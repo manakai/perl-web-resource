@@ -323,8 +323,8 @@ sub validate ($$;%) {
                level => $ErrorLevels->{mime_strongly_discouraged},
                value => $type); # RFC 2046 6.
     ## NOTE: "discouraged" in RFC 4288 3.4.
-  } elsif (not $type_def or not $type_def->{registered}) {
-  #} elsif ($type_def and not $type_def->{registered}) {
+  } elsif (not $type_def or not $type_def->{iana}) {
+  #} elsif ($type_def and not $type_def->{iana}) {
     ## NOTE: Top-level type is seldom added.
     
     ## NOTE: RFC 2046 6. "Any format without a rigorous and public
@@ -346,7 +346,7 @@ sub validate ($$;%) {
                  level => $ErrorLevels->{mime_discouraged},
                  value => $type . '/' . $subtype);
       ## NOTE: "x." and "x-" are discouraged in RFC 4288 3.4.
-    } elsif ($subtype_def and not $subtype_def->{registered}) {
+    } elsif ($subtype_def and not $subtype_def->{iana} and $type_def->{iana}) {
       ## NOTE: RFC 2046 6. "Any format without a rigorous and public
       ## definition must be named with an "X-" prefix" (strictly, this
       ## is not an author requirement, but a requirement for media
@@ -383,8 +383,8 @@ sub validate ($$;%) {
         }
 
         $has_param->{$attr} = 1;
-        my $param_def = $subtype_def->{parameter}->{$attr}
-            || $type_def->{parameter}->{$attr};
+        my $param_def = $subtype_def->{params}->{$attr}
+            || $type_def->{params}->{$attr};
         if ($param_def) {
           if (defined $param_def->{syntax}) {
             if ($param_def->{syntax} eq 'mime-charset') { # RFC 2978
@@ -403,8 +403,12 @@ sub validate ($$;%) {
               }
             }
             ## XXX add support for syntax |MIME date-time|
-          } elsif ($param_def->{checker}) {
-            $param_def->{checker}->($self, $value, $onerror);
+          } elsif ($attr eq 'boundary' and $type eq 'multipart') {
+            if ($value !~ /\A[0-9A-Za-z'()+_,.\x2F:=?-]{0,69}[0-9A-Za-z'()+_,.\x2F:=?\x20-]\z/) {
+              $onerror->(type => 'boundary:syntax error',
+                         level => $ErrorLevels->{mime_fact}, # TODO: correct?
+                         value => $value);
+            }
           }
            
           if ($param_def->{obsolete}) {
@@ -422,7 +426,7 @@ sub validate ($$;%) {
         }
         if ($attr_syntax_error) {
           #
-        } elsif (not $param_def or not $param_def->{registered}) {
+        } elsif (not $param_def) { # XXX or not $param_def->{iana}) {
           if ($subtype =~ /\./ or $subtype =~ /^x-/ or $type =~ /^x-/) {
             ## NOTE: The parameter names "SHOULD" be fully specified
             ## for personal or vendor tree subtype [RFC 4288].
@@ -443,8 +447,8 @@ sub validate ($$;%) {
       }
 
       unless ($args{no_required_param}) {
-        for (keys %{$subtype_def->{parameter} or {}}) {
-          if ($subtype_def->{parameter}->{$_}->{required} and
+        for (keys %{$subtype_def->{params} or {}}) {
+          if ($subtype_def->{params}->{$_}->{required} and
               not $has_param->{$_}) {
             $onerror->(type => 'IMT:parameter missing',
                        level => $ErrorLevels->{mime_fact},
@@ -461,12 +465,13 @@ sub validate ($$;%) {
       $onerror->(type => 'IMT:unknown subtype',
                  level => $ErrorLevels->{uncertain},
                  value => $type . '/' . $subtype)
-          if not $subtype_syntax_error and not $subtype =~ /^x[-.]/;
+          if not $subtype_syntax_error and not $subtype =~ /^x[-.]/ and
+             not $type =~ /^x-/;
     }
 
     unless ($args{no_required_param}) {
-      for (keys %{$type_def->{parameter} or {}}) {
-        if ($type_def->{parameter}->{$_}->{required} and
+      for (keys %{$type_def->{params} or {}}) {
+        if ($type_def->{params}->{$_}->{required} and
             not $has_param->{$_}) {
           $onerror->(type => 'IMT:parameter missing',
                      level => $ErrorLevels->{mime_fact},

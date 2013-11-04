@@ -1,11 +1,20 @@
 # -*- Makefile -*-
 
-all:
-
-## ------ Setup ------
-
 WGET = wget
 GIT = git
+PERL = ./perl
+
+all: deps update
+
+update: lib/Web/MIME/_TypeDefs.pm
+
+clean:
+	rm -fr local/mime-types.json
+
+dataautoupdate: clean deps update
+	$(GIT) add lib/Web/MIME/_TypeDefs.pm
+
+## ------ Setup ------
 
 deps: git-submodules pmbp-install
 
@@ -23,6 +32,13 @@ pmbp-install: pmbp-upgrade
 	perl local/bin/pmbp.pl --install \
             --create-perl-command-shortcut perl \
             --create-perl-command-shortcut prove
+
+## ------ Build ------
+
+lib/Web/MIME/_TypeDefs.pm: local/mime-types.json bin/generate-list.pl
+	$(PERL) bin/generate-list.pl < $< > $@
+local/mime-types.json:
+	$(WGET) -O $@ https://raw.github.com/manakai/data-web-defs/master/data/mime-types.json
 
 ## ------ Tests ------
 

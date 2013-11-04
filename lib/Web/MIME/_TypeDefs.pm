@@ -12,7 +12,6 @@ $Web::MIME::_TypeDefs::Type = {
           'application' => {
                              'iana' => 'permanent',
                              'subtype' => {
-                                            '' => {},
                                             '1d-interleaved-parityfec' => {
                                                                             'iana' => 'permanent'
                                                                           },
@@ -3361,6 +3360,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-cprplayer' => {},
                                             'x-csh' => {},
                                             'x-db' => {},
+                                            'x-dd+ext' => {},
                                             'x-debian-package' => {},
                                             'x-detective' => {},
                                             'x-dgc-compressed' => {},
@@ -3573,6 +3573,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-troff-man' => {},
                                             'x-troff-me' => {},
                                             'x-troff-ms' => {},
+                                            'x-up' => {},
                                             'x-ustar' => {},
                                             'x-visual-basic-class' => {},
                                             'x-visual-basic-form' => {},
@@ -3645,6 +3646,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana' => 'permanent'
                                                           },
                                             'xgmml' => {},
+                                            'xhtml+voice+xml' => {},
                                             'xhtml+xml' => {
                                                              'blacklisted' => 1,
                                                              'iana' => 'permanent',
@@ -4197,6 +4199,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                          },
                                       'voxware' => {},
                                       'wav' => {},
+                                      'wave' => {},
                                       'webm' => {},
                                       'x-669-mod' => {},
                                       'x-aac' => {},
@@ -5398,6 +5401,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'iana' => 'permanent'
                                                             },
                                      'vnd.wordperfect' => {},
+                                     'vtt' => {},
                                      'webviewhtml' => {},
                                      'wml' => {},
                                      'x-ada' => {},

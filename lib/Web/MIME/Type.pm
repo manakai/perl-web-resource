@@ -1,7 +1,9 @@
-package Message::MIME::Type;
+package Web::MIME::Type;
 use strict;
 use warnings;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
+
+# XXX MIME sniffing spec
 
 ## ------ Instantiation ------
 
@@ -11,7 +13,7 @@ our $VERSION = '1.0';
 ## RFC 1521, the previous version of that specification, which does
 ## contain BNF rules for parameter values at least.
 
-my $default_error_levels = {
+my $ErrorLevels = {
   must => 'm',
   warn => 'w',
   info => 'i',
@@ -23,7 +25,7 @@ my $default_error_levels = {
   mime_discouraged => 'w',
 
   http_fact => 'm',
-};
+}; # $ErrorLevels
 
 sub new_from_type_and_subtype ($$$) {
   my $self = bless {}, shift;
@@ -31,7 +33,6 @@ sub new_from_type_and_subtype ($$$) {
   $self->{type} =~ tr/A-Z/a-z/;
   $self->{subtype} = ''.$_[1];
   $self->{subtype} =~ tr/A-Z/a-z/;
-  $self->{level} = $default_error_levels;
   return $self;
 } # new_from_type_and_subtype
 
@@ -40,13 +41,12 @@ my $lws0 = qr/(?>(?>\x0D\x0A)?[\x09\x20])*/;
 my $HTTP11QS = qr/"(?>[\x20\x21\x23-\x5B\x5D-\x7E]|\x0D\x0A[\x09\x20]|\x5C[\x00-\x7F])*"/;
 
 ## Web Applications 1.0 "valid MIME type"'s "MUST".
-sub parse_web_mime_type ($$;$$) {
-  my ($class, $value, $onerror, $levels) = @_;
+sub parse_web_mime_type ($$;$) {
+  my ($class, $value, $onerror) = @_;
   $onerror ||= sub {
     my %args = @_;
     warn sprintf "$args{type} at position $args{index}\n";
   };
-  $levels ||= $default_error_levels;
 
   $value =~ /\G$lws0/ogc;
 
@@ -55,14 +55,14 @@ sub parse_web_mime_type ($$;$$) {
     $type = $1;
   } else {
     $onerror->(type => 'IMT:no type', # XXXdocumentation
-               level => $levels->{http_fact},
+               level => $ErrorLevels->{http_fact},
                index => pos $value);
     return undef;
   }
 
   unless ($value =~ m[\G/]gc) {
     $onerror->(type => 'IMT:no /', # XXXdocumentation
-               level => $levels->{http_fact},
+               level => $ErrorLevels->{http_fact},
                index => pos $value);
     return undef;
   }
@@ -72,7 +72,7 @@ sub parse_web_mime_type ($$;$$) {
     $subtype = $1;
   } else {
     $onerror->(type => 'IMT:no subtype', # XXXdocumentation
-               level => $levels->{http_fact},
+               level => $ErrorLevels->{http_fact},
                index => pos $value); 
     return undef;
   }
@@ -89,14 +89,14 @@ sub parse_web_mime_type ($$;$$) {
       $attr = $1;
     } else {
       $onerror->(type => 'params:no attr', # XXXdocumentation
-                 level => $levels->{http_fact},
+                 level => $ErrorLevels->{http_fact},
                  index => pos $value);
       return $self;
     }
 
     unless ($value =~ /\G=/gc) {
       $onerror->(type => 'params:no =', # XXXdocumentation
-                 level => $levels->{http_fact},
+                 level => $ErrorLevels->{http_fact},
                  index => pos $value);
       return $self;
     }
@@ -109,7 +109,7 @@ sub parse_web_mime_type ($$;$$) {
       $v =~ s/\\(.)/$1/gs;
     } else {
       $onerror->(type => 'params:no value', # XXXdocumentation
-                 level => $levels->{http_fact},
+                 level => $ErrorLevels->{http_fact},
                  index => pos $value);
       return $self;
     }
@@ -120,7 +120,7 @@ sub parse_web_mime_type ($$;$$) {
     if (defined $current) {
       ## Surprisingly this is not a violation to the MIME or HTTP spec!
       $onerror->(type => 'params:duplicate attr', # XXXdocumentation
-                 level => $levels->{warn},
+                 level => $ErrorLevels->{warn},
                  value => $attr,
                  index => pos $value);
       next;
@@ -131,11 +131,10 @@ sub parse_web_mime_type ($$;$$) {
 
   if (pos $value < length $value) {
     $onerror->(type => 'params:garbage', # XXXdocumentation
-               level => $levels->{http_fact},
+               level => $ErrorLevels->{http_fact},
                index => pos $value);
   }
 
-  $self->{level} = $levels;
   return $self;
 } # parse_web_mime_type
 
@@ -182,8 +181,8 @@ sub attrs ($) {
 sub _type_def ($) {
   my $self = shift;
   return $self->{_type_def} ||= do {
-    require Message::MIME::Type::Definitions;
-    $Message::MIME::Type::Definitions::Type->{$self->type};
+    require Web::MIME::_TypeDefs;
+    $Web::MIME::_TypeDefs::Type->{$self->type};
   }; # or undef
 } # _type_def
 
@@ -199,7 +198,7 @@ sub _subtype_def ($) {
 ## is a styling language.
 sub is_styling_lang ($) {
   my $self = shift;
-  return (($self->_subtype_def or {})->{is_styling_lang});
+  return (($self->_subtype_def or {})->{styling});
 } # is_styling_lang
 
 ## What is "text-based" media type is unclear.
@@ -212,7 +211,7 @@ sub is_text_based ($) {
   my $subtype = $self->subtype;
   return 1 if $subtype =~ /\+xml\z/;
 
-  return (($self->_subtype_def or {})->{is_text_based});
+  return (($self->_subtype_def or {})->{text});
 } # is_text_based
 
 sub is_composite_type ($) {
@@ -292,8 +291,8 @@ sub validate ($$;%) {
 
   ## NOTE: Attribute duplication are not error, though its semantics
   ## is not defined.  See
-  ## <http://suika.fam.cx/gate/2005/sw/%E5%AA%92%E4%BD%93%E5%9E%8B/%E5%BC%95%E6%95%B0>.
-  ## However, a Message::MIME::Type object cannot represent duplicate
+  ## <http://suika.suikawiki.org/gate/2005/sw/%E5%AA%92%E4%BD%93%E5%9E%8B/%E5%BC%95%E6%95%B0>.
+  ## However, a Web::MIME::Type object cannot represent duplicate
   ## attributes and is reported in the parsing phase.
 
   my $type = $self->type;
@@ -305,13 +304,13 @@ sub validate ($$;%) {
   my $subtype_syntax_error;
   if ($type !~ /\A[A-Za-z0-9!#\$&.+^_-]{1,127}\z/) {
     $onerror->(type => 'IMT:type syntax error',
-               level => $self->{level}->{must}, # RFC 4288 4.2.
+               level => $ErrorLevels->{must}, # RFC 4288 4.2.
                value => $type);
     $type_syntax_error = 1;
   }
   if ($subtype !~ /\A[A-Za-z0-9!#\$&.+^_-]{1,127}\z/) {
     $onerror->(type => 'IMT:subtype syntax error',
-               level => $self->{level}->{must}, # RFC 4288 4.2.
+               level => $ErrorLevels->{must}, # RFC 4288 4.2.
                value => $subtype);
     $subtype_syntax_error = 1;
   }
@@ -321,7 +320,7 @@ sub validate ($$;%) {
 
   if ($type =~ /^x-/) {
     $onerror->(type => 'IMT:private type',
-               level => $self->{level}->{mime_strongly_discouraged},
+               level => $ErrorLevels->{mime_strongly_discouraged},
                value => $type); # RFC 2046 6.
     ## NOTE: "discouraged" in RFC 4288 3.4.
   } elsif (not $type_def or not $type_def->{registered}) {
@@ -334,7 +333,7 @@ sub validate ($$;%) {
     ## for media type specfication author, and it does not restrict
     ## use of unregistered value).
     $onerror->(type => 'IMT:unregistered type',
-               level => $self->{level}->{mime_must},
+               level => $ErrorLevels->{mime_must},
                value => $type)
         unless $type_syntax_error;
   }
@@ -344,7 +343,7 @@ sub validate ($$;%) {
 
     if ($subtype =~ /^x[-\.]/) {
       $onerror->(type => 'IMT:private subtype',
-                 level => $self->{level}->{mime_discouraged},
+                 level => $ErrorLevels->{mime_discouraged},
                  value => $type . '/' . $subtype);
       ## NOTE: "x." and "x-" are discouraged in RFC 4288 3.4.
     } elsif ($subtype_def and not $subtype_def->{registered}) {
@@ -354,7 +353,7 @@ sub validate ($$;%) {
       ## type specfication author and it does not restrict use of
       ## unregistered value).
       $onerror->(type => 'IMT:unregistered subtype',
-                 level => $self->{level}->{mime_must},
+                 level => $ErrorLevels->{mime_must},
                  value => $type . '/' . $subtype);
     }
     
@@ -364,11 +363,11 @@ sub validate ($$;%) {
       ## not defined anywhere.
       if ($subtype_def->{obsolete}) {
         $onerror->(type => 'IMT:obsolete subtype',
-                   level => $self->{level}->{warn},
+                   level => $ErrorLevels->{warn},
                    value => $type . '/' . $subtype);
       } elsif ($subtype_def->{limited_use}) {
         $onerror->(type => 'IMT:limited use subtype',
-                   level => $self->{level}->{warn},
+                   level => $ErrorLevels->{warn},
                    value => $type . '/' . $subtype);        
       }
 
@@ -378,7 +377,7 @@ sub validate ($$;%) {
         my $attr_syntax_error;
         if ($attr !~ /\A[A-Za-z0-9!#\$&.+^_-]{1,127}\z/) {
           $onerror->(type => 'IMT:attribute syntax error',
-                     level => $self->{level}->{mime_fact}, # RFC 4288 4.3.
+                     level => $ErrorLevels->{mime_fact}, # RFC 4288 4.3.
                      value => $attr);
           $attr_syntax_error = 1;
         }
@@ -410,7 +409,7 @@ sub validate ($$;%) {
            
           if ($param_def->{obsolete}) {
             $onerror->(type => 'IMT:obsolete parameter',
-                       level => $self->{level}->{$param_def->{obsolete}},
+                       level => $ErrorLevels->{$param_def->{obsolete}},
                        value => $attr);
             ## NOTE: The value of |$param_def->{obsolete}|, if it has
             ## a true value, must be "mime_fact", which represents
@@ -430,14 +429,14 @@ sub validate ($$;%) {
             ## Therefore, there might be unknown parameters and still
             ## conforming.
             $onerror->(type => 'IMT:unknown parameter',
-                       level => $self->{level}->{uncertain},
+                       level => $ErrorLevels->{uncertain},
                        value => $attr);
           } else {
             ## NOTE: The parameter names "MUST" be fully specified for
             ## standard tree.  Therefore, unknown parameter is
             ## non-conforming, unless it is standardized later.
             $onerror->(type => 'IMT:parameter not allowed',
-                       level => $self->{level}->{mime_fact},
+                       level => $ErrorLevels->{mime_fact},
                        value => $attr);
           }
         }
@@ -448,7 +447,7 @@ sub validate ($$;%) {
           if ($subtype_def->{parameter}->{$_}->{required} and
               not $has_param->{$_}) {
             $onerror->(type => 'IMT:parameter missing',
-                       level => $self->{level}->{mime_fact},
+                       level => $ErrorLevels->{mime_fact},
                        text => $_,
                        value => $type . '/' . $subtype);
           }
@@ -460,7 +459,7 @@ sub validate ($$;%) {
       ## an error for an unknown subtype, instead we report an
       ## "uncertain" status.
       $onerror->(type => 'IMT:unknown subtype',
-                 level => $self->{level}->{uncertain},
+                 level => $ErrorLevels->{uncertain},
                  value => $type . '/' . $subtype)
           if not $subtype_syntax_error and not $subtype =~ /^x[-.]/;
     }
@@ -470,7 +469,7 @@ sub validate ($$;%) {
         if ($type_def->{parameter}->{$_}->{required} and
             not $has_param->{$_}) {
           $onerror->(type => 'IMT:parameter missing',
-                     level => $self->{level}->{mime_fact},
+                     level => $ErrorLevels->{mime_fact},
                      text => $_,
                      value => $type . '/' . $subtype);
         }
@@ -483,9 +482,9 @@ sub validate ($$;%) {
 
 =head1 LICENSE
 
-Copyright 2007-2010 Wakaba <w@suika.fam.cx>
+Copyright 2007-2013 Wakaba <wakaba@suikawiki.org>.
 
-This library is free software; you can redistribute it
-and/or modify it under the same terms as Perl itself.
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
 
 =cut

@@ -1,0 +1,6 @@
+Test::More~0.99
+Scalar::Util~1.35
+Filter::Util::Call~1.49
+Term::ANSIColor~4.02
+AnyEvent~7.05
+Carp~1.32

@@ -180,7 +180,7 @@ sub attrs ($) {
 
 sub _type_def ($) {
   my $self = shift;
-  return $self->{_type_def} ||= do {
+  return do {
     require Web::MIME::_TypeDefs;
     $Web::MIME::_TypeDefs::Type->{$self->type};
   }; # or undef
@@ -188,8 +188,7 @@ sub _type_def ($) {
 
 sub _subtype_def ($) {
   my $self = shift;
-  return $self->{_subtype_def}
-      ||= ($self->_type_def or {})->{subtype}->{$self->subtype}; # or undef
+  return (($self->_type_def or {})->{subtype}->{$self->subtype}); # or undef
 } # _subtype_def
 
 ## Whether the media type is a "styling language" or not.  The Web

@@ -711,6 +711,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'prs.cww' => {
                                                            'iana' => 'permanent'
                                                          },
+                                            'prs.hpub+zip' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                             'prs.nprend' => {
                                                               'iana' => 'permanent'
                                                             },
@@ -996,6 +999,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'urc-uisocketdesc+xml' => {
                                                                         'iana' => 'permanent'
                                                                       },
+                                            'vcard+json' => {
+                                                              'iana' => 'permanent'
+                                                            },
                                             'vcard+xml' => {
                                                              'iana' => 'permanent'
                                                            },

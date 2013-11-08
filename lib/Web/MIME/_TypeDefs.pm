@@ -735,6 +735,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'raptorfec' => {
                                                              'iana' => 'permanent'
                                                            },
+                                            'rdf+json' => {},
                                             'rdf+xml' => {
                                                            'iana' => 'permanent',
                                                            'mac_types' => {

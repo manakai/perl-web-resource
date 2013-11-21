@@ -1262,6 +1262,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.balsamiq.bmml+xml' => {
                                                                          'iana' => 'permanent'
                                                                        },
+                                            'vnd.bekitzur-stech+json' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
                                             'vnd.blueice.multipass' => {
                                                                          'iana' => 'permanent'
                                                                        },

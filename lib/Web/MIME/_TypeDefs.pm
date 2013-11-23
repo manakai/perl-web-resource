@@ -3471,6 +3471,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'widget' => {
                                                           'iana' => 'permanent'
                                                         },
+                                            'wiki' => {},
                                             'winhlp' => {},
                                             'wita' => {
                                                         'iana' => 'permanent'
@@ -4022,6 +4023,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-webbasic' => {},
                                             'x-websync-plugin' => {},
                                             'x-websync2-plugin' => {},
+                                            'x-wiki' => {},
                                             'x-wildtangent-host' => {
                                                                       'plugin' => 1
                                                                     },
@@ -6211,6 +6213,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'vnd.wordperfect' => {},
                                      'vtt' => {},
                                      'webviewhtml' => {},
+                                     'wiki' => {},
                                      'wml' => {},
                                      'x-ada' => {},
                                      'x-apple-binscii' => {},

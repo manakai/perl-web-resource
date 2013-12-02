@@ -703,6 +703,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                            },
                                             'omdoc+xml' => {},
                                             'onenote' => {},
+                                            'opensearchdescription+xml' => {},
                                             'oxps' => {
                                                         'iana' => 'permanent'
                                                       },

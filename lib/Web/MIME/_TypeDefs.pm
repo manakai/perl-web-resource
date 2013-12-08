@@ -15,20 +15,31 @@ $Web::MIME::_TypeDefs::Type = {
                                   }
                    },
           'application' => {
+                             'iana' => 'permanent',
                              'subtype' => {
-                                            '1d-interleaved-parityfec' => {},
-                                            '3gpp-ims+xml' => {},
+                                            '1d-interleaved-parityfec' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            '3gpp-ims+xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                             'a2l' => {
                                                        'iana' => 'provisional'
                                                      },
                                             'acad' => {},
-                                            'activemessage' => {},
+                                            'activemessage' => {
+                                                                 'iana' => 'permanent'
+                                                               },
                                             'album' => {},
                                             'aml' => {
                                                        'iana' => 'provisional'
                                                      },
-                                            'andrew-inset' => {},
-                                            'applefile' => {},
+                                            'andrew-inset' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'applefile' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                             'applixware' => {},
                                             'arj' => {},
                                             'astound' => {},
@@ -42,52 +53,104 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'iana' => 'provisional'
                                                       },
                                             'atom+xml' => {
+                                                            'iana' => 'permanent',
                                                             'params' => {
                                                                           'charset' => {},
                                                                           'type' => {}
                                                                         },
                                                             'text' => 1
                                                           },
-                                            'atomcat+xml' => {},
-                                            'atomicmail' => {},
-                                            'atomsvc+xml' => {},
+                                            'atomcat+xml' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'atomdeleted+xml' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'atomicmail' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'atomsvc+xml' => {
+                                                               'iana' => 'permanent'
+                                                             },
                                             'atxml' => {
                                                          'iana' => 'provisional'
                                                        },
-                                            'auth-policy+xml' => {},
-                                            'batch-smtp' => {},
+                                            'auth-policy+xml' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'batch-smtp' => {
+                                                              'iana' => 'permanent'
+                                                            },
                                             'beatnik' => {
                                                            'plugin' => 1
                                                          },
-                                            'beep+xml' => {},
+                                            'beep+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'binary' => {},
                                             'binhex' => {},
                                             'bld' => {},
                                             'bld2' => {},
-                                            'calendar+xml' => {},
-                                            'cals-1840' => {},
-                                            'ccmp+xml' => {},
+                                            'calendar+xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'call-completion' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'cals-1840' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'cbor' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                            'ccmp+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'ccv' => {},
-                                            'ccxml+xml' => {},
+                                            'ccxml+xml' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                             'cdfx' => {
                                                         'iana' => 'provisional'
                                                       },
-                                            'cdmi-capability' => {},
-                                            'cdmi-container' => {},
-                                            'cdmi-domain' => {},
-                                            'cdmi-object' => {},
-                                            'cdmi-queue' => {},
+                                            'cdmi-capability' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'cdmi-container' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'cdmi-domain' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'cdmi-object' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'cdmi-queue' => {
+                                                              'iana' => 'permanent'
+                                                            },
                                             'cea' => {
                                                        'iana' => 'provisional'
                                                      },
-                                            'cea-2018+xml' => {},
-                                            'cellml+xml' => {},
-                                            'cfw' => {},
+                                            'cea-2018+xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'cellml+xml' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'cfw' => {
+                                                       'iana' => 'permanent'
+                                                     },
                                             'clariscad' => {},
-                                            'cnrp+xml' => {},
-                                            'commonground' => {},
+                                            'cnrp+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'commonground' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                             'compress' => {},
-                                            'conference-info+xml' => {},
+                                            'conference-info+xml' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
                                             'core' => {},
                                             'cpi-download' => {
                                                                 'plugin' => 1
@@ -95,22 +158,45 @@ $Web::MIME::_TypeDefs::Type = {
                                             'cpi-job' => {
                                                            'plugin' => 1
                                                          },
-                                            'cpl+xml' => {},
+                                            'cpl+xml' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'cprplayer' => {},
-                                            'csta+xml' => {},
-                                            'cstadata+xml' => {},
+                                            'csrattrs' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'csta+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'cstadata+xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                             'csv' => {},
                                             'cu-seeme' => {},
-                                            'cybercash' => {},
+                                            'cybercash' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                             'cybermoney' => {},
                                             'dase-trigger' => {},
+                                            'dash+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'dashdelta' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                             'data' => {},
-                                            'davmount+xml' => {},
-                                            'dca-rft' => {},
+                                            'davmount+xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'dca-rft' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'dcd' => {
                                                        'iana' => 'provisional'
                                                      },
-                                            'dec-dx' => {},
+                                            'dec-dx' => {
+                                                          'iana' => 'permanent'
+                                                        },
                                             'demonow750' => {
                                                               'plugin' => 1
                                                             },
@@ -118,8 +204,12 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'plugin' => 1
                                                           },
                                             'deployment' => {},
-                                            'dialog-info+xml' => {},
-                                            'dicom' => {},
+                                            'dialog-info+xml' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'dicom' => {
+                                                         'iana' => 'permanent'
+                                                       },
                                             'dii' => {
                                                        'iana' => 'provisional'
                                                      },
@@ -127,22 +217,33 @@ $Web::MIME::_TypeDefs::Type = {
                                             'dit' => {
                                                        'iana' => 'provisional'
                                                      },
-                                            'dns' => {},
+                                            'dns' => {
+                                                       'iana' => 'permanent'
+                                                     },
                                             'docbook+xml' => {},
                                             'download' => {},
                                             'drafting' => {},
-                                            'dskpp+xml' => {},
+                                            'dskpp+xml' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                             'dsptype' => {},
-                                            'dssc+der' => {},
-                                            'dssc+xml' => {},
+                                            'dssc+der' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'dssc+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'dsssl' => {},
                                             'dvb.pfr' => {},
                                             'dvbj' => {},
-                                            'dvcs' => {},
+                                            'dvcs' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                             'dxf' => {},
                                             'e-score' => {},
                                             'ecmascript' => {
                                                               'browser' => 1,
+                                                              'iana' => 'permanent',
                                                               'mac_types' => {
                                                                                'TEXT' => 1
                                                                              },
@@ -152,25 +253,56 @@ $Web::MIME::_TypeDefs::Type = {
                                                                           },
                                                               'text' => 1
                                                             },
-                                            'edi-consent' => {},
-                                            'edi-x12' => {},
-                                            'edifact' => {},
+                                            'edi-consent' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'edi-x12' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'edifact' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'editor' => {},
                                             'emacs-lisp' => {},
-                                            'emma+xml' => {},
+                                            'emma+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'emotionml+xml' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'encaprtp' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'envoy' => {},
                                             'eot' => {},
-                                            'epp+xml' => {},
+                                            'epp+xml' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'epub+zip' => {},
-                                            'eshop' => {},
-                                            'example' => {},
+                                            'eshop' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                            'example' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'excel' => {},
-                                            'exi' => {},
-                                            'fastinfoset' => {},
+                                            'exi' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                            'fastinfoset' => {
+                                                               'iana' => 'permanent'
+                                                             },
                                             'fastman' => {},
-                                            'fastsoap' => {},
+                                            'fastsoap' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'fdt+xml' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'file-mirror-list' => {},
-                                            'fits' => {},
+                                            'fits' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                             'font-cff' => {
                                                             'font' => 1
                                                           },
@@ -178,17 +310,23 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'font' => 1
                                                           },
                                             'font-sfnt' => {
-                                                             'font' => 1
+                                                             'font' => 1,
+                                                             'iana' => 'permanent'
                                                            },
-                                            'font-tdpfr' => {},
+                                            'font-tdpfr' => {
+                                                              'iana' => 'permanent'
+                                                            },
                                             'font-ttf' => {
                                                             'font' => 1
                                                           },
                                             'font-woff' => {
-                                                             'font' => 1
+                                                             'font' => 1,
+                                                             'iana' => 'permanent'
                                                            },
                                             'fractals' => {},
-                                            'framework-attributes+xml' => {},
+                                            'framework-attributes+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
                                             'futuresplash' => {
                                                                 'plugin' => 1
                                                               },
@@ -197,15 +335,22 @@ $Web::MIME::_TypeDefs::Type = {
                                             'gnumeric' => {},
                                             'gpx+xml' => {},
                                             'gxf' => {},
-                                            'gzip' => {},
-                                            'h224' => {},
+                                            'gzip' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                            'h224' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                             'hdf' => {},
-                                            'held+xml' => {},
+                                            'held+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'hstu' => {
                                                         'plugin' => 1
                                                       },
                                             'hta' => {},
                                             'http' => {
+                                                        'iana' => 'permanent',
                                                         'params' => {
                                                                       'msgtype' => {},
                                                                       'version' => {}
@@ -213,28 +358,59 @@ $Web::MIME::_TypeDefs::Type = {
                                                       },
                                             'http-index-format' => {},
                                             'hyperstudio' => {
+                                                               'iana' => 'permanent',
                                                                'plugin' => 1
                                                              },
                                             'i-deas' => {},
-                                            'ibe-key-request+xml' => {},
-                                            'ibe-pkg-reply+xml' => {},
-                                            'ibe-pp-data' => {},
+                                            'ibe-key-request+xml' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'ibe-pkg-reply+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'ibe-pp-data' => {
+                                                               'iana' => 'permanent'
+                                                             },
                                             'idp' => {},
                                             'ie' => {},
-                                            'iges' => {},
-                                            'im-iscomposing+xml' => {},
-                                            'index' => {},
-                                            'index.cmd' => {},
-                                            'index.obj' => {},
-                                            'index.response' => {},
-                                            'index.vnd' => {},
-                                            'inkml+xml' => {},
-                                            'iotp' => {},
-                                            'ipfix' => {},
-                                            'ipp' => {},
-                                            'isup' => {},
+                                            'iges' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                            'im-iscomposing+xml' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'index' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                            'index.cmd' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'index.obj' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'index.response' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'index.vnd' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'inkml+xml' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'iotp' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                            'ipfix' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                            'ipp' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                            'isup' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                             'its+xml' => {
-                                                           'iana' => 'provisional'
+                                                           'iana' => 'permanent'
                                                          },
                                             'itunes-plugin' => {
                                                                  'plugin' => 1
@@ -247,6 +423,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'java-vm' => {},
                                             'javascript' => {
                                                               'browser' => 1,
+                                                              'iana' => 'permanent',
                                                               'mac_types' => {
                                                                                'TEXT' => 1
                                                                              },
@@ -258,81 +435,183 @@ $Web::MIME::_TypeDefs::Type = {
                                                             },
                                             'javatv-xlet' => {},
                                             'jnlp' => {},
-                                            'json' => {},
+                                            'jrd+json' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'json' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                            'json-patch+json' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
                                             'jsonml+json' => {},
                                             'jwc' => {},
                                             'jxw' => {},
-                                            'kpml-request+xml' => {},
-                                            'kpml-response+xml' => {},
+                                            'kpml-request+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'kpml-response+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'ld+json' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'lgh' => {},
                                             'lha' => {},
+                                            'link-format' => {
+                                                               'iana' => 'permanent'
+                                                             },
                                             'listenup' => {},
                                             'logml' => {},
-                                            'lost+xml' => {},
+                                            'lost+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'lostsync+xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                             'lxf' => {
                                                        'iana' => 'provisional'
                                                      },
                                             'mac-binhex' => {},
-                                            'mac-binhex40' => {},
+                                            'mac-binhex40' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                             'mac-compactpro' => {},
-                                            'macwriteii' => {},
-                                            'mads+xml' => {},
-                                            'marc' => {},
+                                            'macwriteii' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'mads+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'marc' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                             'marche' => {},
-                                            'marcxml+xml' => {},
-                                            'mathematica' => {},
+                                            'marcxml+xml' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'mathematica' => {
+                                                               'iana' => 'permanent'
+                                                             },
                                             'mathmatica' => {},
                                             'mathml+xml' => {
+                                                              'iana' => 'permanent',
                                                               'params' => {
                                                                             'charset' => {}
                                                                           },
                                                               'text' => 1
                                                             },
-                                            'mathml-content+xml' => {},
-                                            'mathml-presentation+xml' => {},
+                                            'mathml-content+xml' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'mathml-presentation+xml' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
                                             'mbedlet' => {},
-                                            'mbms-associated-procedure-description+xml' => {},
-                                            'mbms-deregister+xml' => {},
-                                            'mbms-envelope+xml' => {},
-                                            'mbms-msk+xml' => {},
-                                            'mbms-msk-response+xml' => {},
-                                            'mbms-protection-description+xml' => {},
-                                            'mbms-reception-report+xml' => {},
-                                            'mbms-register+xml' => {},
-                                            'mbms-register-response+xml' => {},
-                                            'mbms-user-service-description+xml' => {},
+                                            'mbms-associated-procedure-description+xml' => {
+                                                                                             'iana' => 'permanent'
+                                                                                           },
+                                            'mbms-deregister+xml' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'mbms-envelope+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'mbms-msk+xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'mbms-msk-response+xml' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'mbms-protection-description+xml' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'mbms-reception-report+xml' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'mbms-register+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'mbms-register-response+xml' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'mbms-schedule+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'mbms-user-service-description+xml' => {
+                                                                                     'iana' => 'permanent'
+                                                                                   },
                                             'mbox' => {
+                                                        'iana' => 'permanent',
                                                         'params' => {
                                                                       'format' => {}
                                                                     },
                                                         'text' => 1
                                                       },
-                                            'media_control+xml' => {},
-                                            'mediaservercontrol+xml' => {},
+                                            'media-policy-dataset+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'media_control+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'mediaservercontrol+xml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
                                             'metalink+xml' => {},
-                                            'metalink4+xml' => {},
+                                            'metalink4+xml' => {
+                                                                 'iana' => 'permanent'
+                                                               },
                                             'metastream' => {},
-                                            'mets+xml' => {},
+                                            'mets+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'mf4' => {
                                                        'iana' => 'provisional'
                                                      },
-                                            'mikey' => {},
-                                            'mods+xml' => {},
-                                            'moss-keys' => {},
-                                            'moss-signature' => {},
-                                            'mosskey-data' => {},
-                                            'mosskey-request' => {},
-                                            'mp21' => {},
-                                            'mp4' => {},
-                                            'mpeg4-generic' => {},
+                                            'mikey' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                            'mods+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'moss-keys' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'moss-signature' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'mosskey-data' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'mosskey-request' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'mp21' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                            'mp4' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                            'mpeg4-generic' => {
+                                                                 'iana' => 'permanent'
+                                                               },
                                             'mpeg4-iod' => {
+                                                             'iana' => 'permanent',
                                                              'plugin' => 1
                                                            },
-                                            'mpeg4-iod-xmt' => {},
+                                            'mpeg4-iod-xmt' => {
+                                                                 'iana' => 'permanent'
+                                                               },
                                             'mpeg4-muxcodetable' => {
                                                                       'plugin' => 1
                                                                     },
                                             'mpp' => {},
+                                            'mrb-consumer+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'mrb-publish+xml' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
                                             'ms-access' => {},
                                             'ms-download' => {},
                                             'ms-excel' => {},
@@ -340,11 +619,16 @@ $Web::MIME::_TypeDefs::Type = {
                                             'ms-tnef' => {},
                                             'ms-word' => {},
                                             'msaccess' => {},
-                                            'msc-ivr+xml' => {},
-                                            'msc-mixer+xml' => {},
+                                            'msc-ivr+xml' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'msc-mixer+xml' => {
+                                                                 'iana' => 'permanent'
+                                                               },
                                             'msexcel' => {},
                                             'mspowerpoint' => {},
                                             'msword' => {
+                                                          'iana' => 'permanent',
                                                           'mac_types' => {
                                                                            'WDBN' => 1
                                                                          },
@@ -353,27 +637,46 @@ $Web::MIME::_TypeDefs::Type = {
                                                                       }
                                                         },
                                             'mswrite' => {},
-                                            'mxf' => {},
+                                            'mxf' => {
+                                                       'iana' => 'permanent'
+                                                     },
                                             'naplps' => {},
                                             'naplps-audio' => {},
-                                            'nasdata' => {},
+                                            'nasdata' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'netmc' => {},
                                             'netobject' => {},
-                                            'news-checkgroups' => {},
-                                            'news-groupinfo' => {},
+                                            'news-checkgroups' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'news-groupinfo' => {
+                                                                  'iana' => 'permanent'
+                                                                },
                                             'news-message-id' => {},
                                             'news-transmission' => {
+                                                                     'iana' => 'permanent',
                                                                      'params' => {
                                                                                    'conversions' => {},
                                                                                    'usage' => {}
                                                                                  },
                                                                      'text' => 1
                                                                    },
-                                            'nss' => {},
-                                            'ocsp-request' => {},
-                                            'ocsp-response' => {},
+                                            'nlsml+xml' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'nss' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                            'ocsp-request' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'ocsp-response' => {
+                                                                 'iana' => 'permanent'
+                                                               },
                                             'octet-stream' => {
                                                                 'browser' => 1,
+                                                                'iana' => 'permanent',
                                                                 'params' => {
                                                                               'conversions' => {},
                                                                               'name' => {},
@@ -382,13 +685,18 @@ $Web::MIME::_TypeDefs::Type = {
                                                                               'x-conversions' => {}
                                                                             }
                                                               },
-                                            'oda' => {},
+                                            'oda' => {
+                                                       'iana' => 'permanent'
+                                                     },
                                             'odx' => {
                                                        'iana' => 'provisional'
                                                      },
-                                            'oebps-package+xml' => {},
+                                            'oebps-package+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
                                             'ogg' => {
-                                                       'audiovideo' => 1
+                                                       'audiovideo' => 1,
+                                                       'iana' => 'permanent'
                                                      },
                                             'oleobject' => {
                                                              'plugin' => 1
@@ -396,15 +704,25 @@ $Web::MIME::_TypeDefs::Type = {
                                             'omdoc+xml' => {},
                                             'onenote' => {},
                                             'opensearchdescription+xml' => {},
-                                            'oxps' => {},
-                                            'parityfec' => {},
-                                            'patch-ops-error+xml' => {},
+                                            'oxps' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                            'p2p-overlay+xml' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'parityfec' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'patch-ops-error+xml' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
                                             'pbautomation' => {
                                                                 'plugin' => 1
                                                               },
                                             'pbld' => {},
                                             'pdf' => {
                                                        'browser' => 1,
+                                                       'iana' => 'permanent',
                                                        'plugin' => 1,
                                                        'scriptable' => 1
                                                      },
@@ -417,9 +735,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                                    },
                                                        'text' => 1
                                                      },
-                                            'pgp-encrypted' => {},
-                                            'pgp-keys' => {},
+                                            'pgp-encrypted' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'pgp-keys' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'pgp-signature' => {
+                                                                 'iana' => 'permanent',
                                                                  'text' => 1
                                                                },
                                             'photobubble' => {
@@ -430,20 +753,48 @@ $Web::MIME::_TypeDefs::Type = {
                                             'pics-labels' => {},
                                             'pics-rules' => {},
                                             'pics-service' => {},
-                                            'pidf+xml' => {},
-                                            'pidf-diff+xml' => {},
-                                            'pkcs10' => {},
-                                            'pkcs7-mime' => {},
-                                            'pkcs7-signature' => {},
-                                            'pkcs8' => {},
-                                            'pkix-attr-cert' => {},
-                                            'pkix-cert' => {},
-                                            'pkix-crl' => {},
-                                            'pkix-pkipath' => {},
-                                            'pkixcmp' => {},
-                                            'pls+xml' => {},
-                                            'poc-settings+xml' => {},
-                                            'postscript' => {},
+                                            'pidf+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'pidf-diff+xml' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'pkcs10' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                            'pkcs7-mime' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'pkcs7-signature' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'pkcs8' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                            'pkix-attr-cert' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'pkix-cert' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'pkix-crl' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'pkix-pkipath' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'pkixcmp' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'pls+xml' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'poc-settings+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'postscript' => {
+                                                              'iana' => 'permanent'
+                                                            },
                                             'pot' => {},
                                             'powerpoint' => {},
                                             'pps' => {},
@@ -451,16 +802,42 @@ $Web::MIME::_TypeDefs::Type = {
                                             'pre-encrypted' => {},
                                             'presentations' => {},
                                             'pro_eng' => {},
-                                            'prs.alvestrand.titrax-sheet' => {},
-                                            'prs.cww' => {},
-                                            'prs.nprend' => {},
-                                            'prs.plucker' => {},
-                                            'prs.rdf-xml-crypt' => {},
-                                            'prs.xsf+xml' => {},
-                                            'pskc+xml' => {},
-                                            'qsig' => {},
+                                            'provenance+xml' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'prs.alvestrand.titrax-sheet' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'prs.cww' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'prs.hpub+zip' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'prs.nprend' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'prs.plucker' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'prs.rdf-xml-crypt' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'prs.xsf+xml' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'pskc+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'qsig' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                            'raptorfec' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                             'rdf+json' => {},
                                             'rdf+xml' => {
+                                                           'iana' => 'permanent',
                                                            'mac_types' => {
                                                                             'TEXT' => 1
                                                                           },
@@ -469,18 +846,45 @@ $Web::MIME::_TypeDefs::Type = {
                                                                        },
                                                            'text' => 1
                                                          },
-                                            'reginfo+xml' => {},
-                                            'relax-ng-compact-syntax' => {},
-                                            'remote-printing' => {},
-                                            'resource-lists+xml' => {},
-                                            'resource-lists-diff+xml' => {},
-                                            'riscos' => {},
-                                            'rlmi+xml' => {},
-                                            'rls-services+xml' => {},
-                                            'rpki-ghostbusters' => {},
-                                            'rpki-manifest' => {},
-                                            'rpki-roa' => {},
-                                            'rpki-updown' => {},
+                                            'reginfo+xml' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'relax-ng-compact-syntax' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'remote-printing' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'reputon+json' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'resource-lists+xml' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'resource-lists-diff+xml' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'riscos' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                            'rlmi+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'rls-services+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'rpki-ghostbusters' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'rpki-manifest' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'rpki-roa' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'rpki-updown' => {
+                                                               'iana' => 'permanent'
+                                                             },
                                             'rsd+xml' => {},
                                             'rss+xml' => {
                                                            'params' => {
@@ -488,24 +892,64 @@ $Web::MIME::_TypeDefs::Type = {
                                                                        },
                                                            'text' => 1
                                                          },
-                                            'rtf' => {},
-                                            'rtx' => {},
-                                            'samlassertion+xml' => {},
-                                            'samlmetadata+xml' => {},
-                                            'sbml+xml' => {},
-                                            'scvp-cv-request' => {},
-                                            'scvp-cv-response' => {},
-                                            'scvp-vp-request' => {},
-                                            'scvp-vp-response' => {},
+                                            'rtf' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                            'rtploopback' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'rtx' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                            'samlassertion+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'samlmetadata+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'sbml+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'scvp-cv-request' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'scvp-cv-response' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'scvp-vp-request' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'scvp-vp-response' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
                                             'sdp' => {
+                                                       'iana' => 'permanent',
                                                        'plugin' => 1
                                                      },
+                                            'sep+xml' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'sep-exi' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'session-info' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                             'set' => {},
-                                            'set-payment' => {},
-                                            'set-payment-initiation' => {},
-                                            'set-registration' => {},
-                                            'set-registration-initiation' => {},
+                                            'set-payment' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'set-payment-initiation' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'set-registration' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'set-registration-initiation' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
                                             'sgml' => {
+                                                        'iana' => 'permanent',
                                                         'params' => {
                                                                       'sgml-bctf' => {},
                                                                       'sgml-boot' => {}
@@ -514,19 +958,34 @@ $Web::MIME::_TypeDefs::Type = {
                                                       },
                                             'sgml-form-urlencoded' => {},
                                             'sgml-open-catalog' => {
+                                                                     'iana' => 'permanent',
                                                                      'params' => {
                                                                                    'charset' => {}
                                                                                  },
                                                                      'text' => 1
                                                                    },
-                                            'shf+xml' => {},
-                                            'sieve' => {},
-                                            'simple-filter+xml' => {},
-                                            'simple-message-summary' => {},
-                                            'simplesymbolcontainer' => {},
+                                            'shf+xml' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'sieve' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                            'simple-filter+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'simple-message-summary' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'simplesymbolcontainer' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
                                             'sla' => {},
-                                            'slate' => {},
+                                            'slate' => {
+                                                         'iana' => 'permanent'
+                                                       },
                                             'smil' => {
+                                                        'iana' => 'permanent',
+                                                        'iana_obsolete' => 1,
                                                         'params' => {
                                                                       'charset' => {}
                                                                     },
@@ -534,431 +993,1235 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'text' => 1
                                                       },
                                             'smil+xml' => {
+                                                            'iana' => 'permanent',
                                                             'params' => {
                                                                           'charset' => {},
                                                                           'profile' => {}
                                                                         },
                                                             'text' => 1
                                                           },
+                                            'smpte336m' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                             'sns' => {},
-                                            'soap+fastinfoset' => {},
-                                            'soap+xml' => {},
+                                            'soap+fastinfoset' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'soap+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'softvision' => {},
                                             'solids' => {},
-                                            'sparql-query' => {},
-                                            'sparql-results+xml' => {},
-                                            'spirits-event+xml' => {},
-                                            'srgs' => {},
-                                            'srgs+xml' => {},
-                                            'sru+xml' => {},
+                                            'sparql-query' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'sparql-results+xml' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'spirits-event+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'sql' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                            'srgs' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                            'srgs+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'sru+xml' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'ssdl+xml' => {},
-                                            'ssml+xml' => {},
+                                            'ssml+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'step' => {},
                                             'streamingmedia' => {},
                                             'studiom' => {},
                                             'stuffit' => {},
                                             't-time' => {},
-                                            'tamp-apex-update' => {},
-                                            'tamp-apex-update-confirm' => {},
-                                            'tamp-community-update' => {},
-                                            'tamp-community-update-confirm' => {},
-                                            'tamp-error' => {},
-                                            'tamp-sequence-adjust' => {},
-                                            'tamp-sequence-adjust-confirm' => {},
-                                            'tamp-status-query' => {},
-                                            'tamp-status-response' => {},
-                                            'tamp-update' => {},
-                                            'tamp-update-confirm' => {},
+                                            'tamp-apex-update' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'tamp-apex-update-confirm' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'tamp-community-update' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'tamp-community-update-confirm' => {
+                                                                                 'iana' => 'permanent'
+                                                                               },
+                                            'tamp-error' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'tamp-sequence-adjust' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'tamp-sequence-adjust-confirm' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'tamp-status-query' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'tamp-status-response' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'tamp-update' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'tamp-update-confirm' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
                                             'tar' => {},
-                                            'tei+xml' => {},
+                                            'tei+xml' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'testfontstream' => {},
+                                            'text' => {},
                                             'tga' => {},
-                                            'thraud+xml' => {},
+                                            'thraud+xml' => {
+                                                              'iana' => 'permanent'
+                                                            },
                                             'tiff' => {
                                                         'plugin' => 1
                                                       },
                                             'timbuktu' => {},
-                                            'timestamp-query' => {},
-                                            'timestamp-reply' => {},
-                                            'timestamped-data' => {},
+                                            'timestamp-query' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'timestamp-reply' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'timestamped-data' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
                                             'tnt' => {
                                                        'plugin' => 1
                                                      },
                                             'toc' => {},
                                             'toolbook' => {},
-                                            'tve-trigger' => {},
-                                            'ulpfec' => {},
+                                            'tve-trigger' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'ulpfec' => {
+                                                          'iana' => 'permanent'
+                                                        },
                                             'unknown' => {},
+                                            'urc-grpsheet+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'urc-ressheet+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'urc-targetdesc+xml' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'urc-uisocketdesc+xml' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
                                             'uwi_bin' => {},
                                             'uwi_form' => {},
                                             'uwi_nothing' => {},
-                                            'vcard+xml' => {},
+                                            'vcard+json' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vcard+xml' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                             'vda' => {},
-                                            'vemmi' => {},
+                                            'vemmi' => {
+                                                         'iana' => 'permanent'
+                                                       },
                                             'vis5d' => {},
                                             'vividence.scriptfile' => {},
                                             'vnd' => {},
-                                            'vnd.3gpp.bsf+xml' => {},
-                                            'vnd.3gpp.pic-bw-large' => {},
-                                            'vnd.3gpp.pic-bw-small' => {},
-                                            'vnd.3gpp.pic-bw-var' => {},
-                                            'vnd.3gpp.sms' => {},
-                                            'vnd.3gpp2.bcmcsinfo+xml' => {},
-                                            'vnd.3gpp2.sms' => {},
-                                            'vnd.3gpp2.tcap' => {},
-                                            'vnd.3m.post-it-notes' => {},
-                                            'vnd.accpac.simply.aso' => {},
-                                            'vnd.accpac.simply.imp' => {},
-                                            'vnd.acucobol' => {},
-                                            'vnd.acucorp' => {},
+                                            'vnd.3gpp.bsf+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.3gpp.pic-bw-large' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.3gpp.pic-bw-small' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.3gpp.pic-bw-var' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.3gpp.sms' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.3gpp2.bcmcsinfo+xml' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.3gpp2.sms' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.3gpp2.tcap' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.3m.post-it-notes' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.accpac.simply.aso' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.accpac.simply.imp' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.acucobol' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.acucorp' => {
+                                                               'iana' => 'permanent'
+                                                             },
                                             'vnd.adobe.air-application-installer-package+zip' => {},
-                                            'vnd.adobe.formscentral.fcdt' => {},
-                                            'vnd.adobe.fxp' => {},
-                                            'vnd.adobe.partial-upload' => {},
+                                            'vnd.adobe.flash.movie' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.adobe.formscentral.fcdt' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.adobe.fxp' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.adobe.partial-upload' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.adobe.x-mars' => {},
                                             'vnd.adobe.xdp+xml' => {
+                                                                     'iana' => 'permanent',
                                                                      'plugin' => 1
                                                                    },
                                             'vnd.adobe.xfd+xml' => {
                                                                      'plugin' => 1
                                                                    },
                                             'vnd.adobe.xfdf' => {
+                                                                  'iana' => 'permanent',
                                                                   'plugin' => 1
                                                                 },
-                                            'vnd.aether.imp' => {},
-                                            'vnd.ah-barcode' => {},
-                                            'vnd.ahead.space' => {},
-                                            'vnd.airzip.filesecure.azf' => {},
-                                            'vnd.airzip.filesecure.azs' => {},
+                                            'vnd.aether.imp' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.ah-barcode' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.ahead.space' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.airzip.filesecure.azf' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.airzip.filesecure.azs' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
                                             'vnd.amazon.ebook' => {},
-                                            'vnd.americandynamics.acc' => {},
-                                            'vnd.amiga.ami' => {},
-                                            'vnd.amundsen.maze+xml' => {},
+                                            'vnd.americandynamics.acc' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.amiga.ami' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.amundsen.maze+xml' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
                                             'vnd.android.package-archive' => {},
-                                            'vnd.anser-web-certificate-issue-initiation' => {},
+                                            'vnd.anser-web-certificate-issue-initiation' => {
+                                                                                              'iana' => 'permanent'
+                                                                                            },
                                             'vnd.anser-web-funds-transfer-initiation' => {},
-                                            'vnd.antix.game-component' => {},
-                                            'vnd.apple.installer+xml' => {},
-                                            'vnd.apple.mpegurl' => {},
-                                            'vnd.arastra.swi' => {},
-                                            'vnd.aristanetworks.swi' => {},
+                                            'vnd.antix.game-component' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.api+json' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.apple.installer+xml' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.apple.mpegurl' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.arastra.swi' => {
+                                                                   'iana' => 'permanent',
+                                                                   'iana_obsolete' => 1
+                                                                 },
+                                            'vnd.aristanetworks.swi' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
                                             'vnd.artgalry' => {},
-                                            'vnd.astraea-software.iota' => {},
-                                            'vnd.audiograph' => {},
-                                            'vnd.autopackage' => {},
-                                            'vnd.avistar+xml' => {},
-                                            'vnd.blueice.multipass' => {},
-                                            'vnd.bluetooth.ep.oob' => {},
-                                            'vnd.bmi' => {},
-                                            'vnd.businessobjects' => {},
-                                            'vnd.cab-jscript' => {},
-                                            'vnd.canon-cpdl' => {},
-                                            'vnd.canon-lips' => {},
-                                            'vnd.cendio.thinlinc.clientconf' => {},
-                                            'vnd.chemdraw+xml' => {},
-                                            'vnd.chipnuts.karaoke-mmd' => {},
+                                            'vnd.astraea-software.iota' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.audiograph' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.autopackage' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.avistar+xml' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.balsamiq.bmml+xml' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.bekitzur-stech+json' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.blueice.multipass' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.bluetooth.ep.oob' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.bluetooth.le.oob' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.bmi' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'vnd.businessobjects' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.cab-jscript' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.canon-cpdl' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.canon-lips' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.cendio.thinlinc.clientconf' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.century-systems.tcp_stream' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.chemdraw+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.chipnuts.karaoke-mmd' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
                                             'vnd.chromium.remoting-viewer' => {
                                                                                 'plugin' => 1
                                                                               },
-                                            'vnd.cinderella' => {},
-                                            'vnd.cirpack.isdn-ext' => {},
-                                            'vnd.claymore' => {},
-                                            'vnd.cloanto.rp9' => {},
-                                            'vnd.clonk.c4group' => {},
-                                            'vnd.cluetrust.cartomobile-config' => {},
-                                            'vnd.cluetrust.cartomobile-config-pkg' => {},
-                                            'vnd.collection+json' => {},
-                                            'vnd.commerce-battelle' => {},
-                                            'vnd.commonspace' => {},
-                                            'vnd.contact.cmsg' => {},
-                                            'vnd.cosmocaller' => {},
-                                            'vnd.crick.clicker' => {},
-                                            'vnd.crick.clicker.keyboard' => {},
-                                            'vnd.crick.clicker.palette' => {},
-                                            'vnd.crick.clicker.template' => {},
-                                            'vnd.crick.clicker.wordbank' => {},
-                                            'vnd.criticaltools.wbs+xml' => {},
-                                            'vnd.ctc-posml' => {},
-                                            'vnd.ctct.ws+xml' => {},
-                                            'vnd.cups-pdf' => {},
-                                            'vnd.cups-postscript' => {},
-                                            'vnd.cups-ppd' => {},
-                                            'vnd.cups-raster' => {},
-                                            'vnd.cups-raw' => {},
+                                            'vnd.cinderella' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.cirpack.isdn-ext' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.claymore' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.cloanto.rp9' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.clonk.c4group' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.cluetrust.cartomobile-config' => {
+                                                                                    'iana' => 'permanent'
+                                                                                  },
+                                            'vnd.cluetrust.cartomobile-config-pkg' => {
+                                                                                        'iana' => 'permanent'
+                                                                                      },
+                                            'vnd.collection+json' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.collection.next+json' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.commerce-battelle' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.commonspace' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.contact.cmsg' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.cosmocaller' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.crick.clicker' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.crick.clicker.keyboard' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.crick.clicker.palette' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.crick.clicker.template' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.crick.clicker.wordbank' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.criticaltools.wbs+xml' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.ctc-posml' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.ctct.ws+xml' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.cups-pdf' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.cups-postscript' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.cups-ppd' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.cups-raster' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.cups-raw' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                             'vnd.curl' => {
+                                                            'iana' => 'permanent',
                                                             'plugin' => 1
                                                           },
                                             'vnd.curl.car' => {},
                                             'vnd.curl.pcurl' => {},
-                                            'vnd.cybank' => {},
-                                            'vnd.dart' => {},
-                                            'vnd.data-vision.rdz' => {},
-                                            'vnd.dece.data' => {},
-                                            'vnd.dece.ttml+xml' => {},
-                                            'vnd.dece.unspecified' => {},
-                                            'vnd.dece.zip' => {},
-                                            'vnd.denovo.fcselayout-link' => {},
-                                            'vnd.dir-bi.plate-dl-nosuffix' => {},
-                                            'vnd.dna' => {},
+                                            'vnd.cyan.dean.root+xml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.cybank' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.dart' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.data-vision.rdz' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.dece.data' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.dece.ttml+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.dece.unspecified' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.dece.zip' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.denovo.fcselayout-link' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.desmume.movie' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.dir-bi.plate-dl-nosuffix' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.dm.delegation+xml' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.dna' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'vnd.document+json' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
                                             'vnd.dolby.mlp' => {},
-                                            'vnd.dolby.mobile.1' => {},
-                                            'vnd.dolby.mobile.2' => {},
-                                            'vnd.dpgraph' => {},
-                                            'vnd.dreamfactory' => {},
+                                            'vnd.dolby.mobile.1' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.dolby.mobile.2' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.dpgraph' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.dreamfactory' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
                                             'vnd.ds-keypoint' => {},
-                                            'vnd.dvb.ait' => {},
-                                            'vnd.dvb.dvbj' => {},
-                                            'vnd.dvb.esgcontainer' => {},
-                                            'vnd.dvb.ipdcdftnotifaccess' => {},
-                                            'vnd.dvb.ipdcesgaccess' => {},
-                                            'vnd.dvb.ipdcesgaccess2' => {},
-                                            'vnd.dvb.ipdcesgpdd' => {},
-                                            'vnd.dvb.ipdcroaming' => {},
-                                            'vnd.dvb.iptv.alfec-base' => {},
-                                            'vnd.dvb.iptv.alfec-enhancement' => {},
-                                            'vnd.dvb.notif-aggregate-root+xml' => {},
-                                            'vnd.dvb.notif-container+xml' => {},
-                                            'vnd.dvb.notif-generic+xml' => {},
-                                            'vnd.dvb.notif-ia-msglist+xml' => {},
-                                            'vnd.dvb.notif-ia-registration-request+xml' => {},
-                                            'vnd.dvb.notif-ia-registration-response+xml' => {},
-                                            'vnd.dvb.notif-init+xml' => {},
-                                            'vnd.dvb.pfr' => {},
-                                            'vnd.dvb.service' => {},
-                                            'vnd.dxr' => {},
-                                            'vnd.dynageo' => {},
-                                            'vnd.easykaraoke.cdgdownload' => {},
-                                            'vnd.ecdis-update' => {},
-                                            'vnd.ecowin.chart' => {},
-                                            'vnd.ecowin.filerequest' => {},
-                                            'vnd.ecowin.fileupdate' => {},
-                                            'vnd.ecowin.series' => {},
-                                            'vnd.ecowin.seriesrequest' => {},
-                                            'vnd.ecowin.seriesupdate' => {},
-                                            'vnd.emclient.accessrequest+xml' => {},
-                                            'vnd.enliven' => {},
-                                            'vnd.eprints.data+xml' => {},
-                                            'vnd.epson.esf' => {},
-                                            'vnd.epson.msf' => {},
-                                            'vnd.epson.quickanime' => {},
-                                            'vnd.epson.salt' => {},
-                                            'vnd.epson.ssf' => {},
-                                            'vnd.ericsson.quickcall' => {},
-                                            'vnd.eszigno3+xml' => {},
-                                            'vnd.etsi.aoc+xml' => {},
-                                            'vnd.etsi.cug+xml' => {},
-                                            'vnd.etsi.iptvcommand+xml' => {},
-                                            'vnd.etsi.iptvdiscovery+xml' => {},
-                                            'vnd.etsi.iptvprofile+xml' => {},
-                                            'vnd.etsi.iptvsad-bc+xml' => {},
-                                            'vnd.etsi.iptvsad-cod+xml' => {},
-                                            'vnd.etsi.iptvsad-npvr+xml' => {},
-                                            'vnd.etsi.iptvservice+xml' => {},
-                                            'vnd.etsi.iptvsync+xml' => {},
-                                            'vnd.etsi.iptvueprofile+xml' => {},
-                                            'vnd.etsi.mcid+xml' => {},
-                                            'vnd.etsi.overload-control-policy-dataset+xml' => {},
-                                            'vnd.etsi.sci+xml' => {},
-                                            'vnd.etsi.simservs+xml' => {},
-                                            'vnd.etsi.tsl+xml' => {},
-                                            'vnd.etsi.tsl.der' => {},
-                                            'vnd.eudora.data' => {},
-                                            'vnd.ezpix-album' => {},
-                                            'vnd.ezpix-package' => {},
-                                            'vnd.f-secure.mobile' => {},
+                                            'vnd.dtg.local' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.dtg.local.flash' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.dtg.local.html' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.dvb.ait' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.dvb.dvbj' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.dvb.esgcontainer' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.dvb.ipdcdftnotifaccess' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.dvb.ipdcesgaccess' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.dvb.ipdcesgaccess2' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.dvb.ipdcesgpdd' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.dvb.ipdcroaming' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.dvb.iptv.alfec-base' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.dvb.iptv.alfec-enhancement' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.dvb.notif-aggregate-root+xml' => {
+                                                                                    'iana' => 'permanent'
+                                                                                  },
+                                            'vnd.dvb.notif-container+xml' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.dvb.notif-generic+xml' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.dvb.notif-ia-msglist+xml' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.dvb.notif-ia-registration-request+xml' => {
+                                                                                             'iana' => 'permanent'
+                                                                                           },
+                                            'vnd.dvb.notif-ia-registration-response+xml' => {
+                                                                                              'iana' => 'permanent'
+                                                                                            },
+                                            'vnd.dvb.notif-init+xml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.dvb.pfr' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.dvb.service' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.dxr' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'vnd.dynageo' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.easykaraoke.cdgdownload' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.ecdis-update' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.ecowin.chart' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.ecowin.filerequest' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.ecowin.fileupdate' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.ecowin.series' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.ecowin.seriesrequest' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.ecowin.seriesupdate' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.emclient.accessrequest+xml' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.enliven' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.eprints.data+xml' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.epson.esf' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.epson.msf' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.epson.quickanime' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.epson.salt' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.epson.ssf' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.ericsson.quickcall' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.eszigno3+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.etsi.aoc+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.etsi.asic-e+zip' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.etsi.asic-s+zip' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.etsi.cug+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.etsi.iptvcommand+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.etsi.iptvdiscovery+xml' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.etsi.iptvprofile+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.etsi.iptvsad-bc+xml' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.etsi.iptvsad-cod+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.etsi.iptvsad-npvr+xml' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.etsi.iptvservice+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.etsi.iptvsync+xml' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.etsi.iptvueprofile+xml' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.etsi.mcid+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.etsi.mheg5' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.etsi.overload-control-policy-dataset+xml' => {
+                                                                                                'iana' => 'permanent'
+                                                                                              },
+                                            'vnd.etsi.pstn+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.etsi.sci+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.etsi.simservs+xml' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.etsi.timestamp-token' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.etsi.tsl+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.etsi.tsl.der' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.eudora.data' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.ezpix-album' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.ezpix-package' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.f-secure.mobile' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
                                             'vnd.fdf' => {
+                                                           'iana' => 'permanent',
                                                            'plugin' => 1
                                                          },
-                                            'vnd.fdsn.mseed' => {},
-                                            'vnd.fdsn.seed' => {},
-                                            'vnd.ffsns' => {},
-                                            'vnd.fints' => {},
-                                            'vnd.flographit' => {},
-                                            'vnd.fluxtime.clip' => {},
-                                            'vnd.font-fontforge-sfd' => {},
-                                            'vnd.framemaker' => {},
-                                            'vnd.frogans.fnc' => {},
-                                            'vnd.frogans.ltf' => {},
-                                            'vnd.fsc.weblaunch' => {},
-                                            'vnd.fujitsu.oasys' => {},
-                                            'vnd.fujitsu.oasys2' => {},
-                                            'vnd.fujitsu.oasys3' => {},
-                                            'vnd.fujitsu.oasysgp' => {},
-                                            'vnd.fujitsu.oasysprs' => {},
-                                            'vnd.fujixerox.art-ex' => {},
-                                            'vnd.fujixerox.art4' => {},
-                                            'vnd.fujixerox.ddd' => {},
-                                            'vnd.fujixerox.docuworks' => {},
-                                            'vnd.fujixerox.docuworks.binder' => {},
-                                            'vnd.fujixerox.hbpl' => {},
-                                            'vnd.fut-misnet' => {},
-                                            'vnd.fuzzysheet' => {},
-                                            'vnd.genomatix.tuxedo' => {},
-                                            'vnd.geocube+xml' => {},
-                                            'vnd.geogebra.file' => {},
-                                            'vnd.geogebra.tool' => {},
-                                            'vnd.geometry-explorer' => {},
-                                            'vnd.geonext' => {},
-                                            'vnd.geoplan' => {},
-                                            'vnd.geospace' => {},
-                                            'vnd.globalplatform.card-content-mgt' => {},
-                                            'vnd.globalplatform.card-content-mgt-response' => {},
-                                            'vnd.gmx' => {},
-                                            'vnd.google-earth.kml+xml' => {},
-                                            'vnd.google-earth.kmz' => {},
-                                            'vnd.grafeq' => {},
-                                            'vnd.gridmp' => {},
-                                            'vnd.groove-account' => {},
-                                            'vnd.groove-help' => {},
-                                            'vnd.groove-identity-message' => {},
-                                            'vnd.groove-injector' => {},
-                                            'vnd.groove-tool-message' => {},
-                                            'vnd.groove-tool-template' => {},
-                                            'vnd.groove-vcard' => {},
-                                            'vnd.hal+json' => {},
-                                            'vnd.hal+xml' => {},
-                                            'vnd.handheld-entertainment+xml' => {},
-                                            'vnd.hbci' => {},
-                                            'vnd.hcl-bireports' => {},
-                                            'vnd.hhe.lesson-player' => {},
+                                            'vnd.fdsn.mseed' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.fdsn.seed' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.ffsns' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'vnd.fints' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'vnd.flographit' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.fluxtime.clip' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.font-fontforge-sfd' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.framemaker' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.frogans.fnc' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.frogans.ltf' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.fsc.weblaunch' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.fujitsu.oasys' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.fujitsu.oasys2' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.fujitsu.oasys3' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.fujitsu.oasysgp' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.fujitsu.oasysprs' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.fujixerox.art-ex' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.fujixerox.art4' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.fujixerox.ddd' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.fujixerox.docuworks' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.fujixerox.docuworks.binder' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.fujixerox.docuworks.container' => {
+                                                                                     'iana' => 'permanent'
+                                                                                   },
+                                            'vnd.fujixerox.hbpl' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.fut-misnet' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.fuzzysheet' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.genomatix.tuxedo' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.geocube+xml' => {
+                                                                   'iana' => 'permanent',
+                                                                   'iana_obsolete' => 1
+                                                                 },
+                                            'vnd.geogebra.file' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.geogebra.tool' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.geometry-explorer' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.geonext' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.geoplan' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.geospace' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.github+json' => {},
+                                            'vnd.github.v3' => {},
+                                            'vnd.github.v3+json' => {},
+                                            'vnd.github.v3.diff+json' => {},
+                                            'vnd.github.v3.full+json' => {},
+                                            'vnd.github.v3.html+json' => {},
+                                            'vnd.github.v3.patch+json' => {},
+                                            'vnd.github.v3.raw+json' => {},
+                                            'vnd.github.v3.text+json' => {},
+                                            'vnd.globalplatform.card-content-mgt' => {
+                                                                                       'iana' => 'permanent'
+                                                                                     },
+                                            'vnd.globalplatform.card-content-mgt-response' => {
+                                                                                                'iana' => 'permanent'
+                                                                                              },
+                                            'vnd.gmx' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_obsolete' => 1
+                                                         },
+                                            'vnd.google-earth.kml+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.google-earth.kmz' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.grafeq' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.gridmp' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.groove-account' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.groove-help' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.groove-identity-message' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.groove-injector' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.groove-tool-message' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.groove-tool-template' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.groove-vcard' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.hal+json' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.hal+xml' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.handheld-entertainment+xml' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.hbci' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.hcl-bireports' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.heroku+json' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.hhe.lesson-player' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
                                             'vnd.hp-hpgl' => {
+                                                               'iana' => 'permanent',
                                                                'plugin' => 1
                                                              },
-                                            'vnd.hp-hpid' => {},
-                                            'vnd.hp-hps' => {},
-                                            'vnd.hp-jlyt' => {},
+                                            'vnd.hp-hpid' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.hp-hps' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.hp-jlyt' => {
+                                                               'iana' => 'permanent'
+                                                             },
                                             'vnd.hp-pcl' => {
+                                                              'iana' => 'permanent',
                                                               'plugin' => 1
                                                             },
-                                            'vnd.hp-pclxl' => {},
-                                            'vnd.httphone' => {},
-                                            'vnd.hydrostatix.sof-data' => {},
-                                            'vnd.hzn-3d-crossword' => {},
-                                            'vnd.ibm.afplinedata' => {},
-                                            'vnd.ibm.electronic-media' => {},
-                                            'vnd.ibm.minipay' => {},
+                                            'vnd.hp-pclxl' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.httphone' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.hydrostatix.sof-data' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.hzn-3d-crossword' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.ibm.afplinedata' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.ibm.electronic-media' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.ibm.minipay' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
                                             'vnd.ibm.modcap' => {
+                                                                  'iana' => 'permanent',
                                                                   'plugin' => 1
                                                                 },
-                                            'vnd.ibm.rights-management' => {},
-                                            'vnd.ibm.secure-container' => {},
-                                            'vnd.iccprofile' => {},
-                                            'vnd.igloader' => {},
-                                            'vnd.immervision-ivp' => {},
-                                            'vnd.immervision-ivu' => {},
-                                            'vnd.informedcontrol.rms+xml' => {},
-                                            'vnd.informix-visionary' => {},
-                                            'vnd.infotech.project' => {},
-                                            'vnd.infotech.project+xml' => {},
-                                            'vnd.innopath.wamp.notification' => {},
-                                            'vnd.insors.igm' => {},
-                                            'vnd.intercon.formnet' => {},
-                                            'vnd.intergeo' => {},
-                                            'vnd.intertrust.digibox' => {},
-                                            'vnd.intertrust.nncp' => {},
-                                            'vnd.intu.qbo' => {},
-                                            'vnd.intu.qfx' => {},
-                                            'vnd.iptc.g2.conceptitem+xml' => {},
-                                            'vnd.iptc.g2.knowledgeitem+xml' => {},
-                                            'vnd.iptc.g2.newsitem+xml' => {},
-                                            'vnd.iptc.g2.newsmessage+xml' => {},
-                                            'vnd.iptc.g2.packageitem+xml' => {},
-                                            'vnd.iptc.g2.planningitem+xml' => {},
-                                            'vnd.ipunplugged.rcprofile' => {},
-                                            'vnd.irepository.package+xml' => {},
-                                            'vnd.is-xpr' => {},
-                                            'vnd.isac.fcs' => {},
-                                            'vnd.jam' => {},
-                                            'vnd.japannet-directory-service' => {},
-                                            'vnd.japannet-jpnstore-wakeup' => {},
-                                            'vnd.japannet-payment-wakeup' => {},
-                                            'vnd.japannet-registration' => {},
-                                            'vnd.japannet-registration-wakeup' => {},
-                                            'vnd.japannet-setstore-wakeup' => {},
-                                            'vnd.japannet-verification' => {},
-                                            'vnd.japannet-verification-wakeup' => {},
-                                            'vnd.jcp.javame.midlet-rms' => {},
-                                            'vnd.jisp' => {},
-                                            'vnd.joost.joda-archive' => {},
-                                            'vnd.kahootz' => {},
-                                            'vnd.kde.karbon' => {},
-                                            'vnd.kde.kchart' => {},
-                                            'vnd.kde.kformula' => {},
-                                            'vnd.kde.kivio' => {},
-                                            'vnd.kde.kontour' => {},
-                                            'vnd.kde.kpresenter' => {},
-                                            'vnd.kde.kspread' => {},
-                                            'vnd.kde.kword' => {},
-                                            'vnd.kenameaapp' => {},
-                                            'vnd.kidspiration' => {},
-                                            'vnd.kinar' => {},
-                                            'vnd.koan' => {},
-                                            'vnd.kodak-descriptor' => {},
-                                            'vnd.las.las+xml' => {},
-                                            'vnd.liberty-request+xml' => {},
-                                            'vnd.llamagraphics.life-balance.desktop' => {},
-                                            'vnd.llamagraphics.life-balance.exchange+xml' => {},
-                                            'vnd.lotus-1-2-3' => {},
-                                            'vnd.lotus-approach' => {},
-                                            'vnd.lotus-freelance' => {},
-                                            'vnd.lotus-notes' => {},
-                                            'vnd.lotus-organizer' => {},
-                                            'vnd.lotus-screencam' => {},
-                                            'vnd.lotus-wordpro' => {},
-                                            'vnd.macports.portpkg' => {},
-                                            'vnd.marlin.drm.actiontoken+xml' => {},
-                                            'vnd.marlin.drm.conftoken+xml' => {},
-                                            'vnd.marlin.drm.license+xml' => {},
-                                            'vnd.marlin.drm.mdcf' => {},
-                                            'vnd.mcd' => {},
-                                            'vnd.medcalcdata' => {},
-                                            'vnd.mediastation.cdkey' => {},
-                                            'vnd.meridian-slingshot' => {},
-                                            'vnd.mfer' => {},
-                                            'vnd.mfmp' => {},
-                                            'vnd.micrografx.flo' => {},
-                                            'vnd.micrografx.igx' => {},
-                                            'vnd.mif' => {},
-                                            'vnd.minisoft-hp3000-save' => {},
-                                            'vnd.mitsubishi.misty-guard.trustweb' => {},
-                                            'vnd.mobius.daf' => {},
-                                            'vnd.mobius.dis' => {},
-                                            'vnd.mobius.mbk' => {},
-                                            'vnd.mobius.mqy' => {},
-                                            'vnd.mobius.msl' => {},
-                                            'vnd.mobius.plc' => {},
-                                            'vnd.mobius.txf' => {},
-                                            'vnd.mophun.application' => {},
-                                            'vnd.mophun.certificate' => {},
-                                            'vnd.motorola.flexsuite' => {},
-                                            'vnd.motorola.flexsuite.adsi' => {},
-                                            'vnd.motorola.flexsuite.fis' => {},
-                                            'vnd.motorola.flexsuite.gotap' => {},
-                                            'vnd.motorola.flexsuite.kmr' => {},
-                                            'vnd.motorola.flexsuite.ttc' => {},
-                                            'vnd.motorola.flexsuite.wem' => {},
-                                            'vnd.motorola.iprm' => {},
+                                            'vnd.ibm.rights-management' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.ibm.secure-container' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.iccprofile' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.ieee.1905' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.igloader' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.immervision-ivp' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.immervision-ivu' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.informedcontrol.rms+xml' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.informix-visionary' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.infotech.project' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.infotech.project+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.innopath.wamp.notification' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.insors.igm' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.intercon.formnet' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.intergeo' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.intertrust.digibox' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.intertrust.nncp' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.intu.qbo' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.intu.qfx' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.iptc.g2.conceptitem+xml' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.iptc.g2.knowledgeitem+xml' => {
+                                                                                 'iana' => 'permanent'
+                                                                               },
+                                            'vnd.iptc.g2.newsitem+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.iptc.g2.newsmessage+xml' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.iptc.g2.packageitem+xml' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.iptc.g2.planningitem+xml' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.ipunplugged.rcprofile' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.irepository.package+xml' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.is-xpr' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.isac.fcs' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.jam' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'vnd.japannet-directory-service' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.japannet-jpnstore-wakeup' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.japannet-payment-wakeup' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.japannet-registration' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.japannet-registration-wakeup' => {
+                                                                                    'iana' => 'permanent'
+                                                                                  },
+                                            'vnd.japannet-setstore-wakeup' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.japannet-verification' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.japannet-verification-wakeup' => {
+                                                                                    'iana' => 'permanent'
+                                                                                  },
+                                            'vnd.jcp.javame.midlet-rms' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.jisp' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.joost.joda-archive' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.jsk.isdn-ngn' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.kahootz' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.kde.karbon' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.kde.kchart' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.kde.kformula' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.kde.kivio' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.kde.kontour' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.kde.kpresenter' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.kde.kspread' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.kde.kword' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.kenameaapp' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.kidspiration' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.kinar' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'vnd.koan' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.kodak-descriptor' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.las.las+xml' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.liberty-request+xml' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.llamagraphics.life-balance.desktop' => {
+                                                                                          'iana' => 'permanent'
+                                                                                        },
+                                            'vnd.llamagraphics.life-balance.exchange+xml' => {
+                                                                                               'iana' => 'permanent'
+                                                                                             },
+                                            'vnd.lotus-1-2-3' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.lotus-approach' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.lotus-freelance' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.lotus-notes' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.lotus-organizer' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.lotus-screencam' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.lotus-wordpro' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.macports.portpkg' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.marlin.drm.actiontoken+xml' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.marlin.drm.conftoken+xml' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.marlin.drm.license+xml' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.marlin.drm.mdcf' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.mcd' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'vnd.medcalcdata' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.mediastation.cdkey' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.meridian-slingshot' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.mfer' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.mfmp' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.micrografx.flo' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.micrografx.igx' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.mif' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'vnd.minisoft-hp3000-save' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.mitsubishi.misty-guard.trustweb' => {
+                                                                                       'iana' => 'permanent'
+                                                                                     },
+                                            'vnd.mobius.daf' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.mobius.dis' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.mobius.mbk' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.mobius.mqy' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.mobius.msl' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.mobius.plc' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.mobius.txf' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.mophun.application' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.mophun.certificate' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.motorola.flexsuite' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.motorola.flexsuite.adsi' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.motorola.flexsuite.fis' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.motorola.flexsuite.gotap' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.motorola.flexsuite.kmr' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.motorola.flexsuite.ttc' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.motorola.flexsuite.wem' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.motorola.iprm' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
                                             'vnd.mozilla.maybe.feed' => {},
                                             'vnd.mozilla.xul+xml' => {
-                                                                       'browser' => 1
+                                                                       'browser' => 1,
+                                                                       'iana' => 'permanent'
                                                                      },
                                             'vnd.ms-access' => {},
-                                            'vnd.ms-artgalry' => {},
-                                            'vnd.ms-asf' => {},
-                                            'vnd.ms-cab-compressed' => {},
+                                            'vnd.ms-artgalry' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.ms-asf' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.ms-cab-compressed' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
                                             'vnd.ms-color.iccprofile' => {},
-                                            'vnd.ms-excel' => {},
-                                            'vnd.ms-excel.addin.macroenabled.12' => {},
-                                            'vnd.ms-excel.sheet.binary.macroenabled.12' => {},
-                                            'vnd.ms-excel.sheet.macroenabled.12' => {},
-                                            'vnd.ms-excel.template.macroenabled.12' => {},
+                                            'vnd.ms-excel' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.ms-excel.addin.macroenabled.12' => {
+                                                                                      'iana' => 'permanent'
+                                                                                    },
+                                            'vnd.ms-excel.sheet.binary.macroenabled.12' => {
+                                                                                             'iana' => 'permanent'
+                                                                                           },
+                                            'vnd.ms-excel.sheet.macroenabled.12' => {
+                                                                                      'iana' => 'permanent'
+                                                                                    },
+                                            'vnd.ms-excel.template.macroenabled.12' => {
+                                                                                         'iana' => 'permanent'
+                                                                                       },
                                             'vnd.ms-fontobject' => {
-                                                                     'font' => 1
+                                                                     'font' => 1,
+                                                                     'iana' => 'permanent'
                                                                    },
-                                            'vnd.ms-htmlhelp' => {},
-                                            'vnd.ms-ims' => {},
-                                            'vnd.ms-lrm' => {},
-                                            'vnd.ms-office.activex+xml' => {},
-                                            'vnd.ms-officetheme' => {},
+                                            'vnd.ms-htmlhelp' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.ms-ims' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.ms-lrm' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.ms-office.activex+xml' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.ms-officetheme' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
                                             'vnd.ms-opentype' => {
                                                                    'font' => 1
                                                                  },
@@ -967,324 +2230,943 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.ms-pki.pko' => {},
                                             'vnd.ms-pki.seccat' => {},
                                             'vnd.ms-pki.stl' => {},
-                                            'vnd.ms-playready.initiator+xml' => {},
-                                            'vnd.ms-powerpoint' => {},
-                                            'vnd.ms-powerpoint.addin.macroenabled.12' => {},
-                                            'vnd.ms-powerpoint.presentation.macroenabled.12' => {},
-                                            'vnd.ms-powerpoint.slide.macroenabled.12' => {},
-                                            'vnd.ms-powerpoint.slideshow.macroenabled.12' => {},
-                                            'vnd.ms-powerpoint.template.macroenabled.12' => {},
+                                            'vnd.ms-playready.initiator+xml' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.ms-powerpoint' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.ms-powerpoint.addin.macroenabled.12' => {
+                                                                                           'iana' => 'permanent'
+                                                                                         },
+                                            'vnd.ms-powerpoint.presentation.macroenabled.12' => {
+                                                                                                  'iana' => 'permanent'
+                                                                                                },
+                                            'vnd.ms-powerpoint.slide.macroenabled.12' => {
+                                                                                           'iana' => 'permanent'
+                                                                                         },
+                                            'vnd.ms-powerpoint.slideshow.macroenabled.12' => {
+                                                                                               'iana' => 'permanent'
+                                                                                             },
+                                            'vnd.ms-powerpoint.template.macroenabled.12' => {
+                                                                                              'iana' => 'permanent'
+                                                                                            },
                                             'vnd.ms-printing.printticket+xml' => {},
-                                            'vnd.ms-project' => {},
+                                            'vnd.ms-project' => {
+                                                                  'iana' => 'permanent'
+                                                                },
                                             'vnd.ms-schedule' => {},
-                                            'vnd.ms-tnef' => {},
-                                            'vnd.ms-wmdrm.lic-chlg-req' => {},
-                                            'vnd.ms-wmdrm.lic-resp' => {},
-                                            'vnd.ms-wmdrm.meter-chlg-req' => {},
-                                            'vnd.ms-wmdrm.meter-resp' => {},
-                                            'vnd.ms-word.document.macroenabled.12' => {},
-                                            'vnd.ms-word.template.macroenabled.12' => {},
-                                            'vnd.ms-works' => {},
-                                            'vnd.ms-wpl' => {},
-                                            'vnd.ms-xpsdocument' => {},
-                                            'vnd.mseq' => {},
-                                            'vnd.msign' => {},
-                                            'vnd.multiad.creator' => {},
-                                            'vnd.multiad.creator.cif' => {},
-                                            'vnd.music-niff' => {},
-                                            'vnd.musician' => {},
-                                            'vnd.muvee.style' => {},
-                                            'vnd.mynfc' => {},
-                                            'vnd.ncd.control' => {},
-                                            'vnd.ncd.reference' => {},
-                                            'vnd.nervana' => {},
-                                            'vnd.netfpx' => {},
-                                            'vnd.neurolanguage.nlu' => {},
-                                            'vnd.nitf' => {},
-                                            'vnd.noblenet-directory' => {},
-                                            'vnd.noblenet-sealer' => {},
-                                            'vnd.noblenet-web' => {},
-                                            'vnd.nokia.catalogs' => {},
-                                            'vnd.nokia.conml+wbxml' => {},
-                                            'vnd.nokia.conml+xml' => {},
-                                            'vnd.nokia.iptv.config+xml' => {},
-                                            'vnd.nokia.isds-radio-presets' => {},
-                                            'vnd.nokia.landmark+wbxml' => {},
-                                            'vnd.nokia.landmark+xml' => {},
-                                            'vnd.nokia.landmarkcollection+xml' => {},
-                                            'vnd.nokia.n-gage.ac+xml' => {},
-                                            'vnd.nokia.n-gage.data' => {},
-                                            'vnd.nokia.n-gage.symbian.install' => {},
-                                            'vnd.nokia.ncd' => {},
-                                            'vnd.nokia.pcd+wbxml' => {},
-                                            'vnd.nokia.pcd+xml' => {},
-                                            'vnd.nokia.radio-preset' => {},
-                                            'vnd.nokia.radio-presets' => {},
-                                            'vnd.novadigm.edm' => {},
-                                            'vnd.novadigm.edx' => {},
-                                            'vnd.novadigm.ext' => {},
-                                            'vnd.ntt-local.file-transfer' => {},
-                                            'vnd.ntt-local.sip-ta_remote' => {},
-                                            'vnd.ntt-local.sip-ta_tcp_stream' => {},
-                                            'vnd.oasis.opendocument.chart' => {},
-                                            'vnd.oasis.opendocument.chart-template' => {},
-                                            'vnd.oasis.opendocument.database' => {},
-                                            'vnd.oasis.opendocument.formula' => {},
-                                            'vnd.oasis.opendocument.formula-template' => {},
-                                            'vnd.oasis.opendocument.graphics' => {},
-                                            'vnd.oasis.opendocument.graphics-template' => {},
-                                            'vnd.oasis.opendocument.image' => {},
-                                            'vnd.oasis.opendocument.image-template' => {},
-                                            'vnd.oasis.opendocument.presentation' => {},
-                                            'vnd.oasis.opendocument.presentation-template' => {},
-                                            'vnd.oasis.opendocument.spreadsheet' => {},
-                                            'vnd.oasis.opendocument.spreadsheet-template' => {},
-                                            'vnd.oasis.opendocument.text' => {},
-                                            'vnd.oasis.opendocument.text-master' => {},
-                                            'vnd.oasis.opendocument.text-template' => {},
-                                            'vnd.oasis.opendocument.text-web' => {},
-                                            'vnd.obn' => {},
-                                            'vnd.oftn.l10n+json' => {},
-                                            'vnd.oipf.contentaccessdownload+xml' => {},
-                                            'vnd.oipf.contentaccessstreaming+xml' => {},
-                                            'vnd.oipf.cspg-hexbinary' => {},
-                                            'vnd.oipf.dae.svg+xml' => {},
-                                            'vnd.oipf.dae.xhtml+xml' => {},
-                                            'vnd.oipf.mippvcontrolmessage+xml' => {},
-                                            'vnd.oipf.pae.gem' => {},
-                                            'vnd.oipf.spdiscovery+xml' => {},
-                                            'vnd.oipf.spdlist+xml' => {},
-                                            'vnd.oipf.ueprofile+xml' => {},
-                                            'vnd.oipf.userprofile+xml' => {},
-                                            'vnd.olpc-sugar' => {},
-                                            'vnd.oma-scws-config' => {},
-                                            'vnd.oma-scws-http-request' => {},
-                                            'vnd.oma-scws-http-response' => {},
-                                            'vnd.oma.bcast.associated-procedure-parameter+xml' => {},
-                                            'vnd.oma.bcast.drm-trigger+xml' => {},
-                                            'vnd.oma.bcast.imd+xml' => {},
-                                            'vnd.oma.bcast.ltkm' => {},
-                                            'vnd.oma.bcast.notification+xml' => {},
-                                            'vnd.oma.bcast.provisioningtrigger' => {},
-                                            'vnd.oma.bcast.sgboot' => {},
-                                            'vnd.oma.bcast.sgdd+xml' => {},
-                                            'vnd.oma.bcast.sgdu' => {},
-                                            'vnd.oma.bcast.simple-symbol-container' => {},
-                                            'vnd.oma.bcast.smartcard-trigger+xml' => {},
-                                            'vnd.oma.bcast.sprov+xml' => {},
-                                            'vnd.oma.bcast.stkm' => {},
-                                            'vnd.oma.cab-address-book+xml' => {},
-                                            'vnd.oma.cab-feature-handler+xml' => {},
-                                            'vnd.oma.cab-pcc+xml' => {},
-                                            'vnd.oma.cab-user-prefs+xml' => {},
-                                            'vnd.oma.dcd' => {},
-                                            'vnd.oma.dcdc' => {},
-                                            'vnd.oma.dd2+xml' => {},
+                                            'vnd.ms-tnef' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.ms-windows.printerpairing' => {
+                                                                                 'iana' => 'permanent'
+                                                                               },
+                                            'vnd.ms-wmdrm.lic-chlg-req' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.ms-wmdrm.lic-resp' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.ms-wmdrm.meter-chlg-req' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.ms-wmdrm.meter-resp' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.ms-word.document.macroenabled.12' => {
+                                                                                        'iana' => 'permanent'
+                                                                                      },
+                                            'vnd.ms-word.template.macroenabled.12' => {
+                                                                                        'iana' => 'permanent'
+                                                                                      },
+                                            'vnd.ms-works' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.ms-wpl' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.ms-xpsdocument' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.mseq' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.msign' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'vnd.multiad.creator' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.multiad.creator.cif' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.music-niff' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.musician' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.muvee.style' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.mynfc' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'vnd.ncd.control' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.ncd.reference' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.nervana' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.netfpx' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.neurolanguage.nlu' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.nintendo.nitro.rom' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.nintendo.snes.rom' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.nitf' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.noblenet-directory' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.noblenet-sealer' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.noblenet-web' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.nokia.catalogs' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.nokia.conml+wbxml' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.nokia.conml+xml' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.nokia.iptv.config+xml' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.nokia.isds-radio-presets' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.nokia.landmark+wbxml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.nokia.landmark+xml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.nokia.landmarkcollection+xml' => {
+                                                                                    'iana' => 'permanent'
+                                                                                  },
+                                            'vnd.nokia.n-gage.ac+xml' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.nokia.n-gage.data' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.nokia.n-gage.symbian.install' => {
+                                                                                    'iana' => 'permanent'
+                                                                                  },
+                                            'vnd.nokia.ncd' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.nokia.pcd+wbxml' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.nokia.pcd+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.nokia.radio-preset' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.nokia.radio-presets' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.novadigm.edm' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.novadigm.edx' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.novadigm.ext' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.ntt-local.content-share' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.ntt-local.file-transfer' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.ntt-local.sip-ta_remote' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.ntt-local.sip-ta_tcp_stream' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.oasis.opendocument.chart' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.oasis.opendocument.chart-template' => {
+                                                                                         'iana' => 'permanent'
+                                                                                       },
+                                            'vnd.oasis.opendocument.database' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.oasis.opendocument.formula' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.oasis.opendocument.formula-template' => {
+                                                                                           'iana' => 'permanent'
+                                                                                         },
+                                            'vnd.oasis.opendocument.graphics' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.oasis.opendocument.graphics-template' => {
+                                                                                            'iana' => 'permanent'
+                                                                                          },
+                                            'vnd.oasis.opendocument.image' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.oasis.opendocument.image-template' => {
+                                                                                         'iana' => 'permanent'
+                                                                                       },
+                                            'vnd.oasis.opendocument.presentation' => {
+                                                                                       'iana' => 'permanent'
+                                                                                     },
+                                            'vnd.oasis.opendocument.presentation-template' => {
+                                                                                                'iana' => 'permanent'
+                                                                                              },
+                                            'vnd.oasis.opendocument.spreadsheet' => {
+                                                                                      'iana' => 'permanent'
+                                                                                    },
+                                            'vnd.oasis.opendocument.spreadsheet-template' => {
+                                                                                               'iana' => 'permanent'
+                                                                                             },
+                                            'vnd.oasis.opendocument.text' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.oasis.opendocument.text-master' => {
+                                                                                      'iana' => 'permanent'
+                                                                                    },
+                                            'vnd.oasis.opendocument.text-template' => {
+                                                                                        'iana' => 'permanent'
+                                                                                      },
+                                            'vnd.oasis.opendocument.text-web' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.obn' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'vnd.oftn.l10n+json' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.oipf.contentaccessdownload+xml' => {
+                                                                                      'iana' => 'permanent'
+                                                                                    },
+                                            'vnd.oipf.contentaccessstreaming+xml' => {
+                                                                                       'iana' => 'permanent'
+                                                                                     },
+                                            'vnd.oipf.cspg-hexbinary' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.oipf.dae.svg+xml' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.oipf.dae.xhtml+xml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.oipf.mippvcontrolmessage+xml' => {
+                                                                                    'iana' => 'permanent'
+                                                                                  },
+                                            'vnd.oipf.pae.gem' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.oipf.spdiscovery+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.oipf.spdlist+xml' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.oipf.ueprofile+xml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.oipf.userprofile+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.olpc-sugar' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.oma-scws-config' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.oma-scws-http-request' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.oma-scws-http-response' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.oma.bcast.associated-procedure-parameter+xml' => {
+                                                                                                    'iana' => 'permanent'
+                                                                                                  },
+                                            'vnd.oma.bcast.drm-trigger+xml' => {
+                                                                                 'iana' => 'permanent'
+                                                                               },
+                                            'vnd.oma.bcast.imd+xml' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.oma.bcast.ltkm' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.oma.bcast.notification+xml' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.oma.bcast.provisioningtrigger' => {
+                                                                                     'iana' => 'permanent'
+                                                                                   },
+                                            'vnd.oma.bcast.sgboot' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.oma.bcast.sgdd+xml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.oma.bcast.sgdu' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.oma.bcast.simple-symbol-container' => {
+                                                                                         'iana' => 'permanent'
+                                                                                       },
+                                            'vnd.oma.bcast.smartcard-trigger+xml' => {
+                                                                                       'iana' => 'permanent'
+                                                                                     },
+                                            'vnd.oma.bcast.sprov+xml' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.oma.bcast.stkm' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.oma.cab-address-book+xml' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.oma.cab-feature-handler+xml' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.oma.cab-pcc+xml' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.oma.cab-subs-invite+xml' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.oma.cab-user-prefs+xml' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.oma.dcd' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.oma.dcdc' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.oma.dd2+xml' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
                                             'vnd.oma.drm.content' => {},
                                             'vnd.oma.drm.message' => {},
-                                            'vnd.oma.drm.risd+xml' => {},
-                                            'vnd.oma.group-usage-list+xml' => {},
-                                            'vnd.oma.pal+xml' => {},
-                                            'vnd.oma.poc.detailed-progress-report+xml' => {},
-                                            'vnd.oma.poc.final-report+xml' => {},
-                                            'vnd.oma.poc.groups+xml' => {},
-                                            'vnd.oma.poc.invocation-descriptor+xml' => {},
-                                            'vnd.oma.poc.optimized-progress-report+xml' => {},
-                                            'vnd.oma.push' => {},
-                                            'vnd.oma.scidm.messages+xml' => {},
-                                            'vnd.oma.xcap-directory+xml' => {},
-                                            'vnd.omads-email+xml' => {},
-                                            'vnd.omads-file+xml' => {},
-                                            'vnd.omads-folder+xml' => {},
-                                            'vnd.omaloc-supl-init' => {},
+                                            'vnd.oma.drm.risd+xml' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.oma.group-usage-list+xml' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.oma.pal+xml' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.oma.poc.detailed-progress-report+xml' => {
+                                                                                            'iana' => 'permanent'
+                                                                                          },
+                                            'vnd.oma.poc.final-report+xml' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.oma.poc.groups+xml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.oma.poc.invocation-descriptor+xml' => {
+                                                                                         'iana' => 'permanent'
+                                                                                       },
+                                            'vnd.oma.poc.optimized-progress-report+xml' => {
+                                                                                             'iana' => 'permanent'
+                                                                                           },
+                                            'vnd.oma.push' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.oma.scidm.messages+xml' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.oma.xcap-directory+xml' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.omads-email+xml' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.omads-file+xml' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.omads-folder+xml' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.omaloc-supl-init' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.openeye.oeb' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
                                             'vnd.openofficeorg.extension' => {},
-                                            'vnd.openxmlformats-officedocument.custom-properties+xml' => {},
-                                            'vnd.openxmlformats-officedocument.customxmlproperties+xml' => {},
-                                            'vnd.openxmlformats-officedocument.drawing+xml' => {},
-                                            'vnd.openxmlformats-officedocument.drawingml.chart+xml' => {},
-                                            'vnd.openxmlformats-officedocument.drawingml.chartshapes+xml' => {},
-                                            'vnd.openxmlformats-officedocument.drawingml.diagramcolors+xml' => {},
-                                            'vnd.openxmlformats-officedocument.drawingml.diagramdata+xml' => {},
-                                            'vnd.openxmlformats-officedocument.drawingml.diagramlayout+xml' => {},
-                                            'vnd.openxmlformats-officedocument.drawingml.diagramstyle+xml' => {},
-                                            'vnd.openxmlformats-officedocument.extended-properties+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.commentauthors+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.comments+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.handoutmaster+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.notesmaster+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.notesslide+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.presentation' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.presentation.main+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.presprops+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.slide' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.slide+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.slidelayout+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.slidemaster+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.slideshow' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.slideupdateinfo+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.tablestyles+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.tags+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.template' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.template.main+xml' => {},
-                                            'vnd.openxmlformats-officedocument.presentationml.viewprops+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.calcchain+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.comments+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.connections+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.externallink+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.pivotcachedefinition+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.pivotcacherecords+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.pivottable+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.querytable+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.revisionheaders+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.revisionlog+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.sharedstrings+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.sheet' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.sheetmetadata+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.styles+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.table+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.tablesinglecells+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.template' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.usernames+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.volatiledependencies+xml' => {},
-                                            'vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml' => {},
-                                            'vnd.openxmlformats-officedocument.theme+xml' => {},
-                                            'vnd.openxmlformats-officedocument.themeoverride+xml' => {},
-                                            'vnd.openxmlformats-officedocument.vmldrawing' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.comments+xml' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.document' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.document.glossary+xml' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.fonttable+xml' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.footer+xml' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.settings+xml' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.styles+xml' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.template' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml' => {},
-                                            'vnd.openxmlformats-officedocument.wordprocessingml.websettings+xml' => {},
-                                            'vnd.openxmlformats-package.core-properties+xml' => {},
-                                            'vnd.openxmlformats-package.digital-signature-xmlsignature+xml' => {},
-                                            'vnd.openxmlformats-package.relationships+xml' => {},
-                                            'vnd.osa.netdeploy' => {},
-                                            'vnd.osgeo.mapguide.package' => {},
-                                            'vnd.osgi.bundle' => {},
-                                            'vnd.osgi.dp' => {},
-                                            'vnd.osgi.subsystem' => {},
-                                            'vnd.otps.ct-kip+xml' => {},
-                                            'vnd.palm' => {},
+                                            'vnd.openxmlformats-officedocument.custom-properties+xml' => {
+                                                                                                           'iana' => 'permanent'
+                                                                                                         },
+                                            'vnd.openxmlformats-officedocument.customxmlproperties+xml' => {
+                                                                                                             'iana' => 'permanent'
+                                                                                                           },
+                                            'vnd.openxmlformats-officedocument.drawing+xml' => {
+                                                                                                 'iana' => 'permanent'
+                                                                                               },
+                                            'vnd.openxmlformats-officedocument.drawingml.chart+xml' => {
+                                                                                                         'iana' => 'permanent'
+                                                                                                       },
+                                            'vnd.openxmlformats-officedocument.drawingml.chartshapes+xml' => {
+                                                                                                               'iana' => 'permanent'
+                                                                                                             },
+                                            'vnd.openxmlformats-officedocument.drawingml.diagramcolors+xml' => {
+                                                                                                                 'iana' => 'permanent'
+                                                                                                               },
+                                            'vnd.openxmlformats-officedocument.drawingml.diagramdata+xml' => {
+                                                                                                               'iana' => 'permanent'
+                                                                                                             },
+                                            'vnd.openxmlformats-officedocument.drawingml.diagramlayout+xml' => {
+                                                                                                                 'iana' => 'permanent'
+                                                                                                               },
+                                            'vnd.openxmlformats-officedocument.drawingml.diagramstyle+xml' => {
+                                                                                                                'iana' => 'permanent'
+                                                                                                              },
+                                            'vnd.openxmlformats-officedocument.extended-properties+xml' => {
+                                                                                                             'iana' => 'permanent'
+                                                                                                           },
+                                            'vnd.openxmlformats-officedocument.presentationml.commentauthors+xml' => {
+                                                                                                                       'iana' => 'permanent'
+                                                                                                                     },
+                                            'vnd.openxmlformats-officedocument.presentationml.comments+xml' => {
+                                                                                                                 'iana' => 'permanent'
+                                                                                                               },
+                                            'vnd.openxmlformats-officedocument.presentationml.handoutmaster+xml' => {
+                                                                                                                      'iana' => 'permanent'
+                                                                                                                    },
+                                            'vnd.openxmlformats-officedocument.presentationml.notesmaster+xml' => {
+                                                                                                                    'iana' => 'permanent'
+                                                                                                                  },
+                                            'vnd.openxmlformats-officedocument.presentationml.notesslide+xml' => {
+                                                                                                                   'iana' => 'permanent'
+                                                                                                                 },
+                                            'vnd.openxmlformats-officedocument.presentationml.presentation' => {
+                                                                                                                 'iana' => 'permanent'
+                                                                                                               },
+                                            'vnd.openxmlformats-officedocument.presentationml.presentation.main+xml' => {
+                                                                                                                          'iana' => 'permanent'
+                                                                                                                        },
+                                            'vnd.openxmlformats-officedocument.presentationml.presprops+xml' => {
+                                                                                                                  'iana' => 'permanent'
+                                                                                                                },
+                                            'vnd.openxmlformats-officedocument.presentationml.slide' => {
+                                                                                                          'iana' => 'permanent'
+                                                                                                        },
+                                            'vnd.openxmlformats-officedocument.presentationml.slide+xml' => {
+                                                                                                              'iana' => 'permanent'
+                                                                                                            },
+                                            'vnd.openxmlformats-officedocument.presentationml.slidelayout+xml' => {
+                                                                                                                    'iana' => 'permanent'
+                                                                                                                  },
+                                            'vnd.openxmlformats-officedocument.presentationml.slidemaster+xml' => {
+                                                                                                                    'iana' => 'permanent'
+                                                                                                                  },
+                                            'vnd.openxmlformats-officedocument.presentationml.slideshow' => {
+                                                                                                              'iana' => 'permanent'
+                                                                                                            },
+                                            'vnd.openxmlformats-officedocument.presentationml.slideshow.main+xml' => {
+                                                                                                                       'iana' => 'permanent'
+                                                                                                                     },
+                                            'vnd.openxmlformats-officedocument.presentationml.slideupdateinfo+xml' => {
+                                                                                                                        'iana' => 'permanent'
+                                                                                                                      },
+                                            'vnd.openxmlformats-officedocument.presentationml.tablestyles+xml' => {
+                                                                                                                    'iana' => 'permanent'
+                                                                                                                  },
+                                            'vnd.openxmlformats-officedocument.presentationml.tags+xml' => {
+                                                                                                             'iana' => 'permanent'
+                                                                                                           },
+                                            'vnd.openxmlformats-officedocument.presentationml.template' => {
+                                                                                                             'iana' => 'permanent'
+                                                                                                           },
+                                            'vnd.openxmlformats-officedocument.presentationml.template.main+xml' => {
+                                                                                                                      'iana' => 'permanent'
+                                                                                                                    },
+                                            'vnd.openxmlformats-officedocument.presentationml.viewprops+xml' => {
+                                                                                                                  'iana' => 'permanent'
+                                                                                                                },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.calcchain+xml' => {
+                                                                                                                 'iana' => 'permanent'
+                                                                                                               },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml' => {
+                                                                                                                  'iana' => 'permanent'
+                                                                                                                },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.comments+xml' => {
+                                                                                                                'iana' => 'permanent'
+                                                                                                              },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.connections+xml' => {
+                                                                                                                   'iana' => 'permanent'
+                                                                                                                 },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.dialogsheet+xml' => {
+                                                                                                                   'iana' => 'permanent'
+                                                                                                                 },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.externallink+xml' => {
+                                                                                                                    'iana' => 'permanent'
+                                                                                                                  },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.pivotcachedefinition+xml' => {
+                                                                                                                            'iana' => 'permanent'
+                                                                                                                          },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.pivotcacherecords+xml' => {
+                                                                                                                         'iana' => 'permanent'
+                                                                                                                       },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.pivottable+xml' => {
+                                                                                                                  'iana' => 'permanent'
+                                                                                                                },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.querytable+xml' => {
+                                                                                                                  'iana' => 'permanent'
+                                                                                                                },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.revisionheaders+xml' => {
+                                                                                                                       'iana' => 'permanent'
+                                                                                                                     },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.revisionlog+xml' => {
+                                                                                                                   'iana' => 'permanent'
+                                                                                                                 },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.sharedstrings+xml' => {
+                                                                                                                     'iana' => 'permanent'
+                                                                                                                   },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.sheet' => {
+                                                                                                         'iana' => 'permanent'
+                                                                                                       },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml' => {
+                                                                                                                  'iana' => 'permanent'
+                                                                                                                },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.sheetmetadata+xml' => {
+                                                                                                                     'iana' => 'permanent'
+                                                                                                                   },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.styles+xml' => {
+                                                                                                              'iana' => 'permanent'
+                                                                                                            },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.table+xml' => {
+                                                                                                             'iana' => 'permanent'
+                                                                                                           },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.tablesinglecells+xml' => {
+                                                                                                                        'iana' => 'permanent'
+                                                                                                                      },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.template' => {
+                                                                                                            'iana' => 'permanent'
+                                                                                                          },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml' => {
+                                                                                                                     'iana' => 'permanent'
+                                                                                                                   },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.usernames+xml' => {
+                                                                                                                 'iana' => 'permanent'
+                                                                                                               },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.volatiledependencies+xml' => {
+                                                                                                                            'iana' => 'permanent'
+                                                                                                                          },
+                                            'vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml' => {
+                                                                                                                 'iana' => 'permanent'
+                                                                                                               },
+                                            'vnd.openxmlformats-officedocument.theme+xml' => {
+                                                                                               'iana' => 'permanent'
+                                                                                             },
+                                            'vnd.openxmlformats-officedocument.themeoverride+xml' => {
+                                                                                                       'iana' => 'permanent'
+                                                                                                     },
+                                            'vnd.openxmlformats-officedocument.vmldrawing' => {
+                                                                                                'iana' => 'permanent'
+                                                                                              },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.comments+xml' => {
+                                                                                                                   'iana' => 'permanent'
+                                                                                                                 },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.document' => {
+                                                                                                               'iana' => 'permanent'
+                                                                                                             },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.document.glossary+xml' => {
+                                                                                                                            'iana' => 'permanent'
+                                                                                                                          },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml' => {
+                                                                                                                        'iana' => 'permanent'
+                                                                                                                      },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml' => {
+                                                                                                                   'iana' => 'permanent'
+                                                                                                                 },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.fonttable+xml' => {
+                                                                                                                    'iana' => 'permanent'
+                                                                                                                  },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.footer+xml' => {
+                                                                                                                 'iana' => 'permanent'
+                                                                                                               },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml' => {
+                                                                                                                    'iana' => 'permanent'
+                                                                                                                  },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml' => {
+                                                                                                                    'iana' => 'permanent'
+                                                                                                                  },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.settings+xml' => {
+                                                                                                                   'iana' => 'permanent'
+                                                                                                                 },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.styles+xml' => {
+                                                                                                                 'iana' => 'permanent'
+                                                                                                               },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.template' => {
+                                                                                                               'iana' => 'permanent'
+                                                                                                             },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.template.main+xml' => {
+                                                                                                                        'iana' => 'permanent'
+                                                                                                                      },
+                                            'vnd.openxmlformats-officedocument.wordprocessingml.websettings+xml' => {
+                                                                                                                      'iana' => 'permanent'
+                                                                                                                    },
+                                            'vnd.openxmlformats-package.core-properties+xml' => {
+                                                                                                  'iana' => 'permanent'
+                                                                                                },
+                                            'vnd.openxmlformats-package.digital-signature-xmlsignature+xml' => {
+                                                                                                                 'iana' => 'permanent'
+                                                                                                               },
+                                            'vnd.openxmlformats-package.relationships+xml' => {
+                                                                                                'iana' => 'permanent'
+                                                                                              },
+                                            'vnd.orange.indata' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.osa.netdeploy' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.osgeo.mapguide.package' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.osgi.bundle' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.osgi.dp' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.osgi.subsystem' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.otps.ct-kip+xml' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.palm' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'vnd.paos+xml' => {},
-                                            'vnd.paos.xml' => {},
-                                            'vnd.pawaafile' => {},
-                                            'vnd.pg.format' => {},
-                                            'vnd.pg.osasli' => {},
-                                            'vnd.piaccess.application-licence' => {},
-                                            'vnd.picsel' => {},
-                                            'vnd.pmi.widget' => {},
-                                            'vnd.poc.group-advertisement+xml' => {},
-                                            'vnd.pocketlearn' => {},
-                                            'vnd.powerbuilder6' => {},
-                                            'vnd.powerbuilder6-s' => {},
-                                            'vnd.powerbuilder7' => {},
-                                            'vnd.powerbuilder7-s' => {},
-                                            'vnd.powerbuilder75' => {},
-                                            'vnd.powerbuilder75-s' => {},
-                                            'vnd.preminet' => {},
-                                            'vnd.previewsystems.box' => {},
-                                            'vnd.proteus.magazine' => {},
-                                            'vnd.publishare-delta-tree' => {},
-                                            'vnd.pvi.ptid1' => {},
-                                            'vnd.pwg-multiplexed' => {},
-                                            'vnd.pwg-xhtml-print+xml' => {},
-                                            'vnd.qualcomm.brew-app-res' => {},
-                                            'vnd.quark.quarkxpress' => {},
-                                            'vnd.quobject-quoxdocument' => {},
-                                            'vnd.radisys.moml+xml' => {},
-                                            'vnd.radisys.msml+xml' => {},
-                                            'vnd.radisys.msml-audit+xml' => {},
-                                            'vnd.radisys.msml-audit-conf+xml' => {},
-                                            'vnd.radisys.msml-audit-conn+xml' => {},
-                                            'vnd.radisys.msml-audit-dialog+xml' => {},
-                                            'vnd.radisys.msml-audit-stream+xml' => {},
-                                            'vnd.radisys.msml-conf+xml' => {},
-                                            'vnd.radisys.msml-dialog+xml' => {},
-                                            'vnd.radisys.msml-dialog-base+xml' => {},
-                                            'vnd.radisys.msml-dialog-fax-detect+xml' => {},
-                                            'vnd.radisys.msml-dialog-fax-sendrecv+xml' => {},
-                                            'vnd.radisys.msml-dialog-group+xml' => {},
-                                            'vnd.radisys.msml-dialog-speech+xml' => {},
-                                            'vnd.radisys.msml-dialog-transform+xml' => {},
-                                            'vnd.rainstor.data' => {},
-                                            'vnd.rapid' => {},
-                                            'vnd.realvnc.bed' => {},
-                                            'vnd.recordare.musicxml' => {},
-                                            'vnd.recordare.musicxml+xml' => {},
-                                            'vnd.renlearn.rlprint' => {},
-                                            'vnd.rig.cryptonote' => {},
+                                            'vnd.paos.xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.pawaafile' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.pg.format' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.pg.osasli' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.piaccess.application-licence' => {
+                                                                                    'iana' => 'permanent'
+                                                                                  },
+                                            'vnd.picsel' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.pmi.widget' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.poc.group-advertisement+xml' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.pocketlearn' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.powerbuilder6' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.powerbuilder6-s' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.powerbuilder7' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.powerbuilder7-s' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.powerbuilder75' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.powerbuilder75-s' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.preminet' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.previewsystems.box' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.proteus.magazine' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.publishare-delta-tree' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.pvi.ptid1' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.pwg-multiplexed' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.pwg-xhtml-print+xml' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.qualcomm.brew-app-res' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.quark.quarkxpress' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.quobject-quoxdocument' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.radisys.moml+xml' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.radisys.msml+xml' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.radisys.msml-audit+xml' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.radisys.msml-audit-conf+xml' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.radisys.msml-audit-conn+xml' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.radisys.msml-audit-dialog+xml' => {
+                                                                                     'iana' => 'permanent'
+                                                                                   },
+                                            'vnd.radisys.msml-audit-stream+xml' => {
+                                                                                     'iana' => 'permanent'
+                                                                                   },
+                                            'vnd.radisys.msml-conf+xml' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.radisys.msml-dialog+xml' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.radisys.msml-dialog-base+xml' => {
+                                                                                    'iana' => 'permanent'
+                                                                                  },
+                                            'vnd.radisys.msml-dialog-fax-detect+xml' => {
+                                                                                          'iana' => 'permanent'
+                                                                                        },
+                                            'vnd.radisys.msml-dialog-fax-sendrecv+xml' => {
+                                                                                            'iana' => 'permanent'
+                                                                                          },
+                                            'vnd.radisys.msml-dialog-group+xml' => {
+                                                                                     'iana' => 'permanent'
+                                                                                   },
+                                            'vnd.radisys.msml-dialog-speech+xml' => {
+                                                                                      'iana' => 'permanent'
+                                                                                    },
+                                            'vnd.radisys.msml-dialog-transform+xml' => {
+                                                                                         'iana' => 'permanent'
+                                                                                       },
+                                            'vnd.rainstor.data' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.rapid' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'vnd.realvnc.bed' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.recordare.musicxml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.recordare.musicxml+xml' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.renlearn.rlprint' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.rig.cryptonote' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
                                             'vnd.rim.cod' => {},
                                             'vnd.rn-realmedia' => {},
                                             'vnd.rn-realmedia-vbr' => {},
                                             'vnd.rn-realplayer' => {},
+                                            'vnd.rn-realplayer-javascript' => {},
                                             'vnd.rn-realsystem-rjs' => {},
                                             'vnd.rn-realsystem-rmj' => {},
                                             'vnd.rn-realsystem-rmx' => {},
                                             'vnd.rn-rn_music_package' => {},
                                             'vnd.roland-rns0' => {},
-                                            'vnd.route66.link66+xml' => {},
-                                            'vnd.rs-274x' => {},
-                                            'vnd.ruckus.download' => {},
-                                            'vnd.s3sms' => {},
-                                            'vnd.sailingtracker.track' => {},
-                                            'vnd.sbm.cid' => {},
-                                            'vnd.sbm.mid2' => {},
-                                            'vnd.scribus' => {},
-                                            'vnd.sealed.3df' => {},
-                                            'vnd.sealed.csf' => {},
-                                            'vnd.sealed.doc' => {},
-                                            'vnd.sealed.eml' => {},
-                                            'vnd.sealed.mht' => {},
-                                            'vnd.sealed.net' => {},
-                                            'vnd.sealed.ppt' => {},
-                                            'vnd.sealed.tiff' => {},
-                                            'vnd.sealed.xls' => {},
-                                            'vnd.sealedmedia.softseal.html' => {},
-                                            'vnd.sealedmedia.softseal.pdf' => {},
-                                            'vnd.seemail' => {},
-                                            'vnd.sema' => {},
-                                            'vnd.semd' => {},
-                                            'vnd.semf' => {},
-                                            'vnd.shana.informed.formdata' => {},
-                                            'vnd.shana.informed.formtemplate' => {},
-                                            'vnd.shana.informed.interchange' => {},
-                                            'vnd.shana.informed.package' => {},
-                                            'vnd.simtech-mindmapper' => {},
-                                            'vnd.smaf' => {},
-                                            'vnd.smart.notebook' => {},
-                                            'vnd.smart.teacher' => {},
-                                            'vnd.software602.filler.form+xml' => {},
-                                            'vnd.software602.filler.form-xml-zip' => {},
-                                            'vnd.solent.sdkm+xml' => {},
-                                            'vnd.spotfire.dxp' => {},
-                                            'vnd.spotfire.sfs' => {},
-                                            'vnd.sss-cod' => {},
-                                            'vnd.sss-dtf' => {},
-                                            'vnd.sss-ntf' => {},
+                                            'vnd.route66.link66+xml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.rs-274x' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.ruckus.download' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.s3sms' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'vnd.sailingtracker.track' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.sbm.cid' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.sbm.mid2' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.scribus' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.sealed.3df' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.sealed.csf' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.sealed.doc' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.sealed.eml' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.sealed.mht' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.sealed.net' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.sealed.ppt' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.sealed.tiff' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.sealed.xls' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.sealedmedia.softseal.html' => {
+                                                                                 'iana' => 'permanent'
+                                                                               },
+                                            'vnd.sealedmedia.softseal.pdf' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'vnd.seemail' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.sema' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.semd' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.semf' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.shana.informed.formdata' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.shana.informed.formtemplate' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.shana.informed.interchange' => {
+                                                                                  'iana' => 'permanent'
+                                                                                },
+                                            'vnd.shana.informed.package' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.simtech-mindmapper' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.siren+json' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.smaf' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.smart.notebook' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.smart.teacher' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.software602.filler.form+xml' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.software602.filler.form-xml-zip' => {
+                                                                                       'iana' => 'permanent'
+                                                                                     },
+                                            'vnd.solent.sdkm+xml' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.spotfire.dxp' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.spotfire.sfs' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.sss-cod' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.sss-dtf' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.sss-ntf' => {
+                                                               'iana' => 'permanent'
+                                                             },
                                             'vnd.stardivision.calc' => {},
                                             'vnd.stardivision.draw' => {},
                                             'vnd.stardivision.impress' => {},
                                             'vnd.stardivision.math' => {},
                                             'vnd.stardivision.writer' => {},
                                             'vnd.stardivision.writer-global' => {},
-                                            'vnd.stepmania.package' => {},
-                                            'vnd.stepmania.stepchart' => {},
-                                            'vnd.street-stream' => {},
-                                            'vnd.sun.wadl+xml' => {},
+                                            'vnd.stepmania.package' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.stepmania.stepchart' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.street-stream' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.sun.wadl+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
                                             'vnd.sun.xml.calc' => {},
                                             'vnd.sun.xml.calc.template' => {},
                                             'vnd.sun.xml.draw' => {},
@@ -1295,119 +3177,328 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.sun.xml.writer' => {},
                                             'vnd.sun.xml.writer.global' => {},
                                             'vnd.sun.xml.writer.template' => {},
-                                            'vnd.sus-calendar' => {},
-                                            'vnd.svd' => {},
+                                            'vnd.sus-calendar' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.svd' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'vnd.swiftview-ics' => {
+                                                                     'iana' => 'permanent',
                                                                      'plugin' => 1
                                                                    },
                                             'vnd.swiftview-zip' => {
                                                                      'plugin' => 1
                                                                    },
                                             'vnd.symbian.install' => {},
-                                            'vnd.syncml+xml' => {},
-                                            'vnd.syncml.dm+wbxml' => {},
-                                            'vnd.syncml.dm+xml' => {},
-                                            'vnd.syncml.dm.notification' => {},
-                                            'vnd.syncml.ds.notification' => {},
-                                            'vnd.tao.intent-module-archive' => {},
-                                            'vnd.tcpdump.pcap' => {},
-                                            'vnd.tmobile-livetv' => {},
-                                            'vnd.trid.tpt' => {},
-                                            'vnd.triscape.mxs' => {},
-                                            'vnd.trueapp' => {},
-                                            'vnd.truedoc' => {},
-                                            'vnd.ubisoft.webplayer' => {},
-                                            'vnd.ufdl' => {},
-                                            'vnd.uiq.theme' => {},
-                                            'vnd.umajin' => {},
-                                            'vnd.unity' => {},
-                                            'vnd.uoml+xml' => {},
-                                            'vnd.uplanet.alert' => {},
-                                            'vnd.uplanet.alert-wbxml' => {},
-                                            'vnd.uplanet.bearer-choice' => {},
-                                            'vnd.uplanet.bearer-choice-wbxml' => {},
-                                            'vnd.uplanet.cacheop' => {},
-                                            'vnd.uplanet.cacheop-wbxml' => {},
-                                            'vnd.uplanet.channel' => {},
-                                            'vnd.uplanet.channel-wbxml' => {},
-                                            'vnd.uplanet.list' => {},
-                                            'vnd.uplanet.list-wbxml' => {},
-                                            'vnd.uplanet.listcmd' => {},
-                                            'vnd.uplanet.listcmd-wbxml' => {},
-                                            'vnd.uplanet.signal' => {},
-                                            'vnd.vcx' => {},
-                                            'vnd.vd-study' => {},
-                                            'vnd.vectorworks' => {},
-                                            'vnd.verimatrix.vcas' => {},
-                                            'vnd.vidsoft.vidconference' => {},
-                                            'vnd.visio' => {},
-                                            'vnd.visionary' => {},
-                                            'vnd.vividence.scriptfile' => {},
-                                            'vnd.vsf' => {},
+                                            'vnd.syncml+xml' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.syncml.dm+wbxml' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.syncml.dm+xml' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.syncml.dm.notification' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.syncml.dmddf+wbxml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.syncml.dmddf+xml' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.syncml.dmtnds+wbxml' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.syncml.dmtnds+xml' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.syncml.ds.notification' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.tao.intent-module-archive' => {
+                                                                                 'iana' => 'permanent'
+                                                                               },
+                                            'vnd.tcpdump.pcap' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.theqvd' => {},
+                                            'vnd.tmobile-livetv' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.trid.tpt' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.triscape.mxs' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.trueapp' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.truedoc' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.ubisoft.webplayer' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.ufdl' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.uiq.theme' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.umajin' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.unity' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'vnd.uoml+xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.uplanet.alert' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.uplanet.alert-wbxml' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.uplanet.bearer-choice' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.uplanet.bearer-choice-wbxml' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.uplanet.cacheop' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.uplanet.cacheop-wbxml' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.uplanet.channel' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.uplanet.channel-wbxml' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.uplanet.list' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.uplanet.list-wbxml' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.uplanet.listcmd' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.uplanet.listcmd-wbxml' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.uplanet.signal' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.vcx' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'vnd.vd-study' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.vectorworks' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.verimatrix.vcas' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.vidsoft.vidconference' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.visio' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'vnd.visionary' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.vividence.scriptfile' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'vnd.vsf' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'vnd.wap.multipart.alternative' => {},
                                             'vnd.wap.multipart.byteranges' => {},
                                             'vnd.wap.multipart.form-data' => {},
                                             'vnd.wap.multipart.mixed' => {},
-                                            'vnd.wap.sic' => {},
-                                            'vnd.wap.slc' => {},
-                                            'vnd.wap.wbxml' => {},
-                                            'vnd.wap.wmlc' => {},
-                                            'vnd.wap.wmlscriptc' => {},
+                                            'vnd.wap.sic' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.wap.slc' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.wap.wbxml' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'vnd.wap.wmlc' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.wap.wmlscriptc' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
                                             'vnd.wap.xhtml+xml' => {},
-                                            'vnd.webturbo' => {},
-                                            'vnd.wfa.wsc' => {},
-                                            'vnd.wmc' => {},
-                                            'vnd.wmf.bootstrap' => {},
-                                            'vnd.wolfram.mathematica' => {},
-                                            'vnd.wolfram.mathematica.package' => {},
-                                            'vnd.wolfram.player' => {},
-                                            'vnd.wordperfect' => {},
-                                            'vnd.wqd' => {},
-                                            'vnd.wrq-hp3000-labelled' => {},
-                                            'vnd.wt.stf' => {},
-                                            'vnd.wv.csp+wbxml' => {},
-                                            'vnd.wv.csp+xml' => {},
-                                            'vnd.wv.ssp+xml' => {},
-                                            'vnd.xara' => {},
-                                            'vnd.xfdl' => {},
-                                            'vnd.xfdl.webform' => {},
-                                            'vnd.xmi+xml' => {},
-                                            'vnd.xmpie.cpkg' => {},
-                                            'vnd.xmpie.dpkg' => {},
-                                            'vnd.xmpie.plan' => {},
-                                            'vnd.xmpie.ppkg' => {},
-                                            'vnd.xmpie.xlim' => {},
-                                            'vnd.yamaha.hv-dic' => {},
-                                            'vnd.yamaha.hv-script' => {},
-                                            'vnd.yamaha.hv-voice' => {},
-                                            'vnd.yamaha.openscoreformat' => {},
-                                            'vnd.yamaha.openscoreformat.osfpvg+xml' => {},
-                                            'vnd.yamaha.remote-setup' => {},
-                                            'vnd.yamaha.smaf-audio' => {},
-                                            'vnd.yamaha.smaf-phrase' => {},
-                                            'vnd.yamaha.through-ngn' => {},
-                                            'vnd.yamaha.tunnel-udpencap' => {},
-                                            'vnd.yellowriver-custom-menu' => {},
-                                            'vnd.zul' => {},
-                                            'vnd.zzazz.deck+xml' => {},
+                                            'vnd.webturbo' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vnd.wfa.p2p' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.wfa.wsc' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.windows.devicepairing' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                            'vnd.wmc' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'vnd.wmf.bootstrap' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.wolfram.mathematica' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.wolfram.mathematica.package' => {
+                                                                                   'iana' => 'permanent'
+                                                                                 },
+                                            'vnd.wolfram.player' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                            'vnd.wordperfect' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'vnd.wqd' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'vnd.wrq-hp3000-labelled' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.wt.stf' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                            'vnd.wv.csp+wbxml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.wv.csp+xml' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.wv.ssp+xml' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.xacml+json' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.xara' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.xfdl' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'vnd.xfdl.webform' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'vnd.xmi+xml' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'vnd.xmpie.cpkg' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.xmpie.dpkg' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.xmpie.plan' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.xmpie.ppkg' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.xmpie.xlim' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'vnd.yamaha.hv-dic' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'vnd.yamaha.hv-script' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'vnd.yamaha.hv-voice' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'vnd.yamaha.openscoreformat' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.yamaha.openscoreformat.osfpvg+xml' => {
+                                                                                         'iana' => 'permanent'
+                                                                                       },
+                                            'vnd.yamaha.remote-setup' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'vnd.yamaha.smaf-audio' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                            'vnd.yamaha.smaf-phrase' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.yamaha.through-ngn' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'vnd.yamaha.tunnel-udpencap' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                            'vnd.yellowriver-custom-menu' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                            'vnd.zul' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'vnd.zzazz.deck+xml' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
                                             'vocaltec-ips' => {},
                                             'vocaltec-media-desc' => {},
                                             'vocaltec-media-file' => {},
-                                            'voicexml+xml' => {},
-                                            'vq-rtcpxr' => {},
-                                            'watcherinfo+xml' => {},
+                                            'voicexml+xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'vq-rtcpxr' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                            'watcherinfo+xml' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
                                             'wcz' => {},
                                             'wfphelpap' => {},
-                                            'whoispp-query' => {},
-                                            'whoispp-response' => {},
-                                            'widget' => {},
+                                            'whoispp-query' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'whoispp-response' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                            'widget' => {
+                                                          'iana' => 'permanent'
+                                                        },
                                             'wiki' => {},
                                             'winhlp' => {},
-                                            'wita' => {},
-                                            'wordperfect5.1' => {},
+                                            'wita' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                            'wordperfect5.1' => {
+                                                                  'iana' => 'permanent'
+                                                                },
                                             'wpc' => {},
-                                            'wsdl+xml' => {},
-                                            'wspolicy+xml' => {},
+                                            'wsdl+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                            'wspolicy+xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                             'x-7z-compressed' => {},
                                             'x-abiword' => {},
                                             'x-ace-compressed' => {},
@@ -1550,6 +3641,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-font-ttf' => {},
                                             'x-font-type1' => {},
                                             'x-font-vfont' => {},
+                                            'x-fontdata' => {},
                                             'x-formatta' => {},
                                             'x-fortezza-ckl' => {},
                                             'x-framefree2' => {
@@ -1929,6 +4021,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-vlc-plugin' => {
                                                                 'plugin' => 1
                                                               },
+                                            'x-vnd.adobe.air.file-list' => {},
                                             'x-vnd.google.oneclickctrl.9' => {
                                                                                'plugin' => 1
                                                                              },
@@ -2005,22 +4098,46 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x3d-vrml' => {
                                                             'iana' => 'provisional'
                                                           },
-                                            'x400-bp' => {},
+                                            'x400-bp' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                            'xacml+xml' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                             'xaml+xml' => {},
-                                            'xcap-att+xml' => {},
-                                            'xcap-caps+xml' => {},
-                                            'xcap-diff+xml' => {},
-                                            'xcap-el+xml' => {},
-                                            'xcap-error+xml' => {},
-                                            'xcap-ns+xml' => {},
-                                            'xcon-conference-info+xml' => {},
-                                            'xcon-conference-info-diff+xml' => {},
-                                            'xenc+xml' => {},
+                                            'xcap-att+xml' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                            'xcap-caps+xml' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'xcap-diff+xml' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                            'xcap-el+xml' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'xcap-error+xml' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                            'xcap-ns+xml' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                            'xcon-conference-info+xml' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                            'xcon-conference-info-diff+xml' => {
+                                                                                 'iana' => 'permanent'
+                                                                               },
+                                            'xenc+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'xgmml' => {},
                                             'xhtml+voice+xml' => {},
                                             'xhtml+xml' => {
                                                              'blacklisted' => 1,
                                                              'browser' => 1,
+                                                             'iana' => 'permanent',
                                                              'mac_types' => {
                                                                               'TEXT' => 1
                                                                             },
@@ -2030,11 +4147,15 @@ $Web::MIME::_TypeDefs::Type = {
                                                                          },
                                                              'text' => 1
                                                            },
-                                            'xhtml-voice+xml' => {},
+                                            'xhtml-voice+xml' => {
+                                                                   'iana' => 'permanent',
+                                                                   'iana_obsolete' => 1
+                                                                 },
                                             'xlc' => {},
                                             'xml' => {
                                                        'blacklisted' => 1,
                                                        'browser' => 1,
+                                                       'iana' => 'permanent',
                                                        'mac_types' => {
                                                                         'TEXT' => 1
                                                                       },
@@ -2046,6 +4167,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'xml' => 1
                                                      },
                                             'xml-dtd' => {
+                                                           'iana' => 'permanent',
                                                            'mac_types' => {
                                                                             'TEXT' => 1
                                                                           },
@@ -2055,6 +4177,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                            'text' => 1
                                                          },
                                             'xml-external-parsed-entity' => {
+                                                                              'iana' => 'permanent',
                                                                               'mac_types' => {
                                                                                                'TEXT' => 1
                                                                                              },
@@ -2063,11 +4186,16 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                           },
                                                                               'text' => 1
                                                                             },
-                                            'xmpp+xml' => {},
+                                            'xmpp+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'xneval' => {},
-                                            'xop+xml' => {},
+                                            'xop+xml' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'xproc+xml' => {},
                                             'xslt+xml' => {
+                                                            'iana' => 'permanent',
                                                             'params' => {
                                                                           'charset' => {}
                                                                         },
@@ -2075,27 +4203,44 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'text' => 1
                                                           },
                                             'xspf+xml' => {},
-                                            'xv+xml' => {},
-                                            'yang' => {},
-                                            'yin+xml' => {},
+                                            'xv+xml' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                            'yang' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                            'yin+xml' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'zip' => {
                                                        'archive' => 1,
+                                                       'iana' => 'permanent',
                                                        'zip' => 1
-                                                     }
+                                                     },
+                                            'zlib' => {
+                                                        'iana' => 'permanent'
+                                                      }
                                           }
                            },
           'audio' => {
                        'audiovideo' => 1,
+                       'iana' => 'permanent',
                        'subtype' => {
-                                      '1d-interleaved-parityfec' => {},
-                                      '32kadpcm' => {},
+                                      '1d-interleaved-parityfec' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                      '32kadpcm' => {
+                                                      'iana' => 'permanent'
+                                                    },
                                       '3gpp' => {
+                                                  'iana' => 'permanent',
                                                   'params' => {
                                                                 'codecs' => {}
                                                               },
                                                   'plugin' => 1
                                                 },
                                       '3gpp2' => {
+                                                   'iana' => 'permanent',
                                                    'params' => {
                                                                  'codecs' => {}
                                                                },
@@ -2104,81 +4249,203 @@ $Web::MIME::_TypeDefs::Type = {
                                       'aac' => {
                                                  'plugin' => 1
                                                },
-                                      'ac3' => {},
+                                      'ac3' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'adpcm' => {},
                                       'aiff' => {
                                                   'plugin' => 1
                                                 },
                                       'amr' => {
+                                                 'iana' => 'permanent',
                                                  'plugin' => 1
                                                },
-                                      'amr-wb' => {},
+                                      'amr-wb' => {
+                                                    'iana' => 'permanent'
+                                                  },
                                       'amr-wb+' => {},
-                                      'asc' => {},
-                                      'atrac-advanced-lossless' => {},
-                                      'atrac-x' => {},
-                                      'atrac3' => {},
+                                      'asc' => {
+                                                 'iana' => 'permanent'
+                                               },
+                                      'atrac-advanced-lossless' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                      'atrac-x' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'atrac3' => {
+                                                    'iana' => 'permanent'
+                                                  },
                                       'au' => {},
                                       'basic' => {
+                                                   'iana' => 'permanent',
                                                    'plugin' => 1
                                                  },
-                                      'bv16' => {},
-                                      'bv32' => {},
+                                      'bv16' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'bv32' => {
+                                                  'iana' => 'permanent'
+                                                },
                                       'cleanmode' => {},
-                                      'clearmode' => {},
-                                      'cn' => {},
-                                      'dat12' => {},
-                                      'dls' => {},
-                                      'dsr-es201108' => {},
-                                      'dsr-es202050' => {},
-                                      'dsr-es202211' => {},
-                                      'dsr-es202212' => {},
-                                      'dv' => {},
-                                      'dvi4' => {},
-                                      'eac3' => {},
+                                      'clearmode' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                      'cn' => {
+                                                'iana' => 'permanent'
+                                              },
+                                      'dat12' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                      'dls' => {
+                                                 'iana' => 'permanent'
+                                               },
+                                      'dsr-es201108' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'dsr-es202050' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'dsr-es202211' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'dsr-es202212' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'dv' => {
+                                                'iana' => 'permanent'
+                                              },
+                                      'dvi4' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'eac3' => {
+                                                  'iana' => 'permanent'
+                                                },
                                       'echospeech' => {},
-                                      'evrc' => {},
-                                      'evrc-qcp' => {},
-                                      'evrc0' => {},
-                                      'evrc1' => {},
-                                      'evrcb' => {},
-                                      'evrcb0' => {},
-                                      'evrcb1' => {},
-                                      'evrcwb' => {},
-                                      'evrcwb0' => {},
-                                      'evrcwb1' => {},
-                                      'example' => {},
-                                      'fwdred' => {},
+                                      'encaprtp' => {
+                                                      'iana' => 'permanent'
+                                                    },
+                                      'evrc' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'evrc-qcp' => {
+                                                      'iana' => 'permanent'
+                                                    },
+                                      'evrc0' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                      'evrc1' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                      'evrcb' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                      'evrcb0' => {
+                                                    'iana' => 'permanent'
+                                                  },
+                                      'evrcb1' => {
+                                                    'iana' => 'permanent'
+                                                  },
+                                      'evrcnw' => {
+                                                    'iana' => 'permanent'
+                                                  },
+                                      'evrcnw0' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'evrcnw1' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'evrcwb' => {
+                                                    'iana' => 'permanent'
+                                                  },
+                                      'evrcwb0' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'evrcwb1' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'example' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'fwdred' => {
+                                                    'iana' => 'permanent'
+                                                  },
                                       'g.722.1' => {},
-                                      'g719' => {},
-                                      'g722' => {},
-                                      'g7221' => {},
-                                      'g723' => {},
-                                      'g726-16' => {},
-                                      'g726-24' => {},
-                                      'g726-32' => {},
-                                      'g726-40' => {},
-                                      'g728' => {},
-                                      'g729' => {},
-                                      'g7291' => {},
-                                      'g729d' => {},
-                                      'g729e' => {},
-                                      'gsm' => {},
-                                      'gsm-efr' => {},
-                                      'gsm-hr-08' => {},
-                                      'ilbc' => {},
+                                      'g719' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'g722' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'g7221' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                      'g723' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'g726-16' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'g726-24' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'g726-32' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'g726-40' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'g728' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'g729' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'g7291' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                      'g729d' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                      'g729e' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                      'gsm' => {
+                                                 'iana' => 'permanent'
+                                               },
+                                      'gsm-efr' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'gsm-hr-08' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                      'ilbc' => {
+                                                  'iana' => 'permanent'
+                                                },
                                       'imelody' => {},
-                                      'ip-mr_v2.5' => {},
+                                      'ip-mr_v2.5' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                       'isac' => {},
                                       'it' => {
                                                 'plugin' => 1
                                               },
                                       'karaoke' => {},
-                                      'l16' => {},
-                                      'l20' => {},
-                                      'l24' => {},
-                                      'l8' => {},
-                                      'lpc' => {},
+                                      'l16' => {
+                                                 'iana' => 'permanent'
+                                               },
+                                      'l20' => {
+                                                 'iana' => 'permanent'
+                                               },
+                                      'l24' => {
+                                                 'iana' => 'permanent'
+                                               },
+                                      'l8' => {
+                                                'iana' => 'permanent'
+                                              },
+                                      'lpc' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'mad' => {},
                                       'madi' => {},
                                       'mdz' => {},
@@ -2188,7 +4455,9 @@ $Web::MIME::_TypeDefs::Type = {
                                       'midi' => {
                                                   'plugin' => 1
                                                 },
-                                      'mobile-xmf' => {},
+                                      'mobile-xmf' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                       'mod' => {
                                                  'plugin' => 1
                                                },
@@ -2198,12 +4467,20 @@ $Web::MIME::_TypeDefs::Type = {
                                                  'plugin' => 1
                                                },
                                       'mp4' => {
+                                                 'iana' => 'permanent',
                                                  'plugin' => 1
                                                },
-                                      'mp4a-latm' => {},
-                                      'mpa' => {},
-                                      'mpa-robust' => {},
+                                      'mp4a-latm' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                      'mpa' => {
+                                                 'iana' => 'permanent'
+                                               },
+                                      'mpa-robust' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                       'mpeg' => {
+                                                  'iana' => 'permanent',
                                                   'plugin' => 1
                                                 },
                                       'mpeg-url' => {},
@@ -2214,7 +4491,9 @@ $Web::MIME::_TypeDefs::Type = {
                                       'mpeg4' => {
                                                    'plugin' => 1
                                                  },
-                                      'mpeg4-generic' => {},
+                                      'mpeg4-generic' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                       'mpegurl' => {
                                                      'plugin' => 1
                                                    },
@@ -2224,98 +4503,233 @@ $Web::MIME::_TypeDefs::Type = {
                                       'musepack' => {},
                                       'nspaudio' => {},
                                       'ogg' => {
+                                                 'iana' => 'permanent',
                                                  'params' => {
                                                                'codecs' => {}
                                                              }
                                                },
                                       'opus' => {},
-                                      'parityfec' => {},
-                                      'pcma' => {},
-                                      'pcma-wb' => {},
-                                      'pcmu' => {},
-                                      'pcmu-wb' => {},
-                                      'prs.sid' => {},
+                                      'parityfec' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                      'pcma' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'pcma-wb' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'pcmu' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'pcmu-wb' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'prs.sid' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'psid' => {},
-                                      'qcelp' => {},
+                                      'qcelp' => {
+                                                   'iana' => 'permanent'
+                                                 },
                                       'qcp' => {},
-                                      'red' => {},
+                                      'raptorfec' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                      'red' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'rmf' => {
                                                  'plugin' => 1
                                                },
                                       'rn-mpeg' => {},
-                                      'rtp-enc-aescm128' => {},
-                                      'rtp-midi' => {},
-                                      'rtx' => {},
+                                      'rtp-enc-aescm128' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                      'rtp-midi' => {
+                                                      'iana' => 'permanent'
+                                                    },
+                                      'rtploopback' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                      'rtx' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       's3m' => {
                                                  'plugin' => 1
                                                },
                                       'scpls' => {},
                                       'sfil' => {},
                                       'silk' => {},
-                                      'smv' => {},
-                                      'smv-qcp' => {},
-                                      'smv0' => {},
+                                      'smv' => {
+                                                 'iana' => 'permanent'
+                                               },
+                                      'smv-qcp' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'smv0' => {
+                                                  'iana' => 'permanent'
+                                                },
                                       'songsafe' => {
                                                       'plugin' => 1
                                                     },
                                       'soundtrack' => {},
-                                      'sp-midi' => {},
-                                      'speex' => {},
+                                      'sp-midi' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'speex' => {
+                                                   'iana' => 'permanent'
+                                                 },
                                       'sysex' => {},
-                                      't140c' => {},
-                                      't38' => {},
-                                      'telephone-event' => {},
-                                      'tone' => {},
+                                      't140c' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                      't38' => {
+                                                 'iana' => 'permanent'
+                                               },
+                                      'telephone-event' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                      'tone' => {
+                                                  'iana' => 'permanent'
+                                                },
                                       'tsplayer' => {},
-                                      'uemclip' => {},
-                                      'ulpfec' => {},
-                                      'vdvi' => {},
-                                      'vmr-wb' => {},
-                                      'vnd.3gpp.iufp' => {},
-                                      'vnd.4sb' => {},
-                                      'vnd.audiokoz' => {},
-                                      'vnd.celp' => {},
-                                      'vnd.cisco.nse' => {},
-                                      'vnd.cmles.radio-events' => {},
-                                      'vnd.cns.anp1' => {},
-                                      'vnd.cns.inf1' => {},
-                                      'vnd.dece.audio' => {},
-                                      'vnd.digital-winds' => {},
-                                      'vnd.dlna.adts' => {},
-                                      'vnd.dolby.heaac.1' => {},
-                                      'vnd.dolby.heaac.2' => {},
-                                      'vnd.dolby.mlp' => {},
-                                      'vnd.dolby.mps' => {},
-                                      'vnd.dolby.pl2' => {},
-                                      'vnd.dolby.pl2x' => {},
-                                      'vnd.dolby.pl2z' => {},
-                                      'vnd.dolby.pulse.1' => {},
-                                      'vnd.dra' => {},
-                                      'vnd.dts' => {},
-                                      'vnd.dts.hd' => {},
-                                      'vnd.dvb.file' => {},
-                                      'vnd.everad.plj' => {},
-                                      'vnd.hns.audio' => {},
-                                      'vnd.lucent.voice' => {},
-                                      'vnd.ms-playready.media.pya' => {},
-                                      'vnd.nokia.mobile-xmf' => {},
-                                      'vnd.nortel.vbk' => {},
-                                      'vnd.nuera.ecelp4800' => {},
-                                      'vnd.nuera.ecelp7470' => {},
-                                      'vnd.nuera.ecelp9600' => {},
-                                      'vnd.octel.sbc' => {},
+                                      'uemclip' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'ulpfec' => {
+                                                    'iana' => 'permanent'
+                                                  },
+                                      'vdvi' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'vmr-wb' => {
+                                                    'iana' => 'permanent'
+                                                  },
+                                      'vnd.3gpp.iufp' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                      'vnd.4sb' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.audiokoz' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'vnd.celp' => {
+                                                      'iana' => 'permanent'
+                                                    },
+                                      'vnd.cisco.nse' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                      'vnd.cmles.radio-events' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                      'vnd.cns.anp1' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'vnd.cns.inf1' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'vnd.dece.audio' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                      'vnd.digital-winds' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                      'vnd.dlna.adts' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                      'vnd.dolby.heaac.1' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                      'vnd.dolby.heaac.2' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                      'vnd.dolby.mlp' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                      'vnd.dolby.mps' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                      'vnd.dolby.pl2' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                      'vnd.dolby.pl2x' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                      'vnd.dolby.pl2z' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                      'vnd.dolby.pulse.1' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                      'vnd.dra' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.dts' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.dts.hd' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                      'vnd.dvb.file' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'vnd.everad.plj' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                      'vnd.hns.audio' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                      'vnd.lucent.voice' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                      'vnd.ms-playready.media.pya' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                      'vnd.nokia.mobile-xmf' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                      'vnd.nortel.vbk' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                      'vnd.nuera.ecelp4800' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                      'vnd.nuera.ecelp7470' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                      'vnd.nuera.ecelp9600' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                      'vnd.octel.sbc' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                       'vnd.qcelp' => {
+                                                       'iana' => 'permanent',
+                                                       'iana_deprecated' => 'audio/qcelp',
                                                        'plugin' => 1
                                                      },
-                                      'vnd.rhetorex.32kadpcm' => {},
-                                      'vnd.rip' => {},
+                                      'vnd.rhetorex.32kadpcm' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                      'vnd.rip' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'vnd.rn-mp3' => {},
                                       'vnd.rn-realaudio' => {},
-                                      'vnd.sealedmedia.softseal.mpeg' => {},
-                                      'vnd.vmx.cvsd' => {},
+                                      'vnd.sealedmedia.softseal.mpeg' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                      'vnd.vmx.cvsd' => {
+                                                          'iana' => 'permanent'
+                                                        },
                                       'vnd.wave' => {},
-                                      'vorbis' => {},
-                                      'vorbis-config' => {},
+                                      'vorbis' => {
+                                                    'iana' => 'permanent'
+                                                  },
+                                      'vorbis-config' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                       'voxware' => {},
                                       'wav' => {
                                                  'plugin' => 1
@@ -2644,6 +5058,7 @@ $Web::MIME::_TypeDefs::Type = {
                                     }
                      },
           'image' => {
+                       'iana' => 'permanent',
                        'image' => 1,
                        'subtype' => {
                                       'amidraw' => {},
@@ -2661,7 +5076,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                   'plugin' => 1
                                                 },
                                       'cewavelet' => {},
-                                      'cgm' => {},
+                                      'cgm' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'cis-cid' => {},
                                       'cis-cod' => {},
                                       'cit' => {},
@@ -2679,15 +5096,22 @@ $Web::MIME::_TypeDefs::Type = {
                                                 },
                                       'dvb.subtitle' => {},
                                       'eps' => {},
-                                      'example' => {},
+                                      'example' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'fax' => {},
                                       'fax-g3' => {},
                                       'fif' => {},
-                                      'fits' => {},
-                                      'g3fax' => {},
+                                      'fits' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'g3fax' => {
+                                                   'iana' => 'permanent'
+                                                 },
                                       'gif' => {
                                                  'blacklisted' => 1,
                                                  'browser' => 1,
+                                                 'iana' => 'permanent',
                                                  'plugin' => 1
                                                },
                                       'gradation' => {},
@@ -2697,7 +5121,9 @@ $Web::MIME::_TypeDefs::Type = {
                                       'i-vrml' => {},
                                       'ico' => {},
                                       'icon' => {},
-                                      'ief' => {},
+                                      'ief' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'if' => {},
                                       'ifs' => {},
                                       'imagn' => {},
@@ -2709,6 +5135,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'jbig' => {},
                                       'jng' => {},
                                       'jp2' => {
+                                                 'iana' => 'permanent',
                                                  'plugin' => 1
                                                },
                                       'jpc' => {
@@ -2716,18 +5143,24 @@ $Web::MIME::_TypeDefs::Type = {
                                                },
                                       'jpeg' => {
                                                   'blacklisted' => 1,
-                                                  'browser' => 1
+                                                  'browser' => 1,
+                                                  'iana' => 'permanent'
                                                 },
                                       'jpeg2000' => {},
                                       'jpeg2000-image' => {},
                                       'jpg' => {
                                                  'plugin' => 1
                                                },
-                                      'jpm' => {},
+                                      'jpm' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'jpx' => {
+                                                 'iana' => 'permanent',
                                                  'plugin' => 1
                                                },
-                                      'ktx' => {},
+                                      'ktx' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'mac' => {},
                                       'map' => {},
                                       'miff' => {},
@@ -2737,6 +5170,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'mpeg' => {},
                                       'mtv' => {},
                                       'naplps' => {
+                                                    'iana' => 'permanent',
                                                     'params' => {
                                                                   'version' => {}
                                                                 },
@@ -2758,12 +5192,20 @@ $Web::MIME::_TypeDefs::Type = {
                                       'png' => {
                                                  'blacklisted' => 1,
                                                  'browser' => 1,
+                                                 'iana' => 'permanent',
                                                  'plugin' => 1
                                                },
                                       'postscript' => {},
-                                      'prs.btif' => {},
-                                      'prs.pti' => {},
+                                      'prs.btif' => {
+                                                      'iana' => 'permanent'
+                                                    },
+                                      'prs.pti' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'psd' => {},
+                                      'pwg-raster' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                       'rad' => {},
                                       'rast' => {},
                                       'rgb' => {},
@@ -2776,6 +5218,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'svg+xml' => {
                                                      'blacklisted' => 1,
                                                      'browser' => 1,
+                                                     'iana' => 'permanent',
                                                      'mac_types' => {
                                                                       'svg ' => 1
                                                                     },
@@ -2793,7 +5236,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                      'text' => 1
                                                    },
                                       'svh' => {},
-                                      't38' => {},
+                                      't38' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'targa' => {},
                                       'tdf' => {},
                                       'tga' => {},
@@ -2801,9 +5246,12 @@ $Web::MIME::_TypeDefs::Type = {
                                                  'plugin' => 1
                                                },
                                       'tiff' => {
+                                                  'iana' => 'permanent',
                                                   'plugin' => 1
                                                 },
-                                      'tiff-fx' => {},
+                                      'tiff-fx' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'unknown' => {},
                                       'uyyu' => {},
                                       'vasa' => {},
@@ -2813,7 +5261,9 @@ $Web::MIME::_TypeDefs::Type = {
                                       'vn-svf' => {},
                                       'vnd' => {},
                                       'vnd-svf' => {},
-                                      'vnd.adobe.photoshop' => {},
+                                      'vnd.adobe.photoshop' => {
+                                                                 'iana' => 'permanent'
+                                                               },
                                       'vnd.adobe.svg+xml' => {
                                                                'params' => {
                                                                              'charset' => {}
@@ -2821,38 +5271,81 @@ $Web::MIME::_TypeDefs::Type = {
                                                                'plugin' => 1,
                                                                'text' => 1
                                                              },
-                                      'vnd.cns.inf2' => {},
-                                      'vnd.dece.graphic' => {},
+                                      'vnd.airzip.accelerator.azv' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                      'vnd.cns.inf2' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'vnd.dece.graphic' => {
+                                                              'iana' => 'permanent'
+                                                            },
                                       'vnd.djvu' => {
+                                                      'iana' => 'permanent',
                                                       'plugin' => 1
                                                     },
-                                      'vnd.dvb.subtitle' => {},
+                                      'vnd.dvb.subtitle' => {
+                                                              'iana' => 'permanent'
+                                                            },
                                       'vnd.dwf' => {
                                                      'plugin' => 1
                                                    },
-                                      'vnd.dwg' => {},
-                                      'vnd.dxf' => {},
-                                      'vnd.fastbidsheet' => {},
-                                      'vnd.fpx' => {},
-                                      'vnd.fst' => {},
-                                      'vnd.fujixerox.edmics-mmr' => {},
-                                      'vnd.fujixerox.edmics-rlc' => {},
-                                      'vnd.globalgraphics.pgb' => {},
+                                      'vnd.dwg' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.dxf' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.fastbidsheet' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                      'vnd.fpx' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.fst' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.fujixerox.edmics-mmr' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                      'vnd.fujixerox.edmics-rlc' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                      'vnd.globalgraphics.pgb' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
                                       'vnd.microsoft.icon' => {
-                                                                'browser' => 1
+                                                                'browser' => 1,
+                                                                'iana' => 'permanent'
                                                               },
-                                      'vnd.mix' => {},
-                                      'vnd.ms-modi' => {},
+                                      'vnd.mix' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.ms-modi' => {
+                                                         'iana' => 'permanent'
+                                                       },
                                       'vnd.ms-photo' => {},
-                                      'vnd.net-fpx' => {},
+                                      'vnd.net-fpx' => {
+                                                         'iana' => 'permanent'
+                                                       },
                                       'vnd.phonecom.cache' => {},
-                                      'vnd.radiance' => {},
+                                      'vnd.radiance' => {
+                                                          'iana' => 'permanent'
+                                                        },
                                       'vnd.rn-realflash' => {},
                                       'vnd.rn-realpix' => {},
-                                      'vnd.sealed.png' => {},
-                                      'vnd.sealedmedia.softseal.gif' => {},
-                                      'vnd.sealedmedia.softseal.jpg' => {},
-                                      'vnd.svf' => {},
+                                      'vnd.sealed.png' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                      'vnd.sealedmedia.softseal.gif' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                      'vnd.sealedmedia.softseal.jpg' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                      'vnd.svf' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'vnd.swiftview-cals' => {
                                                                 'plugin' => 1
                                                               },
@@ -2860,8 +5353,12 @@ $Web::MIME::_TypeDefs::Type = {
                                                                'plugin' => 1
                                                              },
                                       'vnd.up.wpng' => {},
-                                      'vnd.wap.wbmp' => {},
-                                      'vnd.xiff' => {},
+                                      'vnd.wap.wbmp' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'vnd.xiff' => {
+                                                      'iana' => 'permanent'
+                                                    },
                                       'wavelet' => {},
                                       'webp' => {},
                                       'wmf' => {},
@@ -3071,14 +5568,24 @@ $Web::MIME::_TypeDefs::Type = {
           'matter-transport' => {},
           'message' => {
                          'composite' => 1,
+                         'iana' => 'permanent',
                          'preferred_cte' => 'quoted-printable',
                          'subtype' => {
                                         'coffeepot' => {},
-                                        'cpim' => {},
-                                        'delivery-status' => {},
-                                        'disposition-notification' => {},
-                                        'example' => {},
+                                        'cpim' => {
+                                                    'iana' => 'permanent'
+                                                  },
+                                        'delivery-status' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                        'disposition-notification' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                        'example' => {
+                                                       'iana' => 'permanent'
+                                                     },
                                         'external-body' => {
+                                                             'iana' => 'permanent',
                                                              'params' => {
                                                                            'access-type' => {},
                                                                            'expiration' => {},
@@ -3090,41 +5597,72 @@ $Web::MIME::_TypeDefs::Type = {
                                                                            'url' => {}
                                                                          }
                                                            },
-                                        'feedback-report' => {},
-                                        'global' => {},
-                                        'global-delivery-status' => {},
-                                        'global-disposition-notification' => {},
-                                        'global-headers' => {},
+                                        'feedback-report' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                        'global' => {
+                                                      'iana' => 'permanent'
+                                                    },
+                                        'global-delivery-status' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
+                                        'global-disposition-notification' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
+                                        'global-headers' => {
+                                                              'iana' => 'permanent'
+                                                            },
                                         'html' => {},
                                         'http' => {
+                                                    'iana' => 'permanent',
                                                     'params' => {
                                                                   'msgtype' => {},
                                                                   'version' => {}
                                                                 }
                                                   },
-                                        'imdn+xml' => {},
+                                        'imdn+xml' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                         'news' => {
+                                                    'iana' => 'permanent',
+                                                    'iana_obsolete' => 1,
                                                     'text' => 1
                                                   },
                                         'partial' => {
+                                                       'iana' => 'permanent',
                                                        'params' => {
                                                                      'id' => {},
                                                                      'number' => {},
                                                                      'total' => {}
                                                                    }
                                                      },
-                                        'rfc822' => {},
+                                        'rfc822' => {
+                                                      'iana' => 'permanent'
+                                                    },
                                         'rfc822-headers' => {},
                                         's-http' => {
+                                                      'iana' => 'permanent',
                                                       'params' => {
                                                                     'msgtype' => {},
                                                                     'version' => {}
                                                                   }
                                                     },
-                                        'sip' => {},
-                                        'sipfrag' => {},
-                                        'tracking-status' => {},
-                                        'vnd.si.simp' => {},
+                                        'sip' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                        'sipfrag' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                        'tracking-status' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                        'vnd.si.simp' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_obsolete' => 1
+                                                         },
+                                        'vnd.wfa.wsc' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                         'x-gnu-rmail' => {},
                                         'x-netnews' => {
                                                          'text' => 1
@@ -3148,30 +5686,59 @@ $Web::MIME::_TypeDefs::Type = {
                                    }
                     },
           'model' => {
+                       'iana' => 'permanent',
                        'params' => {
                                      'dimension' => {},
                                      'state' => {}
                                    },
                        'preferred_cte' => 'base64',
                        'subtype' => {
-                                      'example' => {},
-                                      'iges' => {},
-                                      'mesh' => {},
-                                      'vnd.collada+xml' => {},
-                                      'vnd.dwf' => {},
+                                      'example' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'iges' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'mesh' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'vnd.collada+xml' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                      'vnd.dwf' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'vnd.flatland.3dml' => {
+                                                               'iana' => 'permanent',
                                                                'plugin' => 1
                                                              },
-                                      'vnd.gdl' => {},
-                                      'vnd.gs-gdl' => {},
+                                      'vnd.gdl' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.gs-gdl' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                       'vnd.gs.gdl' => {},
-                                      'vnd.gtw' => {},
-                                      'vnd.moml+xml' => {},
-                                      'vnd.mts' => {},
-                                      'vnd.parasolid.transmit.binary' => {},
-                                      'vnd.parasolid.transmit.text' => {},
-                                      'vnd.vtu' => {},
+                                      'vnd.gtw' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.moml+xml' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'vnd.mts' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.parasolid.transmit.binary' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                      'vnd.parasolid.transmit.text' => {
+                                                                         'iana' => 'permanent'
+                                                                       },
+                                      'vnd.vtu' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'vrml' => {
+                                                  'iana' => 'permanent',
                                                   'plugin' => 1
                                                 },
                                       'x3d+binary' => {},
@@ -3180,6 +5747,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                            },
                                       'x3d+vrml' => {},
                                       'x3d+xml' => {
+                                                     'iana' => 'permanent',
                                                      'plugin' => 1
                                                    }
                                     }
@@ -3191,6 +5759,7 @@ $Web::MIME::_TypeDefs::Type = {
                                    },
           'multipart' => {
                            'composite' => 1,
+                           'iana' => 'permanent',
                            'params' => {
                                          'boundary' => {
                                                          'required' => 1
@@ -3199,33 +5768,58 @@ $Web::MIME::_TypeDefs::Type = {
                            'preferred_cte' => 'quoted-printable',
                            'subtype' => {
                                           'alternative' => {
+                                                             'iana' => 'permanent',
                                                              'params' => {
                                                                            'differences' => {}
                                                                          }
                                                            },
                                           'appledouble' => {
+                                                             'iana' => 'permanent',
                                                              'params' => {
                                                                            'name' => {}
                                                                          }
                                                            },
-                                          'byteranges' => {},
-                                          'digest' => {},
+                                          'byteranges' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                          'digest' => {
+                                                        'iana' => 'permanent'
+                                                      },
                                           'dvb.service' => {},
-                                          'encrypted' => {},
-                                          'example' => {},
-                                          'form-data' => {},
+                                          'encrypted' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                          'example' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                          'form-data' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                           'gedi-record' => {},
-                                          'header-set' => {},
-                                          'mixed' => {},
-                                          'parallel' => {},
-                                          'related' => {},
+                                          'header-set' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                          'mixed' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                          'parallel' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                          'related' => {
+                                                         'iana' => 'permanent'
+                                                       },
                                           'report' => {
+                                                        'iana' => 'permanent',
                                                         'params' => {
                                                                       'report-type' => {}
                                                                     }
                                                       },
-                                          'signed' => {},
-                                          'voice-message' => {},
+                                          'signed' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                          'voice-message' => {
+                                                               'iana' => 'permanent'
+                                                             },
                                           'x-byteranges' => {},
                                           'x-gzip' => {},
                                           'x-mimepgp' => {},
@@ -3267,9 +5861,12 @@ $Web::MIME::_TypeDefs::Type = {
                                        }
                         },
           'text' => {
+                      'iana' => 'permanent',
                       'preferred_cte' => 'quoted-printable',
                       'subtype' => {
-                                     '1d-interleaved-parityfec' => {},
+                                     '1d-interleaved-parityfec' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
                                      '_moz_htmlcontext' => {},
                                      '_moz_htmlinfo' => {},
                                      'abiword' => {},
@@ -3282,6 +5879,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                            'blacklisted' => 1
                                                          },
                                      'calendar' => {
+                                                     'iana' => 'permanent',
                                                      'mac_types' => {
                                                                       'iCal' => 1,
                                                                       'iFBf' => 1
@@ -3302,6 +5900,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'css' => {
                                                 'blacklisted' => 1,
                                                 'browser' => 1,
+                                                'iana' => 'permanent',
                                                 'mac_types' => {
                                                                  'css ' => 1
                                                                },
@@ -3310,8 +5909,12 @@ $Web::MIME::_TypeDefs::Type = {
                                                             },
                                                 'styling' => 1
                                               },
-                                     'csv' => {},
+                                     'csv' => {
+                                                'iana' => 'permanent'
+                                              },
                                      'directory' => {
+                                                      'iana' => 'permanent',
+                                                      'iana_deprecated' => 1,
                                                       'mac_types' => {
                                                                        'iCal' => 1,
                                                                        'iFBf' => 1
@@ -3320,7 +5923,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'profile' => {}
                                                                   }
                                                     },
-                                     'dns' => {},
+                                     'dns' => {
+                                                'iana' => 'permanent'
+                                              },
                                      'download' => {},
                                      'dsssl' => {},
                                      'dvb.subtitle' => {},
@@ -3328,6 +5933,8 @@ $Web::MIME::_TypeDefs::Type = {
                                      'dvb.utf8' => {},
                                      'ecmascript' => {
                                                        'browser' => 1,
+                                                       'iana' => 'permanent',
+                                                       'iana_obsolete' => 1,
                                                        'mac_types' => {
                                                                         'TEXT' => 1
                                                                       },
@@ -3336,21 +5943,33 @@ $Web::MIME::_TypeDefs::Type = {
                                                                      'version' => {}
                                                                    }
                                                      },
+                                     'encaprtp' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                      'english' => {},
                                      'enriched' => {
+                                                     'iana' => 'permanent',
                                                      'params' => {
                                                                    'charset' => {}
                                                                  }
                                                    },
                                      'event-stream' => {},
-                                     'example' => {},
+                                     'example' => {
+                                                    'iana' => 'permanent'
+                                                  },
                                      'ftp-dir-listing' => {},
-                                     'fwdred' => {},
+                                     'fwdred' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                     'grammar-ref-list' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                      'h323' => {},
                                      'hnf' => {},
                                      'html' => {
                                                  'blacklisted' => 1,
                                                  'browser' => 1,
+                                                 'iana' => 'permanent',
                                                  'mac_types' => {
                                                                   'TEXT' => 1
                                                                 },
@@ -3365,6 +5984,8 @@ $Web::MIME::_TypeDefs::Type = {
                                      'iuls' => {},
                                      'javascript' => {
                                                        'browser' => 1,
+                                                       'iana' => 'permanent',
+                                                       'iana_obsolete' => 1,
                                                        'mac_types' => {
                                                                         'TEXT' => 1
                                                                       },
@@ -3377,6 +5998,9 @@ $Web::MIME::_TypeDefs::Type = {
                                      'javascript1.1' => {},
                                      'javascript1.2' => {},
                                      'javascript1.3' => {},
+                                     'jcr-cnd' => {
+                                                    'iana' => 'permanent'
+                                                  },
                                      'js' => {},
                                      'json' => {},
                                      'jss' => {},
@@ -3388,14 +6012,21 @@ $Web::MIME::_TypeDefs::Type = {
                                      'mathml-rendererb' => {},
                                      'mcf' => {},
                                      'mdl' => {},
+                                     'mizar' => {
+                                                  'iana' => 'permanent'
+                                                },
                                      'mpml-basic-layout' => {},
                                      'mustache' => {},
-                                     'n3' => {},
+                                     'n3' => {
+                                               'iana' => 'permanent'
+                                             },
                                      'ng-template' => {},
                                      'os-data' => {},
                                      'os-template' => {},
                                      'owl-manchester' => {},
-                                     'parityfec' => {},
+                                     'parityfec' => {
+                                                      'iana' => 'permanent'
+                                                    },
                                      'perl' => {},
                                      'perlscript' => {},
                                      'php' => {},
@@ -3405,6 +6036,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'plain' => {
                                                   'blacklisted' => 1,
                                                   'browser' => 1,
+                                                  'iana' => 'permanent',
                                                   'mac_types' => {
                                                                    'TEXT' => 1
                                                                  },
@@ -3415,31 +6047,56 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'format' => {}
                                                               }
                                                 },
-                                     'prs.fallenstein.rst' => {},
-                                     'prs.lines.tag' => {},
+                                     'provenance-notation' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                     'prs.fallenstein.rst' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                     'prs.lines.tag' => {
+                                                          'iana' => 'permanent'
+                                                        },
                                      'python' => {},
+                                     'raptorfec' => {
+                                                      'iana' => 'permanent'
+                                                    },
                                      'rdf' => {
                                                 'plugin' => 1
                                               },
                                      'rdf+n3' => {},
-                                     'red' => {},
+                                     'red' => {
+                                                'iana' => 'permanent'
+                                              },
                                      'rfc822' => {},
-                                     'rfc822-headers' => {},
+                                     'rfc822-headers' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                      'richtext' => {
+                                                     'iana' => 'permanent',
                                                      'params' => {
                                                                    'charset' => {}
                                                                  }
                                                    },
                                      'rocketscript' => {},
-                                     'rtf' => {},
-                                     'rtp-enc-aescm128' => {},
-                                     'rtx' => {},
+                                     'rtf' => {
+                                                'iana' => 'permanent'
+                                              },
+                                     'rtp-enc-aescm128' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                     'rtploopback' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                     'rtx' => {
+                                                'iana' => 'permanent'
+                                              },
                                      'ruby' => {},
                                      'ruby-script' => {},
                                      'rubyscript' => {},
                                      'script' => {},
                                      'scriptlet' => {},
                                      'sgml' => {
+                                                 'iana' => 'permanent',
                                                  'params' => {
                                                                'charset' => {},
                                                                'sgml-bctf' => {},
@@ -3453,16 +6110,27 @@ $Web::MIME::_TypeDefs::Type = {
                                      'spice' => {},
                                      'spreadsheet' => {},
                                      't-time' => {},
-                                     't140' => {},
-                                     'tab-separated-values' => {},
+                                     't140' => {
+                                                 'iana' => 'permanent'
+                                               },
+                                     'tab-separated-values' => {
+                                                                 'iana' => 'permanent'
+                                                               },
                                      'tcl' => {},
                                      'template' => {},
                                      'tiscript' => {},
-                                     'troff' => {},
-                                     'turtle' => {},
-                                     'ulpfec' => {},
+                                     'troff' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                     'turtle' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                     'ulpfec' => {
+                                                   'iana' => 'permanent'
+                                                 },
                                      'unicode' => {},
                                      'uri-list' => {
+                                                     'iana' => 'permanent',
                                                      'mac_types' => {
                                                                       'URIs' => 1
                                                                     }
@@ -3470,11 +6138,16 @@ $Web::MIME::_TypeDefs::Type = {
                                      'url' => {},
                                      'vbs' => {},
                                      'vbscript' => {},
-                                     'vcard' => {},
+                                     'vcard' => {
+                                                  'iana' => 'permanent'
+                                                },
                                      'vcsswg' => {},
-                                     'vnd.abc' => {},
+                                     'vnd.abc' => {
+                                                    'iana' => 'permanent'
+                                                  },
                                      'vnd.csr' => {},
                                      'vnd.curl' => {
+                                                     'iana' => 'permanent',
                                                      'plugin' => 1
                                                    },
                                      'vnd.curl.2.0' => {
@@ -3483,34 +6156,82 @@ $Web::MIME::_TypeDefs::Type = {
                                      'vnd.curl.dcurl' => {},
                                      'vnd.curl.mcurl' => {},
                                      'vnd.curl.scurl' => {},
-                                     'vnd.dmclientscript' => {},
-                                     'vnd.dvb.subtitle' => {},
-                                     'vnd.esmertec.theme-descriptor' => {},
-                                     'vnd.fly' => {},
-                                     'vnd.fmi.flexstor' => {},
-                                     'vnd.graphviz' => {},
-                                     'vnd.in3d.3dml' => {},
-                                     'vnd.in3d.spot' => {},
-                                     'vnd.iptc.newsml' => {},
-                                     'vnd.iptc.nitf' => {},
-                                     'vnd.latex-z' => {},
-                                     'vnd.motorola.reflex' => {},
-                                     'vnd.ms-mediapackage' => {},
+                                     'vnd.debian.copyright' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                     'vnd.dmclientscript' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                     'vnd.dvb.subtitle' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                     'vnd.esmertec.theme-descriptor' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                     'vnd.fly' => {
+                                                    'iana' => 'permanent'
+                                                  },
+                                     'vnd.fmi.flexstor' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                     'vnd.graphviz' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                     'vnd.in3d.3dml' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                     'vnd.in3d.spot' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                     'vnd.iptc.newsml' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                     'vnd.iptc.nitf' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                     'vnd.latex-z' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                     'vnd.motorola.reflex' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                     'vnd.ms-mediapackage' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                      'vnd.ms-word' => {},
-                                     'vnd.net2phone.commcenter.command' => {},
-                                     'vnd.radisys.msml-basic-layout' => {},
+                                     'vnd.net2phone.commcenter.command' => {
+                                                                             'iana' => 'permanent'
+                                                                           },
+                                     'vnd.radisys.msml-basic-layout' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
                                      'vnd.rn-realtext' => {},
                                      'vnd.rn-realtext3d' => {},
-                                     'vnd.si.uricatalogue' => {},
-                                     'vnd.sun.j2me.app-descriptor' => {},
-                                     'vnd.trolltech.linguist' => {},
+                                     'vnd.si.uricatalogue' => {
+                                                                'iana' => 'permanent',
+                                                                'iana_obsolete' => 1
+                                                              },
+                                     'vnd.sun.j2me.app-descriptor' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                     'vnd.trolltech.linguist' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
                                      'vnd.viewcvs-markup' => {},
                                      'vnd.wap.co' => {},
                                      'vnd.wap.connectivility-xml' => {},
-                                     'vnd.wap.si' => {},
-                                     'vnd.wap.sl' => {},
-                                     'vnd.wap.wml' => {},
-                                     'vnd.wap.wmlscript' => {},
+                                     'vnd.wap.si' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                     'vnd.wap.sl' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                     'vnd.wap.wml' => {
+                                                        'iana' => 'permanent'
+                                                      },
+                                     'vnd.wap.wmlscript' => {
+                                                              'iana' => 'permanent'
+                                                            },
                                      'vnd.wordperfect' => {},
                                      'vtt' => {},
                                      'webviewhtml' => {},
@@ -3707,6 +6428,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'xml' => {
                                                 'blacklisted' => 1,
                                                 'browser' => 1,
+                                                'iana' => 'permanent',
                                                 'mac_types' => {
                                                                  'TEXT' => 1
                                                                },
@@ -3718,6 +6440,7 @@ $Web::MIME::_TypeDefs::Type = {
                                               },
                                      'xml-content' => {},
                                      'xml-external-parsed-entity' => {
+                                                                       'iana' => 'permanent',
                                                                        'mac_types' => {
                                                                                         'TEXT' => 1
                                                                                       },
@@ -3762,16 +6485,23 @@ $Web::MIME::_TypeDefs::Type = {
                       },
           'video' => {
                        'audiovideo' => 1,
+                       'iana' => 'permanent',
                        'subtype' => {
-                                      '1d-interleaved-parityfec' => {},
+                                      '1d-interleaved-parityfec' => {
+                                                                      'iana' => 'permanent'
+                                                                    },
                                       '3gpp' => {
+                                                  'iana' => 'permanent',
                                                   'params' => {
                                                                 'codecs' => {}
                                                               },
                                                   'plugin' => 1
                                                 },
-                                      '3gpp-tt' => {},
+                                      '3gpp-tt' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       '3gpp2' => {
+                                                   'iana' => 'permanent',
                                                    'params' => {
                                                                  'codecs' => {}
                                                                },
@@ -3784,49 +6514,92 @@ $Web::MIME::_TypeDefs::Type = {
                                                  'plugin' => 1
                                                },
                                       'avs' => {},
-                                      'bmpeg' => {},
-                                      'bt656' => {},
-                                      'celb' => {},
+                                      'bmpeg' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                      'bt656' => {
+                                                   'iana' => 'permanent'
+                                                 },
+                                      'celb' => {
+                                                  'iana' => 'permanent'
+                                                },
                                       'ditital-movie' => {},
                                       'divx' => {},
                                       'dl' => {},
-                                      'dv' => {},
+                                      'dv' => {
+                                                'iana' => 'permanent'
+                                              },
                                       'dvb.mpeg.drip' => {},
-                                      'example' => {},
+                                      'encaprtp' => {
+                                                      'iana' => 'permanent'
+                                                    },
+                                      'example' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'flc' => {
                                                  'plugin' => 1
                                                },
                                       'fli' => {},
                                       'flv' => {},
-                                      'h261' => {},
-                                      'h263' => {},
-                                      'h263-1998' => {},
-                                      'h263-2000' => {},
-                                      'h264' => {},
-                                      'h264-rcdo' => {},
-                                      'h264-svc' => {},
+                                      'h261' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'h263' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'h263-1998' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                      'h263-2000' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                      'h264' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'h264-rcdo' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                      'h264-svc' => {
+                                                      'iana' => 'permanent'
+                                                    },
                                       'hypervideo' => {},
                                       'isivideo' => {},
                                       'iso.segment' => {
                                                          'iana' => 'provisional'
                                                        },
-                                      'jpeg' => {},
-                                      'jpeg2000' => {},
+                                      'jpeg' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'jpeg2000' => {
+                                                      'iana' => 'permanent'
+                                                    },
                                       'jpm' => {},
-                                      'mj2' => {},
+                                      'mj2' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'mng' => {},
-                                      'mp1s' => {},
-                                      'mp2p' => {},
-                                      'mp2t' => {},
+                                      'mp1s' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'mp2p' => {
+                                                  'iana' => 'permanent'
+                                                },
+                                      'mp2t' => {
+                                                  'iana' => 'permanent'
+                                                },
                                       'mp4' => {
+                                                 'iana' => 'permanent',
                                                  'params' => {
                                                                'codecs' => {}
                                                              },
                                                  'plugin' => 1
                                                },
                                       'mp4v' => {},
-                                      'mp4v-es' => {},
+                                      'mp4v-es' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'mpeg' => {
+                                                  'iana' => 'permanent',
                                                   'plugin' => 1
                                                 },
                                       'mpeg-2' => {},
@@ -3838,74 +6611,174 @@ $Web::MIME::_TypeDefs::Type = {
                                       'mpeg4' => {
                                                    'plugin' => 1
                                                  },
-                                      'mpeg4-generic' => {},
+                                      'mpeg4-generic' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                       'mpg' => {},
-                                      'mpv' => {},
+                                      'mpv' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'msvideo' => {
                                                      'plugin' => 1
                                                    },
-                                      'nv' => {},
+                                      'nv' => {
+                                                'iana' => 'permanent'
+                                              },
                                       'ogg' => {
+                                                 'iana' => 'permanent',
                                                  'params' => {
                                                                'codecs' => {}
                                                              }
                                                },
                                       'olivr' => {},
-                                      'parityfec' => {},
-                                      'pointer' => {},
+                                      'parityfec' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                      'pointer' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'quicktime' => {
+                                                       'iana' => 'permanent',
                                                        'plugin' => 1
                                                      },
                                       'quicktime-stream' => {},
-                                      'raw' => {},
-                                      'rtp-enc-aescm128' => {},
-                                      'rtx' => {},
+                                      'raptorfec' => {
+                                                       'iana' => 'permanent'
+                                                     },
+                                      'raw' => {
+                                                 'iana' => 'permanent'
+                                               },
+                                      'rtp-enc-aescm128' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                      'rtploopback' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                      'rtx' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'sd-video' => {
                                                       'plugin' => 1
                                                     },
                                       'sgi-movie' => {},
-                                      'smpte292m' => {},
+                                      'smpte292m' => {
+                                                       'iana' => 'permanent'
+                                                     },
                                       'smtpe292m' => {},
-                                      'ulpfec' => {},
-                                      'vc1' => {},
+                                      'ulpfec' => {
+                                                    'iana' => 'permanent'
+                                                  },
+                                      'vc1' => {
+                                                 'iana' => 'permanent'
+                                               },
                                       'vdo' => {},
                                       'vivo' => {},
                                       'vmx' => {},
                                       'vnd.avi' => {},
-                                      'vnd.cctv' => {},
-                                      'vnd.dece.hd' => {},
-                                      'vnd.dece.mobile' => {},
-                                      'vnd.dece.mp4' => {},
-                                      'vnd.dece.pd' => {},
-                                      'vnd.dece.sd' => {},
-                                      'vnd.dece.video' => {},
-                                      'vnd.directv.mpeg' => {},
-                                      'vnd.directv.mpeg-tts' => {},
-                                      'vnd.dlna.mpeg-tts' => {},
-                                      'vnd.dvb.file' => {},
-                                      'vnd.fvt' => {},
-                                      'vnd.hns.video' => {},
-                                      'vnd.iptvforum.1dparityfec-1010' => {},
-                                      'vnd.iptvforum.1dparityfec-2005' => {},
-                                      'vnd.iptvforum.2dparityfec-1010' => {},
-                                      'vnd.iptvforum.2dparityfec-2005' => {},
-                                      'vnd.iptvforum.ttsavc' => {},
-                                      'vnd.iptvforum.ttsmpeg2' => {},
-                                      'vnd.motorola.video' => {},
-                                      'vnd.motorola.videop' => {},
-                                      'vnd.mpegurl' => {},
-                                      'vnd.ms-playready.media.pyv' => {},
-                                      'vnd.nokia.interleaved-multimedia' => {},
-                                      'vnd.nokia.videovoip' => {},
-                                      'vnd.objectvideo' => {},
+                                      'vnd.cctv' => {
+                                                      'iana' => 'permanent'
+                                                    },
+                                      'vnd.dece.hd' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                      'vnd.dece.mobile' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                      'vnd.dece.mp4' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'vnd.dece.pd' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                      'vnd.dece.sd' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                      'vnd.dece.video' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                      'vnd.directv.mpeg' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                      'vnd.directv.mpeg-tts' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                      'vnd.dlna.mpeg-tts' => {
+                                                               'iana' => 'permanent'
+                                                             },
+                                      'vnd.dvb.file' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'vnd.fvt' => {
+                                                     'iana' => 'permanent'
+                                                   },
+                                      'vnd.hns.video' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                      'vnd.iptvforum.1dparityfec-1010' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                      'vnd.iptvforum.1dparityfec-2005' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                      'vnd.iptvforum.2dparityfec-1010' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                      'vnd.iptvforum.2dparityfec-2005' => {
+                                                                            'iana' => 'permanent'
+                                                                          },
+                                      'vnd.iptvforum.ttsavc' => {
+                                                                  'iana' => 'permanent'
+                                                                },
+                                      'vnd.iptvforum.ttsmpeg2' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                      'vnd.motorola.video' => {
+                                                                'iana' => 'permanent'
+                                                              },
+                                      'vnd.motorola.videop' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                      'vnd.mpegurl' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                      'vnd.ms-playready.media.pyv' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                      'vnd.nokia.interleaved-multimedia' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
+                                      'vnd.nokia.videovoip' => {
+                                                                 'iana' => 'permanent'
+                                                               },
+                                      'vnd.objectvideo' => {
+                                                             'iana' => 'permanent'
+                                                           },
+                                      'vnd.radgamettools.bink' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
+                                      'vnd.radgamettools.smacker' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
                                       'vnd.rn-realvideo' => {},
                                       'vnd.rn-realvideo-secure' => {},
-                                      'vnd.sealed.mpeg1' => {},
-                                      'vnd.sealed.mpeg4' => {},
-                                      'vnd.sealed.swf' => {},
-                                      'vnd.sealedmedia.softseal.mov' => {},
-                                      'vnd.uvvu.mp4' => {},
-                                      'vnd.vivo' => {},
+                                      'vnd.sealed.mpeg1' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                      'vnd.sealed.mpeg4' => {
+                                                              'iana' => 'permanent'
+                                                            },
+                                      'vnd.sealed.swf' => {
+                                                            'iana' => 'permanent'
+                                                          },
+                                      'vnd.sealedmedia.softseal.mov' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                      'vnd.uvvu.mp4' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                      'vnd.vivo' => {
+                                                      'iana' => 'permanent'
+                                                    },
                                       'wavelet' => {},
                                       'webm' => {},
                                       'x-anim' => {},

@@ -781,7 +781,11 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana' => 'permanent'
                                                           },
                                             'pkix-pkipath' => {
-                                                                'iana' => 'permanent'
+                                                                'der' => 1,
+                                                                'iana' => 'permanent',
+                                                                'params' => {
+                                                                              'version' => {}
+                                                                            }
                                                               },
                                             'pkixcmp' => {
                                                            'iana' => 'permanent'

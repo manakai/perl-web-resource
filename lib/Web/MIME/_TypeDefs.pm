@@ -4056,6 +4056,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 },
                                             'x-world' => {},
                                             'x-worldgroup' => {},
+                                            'x-www-form+xml' => {},
                                             'x-www-form-encoded' => {},
                                             'x-www-form-urlencoded' => {
                                                                          'blacklisted' => 1,

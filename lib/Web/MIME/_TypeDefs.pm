@@ -251,6 +251,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                             'charset' => {},
                                                                             'version' => {}
                                                                           },
+                                                              'scripting_language' => 'javascript',
                                                               'text' => 1
                                                             },
                                             'edi-consent' => {
@@ -431,6 +432,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                             'charset' => {},
                                                                             'version' => {}
                                                                           },
+                                                              'scripting_language' => 'javascript',
                                                               'text' => 1
                                                             },
                                             'javatv-xlet' => {},
@@ -683,7 +685,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                               'padding' => {},
                                                                               'type' => {},
                                                                               'x-conversions' => {}
-                                                                            }
+                                                                            },
+                                                                'scripting_language' => 'no'
                                                               },
                                             'oda' => {
                                                        'iana' => 'permanent'
@@ -3616,6 +3619,14 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-dump' => {},
                                             'x-dvi' => {},
                                             'x-earthtime' => {},
+                                            'x-ecmascript' => {
+                                                                'browser' => 1,
+                                                                'params' => {
+                                                                              'charset' => {}
+                                                                            },
+                                                                'scripting_language' => 'javascript',
+                                                                'text' => 1
+                                                              },
                                             'x-enterlicense' => {},
                                             'x-envoy' => {},
                                             'x-eva' => {},
@@ -3738,6 +3749,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'params' => {
                                                                               'charset' => {}
                                                                             },
+                                                                'scripting_language' => 'javascript',
                                                                 'text' => 1
                                                               },
                                             'x-javascript-config' => {},
@@ -3837,6 +3849,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-nacl' => {
                                                           'plugin' => 1
                                                         },
+                                            'x-naoscheme' => {
+                                                               'script_data_block' => 1
+                                                             },
                                             'x-nemo' => {
                                                           'plugin' => 1
                                                         },
@@ -3881,6 +3896,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                       },
                                                           'text' => 1
                                                         },
+                                            'x-perl-script' => {},
+                                            'x-perlscript' => {
+                                                                'scripting_language' => 'yes'
+                                                              },
                                             'x-pkcs12' => {},
                                             'x-pkcs7-certificates' => {},
                                             'x-pkcs7-certreqresp' => {},
@@ -3909,6 +3928,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-pulse-version-5-2-0-10532' => {
                                                                                'plugin' => 1
                                                                              },
+                                            'x-python' => {
+                                                            'scripting_language' => 'yes'
+                                                          },
                                             'x-qplus' => {},
                                             'x-quicktimeplayer' => {},
                                             'x-quicktimeupdater' => {},
@@ -4011,6 +4033,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-up' => {},
                                             'x-ustar' => {},
                                             'x-uuencode' => {},
+                                            'x-vbscript' => {
+                                                              'scripting_language' => 'yes'
+                                                            },
                                             'x-vcon-command' => {},
                                             'x-vcon-data' => {},
                                             'x-virtools' => {
@@ -4075,6 +4100,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-xdma' => {},
                                             'x-xfdl' => {},
                                             'x-xfig' => {},
+                                            'x-xforms-actions+xml' => {
+                                                                        'scripting_language' => 'yes'
+                                                                      },
                                             'x-xhtml+voice+xml' => {},
                                             'x-xliff+xml' => {},
                                             'x-xp' => {},
@@ -4168,6 +4196,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                      'charset' => {}
                                                                    },
                                                        'scriptable' => 1,
+                                                       'scripting_language' => 'no',
                                                        'text' => 1,
                                                        'xml' => 1
                                                      },
@@ -5880,6 +5909,12 @@ $Web::MIME::_TypeDefs::Type = {
                                      'boolean' => {},
                                      'bss' => {},
                                      'c' => {},
+                                     'c#' => {
+                                               'scripting_language' => 'yes'
+                                             },
+                                     'cache' => {
+                                                  'scripting_language' => 'yes'
+                                                },
                                      'cache-manifest' => {
                                                            'blacklisted' => 1
                                                          },
@@ -5899,8 +5934,14 @@ $Web::MIME::_TypeDefs::Type = {
                                      'cas' => {},
                                      'cmif' => {},
                                      'cmml' => {},
+                                     'cobol' => {
+                                                  'scripting_language' => 'yes'
+                                                },
                                      'coffeescript' => {},
                                      'comma-separated-values' => {},
+                                     'common-lisp' => {
+                                                        'scripting_language' => 'yes'
+                                                      },
                                      'cpp' => {},
                                      'css' => {
                                                 'blacklisted' => 1,
@@ -5946,7 +5987,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'params' => {
                                                                      'charset' => {},
                                                                      'version' => {}
-                                                                   }
+                                                                   },
+                                                       'scripting_language' => 'javascript'
                                                      },
                                      'encaprtp' => {
                                                      'iana' => 'permanent'
@@ -5998,20 +6040,82 @@ $Web::MIME::_TypeDefs::Type = {
                                                                      'charset' => {},
                                                                      'e4x' => {},
                                                                      'version' => {}
-                                                                   }
+                                                                   },
+                                                       'scripting_language' => 'javascript'
                                                      },
-                                     'javascript1.1' => {},
-                                     'javascript1.2' => {},
-                                     'javascript1.3' => {},
+                                     'javascript1.0' => {
+                                                          'browser' => 1,
+                                                          'params' => {
+                                                                        'charset' => {}
+                                                                      },
+                                                          'scripting_language' => 'javascript'
+                                                        },
+                                     'javascript1.1' => {
+                                                          'browser' => 1,
+                                                          'params' => {
+                                                                        'charset' => {}
+                                                                      },
+                                                          'scripting_language' => 'javascript'
+                                                        },
+                                     'javascript1.2' => {
+                                                          'browser' => 1,
+                                                          'params' => {
+                                                                        'charset' => {}
+                                                                      },
+                                                          'scripting_language' => 'javascript'
+                                                        },
+                                     'javascript1.3' => {
+                                                          'browser' => 1,
+                                                          'params' => {
+                                                                        'charset' => {}
+                                                                      },
+                                                          'scripting_language' => 'javascript'
+                                                        },
+                                     'javascript1.4' => {
+                                                          'browser' => 1,
+                                                          'params' => {
+                                                                        'charset' => {}
+                                                                      },
+                                                          'scripting_language' => 'javascript'
+                                                        },
+                                     'javascript1.5' => {
+                                                          'browser' => 1,
+                                                          'params' => {
+                                                                        'charset' => {}
+                                                                      },
+                                                          'scripting_language' => 'javascript'
+                                                        },
                                      'jcr-cnd' => {
                                                     'iana' => 'permanent'
                                                   },
+                                     'jquery' => {
+                                                   'script_data_block' => 1
+                                                 },
                                      'js' => {},
+                                     'jscript' => {
+                                                    'browser' => 1,
+                                                    'params' => {
+                                                                  'charset' => {}
+                                                                },
+                                                    'scripting_language' => 'javascript'
+                                                  },
+                                     'jscript.encode' => {
+                                                           'scripting_language' => 'yes'
+                                                         },
                                      'json' => {},
                                      'jss' => {},
                                      'kendo-tmpl' => {},
                                      'less' => {},
-                                     'livescript' => {},
+                                     'livescript' => {
+                                                       'browser' => 1,
+                                                       'params' => {
+                                                                     'charset' => {}
+                                                                   },
+                                                       'scripting_language' => 'javascript'
+                                                     },
+                                     'logo' => {
+                                                 'script_data_block' => 1
+                                               },
                                      'mathml' => {},
                                      'mathml-renderer' => {},
                                      'mathml-rendererb' => {},
@@ -6026,15 +6130,23 @@ $Web::MIME::_TypeDefs::Type = {
                                                'iana' => 'permanent'
                                              },
                                      'ng-template' => {},
-                                     'os-data' => {},
-                                     'os-template' => {},
+                                     'os-data' => {
+                                                    'script_data_block' => 1
+                                                  },
+                                     'os-template' => {
+                                                        'script_data_block' => 1
+                                                      },
                                      'owl-manchester' => {},
                                      'parityfec' => {
                                                       'iana' => 'permanent'
                                                     },
                                      'perl' => {},
-                                     'perlscript' => {},
-                                     'php' => {},
+                                     'perlscript' => {
+                                                       'scripting_language' => 'yes'
+                                                     },
+                                     'php' => {
+                                                'scripting_language' => 'yes'
+                                              },
                                      'ping' => {
                                                  'blacklisted' => 1
                                                },
@@ -6050,7 +6162,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'charset-edition' => {},
                                                                 'charset-extension' => {},
                                                                 'format' => {}
-                                                              }
+                                                              },
+                                                  'scripting_language' => 'no'
                                                 },
                                      'provenance-notation' => {
                                                                 'iana' => 'permanent'
@@ -6061,7 +6174,9 @@ $Web::MIME::_TypeDefs::Type = {
                                      'prs.lines.tag' => {
                                                           'iana' => 'permanent'
                                                         },
-                                     'python' => {},
+                                     'python' => {
+                                                   'scripting_language' => 'yes'
+                                                 },
                                      'raptorfec' => {
                                                       'iana' => 'permanent'
                                                     },
@@ -6097,7 +6212,9 @@ $Web::MIME::_TypeDefs::Type = {
                                               },
                                      'ruby' => {},
                                      'ruby-script' => {},
-                                     'rubyscript' => {},
+                                     'rubyscript' => {
+                                                       'scripting_language' => 'yes'
+                                                     },
                                      'script' => {},
                                      'scriptlet' => {},
                                      'sgml' => {
@@ -6114,6 +6231,9 @@ $Web::MIME::_TypeDefs::Type = {
                                      'sms' => {},
                                      'spice' => {},
                                      'spreadsheet' => {},
+                                     'sql' => {
+                                                'scripting_language' => 'yes'
+                                              },
                                      't-time' => {},
                                      't140' => {
                                                  'iana' => 'permanent'
@@ -6121,9 +6241,13 @@ $Web::MIME::_TypeDefs::Type = {
                                      'tab-separated-values' => {
                                                                  'iana' => 'permanent'
                                                                },
-                                     'tcl' => {},
+                                     'tcl' => {
+                                                'scripting_language' => 'yes'
+                                              },
                                      'template' => {},
-                                     'tiscript' => {},
+                                     'tiscript' => {
+                                                     'scripting_language' => 'yes'
+                                                   },
                                      'troff' => {
                                                   'iana' => 'permanent'
                                                 },
@@ -6141,8 +6265,18 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     }
                                                    },
                                      'url' => {},
-                                     'vbs' => {},
-                                     'vbscript' => {},
+                                     'vb' => {
+                                               'scripting_language' => 'yes'
+                                             },
+                                     'vbs' => {
+                                                'scripting_language' => 'yes'
+                                              },
+                                     'vbscript' => {
+                                                     'scripting_language' => 'yes'
+                                                   },
+                                     'vbscript.encode' => {
+                                                            'scripting_language' => 'yes'
+                                                          },
                                      'vcard' => {
                                                   'iana' => 'permanent'
                                                 },
@@ -6279,6 +6413,13 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-dot-template' => {},
                                      'x-dsl' => {},
                                      'x-dtd' => {},
+                                     'x-ecmascript' => {
+                                                         'browser' => 1,
+                                                         'params' => {
+                                                                       'charset' => {}
+                                                                     },
+                                                         'scripting_language' => 'javascript'
+                                                       },
                                      'x-ejs-template' => {},
                                      'x-emacs-lisp' => {},
                                      'x-emelody' => {},
@@ -6307,7 +6448,13 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-install' => {},
                                      'x-java' => {},
                                      'x-java-source' => {},
-                                     'x-javascript' => {},
+                                     'x-javascript' => {
+                                                         'browser' => 1,
+                                                         'params' => {
+                                                                       'charset' => {}
+                                                                     },
+                                                         'scripting_language' => 'javascript'
+                                                       },
                                      'x-jdoc-format' => {},
                                      'x-jquery-tmpl' => {},
                                      'x-jsrender' => {},
@@ -6346,7 +6493,9 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-packed-dat' => {},
                                      'x-pascal' => {},
                                      'x-patch' => {},
-                                     'x-perl' => {},
+                                     'x-perl' => {
+                                                   'scripting_language' => 'yes'
+                                                 },
                                      'x-perl-script' => {},
                                      'x-pgp-cleartext-signed' => {
                                                                    'params' => {
@@ -6390,7 +6539,9 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-ssa' => {},
                                      'x-suikawiki' => {},
                                      'x-syn' => {},
-                                     'x-tcl' => {},
+                                     'x-tcl' => {
+                                                  'scripting_language' => 'yes'
+                                                },
                                      'x-tex' => {},
                                      'x-texinfo' => {},
                                      'x-tmpl' => {},
@@ -6412,7 +6563,9 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-vb' => {},
                                      'x-vb-source' => {},
                                      'x-vbookmark' => {},
-                                     'x-vbscript' => {},
+                                     'x-vbscript' => {
+                                                       'scripting_language' => 'yes'
+                                                     },
                                      'x-vcalendar' => {},
                                      'x-vcalender' => {},
                                      'x-vcanlender' => {},
@@ -6428,7 +6581,9 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-xetext' => {},
                                      'x-xml' => {},
                                      'x.wiki' => {},
-                                     'xaml' => {},
+                                     'xaml' => {
+                                                 'script_data_block' => 1
+                                               },
                                      'xhtml' => {},
                                      'xhtml+xml' => {},
                                      'xml' => {
@@ -6441,7 +6596,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                 'params' => {
                                                               'charset' => {}
                                                             },
+                                                'script_data_block' => 1,
                                                 'scriptable' => 1,
+                                                'scripting_language' => 'no',
                                                 'xml' => 1
                                               },
                                      'xml-content' => {},
@@ -6454,7 +6611,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                      'charset' => {}
                                                                                    }
                                                                      },
-                                     'xml-script' => {},
+                                     'xml-script' => {
+                                                       'scripting_language' => 'yes'
+                                                     },
                                      'xml-soap' => {},
                                      'xmlp+xml' => {},
                                      'xmms-playlist' => {},
@@ -6997,8 +7156,12 @@ $Web::MIME::_TypeDefs::Type = {
                         },
           'x-shader' => {
                           'subtype' => {
-                                         'x-fragment' => {},
-                                         'x-vertex' => {}
+                                         'x-fragment' => {
+                                                           'script_data_block' => 1
+                                                         },
+                                         'x-vertex' => {
+                                                         'script_data_block' => 1
+                                                       }
                                        }
                         },
           'x-squid-internal' => {

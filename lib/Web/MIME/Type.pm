@@ -1,9 +1,9 @@
 package Web::MIME::Type;
 use strict;
 use warnings;
-our $VERSION = '2.0';
+our $VERSION = '3.0';
 
-# XXX MIME sniffing spec
+# XXX Implement MIME sniffing spec
 
 ## ------ Instantiation ------
 
@@ -199,6 +199,17 @@ sub is_styling_lang ($) {
   my $self = shift;
   return (($self->_subtype_def or {})->{styling});
 } # is_styling_lang
+
+sub is_scripting_lang ($) {
+  my $self = shift;
+  my $lang = ($self->_subtype_def or {})->{scripting_language} || '';
+  return $lang && $lang ne 'no';
+} # is_scripting_lang
+
+sub is_javascript ($) {
+  my $self = shift;
+  return 'javascript' eq (($self->_subtype_def or {})->{scripting_language} || '');
+} # is_javascript
 
 ## What is "text-based" media type is unclear.
 sub is_text_based ($) {

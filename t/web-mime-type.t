@@ -127,8 +127,11 @@ for my $test (
   ['text', 'css', 1],
   ['text', 'javascript', 0],
   ['text', 'xsl', 1],
+  ['text', 'xml', 0],
   ['text', 'xslt', 0],
   ['application', 'xslt+xml', 1],
+  ['application', 'xml', 0],
+  ['application', 'octet-stream', 0],
   ['x-unknown', 'x-unknown', 0],
 ) {
   test {
@@ -145,6 +148,9 @@ for my $test (
   ['text', 'css', 0, 0],
   ['text', 'xsl', 0, 0],
   ['text', 'xslt', 0, 0],
+  ['text', 'xml', 0, 0],
+  ['application', 'xml', 0, 0],
+  ['application', 'octet-stream', 0, 0],
   ['application', 'xslt+xml', 0, 0],
   ['x-unknown', 'x-unknown', 0, 0],
   ['text', 'javascript', 1, 1],

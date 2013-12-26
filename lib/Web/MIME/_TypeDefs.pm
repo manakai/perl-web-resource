@@ -6298,6 +6298,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-hdml' => {},
                                      'x-hnf' => {},
                                      'x-html' => {},
+                                     'x-html-srcdoc' => {},
                                      'x-html-template' => {},
                                      'x-idl' => {},
                                      'x-imagemap' => {},

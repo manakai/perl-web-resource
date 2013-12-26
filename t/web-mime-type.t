@@ -121,22 +121,60 @@ test {
 
 ## ------ Properties ------
 
-test {
-  my $c = shift;
-  for (
-      ['text', 'plain', 0],
-      ['text', 'html', 0],
-      ['text', 'css', 1],
-      ['text', 'xsl', 1],
-      ['text', 'xslt', 0],
-      ['application', 'xslt+xml', 1],
-      ['x-unknown', 'x-unknown', 0],
-  ) {
-    my $mt = Web::MIME::Type->new_from_type_and_subtype ($_->[0], $_->[1]);
-    is !!$mt->is_styling_lang, !!$_->[2];
-  }
-  done $c;
-} n => 7, name => 'is_styling_lang';
+for my $test (
+  ['text', 'plain', 0],
+  ['text', 'html', 0],
+  ['text', 'css', 1],
+  ['text', 'javascript', 0],
+  ['text', 'xsl', 1],
+  ['text', 'xslt', 0],
+  ['application', 'xslt+xml', 1],
+  ['x-unknown', 'x-unknown', 0],
+) {
+  test {
+    my $c = shift;
+    my $mt = Web::MIME::Type->new_from_type_and_subtype ($test->[0], $test->[1]);
+    is !!$mt->is_styling_lang, !!$test->[2];
+    done $c;
+  } n => 1, name => ['is_styling_lang', $test->[0], $test->[1]];
+}
+
+for my $test (
+  ['text', 'plain', 0, 0],
+  ['text', 'html', 0, 0],
+  ['text', 'css', 0, 0],
+  ['text', 'xsl', 0, 0],
+  ['text', 'xslt', 0, 0],
+  ['application', 'xslt+xml', 0, 0],
+  ['x-unknown', 'x-unknown', 0, 0],
+  ['text', 'javascript', 1, 1],
+  ['text', 'javascript1.0', 1, 1],
+  ['text', 'javascript1.1', 1, 1],
+  ['text', 'javascript1.2', 1, 1],
+  ['text', 'javascript1.3', 1, 1],
+  ['text', 'javascript1.4', 1, 1],
+  ['text', 'javascript1.5', 1, 1],
+  ['text', 'jscript', 1, 1],
+  ['text', 'livescript', 1, 1],
+  ['text', 'ecmascript', 1, 1],
+  ['text', 'x-ecmascript', 1, 1],
+  ['text', 'x-javascript', 1, 1],
+  ['application', 'ecmascript', 1, 1],
+  ['application', 'javascript', 1, 1],
+  ['application', 'x-ecmascript', 1, 1],
+  ['application', 'x-javascript', 1, 1],
+  ['text', 'vbscript', 1, 0],
+  ['text', 'vbs', 1, 0],
+  ['text', 'tcl', 1, 0],
+) {
+  test {
+    my $c = shift;
+    my $mt = Web::MIME::Type->new_from_type_and_subtype ($test->[0], $test->[1]);
+    is !!$mt->is_scripting_lang, !!$test->[2];
+    is !!$mt->is_javascript, !!$test->[3];
+    done $c;
+  } n => 2, name => ['is_scripting_lang', $test->[0], $test->[1]];
+}
 
 test {
   my $c = shift;

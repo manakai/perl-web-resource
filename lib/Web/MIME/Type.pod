@@ -104,6 +104,15 @@ represented as a C<token> or a C<quoted-string> in the lexical form.
 Therefore, the method never returnes enclosing C<"> characters nor
 C<\> in C<quoted-pair>.
 
+=item I<BOOL> = I<$t>->is_javascript
+
+Returns whether the type represents JavaScript or not.
+
+=item I<BOOL> = I<$t>->is_scripting_lang
+
+Returns whether the type represents a scripting language (typically
+run within the Web browser's environment), such as JavaScript.
+
 =item I<BOOL> = I<$t>->is_styling_lang
 
 Returns whether the type represents a styling language, such as CSS.
@@ -173,7 +182,7 @@ RFC 3023 "XML Media Types" <http://tools.ietf.org/html/rfc3023>.
 RFC 4288 "Media Type Specifications and Registration Procedures"
 <http://tools.ietf.org/html/rfc4288>.
 
-Web Applications 1.0
+HTML Standard
 <http://www.whatwg.org/specs/web-apps/current-work/complete.html>.
 
 MIME Media Types <http://www.iana.org/assignments/media-types/>.

@@ -377,6 +377,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'iges' => {
                                                         'iana' => 'permanent'
                                                       },
+                                            'illustrator' => {},
                                             'im-iscomposing+xml' => {
                                                                       'iana' => 'permanent'
                                                                     },

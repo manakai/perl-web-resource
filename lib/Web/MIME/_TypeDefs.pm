@@ -442,7 +442,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana' => 'permanent'
                                                           },
                                             'json' => {
-                                                        'iana' => 'permanent'
+                                                        'iana' => 'permanent',
+                                                        'script_data_block' => 1
                                                       },
                                             'json-patch+json' => {
                                                                    'iana' => 'permanent'
@@ -457,7 +458,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                      'iana' => 'permanent'
                                                                    },
                                             'ld+json' => {
-                                                           'iana' => 'permanent'
+                                                           'iana' => 'permanent',
+                                                           'script_data_block' => 1
                                                          },
                                             'lgh' => {},
                                             'lha' => {},
@@ -6104,7 +6106,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                            'scripting_language' => 'yes'
                                                          },
                                      'json' => {},
-                                     'jss' => {},
+                                     'jss' => {
+                                                'styling' => 1
+                                              },
                                      'kendo-tmpl' => {},
                                      'less' => {},
                                      'livescript' => {

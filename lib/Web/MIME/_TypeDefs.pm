@@ -695,7 +695,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'iana' => 'permanent'
                                                      },
                                             'odx' => {
-                                                       'iana' => 'provisional'
+                                                       'iana' => 'permanent'
                                                      },
                                             'oebps-package+xml' => {
                                                                      'iana' => 'permanent'

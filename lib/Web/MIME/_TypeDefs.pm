@@ -5786,7 +5786,10 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x3d+xml' => {
                                                      'iana' => 'permanent',
                                                      'plugin' => 1
-                                                   }
+                                                   },
+                                      'x3d-vrml' => {
+                                                      'iana' => 'permanent'
+                                                    }
                                     }
                      },
           'mozilla.application' => {

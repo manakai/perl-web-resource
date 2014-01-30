@@ -78,6 +78,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'auth-policy+xml' => {
                                                                    'iana' => 'permanent'
                                                                  },
+                                            'bacnet-xdd+zip' => {
+                                                                  'iana' => 'permanent'
+                                                                },
                                             'batch-smtp' => {
                                                               'iana' => 'permanent'
                                                             },
@@ -733,7 +736,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'scriptable' => 1
                                                      },
                                             'pdx' => {
-                                                       'iana' => 'provisional'
+                                                       'iana' => 'permanent'
                                                      },
                                             'pgp' => {
                                                        'params' => {
@@ -1939,6 +1942,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.intu.qfx' => {
                                                                 'iana' => 'permanent'
                                                               },
+                                            'vnd.iptc.g2.catalogitem+xml' => {
+                                                                               'iana' => 'permanent'
+                                                                             },
                                             'vnd.iptc.g2.conceptitem+xml' => {
                                                                                'iana' => 'permanent'
                                                                              },
@@ -6738,7 +6744,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'hypervideo' => {},
                                       'isivideo' => {},
                                       'iso.segment' => {
-                                                         'iana' => 'provisional'
+                                                         'iana' => 'permanent'
                                                        },
                                       'jpeg' => {
                                                   'iana' => 'permanent'

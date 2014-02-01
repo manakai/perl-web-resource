@@ -1346,6 +1346,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.collection+json' => {
                                                                        'iana' => 'permanent'
                                                                      },
+                                            'vnd.collection.doc+json' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
                                             'vnd.collection.next+json' => {
                                                                             'iana' => 'permanent'
                                                                           },
@@ -2900,6 +2903,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.pawaafile' => {
                                                                  'iana' => 'permanent'
                                                                },
+                                            'vnd.pcos' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'vnd.pg.format' => {
                                                                  'iana' => 'permanent'
                                                                },

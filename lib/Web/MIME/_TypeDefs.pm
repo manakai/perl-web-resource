@@ -470,6 +470,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                'iana' => 'permanent'
                                                              },
                                             'listenup' => {},
+                                            'load-control+xml' => {
+                                                                    'iana' => 'permanent'
+                                                                  },
                                             'logml' => {},
                                             'lost+xml' => {
                                                             'iana' => 'permanent'

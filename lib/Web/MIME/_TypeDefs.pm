@@ -1119,6 +1119,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                      },
                                             'toc' => {},
                                             'toolbook' => {},
+                                            'ttml+xml' => {
+                                                            'iana' => 'permanent'
+                                                          },
                                             'tve-trigger' => {
                                                                'iana' => 'permanent'
                                                              },

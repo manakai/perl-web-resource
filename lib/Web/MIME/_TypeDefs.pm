@@ -4261,6 +4261,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'xv+xml' => {
                                                           'iana' => 'permanent'
                                                         },
+                                            'yaml' => {},
                                             'yang' => {
                                                         'iana' => 'permanent'
                                                       },
@@ -6606,6 +6607,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-www-rules' => {},
                                      'x-xetext' => {},
                                      'x-xml' => {},
+                                     'x-yaml' => {},
                                      'x.wiki' => {},
                                      'xaml' => {
                                                  'script_data_block' => 1
@@ -6653,7 +6655,8 @@ $Web::MIME::_TypeDefs::Type = {
                                      'xslfo' => {},
                                      'xul' => {
                                                 'browser' => 1
-                                              }
+                                              },
+                                     'yaml' => {}
                                    },
                       'text' => 1
                     },

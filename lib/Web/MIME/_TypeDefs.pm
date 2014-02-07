@@ -4055,7 +4055,8 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-ustar' => {},
                                             'x-uuencode' => {},
                                             'x-vbscript' => {
-                                                              'scripting_language' => 'yes'
+                                                              'scripting_language' => 'yes',
+                                                              'text' => 1
                                                             },
                                             'x-vcon-command' => {},
                                             'x-vcon-data' => {},
@@ -4137,7 +4138,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                'plugin' => 1
                                                              },
                                             'x-xz' => {},
-                                            'x-yaml' => {},
+                                            'x-yaml' => {
+                                                          'text' => 1
+                                                        },
                                             'x-yumekara' => {},
                                             'x-yz1' => {},
                                             'x-zaurus-zac' => {},
@@ -4261,7 +4264,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'xv+xml' => {
                                                           'iana' => 'permanent'
                                                         },
-                                            'yaml' => {},
+                                            'yaml' => {
+                                                        'text' => 1
+                                                      },
                                             'yang' => {
                                                         'iana' => 'permanent'
                                                       },

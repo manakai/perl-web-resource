@@ -6313,6 +6313,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                   'iana' => 'permanent'
                                                 },
                                      'vcsswg' => {},
+                                     'vnd.a' => {
+                                                  'iana' => 'permanent'
+                                                },
                                      'vnd.abc' => {
                                                     'iana' => 'permanent'
                                                   },

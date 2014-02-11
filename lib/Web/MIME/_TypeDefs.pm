@@ -5549,6 +5549,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-wavelet' => {
                                                        'plugin' => 1
                                                      },
+                                      'x-webp' => {},
                                       'x-win-bitmap' => {},
                                       'x-windows-bitmap' => {},
                                       'x-windows-icon' => {},

@@ -14,6 +14,11 @@ $Web::MIME::_TypeDefs::Type = {
                                     'gg' => {}
                                   }
                    },
+          'applicaiton' => {
+                             'subtype' => {
+                                            'x-bytecode.python' => {}
+                                          }
+                           },
           'application' => {
                              'iana' => 'permanent',
                              'subtype' => {
@@ -81,6 +86,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'bacnet-xdd+zip' => {
                                                                   'iana' => 'permanent'
                                                                 },
+                                            'base64' => {},
                                             'batch-smtp' => {
                                                               'iana' => 'permanent'
                                                             },
@@ -92,8 +98,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                           },
                                             'binary' => {},
                                             'binhex' => {},
+                                            'binhex4' => {},
                                             'bld' => {},
                                             'bld2' => {},
+                                            'book' => {},
                                             'calendar+xml' => {
                                                                 'iana' => 'permanent'
                                                               },
@@ -113,6 +121,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'ccxml+xml' => {
                                                              'iana' => 'permanent'
                                                            },
+                                            'cdf' => {},
                                             'cdfx' => {
                                                         'iana' => 'provisional'
                                                       },
@@ -144,6 +153,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'iana' => 'permanent'
                                                      },
                                             'clariscad' => {},
+                                            'cms' => {
+                                                       'iana' => 'permanent'
+                                                     },
                                             'cnrp+xml' => {
                                                             'iana' => 'permanent'
                                                           },
@@ -331,13 +343,16 @@ $Web::MIME::_TypeDefs::Type = {
                                             'framework-attributes+xml' => {
                                                                             'iana' => 'permanent'
                                                                           },
+                                            'freeloader' => {},
                                             'futuresplash' => {
                                                                 'plugin' => 1
                                                               },
                                             'gcwin' => {},
                                             'gml+xml' => {},
                                             'gnumeric' => {},
+                                            'gnutar' => {},
                                             'gpx+xml' => {},
+                                            'groupwise' => {},
                                             'gxf' => {},
                                             'gzip' => {
                                                         'iana' => 'permanent'
@@ -349,6 +364,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'held+xml' => {
                                                             'iana' => 'permanent'
                                                           },
+                                            'hlp' => {},
                                             'hstu' => {
                                                         'plugin' => 1
                                                       },
@@ -399,6 +415,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'index.vnd' => {
                                                              'iana' => 'permanent'
                                                            },
+                                            'inf' => {},
                                             'inkml+xml' => {
                                                              'iana' => 'permanent'
                                                            },
@@ -420,7 +437,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'itunes-plugin' => {
                                                                  'plugin' => 1
                                                                },
+                                            'java' => {},
                                             'java-archive' => {},
+                                            'java-byte-code' => {},
                                             'java-deployment-toolkit' => {
                                                                            'plugin' => 1
                                                                          },
@@ -483,11 +502,14 @@ $Web::MIME::_TypeDefs::Type = {
                                             'lxf' => {
                                                        'iana' => 'provisional'
                                                      },
+                                            'lzx' => {},
+                                            'mac-binary' => {},
                                             'mac-binhex' => {},
                                             'mac-binhex40' => {
                                                                 'iana' => 'permanent'
                                                               },
                                             'mac-compactpro' => {},
+                                            'macbinary' => {},
                                             'macwriteii' => {
                                                               'iana' => 'permanent'
                                                             },
@@ -559,6 +581,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     },
                                                         'text' => 1
                                                       },
+                                            'mcad' => {},
                                             'media-policy-dataset+xml' => {
                                                                             'iana' => 'permanent'
                                                                           },
@@ -582,6 +605,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'mikey' => {
                                                          'iana' => 'permanent'
                                                        },
+                                            'mime' => {},
                                             'mods+xml' => {
                                                             'iana' => 'permanent'
                                                           },
@@ -771,6 +795,8 @@ $Web::MIME::_TypeDefs::Type = {
                                             'pidf-diff+xml' => {
                                                                  'iana' => 'permanent'
                                                                },
+                                            'pkcs-12' => {},
+                                            'pkcs-crl' => {},
                                             'pkcs10' => {
                                                           'iana' => 'permanent'
                                                         },
@@ -802,6 +828,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'pkixcmp' => {
                                                            'iana' => 'permanent'
                                                          },
+                                            'plain' => {},
                                             'pls+xml' => {
                                                            'iana' => 'permanent'
                                                          },
@@ -880,6 +907,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'resource-lists-diff+xml' => {
                                                                            'iana' => 'permanent'
                                                                          },
+                                            'ringing-tones' => {},
                                             'riscos' => {
                                                           'iana' => 'permanent'
                                                         },
@@ -942,6 +970,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'iana' => 'permanent',
                                                        'plugin' => 1
                                                      },
+                                            'sea' => {},
                                             'sep+xml' => {
                                                            'iana' => 'permanent'
                                                          },
@@ -1028,6 +1057,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                           },
                                             'softvision' => {},
                                             'solids' => {},
+                                            'sounder' => {},
                                             'sparql-query' => {
                                                                 'iana' => 'permanent'
                                                               },
@@ -2374,6 +2404,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.nokia.catalogs' => {
                                                                       'iana' => 'permanent'
                                                                     },
+                                            'vnd.nokia.configuration-message' => {},
                                             'vnd.nokia.conml+wbxml' => {
                                                                          'iana' => 'permanent'
                                                                        },
@@ -2419,6 +2450,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.nokia.radio-presets' => {
                                                                            'iana' => 'permanent'
                                                                          },
+                                            'vnd.nokia.ringing-tone' => {},
                                             'vnd.novadigm.edm' => {
                                                                     'iana' => 'permanent'
                                                                   },
@@ -3517,9 +3549,12 @@ $Web::MIME::_TypeDefs::Type = {
                                             'wita' => {
                                                         'iana' => 'permanent'
                                                       },
+                                            'wordperfect' => {},
                                             'wordperfect5.1' => {
                                                                   'iana' => 'permanent'
                                                                 },
+                                            'wordperfect6.0' => {},
+                                            'wordperfect6.1' => {},
                                             'wpc' => {},
                                             'wsdl+xml' => {
                                                             'iana' => 'permanent'
@@ -3527,6 +3562,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'wspolicy+xml' => {
                                                                 'iana' => 'permanent'
                                                               },
+                                            'x-123' => {},
                                             'x-7z-compressed' => {},
                                             'x-abiword' => {},
                                             'x-ace-compressed' => {},
@@ -3566,6 +3602,8 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-beatnik' => {
                                                              'plugin' => 1
                                                            },
+                                            'x-binary' => {},
+                                            'x-binhex40' => {},
                                             'x-bittorrent' => {},
                                             'x-blaxxuncc3d' => {
                                                                  'plugin' => 1
@@ -3575,6 +3613,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                   },
                                             'x-blorb' => {},
                                             'x-bootable' => {},
+                                            'x-bsh' => {},
+                                            'x-bytecode.elisp' => {},
                                             'x-bz2-compressed' => {},
                                             'x-bzip' => {},
                                             'x-bzip2' => {},
@@ -3595,14 +3635,18 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-cif-tif-tiff' => {
                                                                   'plugin' => 1
                                                                 },
+                                            'x-cmu-raster' => {},
                                             'x-cmx' => {},
                                             'x-cnc' => {},
                                             'x-cnet-vsl' => {},
                                             'x-cocoa' => {},
+                                            'x-compactpro' => {},
                                             'x-compress' => {},
+                                            'x-compressed' => {},
                                             'x-conference' => {},
                                             'x-cpio' => {},
                                             'x-cprplayer' => {},
+                                            'x-cpt' => {},
                                             'x-csh' => {},
                                             'x-cult3d-object' => {
                                                                    'plugin' => 1
@@ -3615,6 +3659,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-dd+ext' => {},
                                             'x-debian-package' => {},
                                             'x-decomail-template' => {},
+                                            'x-deepv' => {},
                                             'x-detective' => {},
                                             'x-dgc-compressed' => {},
                                             'x-digitalloca' => {},
@@ -3648,8 +3693,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'scripting_language' => 'javascript',
                                                                 'text' => 1
                                                               },
+                                            'x-elc' => {},
                                             'x-enterlicense' => {},
                                             'x-envoy' => {},
+                                            'x-esrehber' => {},
                                             'x-eva' => {},
                                             'x-excel' => {},
                                             'x-exe' => {},
@@ -3680,11 +3727,13 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-fontdata' => {},
                                             'x-formatta' => {},
                                             'x-fortezza-ckl' => {},
+                                            'x-frame' => {},
                                             'x-framefree2' => {
                                                                 'plugin' => 1
                                                               },
                                             'x-framemaker' => {},
                                             'x-freearc' => {},
+                                            'x-freelance' => {},
                                             'x-futuresplash' => {},
                                             'x-gca-compressed' => {},
                                             'x-gcwin' => {},
@@ -3705,22 +3754,79 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-gps' => {},
                                             'x-gramps-xml' => {},
                                             'x-gsp' => {},
+                                            'x-gss' => {},
                                             'x-gtar' => {},
                                             'x-gzip' => {
                                                           'archive' => 1
                                                         },
                                             'x-hdf' => {},
+                                            'x-helpfile' => {},
                                             'x-htln+xml' => {},
                                             'x-htmlmail-template' => {},
-                                            'x-httpd-cgi' => {},
-                                            'x-httpd-imap' => {},
-                                            'x-httpd-isapi' => {},
+                                            'x-httpd-cgi' => {
+                                                               'httpd_handler' => 1
+                                                             },
+                                            'x-httpd-imap' => {
+                                                                'httpd_handler' => 1
+                                                              },
+                                            'x-httpd-isapi' => {
+                                                                 'httpd_handler' => 1
+                                                               },
+                                            'x-httpd-java' => {
+                                                                'httpd_handler' => 1
+                                                              },
+                                            'x-httpd-perl' => {
+                                                                'httpd_handler' => 1
+                                                              },
+                                            'x-httpd-php' => {
+                                                               'httpd_handler' => 1
+                                                             },
+                                            'x-httpd-php-source' => {
+                                                                      'httpd_handler' => 1
+                                                                    },
+                                            'x-httpd-php4cgi' => {
+                                                                   'httpd_handler' => 1
+                                                                 },
+                                            'x-httpd-php5' => {
+                                                                'httpd_handler' => 1
+                                                              },
+                                            'x-httpd-php52' => {
+                                                                 'httpd_handler' => 1
+                                                               },
+                                            'x-httpd-php53cgi' => {
+                                                                    'httpd_handler' => 1
+                                                                  },
+                                            'x-httpd-php54' => {
+                                                                 'httpd_handler' => 1
+                                                               },
+                                            'x-httpd-php54cgi' => {
+                                                                    'httpd_handler' => 1
+                                                                  },
+                                            'x-httpd-php5cgi' => {
+                                                                   'httpd_handler' => 1
+                                                                 },
+                                            'x-httpd-php5s' => {
+                                                                 'httpd_handler' => 1
+                                                               },
+                                            'x-httpd-php6cgi' => {
+                                                                   'httpd_handler' => 1
+                                                                 },
+                                            'x-httpd-phpcgi' => {
+                                                                  'httpd_handler' => 1
+                                                                },
+                                            'x-httpd-phps' => {
+                                                                'httpd_handler' => 1
+                                                              },
+                                            'x-httpd-python' => {
+                                                                  'httpd_handler' => 1
+                                                                },
                                             'x-hypercosm' => {
                                                                'plugin' => 1
                                                              },
                                             'x-iconbook' => {},
                                             'x-icq' => {},
                                             'x-idp' => {},
+                                            'x-ima' => {},
                                             'x-imagewebserver-ecw' => {
                                                                         'plugin' => 1
                                                                       },
@@ -3738,6 +3844,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-install-instructions' => {},
                                             'x-installer' => {},
                                             'x-internet-signup' => {},
+                                            'x-internett-signup' => {},
+                                            'x-inventor' => {},
+                                            'x-ip2' => {},
                                             'x-iphone' => {},
                                             'x-ipix' => {
                                                           'plugin' => 1
@@ -3755,6 +3864,8 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-java-bean' => {
                                                                'plugin' => 1
                                                              },
+                                            'x-java-class' => {},
+                                            'x-java-commerce' => {},
                                             'x-java-jnlp-file' => {},
                                             'x-java-vm' => {
                                                              'plugin' => 1
@@ -3800,12 +3911,17 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'text' => 1
                                                             },
                                             'x-lisp' => {},
+                                            'x-livescreen' => {},
                                             'x-lk-rlestream' => {},
                                             'x-locale' => {},
+                                            'x-lotus' => {},
+                                            'x-lotusscreencam' => {},
                                             'x-lzh' => {},
                                             'x-lzh-compressed' => {},
                                             'x-lzx' => {},
+                                            'x-mac-binhex40' => {},
                                             'x-macbinary' => {},
+                                            'x-magic-cap-package-1.0' => {},
                                             'x-mail-message' => {
                                                                   'params' => {
                                                                                 'charset' => {}
@@ -3816,7 +3932,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-maker' => {},
                                             'x-mapserver' => {},
                                             'x-mascot' => {},
+                                            'x-mathcad' => {},
                                             'x-mediadesc' => {},
+                                            'x-meme' => {},
                                             'x-midi' => {
                                                           'plugin' => 1
                                                         },
@@ -3825,6 +3943,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-mindavenueaxelstream' => {
                                                                           'plugin' => 1
                                                                         },
+                                            'x-mix-transfer' => {},
                                             'x-mobipocket-ebook' => {},
                                             'x-mocha' => {},
                                             'x-moz-file' => {},
@@ -3857,6 +3976,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-msmetafile' => {},
                                             'x-msmoney' => {},
                                             'x-msoffice' => {},
+                                            'x-mspowerpoint' => {},
                                             'x-mspublisher' => {},
                                             'x-msschedule' => {},
                                             'x-msterminal' => {},
@@ -3873,6 +3993,10 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-naoscheme' => {
                                                                'script_data_block' => 1
                                                              },
+                                            'x-navi-animation' => {},
+                                            'x-navidoc' => {},
+                                            'x-navimap' => {},
+                                            'x-navistyle' => {},
                                             'x-nemo' => {
                                                           'plugin' => 1
                                                         },
@@ -3881,7 +4005,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-netcdf' => {},
                                             'x-netfpx' => {},
                                             'x-neva1' => {},
+                                            'x-newton-compatible-pkg' => {},
                                             'x-nif' => {},
+                                            'x-nokia-9000-communicator-add-on-software' => {},
                                             'x-ns-proxy-auto-config' => {},
                                             'x-ns-proxy-autoconfig' => {},
                                             'x-nvat' => {},
@@ -3898,14 +4024,19 @@ $Web::MIME::_TypeDefs::Type = {
                                                                'plugin' => 1
                                                              },
                                             'x-olescript' => {},
+                                            'x-omc' => {},
+                                            'x-omcdatamaker' => {},
+                                            'x-omcregerator' => {},
                                             'x-onlive' => {},
                                             'x-onlivehead' => {},
                                             'x-onlivereg' => {},
                                             'x-opera-widgets' => {},
                                             'x-p3d' => {},
+                                            'x-pagemaker' => {},
                                             'x-palmpilot' => {},
                                             'x-parable-thing' => {},
                                             'x-pc-floppy' => {},
+                                            'x-pcl' => {},
                                             'x-pcn' => {},
                                             'x-pcn-connection' => {},
                                             'x-pcnavi' => {},
@@ -3921,6 +4052,8 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-perlscript' => {
                                                                 'scripting_language' => 'yes'
                                                               },
+                                            'x-pixclscript' => {},
+                                            'x-pkcs10' => {},
                                             'x-pkcs12' => {},
                                             'x-pkcs7-certificates' => {},
                                             'x-pkcs7-certreqresp' => {},
@@ -3931,9 +4064,11 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-pn-npistream' => {},
                                             'x-pn-realaudio' => {},
                                             'x-pointplus' => {},
+                                            'x-portable-anymap' => {},
                                             'x-postpet' => {},
                                             'x-ppages' => {},
                                             'x-prof' => {},
+                                            'x-project' => {},
                                             'x-pulse-download' => {
                                                                     'plugin' => 1
                                                                   },
@@ -3953,6 +4088,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'scripting_language' => 'yes'
                                                           },
                                             'x-qplus' => {},
+                                            'x-qpro' => {},
                                             'x-quicktimeplayer' => {},
                                             'x-quicktimeupdater' => {},
                                             'x-rad-powermedia' => {},
@@ -3967,6 +4103,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-research-info-systems' => {},
                                             'x-rfc-translation+xml' => {},
                                             'x-richlink' => {},
+                                            'x-rtf' => {},
                                             'x-rtsl' => {},
                                             'x-rtsp' => {
                                                           'plugin' => 1
@@ -3978,6 +4115,8 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-sdp' => {
                                                          'plugin' => 1
                                                        },
+                                            'x-sea' => {},
+                                            'x-seelogo' => {},
                                             'x-sgi-lpr' => {},
                                             'x-sgml-entity' => {},
                                             'x-sgml-preamble' => {},
@@ -4019,6 +4158,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-tar' => {},
                                             'x-tar+gzip' => {},
                                             'x-tardist' => {},
+                                            'x-tbook' => {},
                                             'x-tcl' => {},
                                             'x-ternant-web-driver' => {},
                                             'x-tex' => {
@@ -4044,6 +4184,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-troff-man' => {},
                                             'x-troff-me' => {},
                                             'x-troff-ms' => {},
+                                            'x-troff-msvideo' => {},
                                             'x-tv-program-info' => {},
                                             'x-twinvq' => {},
                                             'x-unknown-content-type-curlfil' => {
@@ -4063,6 +4204,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-virtools' => {
                                                               'plugin' => 1
                                                             },
+                                            'x-visio' => {},
                                             'x-visual-basic-class' => {},
                                             'x-visual-basic-form' => {},
                                             'x-visual-basic-form-resource' => {},
@@ -4073,16 +4215,19 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'plugin' => 1
                                                               },
                                             'x-vnd.adobe.air.file-list' => {},
+                                            'x-vnd.audioexplosion.mzz' => {},
                                             'x-vnd.google.oneclickctrl.9' => {
                                                                                'plugin' => 1
                                                                              },
                                             'x-vnd.google.update3webcontrol.3' => {
                                                                                     'plugin' => 1
                                                                                   },
+                                            'x-vnd.ls-xpix' => {},
                                             'x-vnd.mozilla' => {},
                                             'x-vnd.rn-realplayer-javascript' => {
                                                                                   'plugin' => 1
                                                                                 },
+                                            'x-vrml' => {},
                                             'x-w3-isindex' => {},
                                             'x-wais-source' => {},
                                             'x-webarchive' => {},
@@ -4095,6 +4240,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     },
                                             'x-wingz' => {},
                                             'x-winhelp' => {},
+                                            'x-wintalk' => {},
                                             'x-wlpg-detect' => {
                                                                  'plugin' => 1
                                                                },
@@ -4103,6 +4249,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 },
                                             'x-world' => {},
                                             'x-worldgroup' => {},
+                                            'x-wpwin' => {},
+                                            'x-wri' => {},
                                             'x-www-form+xml' => {},
                                             'x-www-form-encoded' => {},
                                             'x-www-form-urlencoded' => {
@@ -4509,6 +4657,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                },
                                       'mad' => {},
                                       'madi' => {},
+                                      'make' => {},
+                                      'make.my.funk' => {},
                                       'mdz' => {},
                                       'mid' => {
                                                  'plugin' => 1
@@ -4653,6 +4803,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'tone' => {
                                                   'iana' => 'permanent'
                                                 },
+                                      'tsp-audio' => {},
                                       'tsplayer' => {},
                                       'uemclip' => {
                                                      'iana' => 'permanent'
@@ -4785,6 +4936,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                           'iana' => 'permanent'
                                                         },
                                       'vnd.wave' => {},
+                                      'voc' => {},
                                       'vorbis' => {
                                                     'iana' => 'permanent'
                                                   },
@@ -4800,11 +4952,13 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-669-mod' => {},
                                       'x-aac' => {},
                                       'x-ac3' => {},
+                                      'x-adpcm' => {},
                                       'x-aifc' => {},
                                       'x-aiff' => {
                                                     'plugin' => 1
                                                   },
                                       'x-alaw-basic' => {},
+                                      'x-au' => {},
                                       'x-background' => {},
                                       'x-bamba' => {},
                                       'x-caf' => {
@@ -4827,6 +4981,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                  },
                                       'x-gus-patch' => {},
                                       'x-it' => {},
+                                      'x-jam' => {},
                                       'x-karaoke' => {},
                                       'x-la-lms' => {},
                                       'x-la-lqt' => {},
@@ -4865,12 +5020,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                     'plugin' => 1
                                                   },
                                       'x-mpeg-2' => {},
+                                      'x-mpeg-3' => {},
                                       'x-mpeg3' => {
                                                      'plugin' => 1
                                                    },
                                       'x-mpegurl' => {
                                                        'plugin' => 1
                                                      },
+                                      'x-mpequrl' => {},
                                       'x-mpg' => {
                                                    'plugin' => 1
                                                  },
@@ -4934,6 +5091,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-twinvq' => {},
                                       'x-twinvq-plugin' => {},
                                       'x-ulaw' => {},
+                                      'x-vnd.audioexplosion.mjuicemediafile' => {},
                                       'x-vnd.audioexplosion.mjuidemedia' => {},
                                       'x-voc' => {},
                                       'x-wav' => {
@@ -5166,6 +5324,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'fits' => {
                                                   'iana' => 'permanent'
                                                 },
+                                      'florian' => {},
                                       'g3fax' => {
                                                    'iana' => 'permanent'
                                                  },
@@ -5219,6 +5378,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                  'iana' => 'permanent',
                                                  'plugin' => 1
                                                },
+                                      'jutvision' => {},
                                       'ktx' => {
                                                  'iana' => 'permanent'
                                                },
@@ -5508,6 +5668,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                          },
                                       'x-ms-bmp' => {},
                                       'x-ms-bmpi' => {},
+                                      'x-niff' => {},
                                       'x-pc-paintbrush' => {},
                                       'x-pcl-hp' => {},
                                       'x-pcx' => {},
@@ -5525,6 +5686,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-portable-anymap' => {},
                                       'x-portable-bitmap' => {},
                                       'x-portable-graymap' => {},
+                                      'x-portable-greymap' => {},
                                       'x-portable-pixmap' => {},
                                       'x-psd' => {},
                                       'x-quicktime' => {
@@ -5552,6 +5714,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-webp' => {},
                                       'x-win-bitmap' => {},
                                       'x-windows-bitmap' => {},
+                                      'x-windows-bmp' => {},
                                       'x-windows-icon' => {},
                                       'x-windows-meta' => {},
                                       'x-wmf' => {},
@@ -5574,6 +5737,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-xpixmap' => {},
                                       'x-xpm' => {},
                                       'x-xres' => {},
+                                      'x-xwd' => {},
                                       'x-xwindowdump' => {},
                                       'x.djvu' => {
                                                     'plugin' => 1
@@ -5803,6 +5967,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                   'iana' => 'permanent',
                                                   'plugin' => 1
                                                 },
+                                      'x-pov' => {},
                                       'x3d+binary' => {},
                                       'x3d+fastinfoset' => {
                                                              'iana' => 'provisional'
@@ -5892,6 +6057,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  'blacklisted' => 1
                                                                },
                                           'x-sgml' => {},
+                                          'x-ustar' => {},
                                           'x-www-form-data' => {},
                                           'x-zip' => {}
                                         },
@@ -5901,7 +6067,8 @@ $Web::MIME::_TypeDefs::Type = {
                        'subtype' => {
                                       'crescendo' => {},
                                       'crescendo-encrypted' => {},
-                                      'x-crescendo-encrypted' => {}
+                                      'x-crescendo-encrypted' => {},
+                                      'x-karaoke' => {}
                                     }
                      },
           'netscape' => {
@@ -5911,6 +6078,11 @@ $Web::MIME::_TypeDefs::Type = {
                                          'tn3270' => {}
                                        }
                         },
+          'paleovu' => {
+                         'subtype' => {
+                                        'x-pv' => {}
+                                      }
+                       },
           'plugin' => {
                         'subtype' => {
                                        'listenup' => {},
@@ -5936,6 +6108,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      '_moz_htmlinfo' => {},
                                      'abiword' => {},
                                      'act' => {},
+                                     'asp' => {},
                                      'bib' => {},
                                      'boolean' => {},
                                      'bss' => {},
@@ -6173,6 +6346,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'parityfec' => {
                                                       'iana' => 'permanent'
                                                     },
+                                     'pascal' => {},
                                      'perl' => {},
                                      'perlscript' => {
                                                        'scripting_language' => 'yes'
@@ -6248,6 +6422,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'rubyscript' => {
                                                        'scripting_language' => 'yes'
                                                      },
+                                     'scriplet' => {},
                                      'script' => {},
                                      'scriptlet' => {},
                                      'sgml' => {
@@ -6419,6 +6594,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-ascii-plain' => {},
                                      'x-asm' => {},
                                      'x-astromark' => {},
+                                     'x-audiosoft-intra' => {},
                                      'x-authors' => {},
                                      'x-ave' => {},
                                      'x-c' => {},
@@ -6468,6 +6644,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-glsl-fs' => {},
                                      'x-gtkrc' => {},
                                      'x-gwt-rpc' => {},
+                                     'x-h' => {},
                                      'x-h2h' => {},
                                      'x-h2h+html' => {},
                                      'x-handlebars-template' => {},
@@ -6496,7 +6673,9 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-jsrender' => {},
                                      'x-kom-basic' => {},
                                      'x-ksh' => {},
+                                     'x-la-asf' => {},
                                      'x-lua-source' => {},
+                                     'x-m' => {},
                                      'x-mail' => {},
                                      'x-makefile' => {},
                                      'x-markdown' => {},
@@ -6557,14 +6736,32 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-roff' => {},
                                      'x-rst' => {},
                                      'x-scheme' => {},
+                                     'x-script' => {},
                                      'x-script-element-content' => {},
                                      'x-script-element-text' => {},
                                      'x-script-inline-documentation' => {},
+                                     'x-script.csh' => {},
+                                     'x-script.elisp' => {},
+                                     'x-script.guile' => {},
+                                     'x-script.ksh' => {},
+                                     'x-script.lisp' => {},
+                                     'x-script.perl' => {},
                                      'x-script.perl-module' => {},
+                                     'x-script.phyton' => {},
+                                     'x-script.rexx' => {},
+                                     'x-script.scheme' => {},
+                                     'x-script.sh' => {},
+                                     'x-script.tcl' => {},
+                                     'x-script.tcsh' => {},
+                                     'x-script.zsh' => {},
                                      'x-scriptlet' => {},
                                      'x-serialization' => {},
-                                     'x-server-parsed-html' => {},
-                                     'x-server-parsed-html3' => {},
+                                     'x-server-parsed-html' => {
+                                                                 'httpd_handler' => 1
+                                                               },
+                                     'x-server-parsed-html3' => {
+                                                                  'httpd_handler' => 1
+                                                                },
                                      'x-setext' => {},
                                      'x-sfv' => {},
                                      'x-sgml' => {},
@@ -6588,6 +6785,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-troff-mm' => {},
                                      'x-troff-ms' => {},
                                      'x-ttml' => {},
+                                     'x-uil' => {},
                                      'x-underscore-template' => {},
                                      'x-url' => {},
                                      'x-url-shortcut' => {
@@ -6717,6 +6915,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                  'plugin' => 1
                                                },
                                       'avs' => {},
+                                      'avs-video' => {},
                                       'bmpeg' => {
                                                    'iana' => 'permanent'
                                                  },
@@ -6744,6 +6943,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                },
                                       'fli' => {},
                                       'flv' => {},
+                                      'gl' => {},
                                       'h261' => {
                                                   'iana' => 'permanent'
                                                 },
@@ -6982,14 +7182,19 @@ $Web::MIME::_TypeDefs::Type = {
                                       'vnd.vivo' => {
                                                       'iana' => 'permanent'
                                                     },
+                                      'vosaic' => {},
                                       'wavelet' => {},
                                       'webm' => {},
+                                      'x-amt-demorun' => {},
+                                      'x-amt-showrun' => {},
                                       'x-anim' => {},
                                       'x-arib-aiff' => {},
                                       'x-arib-mng' => {},
                                       'x-arib-mpeg1' => {},
                                       'x-arib-mpeg2-aac' => {},
+                                      'x-atomic3d-feature' => {},
                                       'x-bamba' => {},
+                                      'x-dl' => {},
                                       'x-dv' => {
                                                   'plugin' => 1
                                                 },
@@ -6997,6 +7202,8 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-flc' => {},
                                       'x-fli' => {},
                                       'x-flv' => {},
+                                      'x-gl' => {},
+                                      'x-isvideo' => {},
                                       'x-ivf' => {
                                                    'plugin' => 1
                                                  },
@@ -7006,6 +7213,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                  },
                                       'x-matroska' => {},
                                       'x-mng' => {},
+                                      'x-motion-jpeg' => {},
                                       'x-mpeg' => {
                                                     'plugin' => 1
                                                   },
@@ -7014,6 +7222,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                          },
                                       'x-mpeg2' => {},
                                       'x-mpeg2a' => {},
+                                      'x-mpeq2a' => {},
                                       'x-mpg' => {},
                                       'x-ms-asf' => {
                                                       'plugin' => 1
@@ -7044,6 +7253,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-qmsys' => {},
                                       'x-qtc' => {},
                                       'x-quicktime' => {},
+                                      'x-scm' => {},
                                       'x-sgi-movie' => {},
                                       'x-smv' => {},
                                       'x-tango' => {},
@@ -7257,6 +7467,12 @@ $Web::MIME::_TypeDefs::Type = {
                                       }
                        },
           'xgi' => {
+                     'subtype' => {
+                                    'drawing' => {},
+                                    'movie' => {}
+                                  }
+                   },
+          'xgl' => {
                      'subtype' => {
                                     'drawing' => {},
                                     'movie' => {}

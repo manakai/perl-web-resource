@@ -6837,6 +6837,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                 'xml' => 1
                                               },
                                      'xml-content' => {},
+                                     'xml-dtd' => {},
                                      'xml-external-parsed-entity' => {
                                                                        'iana' => 'permanent',
                                                                        'mac_types' => {

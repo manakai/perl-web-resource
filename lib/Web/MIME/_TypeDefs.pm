@@ -6669,7 +6669,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                          'scripting_language' => 'javascript'
                                                        },
                                      'x-jdoc-format' => {},
-                                     'x-jquery-tmpl' => {},
+                                     'x-jquery-tmpl' => {
+                                                          'script_data_block' => 1
+                                                        },
                                      'x-jsrender' => {},
                                      'x-kom-basic' => {},
                                      'x-ksh' => {},

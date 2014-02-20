@@ -4109,6 +4109,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                           'plugin' => 1
                                                         },
                                             'x-salsa' => {},
+                                            'x-sami-dnd-flag' => {},
                                             'x-sch' => {},
                                             'x-scream' => {},
                                             'x-screencam' => {},

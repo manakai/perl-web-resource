@@ -6344,6 +6344,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'script_data_block' => 1
                                                       },
                                      'owl-manchester' => {},
+                                     'parameters' => {
+                                                       'iana' => 'permanent'
+                                                     },
                                      'parityfec' => {
                                                       'iana' => 'permanent'
                                                     },

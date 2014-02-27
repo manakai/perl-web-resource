@@ -4267,6 +4267,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-www-pgm-reply' => {},
                                             'x-www-pgm-request' => {},
                                             'x-x509-ca-cert' => {},
+                                            'x-x509-email-cert' => {},
                                             'x-x509-user-cert' => {},
                                             'x-xdma' => {},
                                             'x-xfdl' => {},

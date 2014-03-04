@@ -1811,6 +1811,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                               },
                                             'vnd.github+json' => {},
                                             'vnd.github.v3' => {},
+                                            'vnd.github.v3+form' => {},
                                             'vnd.github.v3+json' => {},
                                             'vnd.github.v3.diff+json' => {},
                                             'vnd.github.v3.full+json' => {},

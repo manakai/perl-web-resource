@@ -3860,9 +3860,17 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-jam' => {},
                                             'x-java' => {},
                                             'x-java-applet' => {
+                                                                 'params' => {
+                                                                               'jpi-version' => {},
+                                                                               'version' => {}
+                                                                             },
                                                                  'plugin' => 1
                                                                },
                                             'x-java-bean' => {
+                                                               'params' => {
+                                                                             'jpi-version' => {},
+                                                                             'version' => {}
+                                                                           },
                                                                'plugin' => 1
                                                              },
                                             'x-java-class' => {},

@@ -6476,7 +6476,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                   'iana' => 'permanent'
                                                 },
                                      'turtle' => {
-                                                   'iana' => 'permanent'
+                                                   'iana' => 'permanent',
+                                                   'script_data_block' => 1
                                                  },
                                      'ulpfec' => {
                                                    'iana' => 'permanent'

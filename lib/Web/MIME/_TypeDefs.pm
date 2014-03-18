@@ -4148,6 +4148,12 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-silverlight-2' => {
                                                                    'plugin' => 1
                                                                  },
+                                            'x-silverlight-2-b1' => {
+                                                                      'plugin' => 1
+                                                                    },
+                                            'x-silverlight-2-b2' => {
+                                                                      'plugin' => 1
+                                                                    },
                                             'x-silverlight-app' => {},
                                             'x-sit' => {},
                                             'x-smaf' => {},
@@ -5805,6 +5811,11 @@ $Web::MIME::_TypeDefs::Type = {
                                    }
                     },
           'matter-transport' => {},
+          'mce-text' => {
+                          'subtype' => {
+                                         'javascript' => {}
+                                       }
+                        },
           'message' => {
                          'composite' => 1,
                          'iana' => 'permanent',

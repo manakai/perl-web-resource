@@ -36,6 +36,36 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  'iana' => 'permanent'
                                                                },
                                             'album' => {},
+                                            'alto-costmap+json' => {
+                                                                     'iana' => 'permanent'
+                                                                   },
+                                            'alto-costmapfilter+json' => {
+                                                                           'iana' => 'permanent'
+                                                                         },
+                                            'alto-directory+json' => {
+                                                                       'iana' => 'permanent'
+                                                                     },
+                                            'alto-endpointcost+json' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'alto-endpointcostparams+json' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'alto-endpointprop+json' => {
+                                                                          'iana' => 'permanent'
+                                                                        },
+                                            'alto-endpointpropparams+json' => {
+                                                                                'iana' => 'permanent'
+                                                                              },
+                                            'alto-error+json' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
+                                            'alto-networkmap+json' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
+                                            'alto-networkmapfilter+json' => {
+                                                                              'iana' => 'permanent'
+                                                                            },
                                             'aml' => {
                                                        'iana' => 'provisional'
                                                      },

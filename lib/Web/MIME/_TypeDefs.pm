@@ -764,6 +764,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'audiovideo' => 1,
                                                        'iana' => 'permanent'
                                                      },
+                                            'oipfcapabilities' => {},
                                             'oleobject' => {
                                                              'plugin' => 1
                                                            },
@@ -1901,6 +1902,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.handheld-entertainment+xml' => {
                                                                                   'iana' => 'permanent'
                                                                                 },
+                                            'vnd.hbbtv.xhtml+xml' => {},
                                             'vnd.hbci' => {
                                                             'iana' => 'permanent'
                                                           },
@@ -7038,6 +7040,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                       'iana' => 'permanent'
                                                     },
                                       'jpm' => {},
+                                      'local' => {},
                                       'mj2' => {
                                                  'iana' => 'permanent'
                                                },

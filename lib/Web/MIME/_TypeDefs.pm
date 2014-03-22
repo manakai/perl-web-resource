@@ -182,6 +182,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'cfw' => {
                                                        'iana' => 'permanent'
                                                      },
+                                            'chromepage' => {},
                                             'clariscad' => {},
                                             'cms' => {
                                                        'iana' => 'permanent'

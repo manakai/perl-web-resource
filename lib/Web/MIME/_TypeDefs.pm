@@ -25,6 +25,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             '1d-interleaved-parityfec' => {
                                                                             'iana' => 'permanent'
                                                                           },
+                                            '3gpdash-qoe-report+xml' => {
+                                                                          'iana' => 'provisional'
+                                                                        },
                                             '3gpp-ims+xml' => {
                                                                 'iana' => 'permanent'
                                                               },
@@ -151,7 +154,11 @@ $Web::MIME::_TypeDefs::Type = {
                                             'ccxml+xml' => {
                                                              'iana' => 'permanent'
                                                            },
-                                            'cdf' => {},
+                                            'cdf' => {
+                                                       'any_xml' => 1,
+                                                       'browser' => 1,
+                                                       'text' => 1
+                                                     },
                                             'cdfx' => {
                                                         'iana' => 'provisional'
                                                       },
@@ -711,6 +718,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'nasdata' => {
                                                            'iana' => 'permanent'
                                                          },
+                                            'netcdf' => {},
                                             'netmc' => {},
                                             'netobject' => {},
                                             'news-checkgroups' => {
@@ -1061,6 +1069,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                          'iana' => 'permanent'
                                                        },
                                             'smil' => {
+                                                        'any_xml' => 1,
                                                         'iana' => 'permanent',
                                                         'iana_obsolete' => 1,
                                                         'params' => {
@@ -3661,7 +3670,11 @@ $Web::MIME::_TypeDefs::Type = {
                                                           'plugin' => 1
                                                         },
                                             'x-cct' => {},
-                                            'x-cdf' => {},
+                                            'x-cdf' => {
+                                                         'any_xml' => 1,
+                                                         'browser' => 1,
+                                                         'text' => 1
+                                                       },
                                             'x-cdlink' => {},
                                             'x-cfs-compressed' => {},
                                             'x-chat' => {},
@@ -4352,9 +4365,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-zsh' => {},
                                             'x-ztardist' => {},
                                             'x.microsummary+xml' => {},
-                                            'x3d-vrml' => {
-                                                            'iana' => 'provisional'
-                                                          },
+                                            'x3d-vrml' => {},
                                             'x400-bp' => {
                                                            'iana' => 'permanent'
                                                          },
@@ -4410,6 +4421,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  },
                                             'xlc' => {},
                                             'xml' => {
+                                                       'any_xml' => 1,
                                                        'blacklisted' => 1,
                                                        'browser' => 1,
                                                        'iana' => 'permanent',
@@ -6193,6 +6205,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  }
                                                    },
                                      'cas' => {},
+                                     'cdf' => {
+                                                'any_xml' => 1,
+                                                'text' => 1
+                                              },
                                      'cmif' => {},
                                      'cmml' => {},
                                      'cobol' => {
@@ -6663,6 +6679,10 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-c++hdr' => {},
                                      'x-c++src' => {},
                                      'x-c-source' => {},
+                                     'x-cdf' => {
+                                                  'any_xml' => 1,
+                                                  'text' => 1
+                                                },
                                      'x-chdr' => {},
                                      'x-cmml' => {},
                                      'x-co-desc' => {},
@@ -6672,7 +6692,10 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-copying' => {},
                                      'x-cpp-source' => {},
                                      'x-credits' => {},
-                                     'x-cross-domain-policy' => {},
+                                     'x-cross-domain-policy' => {
+                                                                  'any_xml' => 1,
+                                                                  'text' => 1
+                                                                },
                                      'x-csh' => {},
                                      'x-csharp' => {},
                                      'x-csrc' => {},
@@ -6885,6 +6908,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'xhtml' => {},
                                      'xhtml+xml' => {},
                                      'xml' => {
+                                                'any_xml' => 1,
                                                 'blacklisted' => 1,
                                                 'browser' => 1,
                                                 'iana' => 'permanent',
@@ -6897,6 +6921,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                 'script_data_block' => 1,
                                                 'scriptable' => 1,
                                                 'scripting_language' => 'no',
+                                                'text' => 1,
                                                 'xml' => 1
                                               },
                                      'xml-content' => {},
@@ -6917,15 +6942,19 @@ $Web::MIME::_TypeDefs::Type = {
                                      'xmlp+xml' => {},
                                      'xmms-playlist' => {},
                                      'xsl' => {
+                                                'any_xml' => 1,
                                                 'browser' => 1,
                                                 'params' => {
                                                               'charset' => {}
                                                             },
-                                                'styling' => 1
+                                                'styling' => 1,
+                                                'text' => 1
                                               },
                                      'xslfo' => {},
                                      'xul' => {
-                                                'browser' => 1
+                                                'any_xml' => 1,
+                                                'browser' => 1,
+                                                'text' => 1
                                               },
                                      'yaml' => {}
                                    },

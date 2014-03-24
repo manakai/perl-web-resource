@@ -503,7 +503,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                           },
                                             'json' => {
                                                         'iana' => 'permanent',
-                                                        'script_data_block' => 1
+                                                        'params' => {
+                                                                      'charset' => {},
+                                                                      'ieee754compatible' => {},
+                                                                      'odata.metadata' => {},
+                                                                      'odata.streaming' => {}
+                                                                    },
+                                                        'script_data_block' => 1,
+                                                        'text' => 1
                                                       },
                                             'json-patch+json' => {
                                                                    'iana' => 'permanent'
@@ -640,6 +647,10 @@ $Web::MIME::_TypeDefs::Type = {
                                             'mf4' => {
                                                        'iana' => 'provisional'
                                                      },
+                                            'microdata+json' => {
+                                                                  'browser' => 1,
+                                                                  'dnd' => 1
+                                                                },
                                             'mikey' => {
                                                          'iana' => 'permanent'
                                                        },
@@ -750,6 +761,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                },
                                             'octet-stream' => {
                                                                 'browser' => 1,
+                                                                'dnd' => 1,
                                                                 'iana' => 'permanent',
                                                                 'params' => {
                                                                               'conversions' => {},
@@ -3620,6 +3632,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                },
                                             'x-amanda-header' => {},
                                             'x-amf' => {},
+                                            'x-amz-json-1.0' => {},
                                             'x-anm' => {},
                                             'x-annotator' => {},
                                             'x-apl-workspace' => {},
@@ -6436,6 +6449,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'plain' => {
                                                   'blacklisted' => 1,
                                                   'browser' => 1,
+                                                  'dnd' => 1,
                                                   'iana' => 'permanent',
                                                   'mac_types' => {
                                                                    'TEXT' => 1
@@ -6544,6 +6558,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                  },
                                      'unicode' => {},
                                      'uri-list' => {
+                                                     'browser' => 1,
+                                                     'dnd' => 1,
                                                      'iana' => 'permanent',
                                                      'mac_types' => {
                                                                       'URIs' => 1

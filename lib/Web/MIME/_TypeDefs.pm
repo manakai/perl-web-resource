@@ -1208,6 +1208,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'tve-trigger' => {
                                                                'iana' => 'permanent'
                                                              },
+                                            'ubjson' => {},
                                             'ulpfec' => {
                                                           'iana' => 'permanent'
                                                         },
@@ -3917,6 +3918,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                             },
                                             'x-iso9660-image' => {},
                                             'x-iwnn' => {},
+                                            'x-jackson-smile' => {},
                                             'x-jam' => {},
                                             'x-java' => {},
                                             'x-java-applet' => {
@@ -6772,6 +6774,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-jquery-tmpl' => {
                                                           'script_data_block' => 1
                                                         },
+                                     'x-json' => {},
                                      'x-jsrender' => {},
                                      'x-kom-basic' => {},
                                      'x-ksh' => {},

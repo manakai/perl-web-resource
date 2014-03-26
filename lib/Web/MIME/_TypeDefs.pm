@@ -4334,6 +4334,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-www-form-encoded' => {},
                                             'x-www-form-urlencoded' => {
                                                                          'blacklisted' => 1,
+                                                                         'iana' => 'provisional',
                                                                          'params' => {
                                                                                        'charset' => {}
                                                                                      },
@@ -6138,7 +6139,8 @@ $Web::MIME::_TypeDefs::Type = {
                                           'x-gzip' => {},
                                           'x-mimepgp' => {},
                                           'x-mixed-replace' => {
-                                                                 'blacklisted' => 1
+                                                                 'blacklisted' => 1,
+                                                                 'iana' => 'provisional'
                                                                },
                                           'x-sgml' => {},
                                           'x-ustar' => {},
@@ -6204,7 +6206,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                   'scripting_language' => 'yes'
                                                 },
                                      'cache-manifest' => {
-                                                           'blacklisted' => 1
+                                                           'blacklisted' => 1,
+                                                           'iana' => 'provisional'
                                                          },
                                      'calendar' => {
                                                      'iana' => 'permanent',

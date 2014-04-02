@@ -135,6 +135,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'bld' => {},
                                             'bld2' => {},
                                             'book' => {},
+                                            'calendar+json' => {
+                                                                 'iana' => 'permanent'
+                                                               },
                                             'calendar+xml' => {
                                                                 'iana' => 'permanent'
                                                               },

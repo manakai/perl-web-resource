@@ -1867,6 +1867,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana' => 'permanent'
                                                               },
                                             'vnd.github+json' => {},
+                                            'vnd.github.cannonball-preview+json' => {},
+                                            'vnd.github.she-hulk-preview+json' => {},
                                             'vnd.github.v3' => {},
                                             'vnd.github.v3+form' => {},
                                             'vnd.github.v3+json' => {},

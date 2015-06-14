@@ -1,0 +1,34 @@
+#data
+close
+#body
+(close)
+
+#data
+"foo"
+"bar"
+close
+#body
+foobar(close)
+
+#data
+"foo"CRLF
+close
+#body escaped
+foo\u000D\u000A(close)
+
+#data
+receive LF
+"foo"
+close
+#body
+foo(close)
+
+#data
+receive LF
+"foo"
+sleep 1
+"bar"
+close
+#boundary 1
+#body
+foo(boundary)bar(boundary)(close)

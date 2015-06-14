@@ -4,3 +4,6 @@
 [submodule "t_deps/modules/testdataparser"]
 	path = t_deps/modules/testdataparser
 	url = git://github.com/wakaba/testdataparser
+[submodule "modules/promise"]
+	path = modules/promise
+	url = git://github.com/wakaba/perl-promise

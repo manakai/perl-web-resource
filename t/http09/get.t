@@ -6,6 +6,7 @@ use Test::More;
 use Test::X1;
 use Test::HTCT::Parser;
 use HTTP;
+use Promise;
 use AnyEvent::Util qw(run_cmd);
 
 my $server_pids = {};
@@ -37,35 +38,41 @@ sub server_as_cv ($) {
   return $cv;
 } # server_as_cv
 
-for_each_test path (__FILE__)->parent->parent->parent->child ('t_deps/data/http09.dat'), {}, sub {
-  my $test = $_[0];
-  test {
-    my $c = shift;
-    server_as_cv ($test->{data}->[0])->cb (sub {
-      my $server = $_[0]->recv;
-      my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
-      my $data = '';
-      $http->ondata (sub {
-        if (defined $_[0]) {
-          $data .= $_[0];
-          $data .= '(boundary)' if $test->{boundary};
-        }
+for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->child ('t_deps/data/*.dat')) {
+  for_each_test $path, {}, sub {
+    my $test = $_[0];
+    test {
+      my $c = shift;
+      server_as_cv ($test->{data}->[0])->cb (sub {
+        my $server = $_[0]->recv;
+        my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+        my $data = '';
+        $http->ondata (sub {
+          if (defined $_[0]) {
+            $data .= $_[0];
+            $data .= '(boundary)' if $test->{boundary};
+          }
+        });
+        $http->onclose (sub {
+          $data .= defined $_[0] ? '(error close)' : '(close)';
+          test {
+            my $status = $data eq '(close)' ? 0 : 200;
+            is $status, $test->{status}->[1]->[0];
+            is $data, $test->{body}->[0];
+            $server->{stop}->();
+            done $c;
+            undef $c;
+          } $c;
+        });
+        $http->connect->then (sub {
+          return $http->send_request ({
+            ':method' => $test->{method}->[1]->[0],
+            ':request-target' => $test->{url}->[1]->[0],
+          });
+        });
       });
-      $http->onclose (sub {
-        $data .= defined $_[0] ? '(error close)' : '(close)';
-      });
-      $http->connect_as_cv->cb (sub {
-        test {
-          my $status = $data eq '(close)' ? 0 : 200;
-          is $status, $test->{status}->[1]->[0];
-          is $data, $test->{body}->[0];
-          $server->{stop}->();
-          done $c;
-          undef $c;
-        } $c;
-      });
-    });
-  } n => 2;
-};
+    } n => 2, name => $path;
+  };
+} # $path
 
 run_tests;

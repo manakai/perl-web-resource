@@ -1,9 +1,13 @@
+#method GET
+#url /
 #data
 close
 #status 0
 #body
 (close)
 
+#method GET
+#url /
 #data
 CRLF
 close
@@ -11,6 +15,8 @@ close
 #body escaped
 \u000D\u000A(close)
 
+#method GET
+#url /
 #data escaped
 "\u0000"
 close
@@ -18,6 +24,8 @@ close
 #body escaped
 \u0000(close)
 
+#method GET
+#url /
 #data
 "foo"
 "bar"
@@ -26,6 +34,8 @@ close
 #body
 foobar(close)
 
+#method GET
+#url /
 #data
 "foo"CRLF
 close
@@ -33,6 +43,8 @@ close
 #body escaped
 foo\u000D\u000A(close)
 
+#method GET
+#url /
 #data
 receive LF
 "foo"
@@ -41,6 +53,8 @@ close
 #body
 foo(close)
 
+#method GET
+#url /
 #data
 receive LF
 "foo"
@@ -51,3 +65,27 @@ close
 #boundary 1
 #body
 foo(boundary)bar(boundary)(close)
+
+#method GET
+#url /
+#data
+receive LF
+"HTTP/1.0 200 OK"CRLF
+CRLF
+"bar"
+close
+#status 200
+#body escaped
+HTTP/1.0 200 OK\u000D\u000A\u000D\u000Abar(close)
+
+#method GET
+#url /
+#data
+receive LF
+"HTTP/1.0 201 OK"CRLF
+CRLF
+"bar"
+close
+#status 200
+#body escaped
+HTTP/1.0 201 OK\u000D\u000A\u000D\u000Abar(close)

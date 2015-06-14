@@ -1,0 +1,572 @@
+#method GET
+#url /
+#data
+receive LF
+"HTTP/1.0 200 OK"CRLF
+CRLF
+"A"
+close
+#status 200
+#body
+A(close)
+
+#method GET
+#url /
+#data
+receive LF
+"HTTP/1.0 200 OK"LF
+LF
+"A"
+close
+#status 200
+#body
+A(close)
+
+#method GET
+#url /
+#data
+receive LF
+"XHTTP/1.0 200 OK"CRLF
+CRLF
+"A"
+close
+#status 200
+#body
+A(close)
+
+#method GET
+#url /
+#data
+receive LF
+"http/1.0 200 OK"CRLF
+CRLF
+"A"
+close
+#status 200
+#body
+A(close)
+
+#method GET
+#url /
+#data
+receive LF
+"HTTP/1.1 200 OK"CRLF
+CRLF
+"A"
+close
+#status 200
+#body
+A(close)
+
+#method GET
+#url /
+#data
+receive LF
+"HTTP/0. 201 OK"CRLF
+CRLF
+"A"
+close
+#status 201
+#body
+A(close)
+
+#method GET
+#url /
+#data
+receive LF
+"HTTP/1. 201 OK"CRLF
+CRLF
+"A"
+close
+#status 201
+#body
+A(close)
+
+#method GET
+#url /
+#data
+receive LF
+"HTTP/01. 201 OK"CRLF
+CRLF
+"A"
+close
+#status 201
+#body
+A(close)
+
+#method GET
+#url /
+#data
+receive LF
+"HTTP/1 201 OK"CRLF
+CRLF
+"A"
+close
+#status 201
+#body
+A(close)
+
+#method GET
+#url /
+#data
+receive LF
+"HTTP/ 202 hoe"CRLF
+CRLF
+"A"
+close
+#status 202
+#body
+A(close)
+
+#method GET
+#url /
+#data
+receive LF
+"XHTTP/ 202 hoe"CRLF
+CRLF
+"A"
+close
+#status 202
+#body
+A(close)
+
+#method GET
+#url /
+#data
+receive LF
+"HTTP 203 OK"CRLF
+CRLF
+"B"
+close
+#status 203
+#body escaped
+B(close)
+
+#method GET
+#url /
+#data
+receive LF
+"http 209 foo"CRLF
+CRLF
+"B"
+close
+#status 209
+#body escaped
+B(close)
+
+#method GET
+#url /
+#data
+receive LF
+"htTp 209 foo"CRLF
+CRLF
+"B"
+close
+#status 209
+#body escaped
+B(close)
+
+#method GET
+#url /
+#data
+receive LF
+"HTT 203 notOK"CRLF
+CRLF
+"A"
+close
+#status 200
+#body escaped
+HTT 203 notOK\u000D\u000A\u000D\u000AA(close)
+
+#method GET
+#url /
+#data
+receive LF
+"203 notOK"CRLF
+CRLF
+"A"
+close
+#status 200
+#body escaped
+203 notOK\u000D\u000A\u000D\u000AA(close)
+
+#method GET
+#url /
+#data
+receive LF
+"AHTTP hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDHTTP hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDHTTP/1. hoge"CRLF
+CRLF
+"ax"
+close
+#status 200
+#body
+ax(close)
+
+#method GET
+#url /
+#data
+receive LF
+LF
+"BCDHTTP/1. hoge"CRLF
+CRLF
+"ax"
+close
+#status 200
+#body
+ax(close)
+
+#method GET
+#url /
+#data
+receive LF
+LF
+"ABCDHTTP/1. hoge"CRLF
+CRLF
+"bb"
+close
+#status 200
+#body
+ax(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDEHTTP hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDEHTTP/1. hoge"CRLF
+CRLF
+"b"
+close
+#status 200
+#body
+b(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDEFHTTP hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDEFHTTP/1. hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDEFGHTTP hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDEFGHTTP/1. hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDEFGHHTTP/1. hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDEFGHIHTTP/1. hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDEFGHIJKHTTP/1. hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDEFGHIJKMNOHTTP/1. hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"ABCDEFGHIJKLMNOPQRSTUVWXYZHTTP hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"01234567 HTTP hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"0123456789ABCDEF HTTP hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"0123456789ABCDEF0123HTTP/1.0 hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"0123456789ABCDEF0123 HTTP hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"0123456789ABCDEF01234567 HTTP hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"0123456789ABCDEF012345678HTTP"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"0123456789ABCDEF012345678HTTP hoge"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"0123456789ABCDEF0123456789HTTP"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"0123456789ABCDEF0123456789ABCDEFHTTP"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"X0123456789ABCDEF0123456789ABCDEFHTTP"CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"X0123456789ABCDEF0123456789ABCDEFHTTP "CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"X0123456789ABCDEF0123456789ABCDEFHTTP/1. "CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"0123456789ABCDEF"LF
+"X0123456789ABCDEF0123456789ABCDEFHTTP "CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"0123456789ABCDEF"LF
+LF
+LF
+"X0123456789ABCDEF0123456789ABCDEFHTTP "CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)
+
+#method GET
+#url /
+#data
+receive LF
+"0123456789ABCDEF"LF
+LF
+LF
+"X0123456789ABCDEF0123456789ABCDEFHTTP/1.0 "CRLF
+CRLF
+"a"
+close
+#status 200
+#body
+a(close)

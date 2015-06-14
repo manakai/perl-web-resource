@@ -48,10 +48,12 @@ sub timer ($$) {
 } # timer
 
 my @test;
-for_each_test path (__FILE__)->parent->parent->child ('t_deps/data/http09.dat'), {}, sub {
-  my $test = $_[0];
-  push @test, $test;
-};
+for (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.dat')) {
+  for_each_test $_, {}, sub {
+    my $test = $_[0];
+    push @test, $test;
+  };
+}
 
 my $httpd = AnyEvent::HTTPD->new (host => $host, port => $port);
 $httpd->reg_cb ('' => sub {

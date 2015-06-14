@@ -17,6 +17,7 @@ sub connect ($) {
     my ($ok, $ng) = @_;
     tcp_connect $self->{host}, $self->{port}, sub {
       my $fh = shift or return $ng->($!);
+warn "connected";
       $self->{handle} = AnyEvent::Handle->new
           (fh => $fh,
            on_read => sub {
@@ -46,15 +47,17 @@ sub connect ($) {
                $handle->{rbuf} = '';
              }
            },
-           onerror => sub {
+           on_error => sub {
              my ($hdl, $fatal, $msg) = @_;
              AE::log error => $msg;
              # XXX
+warn "error";
              $self->{handle}->destroy;
              delete $self->{handle};
              $self->onclose->($msg);
            },
            on_eof => sub {
+warn "eof";
              my ($handle) = @_;
              if ($self->{state} eq 'before response') {
                if (length $self->{handle}->{rbuf}) {

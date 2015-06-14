@@ -56,7 +56,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
           $data .= '(boundary)' if $test->{boundary};
         });
         $http->onclose (sub {
-          $data .= defined $_[0] ? '(error close)' : '(close)';
+          $data .= '(close)';
+          $data = '(close)',
+          $res = {network_error => 1, error => $_[0]} if defined $_[0];
           test {
             my $status = $res->{network_error} ? 0 : 200;
             is $status, $test->{status}->[1]->[0];

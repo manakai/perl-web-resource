@@ -6,7 +6,7 @@ use Data::Dumper;
 
 my $http = HTTP->new_from_host_and_port
 #    ('suikawiki.org', 80);
-    ('irc.suikawiki.org', 6667);
+    ('192.168.11.14', 5255);
 
 my $cv = AE::cv;
 

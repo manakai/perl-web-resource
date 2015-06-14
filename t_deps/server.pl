@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+use Socket;
 use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
@@ -31,6 +32,8 @@ sub run_commands ($$) {
       $hdl->push_write ("$1\x0A");
     } elsif ($command =~ /^"([^"]*)"CR$/) {
       $hdl->push_write ("$1\x0D");
+    } elsif ($command =~ /^"([^"]*)"\s+x\s+([0-9]+)$/) {
+      $hdl->push_write ($1 x $2);
     } elsif ($command =~ /^CRLF$/) {
       $hdl->push_write ("\x0D\x0A");
     } elsif ($command =~ /^LF$/) {
@@ -48,6 +51,10 @@ sub run_commands ($$) {
       sleep $1;
     } elsif ($command =~ /^close$/) {
       $hdl->push_shutdown;
+    } elsif ($command =~ /^reset$/) {
+      setsockopt $hdl->{fh}, SOL_SOCKET, SO_LINGER, pack "II", 1, 0;
+      close $hdl->{fh};
+      $hdl->push_shutdown; # let $hdl report an error
     } elsif ($command =~ /\S/) {
       die "Unknown command: |$command|";
     }
@@ -62,12 +69,14 @@ my $server = tcp_server $host, $port, sub {
       (fh => $fh,
        on_error => sub {
          my (undef, $fatal, $msg) = @_;
+warn "onerror";
          run_commands 'error', $_[0];
          AE::log error => $msg;
          $hdl->destroy if $fatal;
          $cv->send if $fatal;
        },
        on_eof => sub {
+warn "oneof";
          $hdl->destroy;
          $cv->send;
        },

@@ -9,6 +9,15 @@ close
 #method GET
 #url /
 #data
+receive LF
+close
+#status 0
+#body
+(close)
+
+#method GET
+#url /
+#data
 CRLF
 close
 #status 200

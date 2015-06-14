@@ -1,18 +1,35 @@
 #data
 close
+#status 0
 #body
 (close)
+
+#data
+CRLF
+close
+#status 200
+#body escaped
+\u000D\u000A(close)
+
+#data escaped
+"\u0000"
+close
+#status 200
+#body escaped
+\u0000(close)
 
 #data
 "foo"
 "bar"
 close
+#status 200
 #body
 foobar(close)
 
 #data
 "foo"CRLF
 close
+#status 200
 #body escaped
 foo\u000D\u000A(close)
 
@@ -20,6 +37,7 @@ foo\u000D\u000A(close)
 receive LF
 "foo"
 close
+#status 200
 #body
 foo(close)
 
@@ -29,6 +47,7 @@ receive LF
 sleep 1
 "bar"
 close
+#status 200
 #boundary 1
 #body
 foo(boundary)bar(boundary)(close)

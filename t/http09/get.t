@@ -56,6 +56,8 @@ for_each_test path (__FILE__)->parent->parent->parent->child ('t_deps/data/http0
       });
       $http->connect_as_cv->cb (sub {
         test {
+          my $status = $data eq '(close)' ? 0 : 200;
+          is $status, $test->{status}->[1]->[0];
           is $data, $test->{body}->[0];
           $server->{stop}->();
           done $c;
@@ -63,7 +65,7 @@ for_each_test path (__FILE__)->parent->parent->parent->child ('t_deps/data/http0
         } $c;
       });
     });
-  } n => 1;
+  } n => 2;
 };
 
 run_tests;

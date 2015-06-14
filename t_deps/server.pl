@@ -55,7 +55,7 @@ sub run_commands ($$) {
 } # run_commands
 
 my $cv = AE::cv;
-#warn "Listening $host:$port...\n";
+warn "Listening $host:$port...\n";
 my $server = tcp_server $host, $port, sub {
   my ($fh, $client_host, $client_port) = @_;
   my $hdl; $hdl = AnyEvent::Handle->new

@@ -46,17 +46,19 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
       server_as_cv ($test->{data}->[0])->cb (sub {
         my $server = $_[0]->recv;
         my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+        my $res;
         my $data = '';
+        $http->onresponsestart (sub {
+          $res = $_[0];
+        });
         $http->ondata (sub {
-          if (defined $_[0]) {
-            $data .= $_[0];
-            $data .= '(boundary)' if $test->{boundary};
-          }
+          $data .= $_[1];
+          $data .= '(boundary)' if $test->{boundary};
         });
         $http->onclose (sub {
           $data .= defined $_[0] ? '(error close)' : '(close)';
           test {
-            my $status = $data eq '(close)' ? 0 : 200;
+            my $status = $res->{network_error} ? 0 : 200;
             is $status, $test->{status}->[1]->[0];
             is $data, $test->{body}->[0];
             $server->{stop}->();
@@ -66,8 +68,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
         });
         $http->connect->then (sub {
           return $http->send_request ({
-            ':method' => $test->{method}->[1]->[0],
-            ':request-target' => $test->{url}->[1]->[0],
+            method => $test->{method}->[1]->[0],
+            url => $test->{url}->[1]->[0],
           });
         });
       });

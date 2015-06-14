@@ -7,7 +7,8 @@ use AnyEvent::Socket;
 use Promise;
 
 sub new_from_host_and_port ($$$) {
-  return bless {host => $_[1], port => $_[2], state => 'initial'}, $_[0];
+  return bless {host => $_[1], port => $_[2], state => 'initial',
+                next_response_id => 1}, $_[0];
 } # new_from_host_and_port
 
 sub connect ($) {
@@ -25,23 +26,60 @@ sub connect ($) {
                  ## HTTP/1.0 or HTTP/1.1
                  $self->{state} = 'before response 1';
                } elsif (8 <= length $handle->{rbuf}) {
+                 $self->onresponsestart->({
+                   response_id => $self->{current_response_id},
+                   version => '0.9',
+                   headers => {},
+                 });
                  $self->{state} = 'response body';
                }
+             } elsif ($self->{state} eq 'before response body') {
+               $self->onresponsestart->({
+                 response_id => $self->{current_response_id},
+                 version => '0.9',
+                 headers => {},
+               });
+               $self->{state} = 'response body';
              }
              if ($self->{state} eq 'response body') {
-               $self->ondata->($handle->{rbuf});
+               $self->ondata->($self->{current_response_id}, $handle->{rbuf});
                $handle->{rbuf} = '';
              }
            },
            onerror => sub {
              my ($hdl, $fatal, $msg) = @_;
              AE::log error => $msg;
+             # XXX
              $self->{handle}->destroy;
              delete $self->{handle};
              $self->onclose->($msg);
            },
            on_eof => sub {
              my ($handle) = @_;
+             if ($self->{state} eq 'before response') {
+               if (length $self->{handle}->{rbuf}) {
+                 $self->onresponsestart->({
+                   response_id => $self->{current_response_id},
+                   version => '0.9',
+                   headers => {},
+                 });
+                 $self->{state} = 'response body';
+               } else {
+                 $self->onresponsestart->({
+                   response_id => $self->{current_response_id},
+                   network_error => 1,
+                   error => "Connection closed",
+                 });
+               }
+             } elsif ($self->{state} eq 'before response body') {
+               unless (length $self->{handle}->{rbuf}) {
+                 $self->onresponsestart->({
+                   response_id => $self->{current_response_id},
+                   network_error => 1,
+                   error => "Connection closed",
+                 });
+               }
+             }
              delete $self->{handle};
              $self->onclose->(undef);
            });
@@ -58,20 +96,28 @@ sub send_request ($$) {
   unless ($self->{state} eq 'initial') {
     return Promise->reject ("Can't use this connection: |$self->{state}|");
   }
-  my $method = $req->{':method'} // '';
+  my $method = $req->{method} // '';
   if (not $method eq 'GET') {
-    return Promise->reject ("Bad |:method|: |$method|");
+    return Promise->reject ("Bad |method|: |$method|");
   }
-  my $url = $req->{':request-target'};
+  my $url = $req->{url};
   if (not defined $url or $url =~ /[\x0D\x0A]/ or
       $url =~ /\A[\x0D\x0A\x09\x20]/ or
       $url =~ /[\x0D\x0A\x09\x20]\z/) {
-    return Promise->reject ("Bad |:request-target|: |$url|");
+    return Promise->reject ("Bad |url|: |$url|");
   }
-  $self->{state} = 'response body';
+  $self->{state} = 'before response body';
+  $self->{current_response_id} = $self->{next_response_id}++;
   $self->{handle}->push_write ("$method $url\x0D\x0A");
   return Promise->resolve;
 } # send_request
+
+sub onresponsestart ($;$) {
+  if (@_ > 1) {
+    $_[0]->{onresponsestart} = $_[1];
+  }
+  return $_[0]->{onresponsestart} ||= sub { };
+} # onresponsestart
 
 sub ondata ($;$) {
   if (@_ > 1) {

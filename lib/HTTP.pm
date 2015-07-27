@@ -56,14 +56,24 @@ sub _process_rbuf ($$) {
                      }
                    }
                    $start_line =~ s{\A[\x09-\x0D\x20]*}{}s;
-                   if ($start_line =~ s/\A([0-9]{3})[\x09-\x0D\x20]*//) {
+                   if ($start_line =~ s/\A0*?([0-9]+)//) {
                      $res->{status} = 0+$1;
-                     $res->{reason_phrase} = $start_line;
+                     $res->{status} = 2**31-1 if $res->{status} > 2**31-1;
+                     if ($start_line =~ s/\A[\x09-\x0D\x20]//) {
+                       $res->{reason_phrase} = $start_line;
+                     } else {
+                       $res->{reason_phrase} = '';
+                     }
                    }
                  } elsif ($start_line =~ s{\A[\x09-\x0D\x20]+}{}) {
-                   if ($start_line =~ s/\A([0-9]{3})[\x09-\x0D\x20]*//) {
+                   if ($start_line =~ s/\A0*?([0-9]+)//) {
                      $res->{status} = 0+$1;
-                     $res->{reason_phrase} = $start_line;
+                     $res->{status} = 2**31-1 if $res->{status} > 2**31-1;
+                     if ($start_line =~ s/\A[\x09-\x0D\x20]//) {
+                       $res->{reason_phrase} = $start_line;
+                     } else {
+                       $res->{reason_phrase} = '';
+                     }
                    }
                  }
                  for (@$headers) {

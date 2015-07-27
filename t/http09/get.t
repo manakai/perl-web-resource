@@ -62,9 +62,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
           $data = '(close)',
           $res = {network_error => 1, error => $_[0]} if defined $_[0];
           test {
-            is !!$res->{network_error}, !!($test->{status}->[1]->[0] == 0);
-            is $res->{status}, $test->{status}->[1]->[0] || undef;
-            is $res->{reason_phrase}, $test->{reason}->[1]->[0];
+            my $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
+            is !!$res->{network_error}, !!$is_error;
+            is $res->{status}, $is_error ? undef : $test->{status}->[1]->[0];
+            is $res->{reason_phrase}, $is_error ? undef : $test->{reason}->[1]->[0] // '';
             is $data, $test->{body}->[0];
             $server->{stop}->();
             done $c;

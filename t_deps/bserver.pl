@@ -147,6 +147,7 @@ $httpd->reg_cb ('' => sub {
                 setResult (cell, x.status == test.status[1][0], x.status, test.status[1][0]) || (failed = true);
                 var cell = tr.appendChild (document.createElement ('td'));
                 var reason = (test.reason || ['', ['']])[1][0];
+                if (reason === undefined) reason = '';
                 setResult (cell, x.statusText == reason, x.statusText, reason) || (failed = true);
                 var cell = tr.appendChild (document.createElement ('td'));
                 var expected = test.body[0].replace (/\\(boundary\\)/g, '');

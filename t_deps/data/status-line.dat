@@ -798,3 +798,158 @@ close
 #reason xx
 #body escaped
 aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.abc"CRLF
+CRLF
+"aa"
+close
+#status 200
+#reason OK
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 0 abc"CRLF
+CRLF
+"aa"
+close
+#status 0
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 12abc"CRLF
+CRLF
+"aa"
+close
+#status 12
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 12 abc"CRLF
+CRLF
+"aa"
+close
+#status 12
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 012 abc"CRLF
+CRLF
+"aa"
+close
+#status 12
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 2001 abc"CRLF
+CRLF
+"aa"
+close
+#status 2001
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 2001abc"CRLF
+CRLF
+"aa"
+close
+#status 2001
+#reason 
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 000400 abc"CRLF
+CRLF
+"aa"
+close
+#status 400
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 65536 abc"CRLF
+CRLF
+"aa"
+close
+#status 65536
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 9965536 abc"CRLF
+CRLF
+"aa"
+close
+#status 9965536
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 2147483648 abc"CRLF
+CRLF
+"aa"
+close
+#status 2147483647
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 4294967296 abc"CRLF
+CRLF
+"aa"
+close
+#status 2147483647
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 0000000000400 abc"CRLF
+CRLF
+"aa"
+close
+#status 400
+#reason abc
+#body escaped
+aa(close)

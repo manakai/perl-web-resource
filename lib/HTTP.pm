@@ -1,6 +1,7 @@
 package HTTP;
 use strict;
 use warnings;
+use Errno;
 use AnyEvent;
 use AnyEvent::Handle;
 use AnyEvent::Socket;
@@ -11,56 +12,55 @@ sub new_from_host_and_port ($$$) {
                 next_response_id => 1}, $_[0];
 } # new_from_host_and_port
 
-sub connect ($) {
-  my $self = $_[0];
-  return Promise->new (sub {
-    my ($ok, $ng) = @_;
-    tcp_connect $self->{host}, $self->{port}, sub {
-      my $fh = shift or return $ng->($!);
-      $self->{handle} = AnyEvent::Handle->new
-          (fh => $fh,
-           on_read => sub {
-             my ($handle) = @_;
-             if ($self->{state} eq 'before response') {
-               if ($handle->{rbuf} =~ s/^.{0,4}[Hh][Tt][Tt][Pp]//s) {
-                 ## HTTP/1.0 or HTTP/1.1
-                 $self->{state} = 'before response 1';
-               } elsif (8 <= length $handle->{rbuf}) {
-                 $self->onresponsestart->({
-                   response_id => $self->{current_response_id},
-                   status => 200,
-                   version => '0.9',
-                   headers => [],
-                 });
-                 $self->{state} = 'response body';
-               }
-             } elsif ($self->{state} eq 'before response 1') {
-               if (2**18-1 < length $handle->{rbuf}) {
-                 $self->onresponsestart->({
-                   response_id => $self->{current_response_id},
-                   network_error => 1,
-                   error => "Header too large",
-                 });
-               } elsif ($handle->{rbuf} =~ s/^(.*?)\x0D?\x0A\x0D?\x0A//s) {
+sub _process_rbuf ($$) {
+  my ($self, $handle) = @_;
+  if ($self->{state} eq 'before response') {
+    if ($handle->{rbuf} =~ s/^.{0,4}[Hh][Tt][Tt][Pp]//s) {
+      ## HTTP/1.0 or HTTP/1.1
+      $self->{state} = 'before response 1';
+    } elsif (8 <= length $handle->{rbuf}) {
+      $self->onresponsestart->({
+        response_id => $self->{current_response_id},
+        status => 200, reason_phrase => 'OK',
+        version => '0.9',
+        headers => [],
+      });
+      $self->{state} = 'response body';
+    }
+  } elsif ($self->{state} eq 'before response 1') {
+    if (2**18-1 < length $handle->{rbuf}) {
+      $self->onresponsestart->({
+        response_id => $self->{current_response_id},
+        network_error => 1,
+        error => "Header too large",
+      });
+      $self->{handle}->push_shutdown;
+    } elsif ($handle->{rbuf} =~ s/^(.*?)\x0D?\x0A\x0D?\x0A//s) {
                  my $headers = [split /\x0D?\x0A/, $1, -1]; # XXX report CR
                  my $start_line = shift @$headers;
-warn "<<$start_line>>";
                  my $res = {response_id => $self->{current_response_id},
-                            status => 200,
+                            status => 200, reason_phrase => 'OK',
                             version => '1.0',
                             headers => [],
                             start_line => $start_line};
-                 if ($start_line =~ s{\A/([0-9]+)\.([0-9]+)[\x09-\x0D\x20]*}{}s) {
-                   my $major = 0+$1;
-                   my $minor = 0+$2;
-                   if ($major > 1 or ($major == 1 and $minor > 0)) {
-                     $res->{version} = '1.1';
+                 if ($start_line =~ s{\A/}{}) {
+                   if ($start_line =~ s{\A([0-9]+)}{}) {
+                     my $major = 0+$1;
+                     if ($start_line =~ s{\A\.}{}) {
+                       if ($start_line =~ s{\A([0-9]+)}{}) {
+                         my $minor = 0+$1;
+                         if ($major > 1 or ($major == 1 and $minor > 0)) {
+                           $res->{version} = '1.1';
+                         }
+                       }
+                     }
                    }
+                   $start_line =~ s{\A[\x09-\x0D\x20]*}{}s;
                    if ($start_line =~ s/\A([0-9]{3})[\x09-\x0D\x20]*//) {
                      $res->{status} = 0+$1;
                      $res->{reason_phrase} = $start_line;
                    }
-                 } elsif ($start_line =~ s{\A[\x090\x0D\x20]+}{}) {
+                 } elsif ($start_line =~ s{\A[\x09-\x0D\x20]+}{}) {
                    if ($start_line =~ s/\A([0-9]{3})[\x09-\x0D\x20]*//) {
                      $res->{status} = 0+$1;
                      $res->{reason_phrase} = $start_line;
@@ -85,55 +85,63 @@ warn "<<$start_line>>";
                  $self->onresponsestart->($res);
                  $self->{state} = 'response body';
                }
-             } elsif ($self->{state} eq 'before response body') {
-               $self->onresponsestart->({
-                 status => 200,
-                 response_id => $self->{current_response_id},
-                 version => '0.9',
-                 headers => [],
-               });
-               $self->{state} = 'response body';
              }
              if ($self->{state} eq 'response body') {
-               $self->ondata->($self->{current_response_id}, $handle->{rbuf});
+               $self->ondata->($self->{current_response_id}, $handle->{rbuf})
+                   if length $handle->{rbuf};
                $handle->{rbuf} = '';
              }
+} # _process_rbuf
+
+sub _process_rbuf_eof ($$) {
+  my ($self, $handle) = @_;
+  if ($self->{state} eq 'before response') {
+    if (length $handle->{rbuf}) {
+      $self->onresponsestart->({
+        response_id => $self->{current_response_id},
+        version => '0.9',
+        status => 200, reason_phrase => 'OK',
+        headers => [],
+      });
+      $self->{state} = 'response body';
+      $self->ondata->($self->{current_response_id}, $handle->{rbuf});
+      $handle->{rbuf} = '';
+    } else {
+      $self->onresponsestart->({
+        response_id => $self->{current_response_id},
+        network_error => 1,
+        error => "Connection closed",
+      });
+    }
+  }
+} # _process_rbuf_eof
+
+sub connect ($) {
+  my $self = $_[0];
+  return Promise->new (sub {
+    my ($ok, $ng) = @_;
+    tcp_connect $self->{host}, $self->{port}, sub {
+      my $fh = shift or return $ng->($!);
+      $self->{handle} = AnyEvent::Handle->new
+          (fh => $fh,
+           oobinline => 0,
+           on_read => sub {
+             my ($handle) = @_;
+             $self->_process_rbuf ($handle);
            },
            on_error => sub {
              my ($hdl, $fatal, $msg) = @_;
+             $self->_process_rbuf ($hdl);
+             $self->_process_rbuf_eof ($hdl);
              AE::log error => $msg;
-             # XXX
              $self->{handle}->destroy;
              delete $self->{handle};
-             $self->onclose->($msg);
+             $self->onclose->($!{EPIPE} ? undef : $msg);
            },
            on_eof => sub {
-             my ($handle) = @_;
-             if ($self->{state} eq 'before response') {
-               if (length $self->{handle}->{rbuf}) {
-                 $self->onresponsestart->({
-                   response_id => $self->{current_response_id},
-                   version => '0.9',
-                   status => 200,
-                   headers => [],
-                 });
-                 $self->{state} = 'response body';
-               } else {
-                 $self->onresponsestart->({
-                   response_id => $self->{current_response_id},
-                   network_error => 1,
-                   error => "Connection closed",
-                 });
-               }
-             } elsif ($self->{state} eq 'before response body') {
-               unless (length $self->{handle}->{rbuf}) {
-                 $self->onresponsestart->({
-                   response_id => $self->{current_response_id},
-                   network_error => 1,
-                   error => "Connection closed",
-                 });
-               }
-             }
+             my ($hdl) = @_;
+             $self->_process_rbuf ($hdl);
+             $self->_process_rbuf_eof ($hdl);
              delete $self->{handle};
              $self->onclose->(undef);
            });
@@ -165,24 +173,6 @@ sub send_request ($$) {
     $self->{state} = 'before response';
     $self->{current_response_id} = $self->{next_response_id}++;
     $self->{handle}->push_write ("$method $url HTTP/1.0\x0D\x0A\x0D\x0A");
-    return Promise->resolve;
-  } elsif ($version eq '0.9') {
-    unless ($self->{state} eq 'initial') {
-      return Promise->reject ("Can't use this connection: |$self->{state}|");
-    }
-    my $method = $req->{method} // '';
-    if (not $method eq 'GET') {
-      return Promise->reject ("Bad |method|: |$method|");
-    }
-    my $url = $req->{url};
-    if (not defined $url or $url =~ /[\x0D\x0A]/ or
-        $url =~ /\A[\x0D\x0A\x09\x20]/ or
-        $url =~ /[\x0D\x0A\x09\x20]\z/) {
-      return Promise->reject ("Bad |url|: |$url|");
-    }
-    $self->{state} = 'before response body';
-    $self->{current_response_id} = $self->{next_response_id}++;
-    $self->{handle}->push_write ("$method $url\x0D\x0A");
     return Promise->resolve;
   } else {
     return Promise->reject ("Bad |version|: |$version|");

@@ -1,6 +1,5 @@
 #method GET
 #url /
-#version 0.9
 #data
 close
 #status 0
@@ -9,7 +8,6 @@ close
 
 #method GET
 #url /
-#version 0.9
 #data
 receive LF
 close
@@ -19,73 +17,72 @@ close
 
 #method GET
 #url /
-#version 0.9
 #data
 CRLF
 close
 #status 200
+#reason OK
 #body escaped
 \u000D\u000A(close)
 
 #method GET
 #url /
-#version 0.9
 #data escaped
 "\u0000"
 close
 #status 200
+#reason OK
 #body escaped
 \u0000(close)
 
 #method GET
-#version 0.9
 #url /
 #data
 "foo"
 "bar"
 close
 #status 200
+#reason OK
 #body
 foobar(close)
 
 #method GET
 #url /
-#version 0.9
 #data
 "foo"CRLF
 close
 #status 200
+#reason OK
 #body escaped
 foo\u000D\u000A(close)
 
 #method GET
 #url /
-#version 0.9
 #data
 receive LF
 "foo"
 close
 #status 200
+#reason OK
 #body
 foo(close)
 
 #method GET
 #url /
-#version 0.9
 #data
 receive LF
-"foo"
+"12345678foo"
 sleep 1
 "bar"
 close
 #status 200
+#reason OK
 #boundary 1
 #body
-foo(boundary)bar(boundary)(close)
+12345678foo(boundary)bar(boundary)(close)
 
 #method GET
 #url /
-#version 0.9
 #data
 receive LF
 "HTTP/1.0 200 OK"CRLF
@@ -93,18 +90,19 @@ CRLF
 "bar"
 close
 #status 200
+#reason OK
 #body escaped
-HTTP/1.0 200 OK\u000D\u000A\u000D\u000Abar(close)
+bar(close)
 
 #method GET
 #url /
-#version 0.9
 #data
 receive LF
 "HTTP/1.0 201 OK"CRLF
 CRLF
 "bar"
 close
-#status 200
+#status 201
+#reason OK
 #body escaped
-HTTP/1.0 201 OK\u000D\u000A\u000D\u000Abar(close)
+bar(close)

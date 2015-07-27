@@ -64,7 +64,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
           test {
             is !!$res->{network_error}, !!($test->{status}->[1]->[0] == 0);
             is $res->{status}, $test->{status}->[1]->[0] || undef;
-            is $res->{reason}, $test->{reason}->[1]->[0];
+            is $res->{reason_phrase}, $test->{reason}->[1]->[0];
             is $data, $test->{body}->[0];
             $server->{stop}->();
             done $c;
@@ -75,7 +75,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
           return $http->send_request ({
             method => $test->{method}->[1]->[0],
             url => $test->{url}->[1]->[0],
-            version => $test->{version}->[1]->[0],
+            version => '1.0',
           });
         });
       });

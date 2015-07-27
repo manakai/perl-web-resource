@@ -1,6 +1,5 @@
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "HTTP/1.0 200 OK"CRLF
@@ -8,6 +7,7 @@ CRLF
 "A"
 close
 #status 200
+#reason OK
 #body
 A(close)
 
@@ -21,6 +21,7 @@ LF
 "A"
 close
 #status 200
+#reason OK
 #body
 A(close)
 
@@ -34,6 +35,7 @@ CRLF
 "A"
 close
 #status 200
+#reason OK
 #body
 A(close)
 
@@ -47,6 +49,7 @@ CRLF
 "A"
 close
 #status 200
+#reason OK
 #body
 A(close)
 
@@ -60,6 +63,7 @@ CRLF
 "A"
 close
 #status 200
+#reason OK
 #body
 A(close)
 
@@ -72,7 +76,8 @@ receive LF
 CRLF
 "A"
 close
-#status 200
+#status 201
+#reason OK
 #body
 A(close)
 
@@ -85,7 +90,8 @@ receive LF
 CRLF
 "A"
 close
-#status 200
+#status 201
+#reason OK
 #body
 A(close)
 
@@ -98,7 +104,8 @@ receive LF
 CRLF
 "A"
 close
-#status 200
+#status 201
+#reason OK
 #body
 A(close)
 
@@ -111,7 +118,8 @@ receive LF
 CRLF
 "A"
 close
-#status 200
+#status 201
+#reason OK
 #body
 A(close)
 
@@ -124,7 +132,8 @@ receive LF
 CRLF
 "A"
 close
-#status 200
+#status 202
+#reason hoe
 #body
 A(close)
 
@@ -137,7 +146,8 @@ receive LF
 CRLF
 "A"
 close
-#status 200
+#status 202
+#reason hoe
 #body
 A(close)
 
@@ -151,6 +161,7 @@ CRLF
 "B"
 close
 #status 203
+#reason OK
 #body escaped
 B(close)
 
@@ -164,6 +175,7 @@ CRLF
 "B"
 close
 #status 209
+#reason foo
 #body escaped
 B(close)
 
@@ -177,6 +189,7 @@ CRLF
 "B"
 close
 #status 209
+#reason foo
 #body escaped
 B(close)
 
@@ -190,6 +203,7 @@ CRLF
 "A"
 close
 #status 200
+#reason OK
 #body escaped
 HTT 203 notOK\u000D\u000A\u000D\u000AA(close)
 
@@ -203,6 +217,7 @@ CRLF
 "A"
 close
 #status 200
+#reason OK
 #body escaped
 203 notOK\u000D\u000A\u000D\u000AA(close)
 
@@ -216,6 +231,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body
 a(close)
 
@@ -229,6 +245,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body
 a(close)
 
@@ -242,6 +259,7 @@ CRLF
 "ax"
 close
 #status 200
+#reason OK
 #body
 ax(close)
 
@@ -256,6 +274,7 @@ CRLF
 "ax"
 close
 #status 200
+#reason OK
 #body
 ax(close)
 
@@ -270,6 +289,7 @@ CRLF
 "bb"
 close
 #status 200
+#reason OK
 #body escaped
 | 
 | ABCDHTTP/1. hoge\u000D
@@ -286,6 +306,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | ABCDEHTTP hoge\u000D
 | \u000D
@@ -301,6 +322,7 @@ CRLF
 "b"
 close
 #status 200
+#reason OK
 #body escaped
 | ABCDEHTTP/1. hoge\u000D
 | \u000D
@@ -316,6 +338,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | ABCDEFHTTP hoge\u000D
 | \u000D
@@ -331,6 +354,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | ABCDEFHTTP/1. hoge\u000D
 | \u000D
@@ -346,6 +370,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | ABCDEFGHTTP hoge\u000D
 | \u000D
@@ -361,6 +386,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | ABCDEFGHTTP/1. hoge\u000D
 | \u000D
@@ -376,6 +402,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | ABCDEFGHHTTP/1. hoge\u000D
 | \u000D
@@ -391,6 +418,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | ABCDEFGHIHTTP/1. hoge\u000D
 | \u000D
@@ -406,6 +434,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | ABCDEFGHIJKHTTP/1. hoge\u000D
 | \u000D
@@ -421,6 +450,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | ABCDEFGHIJKMNOHTTP/1. hoge\u000D
 | \u000D
@@ -436,6 +466,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | ABCDEFGHIJKLMNOPQRSTUVWXYZHTTP hoge\u000D
 | \u000D
@@ -451,6 +482,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 01234567 HTTP hoge\u000D
 | \u000D
@@ -466,6 +498,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 0123456789ABCDEF HTTP hoge\u000D
 | \u000D
@@ -481,6 +514,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 0123456789ABCDEF0123HTTP/1.0 hoge\u000D
 | \u000D
@@ -496,6 +530,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 0123456789ABCDEF0123 HTTP hoge\u000D
 | \u000D
@@ -511,6 +546,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 0123456789ABCDEF01234567 HTTP hoge\u000D
 | \u000D
@@ -526,6 +562,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 0123456789ABCDEF012345678HTTP\u000D
 | \u000D
@@ -541,6 +578,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 0123456789ABCDEF012345678HTTP hoge\u000D
 | \u000D
@@ -556,6 +594,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 0123456789ABCDEF0123456789HTTP\u000D
 | \u000D
@@ -571,6 +610,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 0123456789ABCDEF0123456789ABCDEFHTTP\u000D
 | \u000D
@@ -586,6 +626,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | X0123456789ABCDEF0123456789ABCDEFHTTP\u000D
 | \u000D
@@ -601,6 +642,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | X0123456789ABCDEF0123456789ABCDEFHTTP \u000D
 | \u000D
@@ -616,6 +658,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | X0123456789ABCDEF0123456789ABCDEFHTTP/1. \u000D
 | \u000D
@@ -632,6 +675,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 0123456789ABCDEF
 | X0123456789ABCDEF0123456789ABCDEFHTTP \u000D
@@ -651,6 +695,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 0123456789ABCDEF
 | 
@@ -661,7 +706,6 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "0123456789ABCDEF"LF
@@ -672,6 +716,7 @@ CRLF
 "a"
 close
 #status 200
+#reason OK
 #body escaped
 | 0123456789ABCDEF
 | 
@@ -679,3 +724,77 @@ close
 | X0123456789ABCDEF0123456789ABCDEFHTTP/1.0 \u000D
 | \u000D
 | a(close)
+
+#method GET
+#url /
+#data
+"HTTP HTTP/1.0 202 foo bar"CRLF
+CRLF
+"aa"
+close
+#status 200
+#reason OK
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP202 foo bar"CRLF
+CRLF
+"aa"
+close
+#status 200
+#reason OK
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"203 HTTP ok..."CRLF
+CRLF
+"aa"
+close
+#status 200
+#reason OK
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"203 HTTP/1.0 201 ok..."CRLF
+CRLF
+"aa"
+close
+#status 201
+#reason ok...
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/0.9 203 xyz"CRLF
+CRLF
+"aa"
+close
+#status 203
+#reason xyz
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data
+"HTTP/1.0 20"
+urgent "1"
+"3 xx"CRLF
+CRLF
+"aa"
+close
+#status 203
+#reason xx
+#body escaped
+aa(close)

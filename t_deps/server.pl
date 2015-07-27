@@ -49,6 +49,8 @@ sub run_commands ($$) {
       }
     } elsif ($command =~ /^sleep ([0-9.]+)$/) {
       sleep $1;
+    } elsif ($command =~ /^urgent "([^"]*)"$/) {
+      send $hdl->{fh}, $1, MSG_OOB;
     } elsif ($command =~ /^close$/) {
       $hdl->push_shutdown;
     } elsif ($command =~ /^reset$/) {

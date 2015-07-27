@@ -1,0 +1,12 @@
+#method GET
+#url /
+#version 1.0
+#data
+"HTTP/1.0 200 OK"CRLF
+"x" x 10000000
+CRLF
+"abc"
+close
+#status 0
+#body
+(close)

@@ -1,5 +1,6 @@
 #method GET
 #url /
+#version 0.9
 #data
 close
 #status 0
@@ -8,6 +9,7 @@ close
 
 #method GET
 #url /
+#version 0.9
 #data
 receive LF
 close
@@ -17,6 +19,7 @@ close
 
 #method GET
 #url /
+#version 0.9
 #data
 CRLF
 close
@@ -26,6 +29,7 @@ close
 
 #method GET
 #url /
+#version 0.9
 #data escaped
 "\u0000"
 close
@@ -34,6 +38,7 @@ close
 \u0000(close)
 
 #method GET
+#version 0.9
 #url /
 #data
 "foo"
@@ -45,6 +50,7 @@ foobar(close)
 
 #method GET
 #url /
+#version 0.9
 #data
 "foo"CRLF
 close
@@ -54,6 +60,7 @@ foo\u000D\u000A(close)
 
 #method GET
 #url /
+#version 0.9
 #data
 receive LF
 "foo"
@@ -64,6 +71,7 @@ foo(close)
 
 #method GET
 #url /
+#version 0.9
 #data
 receive LF
 "foo"
@@ -77,6 +85,7 @@ foo(boundary)bar(boundary)(close)
 
 #method GET
 #url /
+#version 0.9
 #data
 receive LF
 "HTTP/1.0 200 OK"CRLF
@@ -89,6 +98,7 @@ HTTP/1.0 200 OK\u000D\u000A\u000D\u000Abar(close)
 
 #method GET
 #url /
+#version 0.9
 #data
 receive LF
 "HTTP/1.0 201 OK"CRLF

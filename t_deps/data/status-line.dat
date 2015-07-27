@@ -1,5 +1,6 @@
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "HTTP/1.0 200 OK"CRLF
@@ -12,6 +13,7 @@ A(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "HTTP/1.0 200 OK"LF
@@ -24,6 +26,7 @@ A(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "XHTTP/1.0 200 OK"CRLF
@@ -36,6 +39,7 @@ A(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "http/1.0 200 OK"CRLF
@@ -48,6 +52,7 @@ A(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "HTTP/1.1 200 OK"CRLF
@@ -60,78 +65,85 @@ A(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "HTTP/0. 201 OK"CRLF
 CRLF
 "A"
 close
-#status 201
+#status 200
 #body
 A(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "HTTP/1. 201 OK"CRLF
 CRLF
 "A"
 close
-#status 201
+#status 200
 #body
 A(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "HTTP/01. 201 OK"CRLF
 CRLF
 "A"
 close
-#status 201
+#status 200
 #body
 A(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "HTTP/1 201 OK"CRLF
 CRLF
 "A"
 close
-#status 201
+#status 200
 #body
 A(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "HTTP/ 202 hoe"CRLF
 CRLF
 "A"
 close
-#status 202
+#status 200
 #body
 A(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "XHTTP/ 202 hoe"CRLF
 CRLF
 "A"
 close
-#status 202
+#status 200
 #body
 A(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "HTTP 203 OK"CRLF
@@ -144,6 +156,7 @@ B(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "http 209 foo"CRLF
@@ -156,6 +169,7 @@ B(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "htTp 209 foo"CRLF
@@ -168,6 +182,7 @@ B(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "HTT 203 notOK"CRLF
@@ -180,6 +195,7 @@ HTT 203 notOK\u000D\u000A\u000D\u000AA(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "203 notOK"CRLF
@@ -192,6 +208,7 @@ close
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "AHTTP hoge"CRLF
@@ -204,6 +221,7 @@ a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDHTTP hoge"CRLF
@@ -216,6 +234,7 @@ a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDHTTP/1. hoge"CRLF
@@ -228,6 +247,7 @@ ax(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 LF
@@ -241,6 +261,7 @@ ax(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 LF
@@ -249,11 +270,15 @@ CRLF
 "bb"
 close
 #status 200
-#body
-ax(close)
+#body escaped
+| 
+| ABCDHTTP/1. hoge\u000D
+| \u000D
+| bb(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDEHTTP hoge"CRLF
@@ -261,11 +286,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| ABCDEHTTP hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDEHTTP/1. hoge"CRLF
@@ -273,11 +301,14 @@ CRLF
 "b"
 close
 #status 200
-#body
-b(close)
+#body escaped
+| ABCDEHTTP/1. hoge\u000D
+| \u000D
+| b(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDEFHTTP hoge"CRLF
@@ -285,11 +316,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| ABCDEFHTTP hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDEFHTTP/1. hoge"CRLF
@@ -297,11 +331,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| ABCDEFHTTP/1. hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDEFGHTTP hoge"CRLF
@@ -309,11 +346,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| ABCDEFGHTTP hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDEFGHTTP/1. hoge"CRLF
@@ -321,11 +361,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| ABCDEFGHTTP/1. hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDEFGHHTTP/1. hoge"CRLF
@@ -333,11 +376,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| ABCDEFGHHTTP/1. hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDEFGHIHTTP/1. hoge"CRLF
@@ -345,11 +391,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| ABCDEFGHIHTTP/1. hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDEFGHIJKHTTP/1. hoge"CRLF
@@ -357,11 +406,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| ABCDEFGHIJKHTTP/1. hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDEFGHIJKMNOHTTP/1. hoge"CRLF
@@ -369,11 +421,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| ABCDEFGHIJKMNOHTTP/1. hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "ABCDEFGHIJKLMNOPQRSTUVWXYZHTTP hoge"CRLF
@@ -381,11 +436,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| ABCDEFGHIJKLMNOPQRSTUVWXYZHTTP hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "01234567 HTTP hoge"CRLF
@@ -393,11 +451,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 01234567 HTTP hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "0123456789ABCDEF HTTP hoge"CRLF
@@ -405,11 +466,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 0123456789ABCDEF HTTP hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "0123456789ABCDEF0123HTTP/1.0 hoge"CRLF
@@ -417,11 +481,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 0123456789ABCDEF0123HTTP/1.0 hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "0123456789ABCDEF0123 HTTP hoge"CRLF
@@ -429,11 +496,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 0123456789ABCDEF0123 HTTP hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "0123456789ABCDEF01234567 HTTP hoge"CRLF
@@ -441,11 +511,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 0123456789ABCDEF01234567 HTTP hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "0123456789ABCDEF012345678HTTP"CRLF
@@ -453,11 +526,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 0123456789ABCDEF012345678HTTP\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "0123456789ABCDEF012345678HTTP hoge"CRLF
@@ -465,11 +541,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 0123456789ABCDEF012345678HTTP hoge\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "0123456789ABCDEF0123456789HTTP"CRLF
@@ -477,11 +556,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 0123456789ABCDEF0123456789HTTP\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "0123456789ABCDEF0123456789ABCDEFHTTP"CRLF
@@ -489,11 +571,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 0123456789ABCDEF0123456789ABCDEFHTTP\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "X0123456789ABCDEF0123456789ABCDEFHTTP"CRLF
@@ -501,11 +586,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| X0123456789ABCDEF0123456789ABCDEFHTTP\u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "X0123456789ABCDEF0123456789ABCDEFHTTP "CRLF
@@ -513,11 +601,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| X0123456789ABCDEF0123456789ABCDEFHTTP \u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "X0123456789ABCDEF0123456789ABCDEFHTTP/1. "CRLF
@@ -525,11 +616,14 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| X0123456789ABCDEF0123456789ABCDEFHTTP/1. \u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "0123456789ABCDEF"LF
@@ -538,11 +632,15 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 0123456789ABCDEF
+| X0123456789ABCDEF0123456789ABCDEFHTTP \u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "0123456789ABCDEF"LF
@@ -553,11 +651,17 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 0123456789ABCDEF
+| 
+| 
+| X0123456789ABCDEF0123456789ABCDEFHTTP \u000D
+| \u000D
+| a(close)
 
 #method GET
 #url /
+#version 1.0
 #data
 receive LF
 "0123456789ABCDEF"LF
@@ -568,5 +672,10 @@ CRLF
 "a"
 close
 #status 200
-#body
-a(close)
+#body escaped
+| 0123456789ABCDEF
+| 
+| 
+| X0123456789ABCDEF0123456789ABCDEFHTTP/1.0 \u000D
+| \u000D
+| a(close)

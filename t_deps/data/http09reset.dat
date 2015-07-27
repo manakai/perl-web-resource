@@ -1,5 +1,6 @@
 #method GET
 #url /
+#version 0.9
 #data
 receive LF
 reset
@@ -9,6 +10,7 @@ reset
 
 #method GET
 #url /
+#version 0.9
 #data
 receive LF
 "hoge"
@@ -19,6 +21,7 @@ reset
 
 #method GET
 #url /
+#version 0.9
 #data
 receive LF
 "HTTP/1.0 200 OK"CRLF
@@ -30,6 +33,7 @@ reset
 
 #method GET
 #url /
+#version 0.9
 #data
 receive LF
 "abcdefg"
@@ -37,3 +41,16 @@ reset
 #status 0
 #body
 (close)
+
+#method GET
+#url /
+#version 0.9
+#data
+receive LF
+"abc"
+urgent "xyz"
+"def"
+close
+#status 200
+#body
+abcxyzdef(close)

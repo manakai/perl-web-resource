@@ -39,7 +39,9 @@ sub server_as_cv ($) {
 } # server_as_cv
 
 for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->child ('t_deps/data/*.dat')) {
-  for_each_test $path, {}, sub {
+  for_each_test $path, {
+    body => {is_prefixed => 1},
+  }, sub {
     my $test = $_[0];
     test {
       my $c = shift;
@@ -60,8 +62,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
           $data = '(close)',
           $res = {network_error => 1, error => $_[0]} if defined $_[0];
           test {
-            my $status = $res->{network_error} ? 0 : 200;
-            is $status, $test->{status}->[1]->[0];
+            is !!$res->{network_error}, !!($test->{status}->[1]->[0] == 0);
+            is $res->{status}, $test->{status}->[1]->[0] || undef;
+            is $res->{reason}, $test->{reason}->[1]->[0];
             is $data, $test->{body}->[0];
             $server->{stop}->();
             done $c;
@@ -72,10 +75,11 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
           return $http->send_request ({
             method => $test->{method}->[1]->[0],
             url => $test->{url}->[1]->[0],
+            version => $test->{version}->[1]->[0],
           });
         });
       });
-    } n => 2, name => $path;
+    } n => 4, name => $path;
   };
 } # $path
 

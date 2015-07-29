@@ -65,12 +65,12 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
             my $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
             is !!$res->{network_error}, !!$is_error;
             is $res->{status}, $is_error ? undef : $test->{status}->[1]->[0];
-            is $res->{reason_phrase}, $is_error ? undef : $test->{reason}->[1]->[0] // '';
+            is $res->{reason_phrase}, $is_error ? undef : $test->{reason}->[1]->[0] // $test->{reason}->[0] // '';
             is $data, $test->{body}->[0];
             $server->{stop}->();
             done $c;
             undef $c;
-          } $c;
+          } $c, name => $test->{name}->[0];
         });
         $http->connect->then (sub {
           return $http->send_request ({

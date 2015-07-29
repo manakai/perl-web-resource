@@ -953,3 +953,138 @@ close
 #reason abc
 #body escaped
 aa(close)
+
+#name
+U+0009
+#method GET
+#url /
+#data escaped
+"HTTP/1.0\u0009201\u0009abc"CRLF
+CRLF
+"aa"
+close
+#status 200
+#reason OK
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.0\u0009201\u0009abc"CRLF
+CRLF
+"aa"
+close
+#status 200
+#reason OK
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.0\u000C201\u000Cabc"CRLF
+CRLF
+"aa"
+close
+#status 200
+#reason OK
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.0\u000D201\u000Dabc"CRLF
+CRLF
+"aa"
+close
+#status 200
+#reason OK
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.0\u0009\u000C201\u0009\u000Cabc"CRLF
+CRLF
+"aa"
+close
+#status 200
+#reason OK
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.0  201  abc"CRLF
+CRLF
+"aa"
+close
+#status 201
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.0   201   abc"CRLF
+CRLF
+"aa"
+close
+#status 201
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.0   \u0009201\u0009   abc"CRLF
+CRLF
+"aa"
+close
+#status 200
+#reason OK
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.0 201\u0009abc"CRLF
+CRLF
+"aa"
+close
+#status 201
+#reason 
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.0 201     abc"CRLF
+CRLF
+"aa"
+close
+#status 201
+#reason abc
+#body escaped
+aa(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.0 201 abc   "CRLF
+CRLF
+"aa"
+close
+#status 201
+#reason escaped
+abc  \u0020
+#body escaped
+aa(close)

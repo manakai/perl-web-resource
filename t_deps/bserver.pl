@@ -107,7 +107,7 @@ $httpd->reg_cb ('' => sub {
       document.body.appendChild (link);
 
       var resultsContainer = document.createElement ('div');
-      resultsContainer.innerHTML = '<table><thead><tr><th>#<th>Result<th><code>status</code><th><code>statusText</code><th><code>responseText</code><th>File<tbody></table>';
+      resultsContainer.innerHTML = '<table><thead><tr><th>#<th>Result<th><code>status</code><th><code>statusText</code><th><code>responseText</code><th>File<th>Name<tbody></table>';
       var results = resultsContainer.firstChild;
       document.body.appendChild (resultsContainer);
       results = results.appendChild (document.createElement ('tbody'));
@@ -146,7 +146,8 @@ $httpd->reg_cb ('' => sub {
                 var cell = tr.appendChild (document.createElement ('td'));
                 setResult (cell, x.status == test.status[1][0], x.status, test.status[1][0]) || (failed = true);
                 var cell = tr.appendChild (document.createElement ('td'));
-                var reason = (test.reason || ['', ['']])[1][0];
+                var reason = test.reason || ['', ['']];
+                reason = reason[1][0] || reason[0];
                 if (reason === undefined) reason = '';
                 setResult (cell, x.statusText == reason, x.statusText, reason) || (failed = true);
                 var cell = tr.appendChild (document.createElement ('td'));
@@ -157,6 +158,7 @@ $httpd->reg_cb ('' => sub {
                   tr.className = 'PASS';
                 }
                 tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode (test._file_name));
+                tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode ((test.name || {})[0]));
                 results.appendChild (tr);
                 then ();
               }
@@ -184,6 +186,7 @@ $httpd->reg_cb ('' => sub {
     $req->respond ([200, 'OK', {'Content-Type' => 'text/css'}, q{
       .PASS { background-color: green; color: white }
       .FAIL { background-color: red; color: white }
+      code { white-space: pre }
       code:empty::after { content: "(empty)"; color: gray }
       td table th {
         text-align: right;

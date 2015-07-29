@@ -5,6 +5,7 @@ use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use AnyEvent;
 use AnyEvent::HTTPD;
 use AnyEvent::Util qw(run_cmd);
+use Encode;
 use JSON::PS;
 use Test::HTCT::Parser;
 
@@ -48,12 +49,16 @@ sub timer ($$) {
   };
 } # timer
 
+my $filter = $ENV{TEST_METHOD} ? qr/$ENV{TEST_METHOD}/ : qr//;
 my @test;
 for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.dat')) {
   for_each_test $file_name, {
+    headers => {is_prefixed => 1},
     body => {is_prefixed => 1},
   }, sub {
     my $test = $_[0];
+    my $name = join ' - ', $file_name, $test->{name}->[0] // '';
+    $name =~ /$filter/o or return;
     $test->{_file_name} = $file_name;
     push @test, $test;
   };
@@ -100,14 +105,14 @@ $httpd->reg_cb ('' => sub {
     my $tests_json = perl2json_chars \@test;
     $req->respond ([200, 'OK', {
       'Content-Type' => 'text/javascript; charset=utf-8',
-    }, qq{
+    }, encode_utf8 qq{
       var link = document.createElement ('p');
       link.innerHTML = '<a href>Run again</a>';
       link.firstChild.href = 'http://$host:$port/';
       document.body.appendChild (link);
 
       var resultsContainer = document.createElement ('div');
-      resultsContainer.innerHTML = '<table><thead><tr><th>#<th>Result<th><code>status</code><th><code>statusText</code><th><code>responseText</code><th>File<th>Name<tbody></table>';
+      resultsContainer.innerHTML = '<table><thead><tr><th>#<th>Result<th><code>status</code><th><code>statusText</code><th>Headers<th><code>responseText</code><th>File<th>Name<tbody></table>';
       var results = resultsContainer.firstChild;
       document.body.appendChild (resultsContainer);
       results = results.appendChild (document.createElement ('tbody'));
@@ -150,6 +155,23 @@ $httpd->reg_cb ('' => sub {
                 reason = reason[1][0] || reason[0];
                 if (reason === undefined) reason = '';
                 setResult (cell, x.statusText == reason, x.statusText, reason) || (failed = true);
+                var cell = tr.appendChild (document.createElement ('td'));
+                var eHeaders = (test.headers || [''])[0];
+                var aHeaderNames = x.getAllResponseHeaders ()
+                    .split (/[\\u000D\\u000A]+/)
+                    .filter (function (_) { return /:/.test (_); })
+                    .map (function (_) { return _.split (/:/)[0]; });
+                cell.title = x.getAllResponseHeaders () + "\\u000A\\u000A" + aHeaderNames;
+                var aHeaders = aHeaderNames.map (function (name) {
+                  try {
+                    var value = x.getResponseHeader (name);
+                    if (value === null) return '';
+                    return name + ": " + value;
+                  } catch (e) {
+                    return '';
+                  }
+                }).filter (function (_) { return _.length }).join ("\\u000A");
+                setResult (cell, aHeaders == eHeaders, aHeaders, eHeaders) || (failed = true);
                 var cell = tr.appendChild (document.createElement ('td'));
                 var expected = test.body[0].replace (/\\(boundary\\)/g, '');
                 setResult (cell, x.responseText + '(close)' == expected, x.responseText + '(close)', expected) || (failed = true);

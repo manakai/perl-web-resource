@@ -35,72 +35,75 @@ sub _process_rbuf ($$) {
         error => "Header too large",
       });
       $self->{handle}->push_shutdown;
-    } elsif ($handle->{rbuf} =~ s/^(.*?)\x0D?\x0A\x0D?\x0A//s) {
-                 my $headers = [split /\x0D?\x0A/, $1, -1]; # XXX report CR
-                 my $start_line = shift @$headers;
-                 my $res = {response_id => $self->{current_response_id},
-                            status => 200, reason_phrase => 'OK',
-                            version => '1.0',
-                            headers => [],
-                            start_line => $start_line};
-                 if ($start_line =~ s{\A/}{}) {
-                   if ($start_line =~ s{\A([0-9]+)}{}) {
-                     my $major = 0+$1;
-                     if ($start_line =~ s{\A\.}{}) {
-                       if ($start_line =~ s{\A([0-9]+)}{}) {
-                         my $minor = 0+$1;
-                         if ($major > 1 or ($major == 1 and $minor > 0)) {
-                           $res->{version} = '1.1';
-                         }
-                       }
-                     }
-                   }
-                   $start_line =~ s{\A\x20*}{}s;
-                   if ($start_line =~ s/\A0*?([0-9]+)//) {
-                     $res->{status} = 0+$1;
-                     $res->{status} = 2**31-1 if $res->{status} > 2**31-1;
-                     if ($start_line =~ s/\A\x20+//) {
-                       $res->{reason_phrase} = $start_line;
-                     } else {
-                       $res->{reason_phrase} = '';
-                     }
-                   }
-                 } elsif ($start_line =~ s{\A\x20+}{}) {
-                   if ($start_line =~ s/\A0*?([0-9]+)//) {
-                     $res->{status} = 0+$1;
-                     $res->{status} = 2**31-1 if $res->{status} > 2**31-1;
-                     if ($start_line =~ s/\A\x20//) {
-                       $res->{reason_phrase} = $start_line;
-                     } else {
-                       $res->{reason_phrase} = '';
-                     }
-                   }
-                 }
-                 for (@$headers) {
-                   if (s/\A([^:]+)://) {
-                     my $name = $1;
-                     my $value = $_;
-                     push @{$res->{headers}}, [$name, $value];
-                   } elsif (@{$res->{headers}} and s/\A[\x09\x0A\x0D\x20]+//) {
-                     $res->{headers}->[-1]->[1] .= ' ' . $_;
-                   } else {
-                     # XXX report error
-                   }
-                 }
-                 for (@{$res->{headers}}) {
-                   $_->[0] =~ s/[\x09\x0A\x0D\x20]+\z//;
-                   $_->[1] =~ s/\A[\x09\x0A\x0D\x20]+//;
-                   $_->[1] =~ s/[\x09\x0A\x0D\x20]+\z//;
-                 }
-                 $self->onresponsestart->($res);
-                 $self->{state} = 'response body';
-               }
-             }
-             if ($self->{state} eq 'response body') {
-               $self->ondata->($self->{current_response_id}, $handle->{rbuf})
-                   if length $handle->{rbuf};
-               $handle->{rbuf} = '';
-             }
+    } elsif ($handle->{rbuf} =~ s/^(.*?)\x0A\x0D?\x0A//s) {
+      my $headers = [split /[\x0D\x0A]+/, $1, -1]; # XXX report CR
+      my $start_line = shift @$headers;
+      my $res = {response_id => $self->{current_response_id},
+                 status => 200, reason_phrase => 'OK',
+                 version => '1.0',
+                 headers => [],
+                 start_line => $start_line};
+      if ($start_line =~ s{\A/}{}) {
+        if ($start_line =~ s{\A([0-9]+)}{}) {
+          my $major = 0+$1;
+          if ($start_line =~ s{\A\.}{}) {
+            if ($start_line =~ s{\A([0-9]+)}{}) {
+              my $minor = 0+$1;
+              if ($major > 1 or ($major == 1 and $minor > 0)) {
+                $res->{version} = '1.1';
+              }
+            }
+          }
+        }
+        $start_line =~ s{\A\x20*}{}s;
+        if ($start_line =~ s/\A0*?([0-9]+)//) {
+          $res->{status} = 0+$1;
+          $res->{status} = 2**31-1 if $res->{status} > 2**31-1;
+          if ($start_line =~ s/\A\x20+//) {
+            $res->{reason_phrase} = $start_line;
+          } else {
+            $res->{reason_phrase} = '';
+          }
+        }
+      } elsif ($start_line =~ s{\A\x20+}{}) {
+        if ($start_line =~ s/\A0*?([0-9]+)//) {
+          $res->{status} = 0+$1;
+          $res->{status} = 2**31-1 if $res->{status} > 2**31-1;
+          if ($start_line =~ s/\A\x20//) {
+            $res->{reason_phrase} = $start_line;
+          } else {
+            $res->{reason_phrase} = '';
+          }
+        }
+      }
+
+      my $last_header = undef;
+      for (@$headers) {
+        if (s/^[\x20\x09]+//) {
+          if (defined $last_header) {
+            $last_header->[1] .= ' ' . $_;
+          }
+        } elsif (s/\A([^:]+)://) {
+          push @{$res->{headers}}, $last_header = [$1, $_];
+        } else {
+          $last_header = undef;
+          # XXX report error
+        }
+      }
+      for (@{$res->{headers}}) {
+        $_->[0] =~ s/[\x09\x20]+\z//;
+        $_->[1] =~ s/\A[\x09\x20]+//;
+        $_->[1] =~ s/[\x09\x20]+\z//;
+      }
+      $self->onresponsestart->($res);
+      $self->{state} = 'response body';
+    }
+  }
+  if ($self->{state} eq 'response body') {
+    $self->ondata->($self->{current_response_id}, $handle->{rbuf})
+        if length $handle->{rbuf};
+    $handle->{rbuf} = '';
+  }
 } # _process_rbuf
 
 sub _process_rbuf_eof ($$) {

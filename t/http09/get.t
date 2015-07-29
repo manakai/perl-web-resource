@@ -40,6 +40,7 @@ sub server_as_cv ($) {
 
 for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->child ('t_deps/data/*.dat')) {
   for_each_test $path, {
+    headers => {is_prefixed => 1},
     body => {is_prefixed => 1},
   }, sub {
     my $test = $_[0];
@@ -66,6 +67,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
             is !!$res->{network_error}, !!$is_error;
             is $res->{status}, $is_error ? undef : $test->{status}->[1]->[0];
             is $res->{reason_phrase}, $is_error ? undef : $test->{reason}->[1]->[0] // $test->{reason}->[0] // '';
+            is join ("\x0A", map {
+              $_->[0] . ': ' . $_->[1];
+            } @{$res->{headers}}), $test->{headers}->[0] // '';
             is $data, $test->{body}->[0];
             $server->{stop}->();
             done $c;
@@ -80,7 +84,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
           });
         });
       });
-    } n => 4, name => $path;
+    } n => 5, name => $path;
   };
 } # $path
 

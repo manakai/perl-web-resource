@@ -14,14 +14,13 @@ my $input;
   $input = <>;
 }
 
-my $commands = [split /\x0D?\x0A/, $input];
-my $Received = '';
+my $Commands = [split /\x0D?\x0A/, $input];
 
-sub run_commands ($$) {
-  my ($context, $hdl) = @_;
+sub run_commands ($$$) {
+  my ($context, $hdl, $states) = @_;
 
-  while (@$commands) {
-    my $command = shift @$commands;
+  while (@{$states->{commands}}) {
+    my $command = shift @{$states->{commands}};
     $command =~ s/^\s+//;
     $command =~ s/\s+$//;
     if ($command =~ /^"([^"]*)"$/) {
@@ -40,11 +39,21 @@ sub run_commands ($$) {
       $hdl->push_write ("\x0A");
     } elsif ($command =~ /^CR$/) {
       $hdl->push_write ("\x0D");
+    } elsif ($command =~ /^0x([0-9A-Fa-f]{2})$/) {
+      $hdl->push_write (pack 'C', hex $1);
     } elsif ($command =~ /^receive LF$/) {
-      if ($Received =~ /\x0A/) {
-        $Received =~ s/^.*?\x0A//s;
+      if ($states->{received} =~ /\x0A/) {
+        $states->{received} =~ s/^.*?\x0A//s;
       } else {
-        unshift @$commands, $command;
+        unshift @{$states->{commands}}, $command;
+        return;
+      }
+    } elsif ($command =~ /^receive "([^"]+)"$/) {
+      my $x = $1;
+      if ($states->{received} =~ /\Q$x\E/) {
+        $states->{received} =~ s/^.*?\Q$x\E//s;
+      } else {
+        unshift @{$states->{commands}}, $command;
         return;
       }
     } elsif ($command =~ /^sleep ([0-9.]+)$/) {
@@ -67,27 +76,28 @@ my $cv = AE::cv;
 warn "Listening $host:$port...\n";
 my $server = tcp_server $host, $port, sub {
   my ($fh, $client_host, $client_port) = @_;
+  warn "... $client_host:$client_port\n";
+  $cv->begin;
+  my $states = {commands => [@$Commands], received => ''};
   my $hdl; $hdl = AnyEvent::Handle->new
       (fh => $fh,
        on_error => sub {
          my (undef, $fatal, $msg) = @_;
-warn "onerror";
-         run_commands 'error', $_[0];
+         run_commands 'error', $_[0], $states;
          AE::log error => $msg;
          $hdl->destroy if $fatal;
-         $cv->send if $fatal;
+         $cv->end if $fatal;
        },
        on_eof => sub {
-warn "oneof";
          $hdl->destroy;
-         $cv->send;
+         $cv->end;
        },
        on_read => sub {
-         $Received .= $_[0]->{rbuf};
+         $states->{received} .= $_[0]->{rbuf};
          $_[0]->{rbuf} = '';
-         run_commands 'read', $_[0];
+         run_commands 'read', $_[0], $states;
        });
-  run_commands 'accepted', $hdl;
+  run_commands 'accepted', $hdl, $states;
 };
 syswrite STDOUT, "[server $host $port]\x0A";
 

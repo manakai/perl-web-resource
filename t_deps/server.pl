@@ -16,8 +16,9 @@ my $input;
 
 my $Commands = [split /\x0D?\x0A/, $input];
 
-sub run_commands ($$$) {
-  my ($context, $hdl, $states) = @_;
+sub run_commands ($$$$);
+sub run_commands ($$$$) {
+  my ($context, $hdl, $states, $then) = @_;
 
   while (@{$states->{commands}}) {
     my $command = shift @{$states->{commands}};
@@ -46,6 +47,7 @@ sub run_commands ($$$) {
         $states->{received} =~ s/^.*?\x0A//s;
       } else {
         unshift @{$states->{commands}}, $command;
+        $then->();
         return;
       }
     } elsif ($command =~ /^receive "([^"]+)"$/) {
@@ -54,6 +56,7 @@ sub run_commands ($$$) {
         $states->{received} =~ s/^.*?\Q$x\E//s;
       } else {
         unshift @{$states->{commands}}, $command;
+        $then->();
         return;
       }
     } elsif ($command =~ /^sleep ([0-9.]+)$/) {
@@ -70,23 +73,26 @@ sub run_commands ($$$) {
       die "Unknown command: |$command|";
     }
   }
+  $then->();
 } # run_commands
 
 my $cv = AE::cv;
 warn "Listening $host:$port...\n";
 my $server = tcp_server $host, $port, sub {
   my ($fh, $client_host, $client_port) = @_;
-  warn "... $client_host:$client_port\n";
+  my $id = int rand 100000;
+  warn "... $client_host:$client_port [$id]\n";
   $cv->begin;
-  my $states = {commands => [@$Commands], received => ''};
+  my $states = {commands => [@$Commands], received => '', id => $id};
   my $hdl; $hdl = AnyEvent::Handle->new
       (fh => $fh,
        on_error => sub {
          my (undef, $fatal, $msg) = @_;
-         run_commands 'error', $_[0], $states;
-         AE::log error => $msg;
-         $hdl->destroy if $fatal;
-         $cv->end if $fatal;
+         run_commands 'error', $_[0], $states, sub {
+           AE::log error => $msg;
+           $hdl->destroy if $fatal;
+           $cv->end if $fatal;
+         };
        },
        on_eof => sub {
          $hdl->destroy;
@@ -94,10 +100,11 @@ my $server = tcp_server $host, $port, sub {
        },
        on_read => sub {
          $states->{received} .= $_[0]->{rbuf};
+         #warn "[$id] $_[0]->{rbuf}\n";
          $_[0]->{rbuf} = '';
-         run_commands 'read', $_[0], $states;
+         run_commands 'read', $_[0], $states, sub { };
        });
-  run_commands 'accepted', $hdl, $states;
+  run_commands 'accepted', $hdl, $states, sub { };
 };
 syswrite STDOUT, "[server $host $port]\x0A";
 

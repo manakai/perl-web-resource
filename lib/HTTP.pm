@@ -26,6 +26,7 @@ sub _process_rbuf ($$) {
         headers => [],
       });
       $self->{state} = 'response body';
+      delete $self->{unread_length};
     }
   } elsif ($self->{state} eq 'before response 1') {
     if (2**18-1 < length $handle->{rbuf}) {
@@ -90,19 +91,74 @@ sub _process_rbuf ($$) {
           # XXX report error
         }
       }
+      my %length;
+      my $has_broken_length = 0;
       for (@{$res->{headers}}) {
         $_->[0] =~ s/[\x09\x20]+\z//;
         $_->[1] =~ s/\A[\x09\x20]+//;
         $_->[1] =~ s/[\x09\x20]+\z//;
+        $_->[2] = $_->[0];
+        $_->[2] =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+        if ($_->[2] eq 'content-length') {
+          for (split /[\x09\x20]*,[\x09\x20]*/, $_->[1]) {
+            if (/\A[0-9]+\z/) {
+              $length{$_}++;
+            } else {
+              $has_broken_length = 1;
+            }
+          }
+        }
+      }
+      delete $self->{unread_length};
+      if (($has_broken_length and keys %length) or 1 < keys %length) {
+        $self->onresponsestart->({
+          response_id => $self->{current_response_id},
+          network_error => 1,
+          error => "Inconsistent content-length values",
+        });
+        $self->{handle}->push_shutdown;
+        return;
+      } elsif (1 == keys %length) {
+        my $length = each %length;
+        $length =~ s/\A0+//;
+        $length ||= 0;
+        if ($length eq 0+$length) { # overflow check
+          $self->{unread_length} = $res->{content_length} = 0+$length;
+        } else {
+          $self->onresponsestart->({
+            response_id => $self->{current_response_id},
+            network_error => 1,
+            error => "Inconsistent content-length values",
+          });
+          $self->{handle}->push_shutdown;
+          return;
+        }
       }
       $self->onresponsestart->($res);
       $self->{state} = 'response body';
     }
   }
   if ($self->{state} eq 'response body') {
-    $self->ondata->($self->{current_response_id}, $handle->{rbuf})
-        if length $handle->{rbuf};
-    $handle->{rbuf} = '';
+    if (defined $self->{unread_length}) {
+      if ($self->{unread_length} >= (my $len = length $handle->{rbuf})) {
+        if ($len) {
+          $self->ondata->($self->{current_response_id}, $handle->{rbuf});
+          $handle->{rbuf} = '';
+          $self->{unread_length} -= $len;
+        }
+      } elsif ($self->{unread_length} > 0) {
+        $self->ondata->($self->{current_response_id}, substr $handle->{rbuf}, 0, $self->{unread_length});
+        substr ($handle->{rbuf}, 0, $self->{unread_length}) = '';
+        $self->{unread_length} = 0;
+      }
+      if ($self->{unread_length} <= 0) {
+        # XXX switch state
+      }
+    } else {
+      $self->ondata->($self->{current_response_id}, $handle->{rbuf})
+          if length $handle->{rbuf};
+      $handle->{rbuf} = '';
+    }
   }
 } # _process_rbuf
 
@@ -117,6 +173,7 @@ sub _process_rbuf_eof ($$) {
         headers => [],
       });
       $self->{state} = 'response body';
+      delete $self->{unread_length};
       $self->ondata->($self->{current_response_id}, $handle->{rbuf});
       $handle->{rbuf} = '';
     } else {
@@ -125,6 +182,11 @@ sub _process_rbuf_eof ($$) {
         network_error => 1,
         error => "Connection closed",
       });
+    }
+  } elsif ($self->{state} eq 'response body') {
+    if (defined $self->{unread_length} and
+        $self->{unread_length} > 0) {
+      $self->{onclose_error} = 'premature closure of the connection';
     }
   }
 } # _process_rbuf_eof
@@ -146,17 +208,19 @@ sub connect ($) {
              my ($hdl, $fatal, $msg) = @_;
              $self->_process_rbuf ($hdl);
              $self->_process_rbuf_eof ($hdl);
+             my $err = delete $self->{onclose_error};
              AE::log error => $msg;
              $self->{handle}->destroy;
              delete $self->{handle};
-             $self->onclose->($!{EPIPE} ? undef : $msg);
+             $self->onclose->($!{EPIPE} ? undef : $msg, $err);
            },
            on_eof => sub {
              my ($hdl) = @_;
              $self->_process_rbuf ($hdl);
              $self->_process_rbuf_eof ($hdl);
+             my $err = delete $self->{onclose_error};
              delete $self->{handle};
-             $self->onclose->(undef);
+             $self->onclose->(undef, $err);
            });
       $ok->();
     };

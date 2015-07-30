@@ -78,7 +78,7 @@ $httpd->reg_cb ('' => sub {
       "HTTP/1.0 200 OK"CRLF
       "Content-Type: text/html; charset=utf-8"CRLF
       CRLF
-      "<!DOCTYPE HTML><link rel='shortcut icon' href=about:blank><link rel=stylesheet href=http://$host:$port/css><body><script src=http://$host:$port/runner></script>"
+      "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico><link rel=stylesheet href=http://$host:$port/css><body><script src=http://$host:$port/runner></script>"
       close
     })->cb (sub {
       my $server = $_[0]->recv;
@@ -198,7 +198,7 @@ $httpd->reg_cb ('' => sub {
           runTest (tests[nextTest], nextTest++, runNext);
         } else {
           var xhr = new XMLHttpRequest;
-          xhr.open ('GET', 'http://$host:$port/last?' + Math.random (), false);
+          xhr.open ('GET', 'http://$host:$port/last?' + Math.random (), true);
           xhr.send (null);
         }
       }

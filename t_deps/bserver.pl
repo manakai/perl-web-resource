@@ -53,6 +53,7 @@ my $filter = $ENV{TEST_METHOD} ? qr/$ENV{TEST_METHOD}/ : qr//;
 my @test;
 for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.dat')) {
   for_each_test $file_name, {
+    '1xx' => {is_prefixed => 1, multiple => 1},
     headers => {is_prefixed => 1},
     body => {is_prefixed => 1},
   }, sub {
@@ -66,6 +67,7 @@ for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.d
 
 my $httpd = AnyEvent::HTTPD->new (host => $host, port => $port);
 my $cv = AE::cv;
+my $last_server;
 
 $httpd->reg_cb ('' => sub {
   my ($httpd, $req) = @_;
@@ -91,12 +93,16 @@ $httpd->reg_cb ('' => sub {
     my $test_name = $1;
     my $test = $test[$test_name];
     if (defined $test) {
+      if ($last_server) {
+        $last_server->{stop}->();
+        undef $last_server;
+      }
       server_as_cv ($test->{data}->[0])->cb (sub {
-        my $server = $_[0]->recv;
+        $last_server = my $server = $_[0]->recv;
         $req->respond ([200, 'OK', {
           'Access-Control-Allow-Origin' => '*',
         }, "http://$host:$test_port/?" . rand]);
-        timer 10, sub { $server->{stop}->() };
+        timer 10, sub { $server->{stop}->(); undef $last_server };
       });
     } else {
       $req->respond ([404, 'Not found', {}, '404 Test not found']);
@@ -138,7 +144,7 @@ $httpd->reg_cb ('' => sub {
           if (xhr.readyState === 4 && xhr.status === 200) {
             var url = xhr.responseText;
             var x = new XMLHttpRequest;
-            x.open ('GET', url, true);
+            x.open (test.method[1][0], url, true);
             x.onreadystatechange = function () {
               if (x.readyState === 4) {
                 var body = x.responseText;

@@ -8,7 +8,7 @@ use AnyEvent::Socket;
 use Promise;
 
 sub new_from_host_and_port ($$$) {
-  return bless {host => $_[1], port => $_[2], state => 'initial',
+  return bless {host => $_[1], port => $_[2], state => 'waiting',
                 next_response_id => 1}, $_[0];
 } # new_from_host_and_port
 
@@ -139,6 +139,14 @@ sub _process_rbuf ($$) {
         $res->{reason} = 'OK';
         $res->{headers} = [];
         $self->{state} = 'before response';
+      } elsif ($res->{status} == 204 or
+               $res->{status} == 205 or
+               $res->{status} == 304 or
+               $self->{current_request}->{method} eq 'HEAD') { # XXX or CONNECT
+        $self->onresponsestart->($res);
+        #XXX $self->onclose
+        delete $self->{current_request};
+        $self->{state} = 'waiting';
       } else {
         $self->onresponsestart->($res);
         $self->{state} = 'response body';
@@ -160,6 +168,7 @@ sub _process_rbuf ($$) {
       }
       if ($self->{unread_length} <= 0) {
         # XXX switch state
+        #delete $self->{current_request};
       }
     } else {
       $self->ondata->($self->{current_response_id}, $handle->{rbuf})
@@ -215,6 +224,7 @@ sub connect ($) {
              $self->{handle}->destroy;
              delete $self->{handle};
              $self->onclose->($!{EPIPE} ? undef : $msg, $err);
+             delete $self->{current_request};
            },
            on_eof => sub {
              my ($hdl) = @_;
@@ -223,6 +233,7 @@ sub connect ($) {
              my $err = delete $self->{onclose_error};
              delete $self->{handle};
              $self->onclose->(undef, $err);
+             delete $self->{current_request};
            });
       $ok->();
     };
@@ -236,7 +247,7 @@ sub send_request ($$) {
   }
   my $version = $req->{version} // '';
   if ($version eq '1.0') {
-    unless ($self->{state} eq 'initial') {
+    unless ($self->{state} eq 'waiting') { # XXX pipelining
       return Promise->reject ("Can't use this connection: |$self->{state}|");
     }
     my $method = $req->{method} // '';
@@ -255,6 +266,7 @@ sub send_request ($$) {
                                  status => 200, reason => 'OK',
                                  version => '0.9',
                                  headers => []};
+    $self->{current_request} = $req;
     $self->{handle}->push_write ("$method $url HTTP/1.0\x0D\x0A\x0D\x0A");
     return Promise->resolve;
   } else {

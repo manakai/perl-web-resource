@@ -1,0 +1,267 @@
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 190 cont."CRLF
+CRLF
+"HTTP/1.1 201 foo"CRLF
+"Hoge:3"CRLF
+CRLF
+"xyz"
+close
+#1xx
+| #status 190
+| #reason cont.
+#status 201
+#reason foo
+#headers
+Hoge: 3
+#body escaped
+xyz(close)
+
+#name
+multiple 1xx responses
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 190 cont."CRLF
+CRLF
+"HTTP/1.1 190 cont."CRLF
+CRLF
+"HTTP/1.1 201 foo"CRLF
+"Hoge:3"CRLF
+CRLF
+"xyz"
+close
+#1xx
+| #status 190
+| #reason cont.
+#1xx
+| #status 190
+| #reason cont.
+#status 201
+#reason foo
+#headers
+Hoge: 3
+#body escaped
+xyz(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 190 cont."CRLF
+"Content-Length: 3"CRLF
+CRLF
+"aab"
+"HTTP/1.1 201 foo"CRLF
+"Hoge:3"CRLF
+CRLF
+"xyz"
+close
+#1xx
+| #status 190
+| #reason cont.
+| #headers
+| Content-Length: 3
+#status 201
+#reason foo
+#headers
+Hoge: 3
+#body escaped
+xyz(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 190 cont."CRLF
+"Content-Length: 8"CRLF
+CRLF
+"aababbbb"
+"HTTP/1.1 201 foo"CRLF
+"Hoge:3"CRLF
+CRLF
+"xyz"
+close
+#1xx
+| #status 190
+| #reason cont.
+| #headers
+| Content-Length: 8
+#status 200
+#reason OK
+#body escaped
+aababbbbHTTP/1.1 201 foo\u000D
+Hoge:3\u000D
+\u000D
+xyz(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 190 cont."CRLF
+"Content-Length: 3"CRLF
+CRLF
+"aab"
+close
+#1xx
+| #status 190
+| #reason cont.
+| #headers
+| Content-Length: 3
+#status 200
+#reason OK
+#headers
+#body escaped
+aab(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 190 cont."CRLF
+"Content-Length: 3"CRLF
+CRLF
+"HTTP/"
+"1.1 201 foo"CRLF
+CRLF
+"aab"
+close
+#1xx
+| #status 190
+| #reason cont.
+| #headers
+| Content-Length: 3
+#status 201
+#reason foo
+#headers
+#body escaped
+aab(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 190 cont."CRLF
+"Content-Length: 3"CRLF
+CRLF
+"HTTP/"
+"1.0 201 foo"CRLF
+CRLF
+"aab"
+close
+#1xx
+| #status 190
+| #reason cont.
+| #headers
+| Content-Length: 3
+#status 201
+#reason foo
+#headers
+#body escaped
+aab(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 190 cont."CRLF
+CRLF
+"aab"
+close
+#1xx
+| #status 190
+| #reason cont.
+#status 200
+#reason OK
+#headers
+#body escaped
+aab(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 190 cont."CRLF
+CRLF
+"HTTP/1.1 190 cont."CRLF
+CRLF
+"aab"
+close
+#1xx
+| #status 190
+| #reason cont.
+#1xx
+| #status 190
+| #reason cont.
+#status 200
+#reason OK
+#headers
+#body escaped
+aab(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 190 cont."CRLF
+CRLF
+close
+#status 0
+#headers
+#body escaped
+(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 190 cont."CRLF
+"connection: close"CRLF
+CRLF
+"HTTP/1.1 201 foo"CRLF
+"Hoge:3"CRLF
+CRLF
+"xyz"
+close
+#1xx
+| #status 190
+| #reason cont.
+| #headers
+| connection: close
+#status 201
+#reason foo
+#headers
+Hoge: 3
+#body escaped
+xyz(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 0190 cont."CRLF
+CRLF
+"HTTP/1.1 201 foo"CRLF
+"Hoge:3"CRLF
+CRLF
+"xyz"
+close
+#1xx
+| #status 190
+| #reason cont.
+#status 201
+#reason foo
+#headers
+Hoge: 3
+#body escaped
+xyz(close)
+
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 099 cont."CRLF
+CRLF
+"HTTP/1.1 201 foo"CRLF
+"Hoge:3"CRLF
+CRLF
+"xyz"
+close
+#status 99
+#reason cont.
+#body escaped
+HTTP/1.1 201 foo\u000D
+Hoge:3\u000D
+\u000D
+xyz(close)

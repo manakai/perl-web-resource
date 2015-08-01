@@ -17,18 +17,13 @@ sub _process_rbuf ($$) {
   if ($self->{state} eq 'before response') {
     if ($handle->{rbuf} =~ s/^.{0,4}[Hh][Tt][Tt][Pp]//s) {
       ## HTTP/1.0 or HTTP/1.1
-      $self->{state} = 'before response 1';
+      $self->{state} = 'before response header';
     } elsif (8 <= length $handle->{rbuf}) {
-      $self->onresponsestart->({
-        response_id => $self->{current_response_id},
-        status => 200, reason_phrase => 'OK',
-        version => '0.9',
-        headers => [],
-      });
+      $self->onresponsestart->($self->{current_response});
       $self->{state} = 'response body';
       delete $self->{unread_length};
     }
-  } elsif ($self->{state} eq 'before response 1') {
+  } elsif ($self->{state} eq 'before response header') {
     if (2**18-1 < length $handle->{rbuf}) {
       $self->onresponsestart->({
         response_id => $self->{current_response_id},
@@ -39,11 +34,8 @@ sub _process_rbuf ($$) {
     } elsif ($handle->{rbuf} =~ s/^(.*?)\x0A\x0D?\x0A//s) {
       my $headers = [split /[\x0D\x0A]+/, $1, -1]; # XXX report CR
       my $start_line = shift @$headers;
-      my $res = {response_id => $self->{current_response_id},
-                 status => 200, reason_phrase => 'OK',
-                 version => '1.0',
-                 headers => [],
-                 start_line => $start_line};
+      my $res = $self->{current_response};
+      $res->{version} = '1.0';
       if ($start_line =~ s{\A/}{}) {
         if ($start_line =~ s{\A([0-9]+)}{}) {
           my $major = 0+$1;
@@ -61,9 +53,9 @@ sub _process_rbuf ($$) {
           $res->{status} = 0+$1;
           $res->{status} = 2**31-1 if $res->{status} > 2**31-1;
           if ($start_line =~ s/\A\x20+//) {
-            $res->{reason_phrase} = $start_line;
+            $res->{reason} = $start_line;
           } else {
-            $res->{reason_phrase} = '';
+            $res->{reason} = '';
           }
         }
       } elsif ($start_line =~ s{\A\x20+}{}) {
@@ -71,9 +63,9 @@ sub _process_rbuf ($$) {
           $res->{status} = 0+$1;
           $res->{status} = 2**31-1 if $res->{status} > 2**31-1;
           if ($start_line =~ s/\A\x20//) {
-            $res->{reason_phrase} = $start_line;
+            $res->{reason} = $start_line;
           } else {
-            $res->{reason_phrase} = '';
+            $res->{reason} = '';
           }
         }
       }
@@ -134,8 +126,23 @@ sub _process_rbuf ($$) {
           return;
         }
       }
-      $self->onresponsestart->($res);
-      $self->{state} = 'response body';
+
+      if (100 <= $res->{status} and $res->{status} <= 199) {
+        push @{$res->{'1xxes'} ||= []}, {
+          version => $res->{version},
+          status => $res->{status},
+          reason => $res->{reason},
+          headers => $res->{headers},
+        };
+        $res->{version} = '0.9';
+        $res->{status} = '200';
+        $res->{reason} = 'OK';
+        $res->{headers} = [];
+        $self->{state} = 'before response';
+      } else {
+        $self->onresponsestart->($res);
+        $self->{state} = 'response body';
+      }
     }
   }
   if ($self->{state} eq 'response body') {
@@ -166,12 +173,7 @@ sub _process_rbuf_eof ($$) {
   my ($self, $handle) = @_;
   if ($self->{state} eq 'before response') {
     if (length $handle->{rbuf}) {
-      $self->onresponsestart->({
-        response_id => $self->{current_response_id},
-        version => '0.9',
-        status => 200, reason_phrase => 'OK',
-        headers => [],
-      });
+      $self->onresponsestart->($self->{current_response});
       $self->{state} = 'response body';
       delete $self->{unread_length};
       $self->ondata->($self->{current_response_id}, $handle->{rbuf});
@@ -249,6 +251,10 @@ sub send_request ($$) {
     }
     $self->{state} = 'before response';
     $self->{current_response_id} = $self->{next_response_id}++;
+    $self->{current_response} = {response_id => $self->{current_response_id},
+                                 status => 200, reason => 'OK',
+                                 version => '0.9',
+                                 headers => []};
     $self->{handle}->push_write ("$method $url HTTP/1.0\x0D\x0A\x0D\x0A");
     return Promise->resolve;
   } else {

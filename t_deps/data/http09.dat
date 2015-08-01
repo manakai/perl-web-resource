@@ -106,3 +106,88 @@ close
 #reason OK
 #body escaped
 bar(close)
+
+#method POST
+#url /
+#data
+"bar"
+close
+#status 200
+#reason OK
+#body escaped
+bar(close)
+
+#method PUT
+#url /
+#data
+"bar"
+close
+#status 0
+#body escaped
+(close)
+
+#method DELETE
+#url /
+#data
+"bar"
+close
+#status 200
+#reason OK
+#body escaped
+bar(close)
+
+#method OPTIONS
+#url /
+#data
+"bar"
+close
+#status 200
+#reason OK
+#body escaped
+bar(close)
+
+#method HEAD
+#url /
+#data
+"bar"
+close
+#status 200
+#reason OK
+#body escaped
+bar(close)
+
+#method LINK
+#url /
+#data
+"bar"
+close
+#status 200
+#reason OK
+#body escaped
+bar(close)
+
+#method HOGE
+#url /
+#data
+"bar"
+close
+#status 200
+#reason OK
+#body escaped
+bar(close)
+
+#method PUT
+#url /
+#data
+close
+#status 0
+#body escaped
+(close)
+
+#method HOGE
+#url /
+#data
+close
+#status 0
+#body escaped
+(close)

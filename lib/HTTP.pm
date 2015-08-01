@@ -19,9 +19,19 @@ sub _process_rbuf ($$) {
       ## HTTP/1.0 or HTTP/1.1
       $self->{state} = 'before response header';
     } elsif (8 <= length $handle->{rbuf}) {
-      $self->onresponsestart->($self->{current_response});
-      $self->{state} = 'response body';
-      delete $self->{unread_length};
+      if ($self->{current_request}->{method} eq 'PUT') {
+        $self->onresponsestart->({
+          response_id => $self->{current_response_id},
+          network_error => 1,
+          error => "HTTP/0.9 response to PUT request",
+        });
+        $self->{handle}->push_shutdown;
+        return;
+      } else {
+        $self->onresponsestart->($self->{current_response});
+        $self->{state} = 'response body';
+        delete $self->{unread_length};
+      }
     }
   } elsif ($self->{state} eq 'before response header') {
     if (2**18-1 < length $handle->{rbuf}) {
@@ -31,6 +41,7 @@ sub _process_rbuf ($$) {
         error => "Header too large",
       });
       $self->{handle}->push_shutdown;
+      return;
     } elsif ($handle->{rbuf} =~ s/^(.*?)\x0A\x0D?\x0A//s) {
       my $headers = [split /[\x0D\x0A]+/, $1, -1]; # XXX report CR
       my $start_line = shift @$headers;
@@ -182,11 +193,21 @@ sub _process_rbuf_eof ($$) {
   my ($self, $handle) = @_;
   if ($self->{state} eq 'before response') {
     if (length $handle->{rbuf}) {
-      $self->onresponsestart->($self->{current_response});
-      $self->{state} = 'response body';
-      delete $self->{unread_length};
-      $self->ondata->($self->{current_response_id}, $handle->{rbuf});
-      $handle->{rbuf} = '';
+      if ($self->{current_request}->{method} eq 'PUT') {
+        $self->onresponsestart->({
+          response_id => $self->{current_response_id},
+          network_error => 1,
+          error => "HTTP/0.9 response to PUT request",
+        });
+        $self->{handle}->push_shutdown;
+        return;
+      } else {
+        $self->onresponsestart->($self->{current_response});
+        $self->{state} = 'response body';
+        delete $self->{unread_length};
+        $self->ondata->($self->{current_response_id}, $handle->{rbuf});
+        $handle->{rbuf} = '';
+      }
     } else {
       $self->onresponsestart->({
         response_id => $self->{current_response_id},

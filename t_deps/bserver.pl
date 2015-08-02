@@ -76,6 +76,10 @@ $httpd->reg_cb ('' => sub {
   $host =~ s/:[0-9]+$//;
   my $path = $req->url->path;
   if ($path eq '/') {
+    if ($last_server) {
+      $last_server->{stop}->();
+      undef $last_server;
+    }
     server_as_cv (qq{
       "HTTP/1.0 200 OK"CRLF
       "Content-Type: text/html; charset=utf-8"CRLF
@@ -83,14 +87,15 @@ $httpd->reg_cb ('' => sub {
       "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico><link rel=stylesheet href=http://$host:$port/css><body><script src=http://$host:$port/runner></script>"
       close
     })->cb (sub {
-      my $server = $_[0]->recv;
+      $last_server = my $server = $_[0]->recv;
       $req->respond ([302, 'Redirect', {
         'Location' => "http://$host:$test_port/?" . rand,
       }, '302 Redirect']);
-      timer 10, sub { $server->{stop}->() };
+      timer 10, sub { $server->{stop}->(); undef $last_server };
     });
   } elsif ($path =~ m{^/start/([0-9]+)$}) {
     my $test_name = $1;
+    #warn "start $test_name\n";
     my $test = $test[$test_name];
     if (defined $test) {
       if ($last_server) {
@@ -137,21 +142,12 @@ $httpd->reg_cb ('' => sub {
         return result;
       } // setResult
 
-      function runTest (test, testName, then) {
-        var xhr = new XMLHttpRequest ();
-        xhr.open ('GET', 'http://$host:$port/start/' + encodeURIComponent (testName) + '?' + Math.random (), true);
-        xhr.onreadystatechange = function () {
-          if (xhr.readyState === 4 && xhr.status === 200) {
-            var url = xhr.responseText;
-            var x = new XMLHttpRequest;
-            x.open (test.method[1][0], url, true);
-            x.onreadystatechange = function () {
-              if (x.readyState === 4) {
+      function compareResponse (test, testNumber, x) {
                 var body = x.responseText;
                 var tr = document.createElement ('tr');
                 tr.className = 'FAIL';
                 var failed = false;
-                tr.appendChild (document.createElement ('th')).appendChild (document.createTextNode (testName));
+                tr.appendChild (document.createElement ('th')).appendChild (document.createTextNode (testNumber));
                 var resultCell = tr.appendChild (document.createElement ('th'));
                 resultCell.textContent = 'FAIL';
                 var cell = tr.appendChild (document.createElement ('td'));
@@ -188,10 +184,25 @@ $httpd->reg_cb ('' => sub {
                 tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode (test._file_name));
                 tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode ((test.name || {})[0]));
                 results.appendChild (tr);
+      } // compareResponse
+
+      function runTest (test, testNumber, then) {
+        var xhr = new XMLHttpRequest ();
+        xhr.open ('GET', 'http://$host:$port/start/' + encodeURIComponent (testNumber) + '?' + Math.random (), true);
+        xhr.onreadystatechange = function () {
+          if (xhr.readyState === 4 && xhr.status === 200) {
+            var url = xhr.responseText;
+
+            var x = new XMLHttpRequest;
+            x.open (test.method[1][0], url, true);
+            x.onreadystatechange = function () {
+              if (x.readyState === 4) {
+                compareResponse (test, testNumber, x);
                 then ();
               }
             };
             x.send (null);
+
           }
         };
         xhr.send (null);

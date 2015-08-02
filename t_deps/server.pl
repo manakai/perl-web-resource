@@ -42,6 +42,8 @@ sub run_commands ($$$$) {
       $hdl->push_write ("\x0D");
     } elsif ($command =~ /^0x([0-9A-Fa-f]{2})$/) {
       $hdl->push_write (pack 'C', hex $1);
+    } elsif ($command =~ /^client$/) {
+      $hdl->push_write ($states->{client_host} . ':' . $states->{client_port});
     } elsif ($command =~ /^receive LF$/) {
       if ($states->{received} =~ /\x0A/) {
         $states->{received} =~ s/^.*?\x0A//s;
@@ -52,6 +54,7 @@ sub run_commands ($$$$) {
       }
     } elsif ($command =~ /^receive "([^"]+)"$/) {
       my $x = $1;
+      #warn "[$states->{id}] receive [$states->{received}]";
       if ($states->{received} =~ /\Q$x\E/) {
         $states->{received} =~ s/^.*?\Q$x\E//s;
       } else {
@@ -65,6 +68,8 @@ sub run_commands ($$$$) {
       send $hdl->{fh}, $1, MSG_OOB;
     } elsif ($command =~ /^close$/) {
       $hdl->push_shutdown;
+    } elsif ($command =~ /^close read$/) {
+      shutdown $hdl->{fh}, 0;
     } elsif ($command =~ /^reset$/) {
       setsockopt $hdl->{fh}, SOL_SOCKET, SO_LINGER, pack "II", 1, 0;
       close $hdl->{fh};
@@ -77,24 +82,31 @@ sub run_commands ($$$$) {
 } # run_commands
 
 my $cv = AE::cv;
+$cv->begin;
+my $sig = AE::signal TERM => sub { $cv->end };
+
 warn "Listening $host:$port...\n";
 my $server = tcp_server $host, $port, sub {
   my ($fh, $client_host, $client_port) = @_;
   my $id = int rand 100000;
   warn "... $client_host:$client_port [$id]\n";
   $cv->begin;
-  my $states = {commands => [@$Commands], received => '', id => $id};
+  my $states = {commands => [@$Commands], received => '', id => $id,
+                client_host => $client_host, client_port => $client_port};
   my $hdl; $hdl = AnyEvent::Handle->new
       (fh => $fh,
        on_error => sub {
          my (undef, $fatal, $msg) = @_;
-         run_commands 'error', $_[0], $states, sub {
-           AE::log error => $msg;
-           $hdl->destroy if $fatal;
-           $cv->end if $fatal;
-         };
+         if ($fatal) {
+           AE::log error => "[$id] $msg (fatal)";
+           $hdl->destroy;
+           $cv->end;
+         } else {
+           AE::log error => "[$id] $msg";
+         }
        },
        on_eof => sub {
+         warn "[$id] EOF\n";
          $hdl->destroy;
          $cv->end;
        },

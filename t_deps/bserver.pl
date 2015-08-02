@@ -15,29 +15,50 @@ my $test_port = int (rand 10000) + 1024;
 
 my $server_pids = {};
 END { kill 'KILL', $_ for keys %$server_pids }
+my $last_server;
 sub server_as_cv ($) {
   my $code = $_[0];
   my $cv = AE::cv;
-  my $started;
-  my $pid;
-  my $data = '';
-  run_cmd
-      ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), 0, $test_port],
-      '<' => \$code,
-      '>' => sub {
-        $data .= $_[0] if defined $_[0];
-        return if $started;
-        if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
-          $cv->send ({pid => $pid, host => $1, port => $2,
-                      stop => sub {
-                        kill 'TERM', $pid;
-                        delete $server_pids->{$pid};
-                      }});
-          $started = 1;
-        }
-      },
-      '$$' => \$pid;
-  $server_pids->{$pid} = 1;
+  my $start = sub {
+    my $started;
+    my $pid;
+    my $data = '';
+    my @after_stop;
+    my $stopper = sub {
+      if (kill 0, $pid) {
+        kill 'TERM', $pid;
+        delete $server_pids->{$pid};
+        push @after_stop, $_[0] if $_[0];
+      } else {
+        $_[0]->() if $_[0];
+      }
+    }; # $stopper
+    my $cmd_cv = run_cmd
+        ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), 0, $test_port],
+        '<' => \$code,
+        '>' => sub {
+          $data .= $_[0] if defined $_[0];
+          return if $started;
+          if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
+            $cv->send ({pid => $pid, host => $1, port => $2,
+                        stop => $stopper});
+            $started = 1;
+          }
+        },
+        '$$' => \$pid;
+    $server_pids->{$pid} = 1;
+    $last_server = $stopper;
+    $cmd_cv->cb (sub {
+      for (@after_stop) {
+        $_->();
+      }
+    });
+  }; # $start
+  if ($last_server) {
+    $last_server->($start);
+  } else {
+    $start->();
+  }
   return $cv;
 } # server_as_cv
 
@@ -67,7 +88,6 @@ for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.d
 
 my $httpd = AnyEvent::HTTPD->new (host => $host, port => $port);
 my $cv = AE::cv;
-my $last_server;
 
 $httpd->reg_cb ('' => sub {
   my ($httpd, $req) = @_;
@@ -76,10 +96,6 @@ $httpd->reg_cb ('' => sub {
   $host =~ s/:[0-9]+$//;
   my $path = $req->url->path;
   if ($path eq '/') {
-    if ($last_server) {
-      $last_server->{stop}->();
-      undef $last_server;
-    }
     server_as_cv (qq{
       "HTTP/1.0 200 OK"CRLF
       "Content-Type: text/html; charset=utf-8"CRLF
@@ -87,27 +103,23 @@ $httpd->reg_cb ('' => sub {
       "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico><link rel=stylesheet href=http://$host:$port/css><body><script src=http://$host:$port/runner></script>"
       close
     })->cb (sub {
-      $last_server = my $server = $_[0]->recv;
+      my $server = $_[0]->recv;
       $req->respond ([302, 'Redirect', {
         'Location' => "http://$host:$test_port/?" . rand,
       }, '302 Redirect']);
-      timer 10, sub { $server->{stop}->(); undef $last_server };
+      timer 10, sub { $server->{stop}->() };
     });
   } elsif ($path =~ m{^/start/([0-9]+)$}) {
     my $test_name = $1;
     #warn "start $test_name\n";
     my $test = $test[$test_name];
     if (defined $test) {
-      if ($last_server) {
-        $last_server->{stop}->();
-        undef $last_server;
-      }
       server_as_cv ($test->{data}->[0])->cb (sub {
-        $last_server = my $server = $_[0]->recv;
+        my $server = $_[0]->recv;
         $req->respond ([200, 'OK', {
           'Access-Control-Allow-Origin' => '*',
         }, "http://$host:$test_port/?" . rand]);
-        timer 10, sub { $server->{stop}->(); undef $last_server };
+        timer 10, sub { $server->{stop}->() };
       });
     } else {
       $req->respond ([404, 'Not found', {}, '404 Test not found']);
@@ -193,16 +205,43 @@ $httpd->reg_cb ('' => sub {
           if (xhr.readyState === 4 && xhr.status === 200) {
             var url = xhr.responseText;
 
-            var x = new XMLHttpRequest;
-            x.open (test.method[1][0], url, true);
-            x.onreadystatechange = function () {
-              if (x.readyState === 4) {
-                compareResponse (test, testNumber, x);
-                then ();
-              }
-            };
-            x.send (null);
-
+            var testType = (test['test-type'] || ['', ['']])[1][0];
+            if (testType === 'second') {
+              var y = new XMLHttpRequest;
+              y.open (test.method[1][0], url, true);
+              y.onreadystatechange = function () {
+                if (y.readyState === 4) {
+                  var tryCount = 0;
+                  var tryReq = function () {
+                    var x = new XMLHttpRequest;
+                    x.open (test.method[1][0], url, true);
+                    x.onreadystatechange = function () {
+                      if (x.readyState === 4) {
+                        if (x.getResponseHeader ('x-test-retry') && tryCount++ < 10) {
+                          tryReq ();
+                        } else {
+                          compareResponse (test, testNumber, x);
+                          then ();
+                        }
+                      }
+                    };
+                    x.send (null);
+                  };
+                  tryReq ();
+                }
+              };
+              y.send (null);
+            } else {
+              var x = new XMLHttpRequest;
+              x.open (test.method[1][0], url, true);
+              x.onreadystatechange = function () {
+                if (x.readyState === 4) {
+                  compareResponse (test, testNumber, x);
+                  then ();
+                }
+              };
+              x.send (null);
+            }
           }
         };
         xhr.send (null);

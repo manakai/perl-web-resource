@@ -1,0 +1,491 @@
+#name
+HTTP/1.1 -> HTTP/1.1
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+HTTP/1.1 -> HTTP/1.1 Connection: close
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Connection: close"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Connection: close
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+HTTP/1.0 Keep-Alive
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.0 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"Connection: keep-alive"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+receive "GET"
+"HTTP/1.0 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+HTTP/1.1 -> HTTP/1.0
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+receive "GET"
+"HTTP/1.0 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+HTTP/1.1 -> HTTP/1.0 Keep-Alive -> HTTP/1.0
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+receive "GET"
+"HTTP/1.0 212 fuga--"CRLF
+"Content-Length: 2"CRLF
+"Connection: keep-alive"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"ab"
+receive "GET"
+"HTTP/1.0 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+HTTP/1.0 Keep-Alive -> HTTP/1.1 -> HTTP/1.0
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.0 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"Connection: keep-alive"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+receive "GET"
+"HTTP/1.1 212 fuga--"CRLF
+"Content-Length: 2"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"ab"
+receive "GET"
+"HTTP/1.0 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+CRLF
+"anc"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 202
+#reason hoge
+#headers
+Content-Length: 3
+#body escaped
+anc(close)
+
+#name
+redundant newline between responses
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+CRLF
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+redundant newline between responses
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+CRLF
+CRLF
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+redundant space between responses
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+"   "
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+redundant space between responses
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+"\u0009"
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+redundant space between responses
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+"\u000C"
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+redundant space between responses
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+"\u000B"
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+redundant control between responses
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+"\u007F"
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+redundant newline between responses
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+CRLF
+CRLF
+CRLF
+CRLF
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+redundant newline between responses
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+CRLF
+CRLF
+CRLF
+CRLF
+receive "GET"
+CRLF
+CRLF
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+redundant newline between responses
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+CRLF
+CRLF
+CRLF
+CRLF
+receive "GET"
+CRLF
+CRLF
+CRLF
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 200
+#reason OK
+#headers
+#body escaped
+\u000D
+\u000D
+\u000D
+HTTP/1.1 203 fuga\u000D
+Content-Length: 2\u000D
+\u000D
+ab(close)
+
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+receive "GET"
+"HTTP/1.1 234 abc"CRLF
+"Content-Length: 4"CRLF
+CRLF
+"xyzw"
+close
+#test-type second
+#status 234
+#reason abc
+#headers
+Content-Length: 4
+#body escaped
+xyzw(close)

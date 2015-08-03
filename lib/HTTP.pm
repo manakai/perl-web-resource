@@ -9,9 +9,7 @@ use Promise;
 
 sub new_from_host_and_port ($$$) {
   return bless {host => $_[1], port => $_[2],
-                #state => 
-                queue => [],
-                next_response_id => 1}, $_[0];
+                queue => []}, $_[0];
 } # new_from_host_and_port
 
 sub _process_rbuf ($$) {
@@ -20,32 +18,24 @@ sub _process_rbuf ($$) {
     if ($handle->{rbuf} =~ s/^.{0,4}[Hh][Tt][Tt][Pp]//s) {
       $self->{state} = 'before response header';
     } elsif (8 <= length $handle->{rbuf}) {
-      if ($self->{current_request}->{method} eq 'PUT') {
-        $self->onevent->($self, $self->{current_request}, 'responseerror', {
+      if ($self->{current_request_item}->{request}->{method} eq 'PUT') {
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'responseerror', {
           message => "HTTP/0.9 response to PUT request",
         });
-        delete $self->{current_request};
-        $self->{state} = 'stopped';
-        $self->{no_new_request} = 1;
-        $self->{handle}->push_shutdown;
-        # XXX
+        $self->_stop;
         return;
       } else {
-        $self->onevent->($self, $self->{current_request}, 'headers', $self->{current_response});
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'headers', $self->{current_response});
         $self->{state} = 'response body';
         delete $self->{unread_length};
       }
     }
   } elsif ($self->{state} eq 'before response header') {
     if (2**18-1 < length $handle->{rbuf}) {
-      $self->onevent->($self, $self->{current_request}, 'responseerror', {
+      $self->onevent->($self, $self->{current_request_item}->{request}, 'responseerror', {
         message => "Header section too large",
       });
-      delete $self->{current_request};
-      $self->{state} = 'stopped';
-      $self->{no_new_request} = 1;
-      $self->{handle}->push_shutdown;
-      # XXX
+      $self->_stop;
       return;
     } elsif ($handle->{rbuf} =~ s/^(.*?)\x0A\x0D?\x0A//s) {
       my $headers = [split /[\x0D\x0A]+/, $1, -1]; # XXX report CR
@@ -119,14 +109,10 @@ sub _process_rbuf ($$) {
       }
       delete $self->{unread_length};
       if (($has_broken_length and keys %length) or 1 < keys %length) {
-        $self->onevent->($self, $self->{current_request}, 'responseerror', {
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'responseerror', {
           message => "Inconsistent content-length values",
         });
-        delete $self->{current_request};
-        $self->{state} = 'stopped';
-        $self->{no_new_request} = 1;
-        $self->{handle}->push_shutdown;
-        # XXX
+        $self->_stop;
         return;
       } elsif (1 == keys %length) {
         my $length = each %length;
@@ -135,14 +121,10 @@ sub _process_rbuf ($$) {
         if ($length eq 0+$length) { # overflow check
           $self->{unread_length} = $res->{content_length} = 0+$length;
         } else {
-          $self->onevent->($self, $self->{current_request}, 'responseerror', {
+          $self->onevent->($self, $self->{current_request_item}->{request}, 'responseerror', {
             message => "Inconsistent content-length values",
           });
-          delete $self->{current_request};
-          $self->{state} = 'stopped';
-          $self->{no_new_request} = 1;
-          $self->{handle}->push_shutdown;
-          # XXX
+          $self->_stop;
           return;
         }
       }
@@ -162,16 +144,18 @@ sub _process_rbuf ($$) {
       } elsif ($res->{status} == 204 or
                $res->{status} == 205 or
                $res->{status} == 304 or
-               $self->{current_request}->{method} eq 'HEAD') { # XXX or CONNECT
-        $self->onevent->($self, $self->{current_request}, 'headers', $res);
-        $self->onevent->($self, $self->{current_request}, 'complete');
+               $self->{current_request_item}->{request}->{method} eq 'HEAD') { # XXX or CONNECT
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'headers', $res);
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'complete');
 
         # XXX go to next
-        delete $self->{current_request};
+        $self->{current_request_item}->{response_status} = 'received';
+        delete $self->{current_request_item}->{request};
+        delete $self->{current_request_item};
         $self->{state} = 'waiting';
         $self->{handle}->push_shutdown if $self->{no_new_request};
       } else {
-        $self->onevent->($self, $self->{current_request}, 'headers', $res);
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'headers', $res);
         $self->{state} = 'response body';
       }
     }
@@ -180,27 +164,31 @@ sub _process_rbuf ($$) {
     if (defined $self->{unread_length}) {
       if ($self->{unread_length} >= (my $len = length $handle->{rbuf})) {
         if ($len) {
-          $self->onevent->($self, $self->{current_request}, 'data', $handle->{rbuf});
+          $self->onevent->($self, $self->{current_request_item}->{request}, 'data', $handle->{rbuf});
           $handle->{rbuf} = '';
           $self->{unread_length} -= $len;
         }
       } elsif ($self->{unread_length} > 0) {
-        $self->onevent->($self, $self->{current_request}, 'data', substr $handle->{rbuf}, 0, $self->{unread_length});
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'data', substr $handle->{rbuf}, 0, $self->{unread_length});
         substr ($handle->{rbuf}, 0, $self->{unread_length}) = '';
         $self->{unread_length} = 0;
       }
       if ($self->{unread_length} <= 0) {
-        $self->onevent->($self, $self->{current_request}, 'complete');
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'complete');
 
         # XXX switch state
-        #delete $self->{current_request};
+        #$self->{current_request_item}->{response_status} = 'received';
+        #delete $self->{current_request_item}->{request};
+        #delete $self->{current_request_item};
 
-        delete $self->{current_request};
+        $self->{current_request_item}->{response_status} = 'received';
+        delete $self->{current_request_item}->{request};
+        delete $self->{current_request_item};
         $self->{state} = 'waiting';
         $self->{handle}->push_shutdown if $self->{no_new_request};
       }
     } else {
-      $self->onevent->($self, $self->{current_request}, 'data', $handle->{rbuf})
+      $self->onevent->($self, $self->{current_request_item}->{request}, 'data', $handle->{rbuf})
           if length $handle->{rbuf};
       $handle->{rbuf} = '';
     }
@@ -214,50 +202,68 @@ sub _process_rbuf_eof ($$;%) {
   my ($self, $handle, %args) = @_;
   if ($self->{state} eq 'before response') {
     if (length $handle->{rbuf}) {
-      if ($self->{current_request}->{method} eq 'PUT') {
-        $self->onevent->($self, $self->{current_request}, 'responseerror', {
+      if ($self->{current_request_item}->{request}->{method} eq 'PUT') {
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'responseerror', {
           message => "HTTP/0.9 response to PUT request",
         });
-        delete $self->{current_request};
       } else {
-        $self->onevent->($self, $self->{current_request}, 'headers', $self->{current_response});
-        $self->onevent->($self, $self->{current_request}, 'data', $handle->{rbuf});
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'headers', $self->{current_response});
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'data', $handle->{rbuf});
+        # XXX
+        #abort => $args{abort},
+        #errno => $args{errno},
+        $self->onevent->($self, $self->{current_request_item}->{request}, 'complete');
       }
       $handle->{rbuf} = '';
     } else {
-      $self->onevent->($self, $self->{current_request}, 'responseerror', {
+      $self->onevent->($self, $self->{current_request_item}->{request}, 'responseerror', {
         message => "Connection closed without response",
+        errno => $args{errno},
       });
-      delete $self->{current_request};
     }
   } elsif ($self->{state} eq 'response body') {
     if ($args{abort} or
         defined $self->{unread_length} and $self->{unread_length} > 0) {
       $self->{current_response}->{incomplete} = 1;
-      $self->{onclose_error} = 'premature closure of the connection'; #XXX
     }
-    $self->onevent->($self, $self->{current_request}, 'complete');
-    delete $self->{current_request};
+    $self->onevent->($self, $self->{current_request_item}->{request}, 'complete');
+        # XXX
+        #abort => $args{abort},
+        #errno => $args{errno},
   } elsif ($self->{state} eq 'before response header') {
-    $self->onevent->($self, $self->{current_request}, 'responseerror', {
+    $self->onevent->($self, $self->{current_request_item}->{request}, 'responseerror', {
       message => "Connection closed in response header",
+      errno => $args{errno},
     });
-    delete $self->{current_request};
   }
 
-  if (defined $self->{current_request}) {
-    $self->onevent->($self, $self->{current_request}, 'complete');
-    delete $self->{current_request};
-  }
-
-  unless ($self->{state} eq 'stopped') {
-    $self->{state} = 'stopped';
-    $self->{no_new_request} = 1;
-    $self->{handle}->push_shutdown;
-
-    # XXX
-  }
+  $self->_stop;
 } # _process_rbuf_eof
+
+sub _stop ($) {
+  my $self = $_[0];
+  return if $self->{state} eq 'stopped';
+
+  if (defined $self->{current_request_item}) {
+    $self->{current_request_item}->{response_status} = 'received';
+    delete $self->{current_request_item}->{request};
+    delete $self->{current_request_item};
+  }
+
+  $self->{state} = 'stopped';
+  $self->{no_new_request} = 1;
+  $self->{handle}->push_shutdown;
+
+  for my $item (@{$self->{queue}}) {
+    if ($item->{request_status} eq 'not') {
+      $self->onevent->($self, $item->{request}, 'cancel');
+    } elsif (not $item->{response_status} eq 'received') {
+      $self->onevent->($self, $item->{request}, 'responseerror', {
+        message => "Connection closed before the response",
+      });
+    }
+  }
+} # _stop
 
 sub connect ($) {
   my $self = $_[0];
@@ -277,29 +283,16 @@ sub connect ($) {
            on_error => sub {
              my ($hdl, $fatal, $msg) = @_;
              if ($!{ECONNRESET}) {
-               if (defined $self->{current_request}) {
-                 $self->onevent->($self, $self->{current_request}, 'reset');
+               if (defined $self->{current_request_item}) {
+                 $self->onevent->($self, $self->{current_request_item}->{request}, 'reset');
                }
-               delete $self->{current_request};
-               unless ($self->{state} eq 'stopped') {
-                 $self->{state} = 'stopped';
-                 $self->{no_new_request} = 1;
-                 #$self->{handle}->push_shutdown;
-                 
-                 # XXX
-               }
+               $self->_stop;
              } else {
                $self->_process_rbuf ($hdl);
-               $self->_process_rbuf_eof ($hdl, abort => 1);
+               $self->_process_rbuf_eof ($hdl, abort => 1, errno => $!);
              }
              $self->{handle}->destroy;
              delete $self->{handle};
-
-             #XXX
-             my $err = delete $self->{onclose_error};
-             #AE::log error => $msg;
-             #$self->onclose->($!{EPIPE} ? undef : $msg, $err); # XXX
-
              $onclosed->();
            },
            on_eof => sub {
@@ -307,11 +300,6 @@ sub connect ($) {
              $self->_process_rbuf ($hdl);
              $self->_process_rbuf_eof ($hdl);
              delete $self->{handle};
-
-             # XXX
-             my $err = delete $self->{onclose_error};
-             #$self->onclose->(undef, $err); # XXX
-
              $onclosed->();
            });
       $self->{state} = 'initial';
@@ -358,26 +346,20 @@ sub send_request ($$) {
     if (@{$self->{queue}} == 1 or
         (@{$self->{queue}} > 1 and
          $self->{queue}->[-2]->{request_status} eq 'sent')) {
-      my $queue_item = $self->{queue}->[-1];
-      $queue_item->{request_status} = 'sending';
-      $self->{current_request} = $req;
-      $self->{current_response_id} = $self->{next_response_id}++;
-      $self->{current_response} = {response_id => $self->{current_response_id},
-                                   status => 200, reason => 'OK',
+      $self->{current_request_item} = $self->{queue}->[-1];
+      $self->{current_request_item}->{request_status} = 'sending';
+      $self->{current_response} = {status => 200, reason => 'OK',
                                    version => '0.9',
                                    headers => []};
       $self->{state} = 'before response';
-
       AE::postpone {
         $self->{handle}->push_write ("$method $url HTTP/1.1\x0D\x0A\x0D\x0A");
         # XXX request body
-        $queue_item->{request_status} = 'sent';
+        $self->{current_request_item}->{request_status} = 'sent';
         $self->onevent->($self, $req, 'requestsent');
         if ($self->{state} eq 'sending') {
           # XXX goto next
             
-        } else {
-          # XXX pipelining
         }
       };
     }

@@ -164,4 +164,108 @@ test {
   });
 } n => 2, name => 'complete event -> send request';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "/req1"
+    "HTTP/1.1 200 OK"CRLF
+    "Content-Length: 1"CRLF
+    CRLF
+    "a"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my @ev;
+    my $ok;
+    my $req2;
+    $http->onevent (sub {
+      my ($http, $req, $type) = @_;
+      push @ev, [$req, $type];
+      if ({
+        complete => 1, abort => 1, reset => 1, cancel => 1,
+        responseerror => 1,
+      }->{$type}) {
+        $ok->() if $req eq $req2;
+      }
+    });
+    $http->connect->then (sub {
+      $http->send_request ({
+        method => 'GET',
+        url => '/req1',
+      });
+      return Promise->new (sub {
+        ($ok) = @_;
+        $http->send_request ($req2 = {
+          method => 'GET',
+          url => '/req2',
+        });
+      });
+    })->then (sub {
+      test {
+        @ev = grep { $_->[0] eq $req2 } @ev;
+        is @ev, 1, 'cancel';
+        ok grep { $_->[1] eq 'cancel' } @ev;
+      } $c;
+    })->then (sub {
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'queued but connection closed';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "/req1"
+    "HTTP/1.1 200 OK"CRLF
+    "Content-Length: 1"CRLF
+    "Content-Length: 2"CRLF
+    CRLF
+    "a"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my @ev;
+    my $ok;
+    my $req2;
+    $http->onevent (sub {
+      my ($http, $req, $type) = @_;
+      push @ev, [$req, $type];
+      if ({
+        complete => 1, abort => 1, reset => 1, cancel => 1,
+        responseerror => 1,
+      }->{$type}) {
+        $ok->() if $req eq $req2;
+      }
+    });
+    $http->connect->then (sub {
+      $http->send_request ({
+        method => 'GET',
+        url => '/req1',
+      });
+      return Promise->new (sub {
+        ($ok) = @_;
+        $http->send_request ($req2 = {
+          method => 'GET',
+          url => '/req2',
+        });
+      });
+    })->then (sub {
+      test {
+        @ev = grep { $_->[0] eq $req2 } @ev;
+        is @ev, 1, 'cancel';
+        ok grep { $_->[1] eq 'cancel' } @ev;
+      } $c;
+    })->then (sub {
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'queued but response error';
+
 run_tests;

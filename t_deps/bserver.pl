@@ -140,6 +140,8 @@ $httpd->reg_cb ('' => sub {
       document.body.appendChild (resultsContainer);
       results = results.appendChild (document.createElement ('tbody'));
 
+      var largeDataSize = 10*1024*1024;
+
       function setResult (cell, result, actual, expected) {
         if (result) {
           cell.innerText = cell.textContent = '';
@@ -206,7 +208,7 @@ $httpd->reg_cb ('' => sub {
             var url = xhr.responseText;
 
             var testType = (test['test-type'] || ['', ['']])[1][0];
-            if (testType === 'second') {
+            if (testType === 'second' || testType === 'largerequest-second') {
               var y = new XMLHttpRequest;
               y.open (test.method[1][0], url, true);
               y.onreadystatechange = function () {
@@ -230,8 +232,14 @@ $httpd->reg_cb ('' => sub {
                   tryReq ();
                 }
               };
-              y.send (null);
-            } else {
+              if (testType === 'largerequest-second') {
+                var data = '';
+                for (var i = 0; i < largeDataSize; i++) data += "x";
+                y.send (data);
+              } else {
+                y.send (null);
+              }
+            } else { // testType
               var x = new XMLHttpRequest;
               x.open (test.method[1][0], url, true);
               x.onreadystatechange = function () {
@@ -240,7 +248,13 @@ $httpd->reg_cb ('' => sub {
                   then ();
                 }
               };
-              x.send (null);
+              if (testType === 'largerequest') {
+                var data = '';
+                for (var i = 0; i < largeDataSize; i++) data += "x";
+                x.send (data);
+              } else {
+                x.send (null);
+              }
             }
           }
         };

@@ -162,6 +162,8 @@ Content-Length: 2
 #body escaped
 ab(close)
 
+#name
+not reusable
 #method GET
 #url /
 #data escaped

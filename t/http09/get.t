@@ -50,22 +50,112 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
       server_as_cv ($test->{data}->[0])->cb (sub {
         my $server = $_[0]->recv;
         my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
-        my $res;
-        my $data = '';
-        $http->onresponsestart (sub {
-          $res = $_[0];
-        });
-        $http->ondata (sub {
-          $data .= $_[1];
-          $data .= '(boundary)' if $test->{boundary};
-        });
-        $http->onclose (sub {
-          $data .= '(close)';
-          $data = '(close)',
-          $res = {network_error => 1, error => $_[0]} if defined $_[0];
+        
+        my $req_results = {};
+        my $onev = sub {
+          my ($http, $req, $type) = @_;
+          #warn "$req $type";
+          my $result = $req_results->{$req->{id}} ||= {};
+          push @{$result->{events} ||= []}, [$type];
+          if ($type eq 'headers') {
+            $result->{response} = $_[3];
+          }
+          if ($type eq 'data') {
+            $result->{body} //= '';
+            $result->{body} .= $_[3];
+            $result->{body} .= '(boundary)' if $test->{boundary};
+          }
+          if ({
+            complete => 1, abort => 1, reset => 1, cancel => 1,
+            responseerror => 1,
+          }->{$type}) {
+            $result->{body} //= '';
+            $result->{body} .= '(close)';
+            $result->{is_error} = 1 unless $type eq 'complete';
+            if ($type eq 'reset') {
+              delete $result->{response};
+            }
+            $req->{_ok}->();
+          }
+        }; # $onev
+        $http->onevent ($onev);
+
+        my $next_req_id = 1;
+        my $get_req = sub {
+          my $req = {
+            @_,
+            id => $next_req_id++,
+          };
+          $req->{done} = Promise->new (sub { $req->{_ok} = $_[0] });
+          return $req;
+        }; # $get_req
+
+        my $test_type = $test->{'test-type'}->[1]->[0] // '';
+
+        $http->connect->then (sub {
+          if ($test_type eq 'second' or
+              $test_type eq 'largerequest-second') {
+            my $try_count = 0;
+            my $try; $try = sub {
+              my $req = $get_req->(
+                method => $test->{method}->[1]->[0],
+                url => $test->{url}->[1]->[0],
+              );
+              if ($test_type eq 'largerequest-second') {
+                $req->{body} = 'x' x (1024*1024);
+              }
+              unless ($http->can_send_request) {
+                return $http->close->then (sub {
+                  $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+                  $http->onevent ($onev);
+                  return $http->connect;
+                })->then (sub {
+                  return $try->();
+                });
+              }
+              $http->send_request ($req);
+              return $req->{done}->then (sub {
+                unless ($try_count++) {
+                  return Promise->new (sub {
+                    my $ok = $_[0];
+                    my $timer; $timer = AE::timer 0.1, 0, sub {
+                      undef $timer;
+                      $ok->($try->());
+                    };
+                  });
+                }
+                my $result = $req_results->{$req->{id}};
+                for (@{$result->{response}->{headers}}) {
+                  if ($_->[2] eq 'x-test-retry') {
+                    return $try->() if $try_count < 10;
+                  }
+                }
+                return $result;
+              })->then (sub {
+                undef $try;
+                return $_[0];
+              });
+            };
+            return $try->();
+          } else {
+            my $req = $get_req->(
+              method => $test->{method}->[1]->[0],
+              url => $test->{url}->[1]->[0],
+            );
+            if ($test_type eq 'largerequest') {
+              $req->{body} = 'x' x (1024*1024);
+            }
+            $http->send_request ($req);
+            return $req->{done}->then (sub {
+              return $req_results->{$req->{id}};
+            });
+          }
+        })->then (sub {
+          my $result = $_[0];
+          my $res = $result->{response};
           test {
             my $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
-            is !!$res->{network_error}, !!$is_error;
+            is !!$result->{is_error}, !!$is_error, 'is error';
 
             my $expected_1xxes = $test->{'1xx'} || [];
             my $actual_1xxes = $res->{'1xxes'} || [];
@@ -92,19 +182,16 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
             is join ("\x0A", map {
               $_->[0] . ': ' . $_->[1];
             } @{$res->{headers}}), $test->{headers}->[0] // '';
-            is $data, $test->{body}->[0];
-
-            $server->{stop}->();
-            done $c;
-            undef $c;
+            is $result->{body}, $test->{body}->[0], 'body';
           } $c;
-        });
-        $http->connect->then (sub {
-          return $http->send_request ({
-            method => $test->{method}->[1]->[0],
-            url => $test->{url}->[1]->[0],
-            version => '1.0',
-          });
+          return $http->close;
+        })->then (sub {
+          $server->{stop}->();
+        })->catch (sub {
+          warn "Error: $_[0]";
+        })->then (sub {
+          done $c;
+          undef $c;
         });
       });
     } n => 6 + 3*@{$test->{'1xx'} || []}, name => [$path, $test->{name}->[0]];

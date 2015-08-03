@@ -28,6 +28,7 @@ sub run_commands ($$$$) {
       $hdl->push_write ($1);
     } elsif ($command =~ /^"([^"]*)"CRLF$/) {
       $hdl->push_write ("$1\x0D\x0A");
+      #AE::log error => "Sent $1 CR LF";
     } elsif ($command =~ /^"([^"]*)"LF$/) {
       $hdl->push_write ("$1\x0A");
     } elsif ($command =~ /^"([^"]*)"CR$/) {
@@ -52,10 +53,13 @@ sub run_commands ($$$$) {
         $then->();
         return;
       }
-    } elsif ($command =~ /^receive "([^"]+)"$/) {
+    } elsif ($command =~ /^receive "([^"]+)"(, showlength|)$/) {
       my $x = $1;
+      my $showlength = $2;
       #warn "[$states->{id}] receive [$states->{received}]";
       if ($states->{received} =~ /\Q$x\E/) {
+        AE::log error => "[$states->{id}] received length = @{[length $states->{received}]}"
+            if $showlength;
         $states->{received} =~ s/^.*?\Q$x\E//s;
       } else {
         unshift @{$states->{commands}}, $command;
@@ -74,6 +78,8 @@ sub run_commands ($$$$) {
       setsockopt $hdl->{fh}, SOL_SOCKET, SO_LINGER, pack "II", 1, 0;
       close $hdl->{fh};
       $hdl->push_shutdown; # let $hdl report an error
+    } elsif ($command =~ /^showreceivedlength$/) {
+      AE::log error => qq{[$states->{id}] length of rbuf = @{[length $states->{received}]}};
     } elsif ($command =~ /\S/) {
       die "Unknown command: |$command|";
     }

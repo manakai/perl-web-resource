@@ -1,3 +1,5 @@
+#name
+reset
 #method GET
 #url /
 #version 0.9
@@ -8,6 +10,8 @@ reset
 #body
 (close)
 
+#name
+data then reset
 #method GET
 #url /
 #version 0.9
@@ -19,9 +23,10 @@ reset
 #body
 (close)
 
+#name
+header then reset
 #method GET
 #url /
-#version 0.9
 #data
 receive LF
 "HTTP/1.0 200 OK"CRLF
@@ -33,7 +38,6 @@ reset
 
 #method GET
 #url /
-#version 0.9
 #data
 receive LF
 "abcdefg"
@@ -42,6 +46,8 @@ reset
 #body
 (close)
 
+#name
+urgent data
 #method GET
 #url /
 #data

@@ -184,6 +184,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               $_->[0] . ': ' . $_->[1];
             } @{$res->{headers}}), $test->{headers}->[0] // '';
             is $result->{body}, $test->{body}->[0], 'body';
+            is !!$result->{response}->{incomplete}, !!$test->{incomplete}, 'incomplete message';
           } $c;
           return $http->close;
         })->then (sub {
@@ -195,7 +196,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           undef $c;
         });
       });
-    } n => 6 + 3*@{$test->{'1xx'} || []}, name => [$path, $test->{name}->[0]];
+    } n => 7 + 3*@{$test->{'1xx'} || []}, name => [$path, $test->{name}->[0]];
   };
 } # $path
 

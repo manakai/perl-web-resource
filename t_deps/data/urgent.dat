@@ -33,3 +33,41 @@ close
 #reason OK
 #body escaped
 \u000D\u000A(close)
+
+#name
+in headers
+#method GET
+#url /
+#data
+"HTTP/1.0 200 OK"CRLF
+"Ho"
+urgent "b"
+"ge:1"CRLF
+CRLF
+"abc"
+close
+#status 200
+#reason OK
+#headers
+Hoge: 1
+#body escaped
+abc(close)
+
+#name
+in body
+#method GET
+#url /
+#data
+"HTTP/1.0 200 OK"CRLF
+"Hoge:1"CRLF
+CRLF
+"ab"
+urgent "b"
+"c"
+close
+#status 200
+#reason OK
+#headers
+Hoge: 1
+#body escaped
+abc(close)

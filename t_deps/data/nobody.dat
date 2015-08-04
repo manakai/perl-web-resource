@@ -269,3 +269,73 @@ ho-ge: bar
 Content-Length: 3
 #body escaped
 (close)
+
+#name
+304 bad Content-Length
+#method HEAD
+#url /
+#data escaped
+"HTTP/1.1 304 notmodified"CRLF
+"Content-Length:3"CRLF
+"Content-Length:2"CRLF
+CRLF
+"abcd"
+close
+#status 0
+#headers
+#body escaped
+(close)
+
+#name
+HEAD bad Content-Length
+#method HEAD
+#url /
+#data escaped
+"HTTP/1.1 200 notmodified"CRLF
+"Content-Length:3"CRLF
+"Content-Length:2"CRLF
+CRLF
+"abcd"
+close
+#status 0
+#headers
+#body escaped
+(close)
+
+#name
+Content-Length: 0 (HTTP/1.1)
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 200 notmodified"CRLF
+"ho-ge:bar"CRLF
+"Content-Length:0"CRLF
+CRLF
+"abcd"
+close
+#status 200
+#reason notmodified
+#headers
+ho-ge: bar
+Content-Length: 0
+#body escaped
+(close)
+
+#name
+Content-Length: 0 (HTTP/1.0)
+#method GET
+#url /
+#data escaped
+"HTTP/1.0 200 notmodified"CRLF
+"ho-ge:bar"CRLF
+"Content-Length:0"CRLF
+CRLF
+"abcd"
+close
+#status 200
+#reason notmodified
+#headers
+ho-ge: bar
+Content-Length: 0
+#body escaped
+(close)

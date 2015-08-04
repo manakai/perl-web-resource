@@ -265,3 +265,22 @@ HTTP/1.1 201 foo\u000D
 Hoge:3\u000D
 \u000D
 xyz(close)
+
+#name
+1xx with bad Content-Length
+#method GET
+#url /
+#data escaped
+"HTTP/1.1 100 cont."CRLF
+"Content-Length: 1"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+"HTTP/1.1 201 foo"CRLF
+"Hoge:3"CRLF
+CRLF
+"xyz"
+close
+#status 0
+#body escaped
+(close)

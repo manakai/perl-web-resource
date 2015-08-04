@@ -153,8 +153,8 @@ sub _process_rbuf ($$) {
                $res->{status} == 304 or
                $self->{request}->{method} eq 'HEAD') {
         $self->onevent->($self, $self->{request}, 'headers', $res);
-        $self->onevent->($self, $self->{request}, 'complete');
-        $self->_next;
+        $self->{unread_length} = 0;
+        $self->{state} = 'response body';
       } else {
         $self->onevent->($self, $self->{request}, 'headers', $res);
         $self->{state} = 'response body';
@@ -176,6 +176,25 @@ sub _process_rbuf ($$) {
       }
       if ($self->{unread_length} <= 0) {
         $self->onevent->($self, $self->{request}, 'complete');
+
+        my $connection = '';
+        my $keep_alive = $self->{response}->{version} eq '1.1';
+        for (@{$self->{response}->{headers} || []}) {
+          if ($_->[2] eq 'connection') {
+            $connection .= ',' . $_->[1];
+          }
+        }
+        $connection =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+        for (split /[\x09\x20]*,[\x09\x20]*/, $connection) {
+          if ($_ eq 'close') {
+            $self->{no_new_request} = 1;
+            last;
+          } elsif ($_ eq 'keep-alive') {
+            $keep_alive = 1;
+          }
+        }
+        $self->{no_new_request} = 1 unless $keep_alive;
+
         $self->_next;
       }
     } else {

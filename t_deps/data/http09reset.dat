@@ -36,6 +36,20 @@ reset
 #body
 (close)
 
+#name
+body then reset
+#method GET
+#url /
+#data
+receive LF
+"HTTP/1.0 200 OK"CRLF
+CRLF
+"abc"
+reset
+#status 0
+#body
+(close)
+
 #method GET
 #url /
 #data

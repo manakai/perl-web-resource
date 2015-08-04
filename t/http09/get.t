@@ -74,6 +74,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
             $result->{is_error} = 1 unless $type eq 'complete';
             if ($type eq 'reset') {
               delete $result->{response};
+              $result->{body} = '(close)';
             }
             $req->{_ok}->();
           }

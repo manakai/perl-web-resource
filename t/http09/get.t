@@ -143,7 +143,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
               target => $test->{url}->[1]->[0],
             );
             if ($test_type eq 'largerequest') {
-              $req->{body} = 'x' x (1024*1024);
+              $req->{body_ref} = \('x' x (1024*1024));
             }
             $http->send_request ($req);
             return $req->{done}->then (sub {

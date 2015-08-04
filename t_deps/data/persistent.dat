@@ -943,3 +943,57 @@ close
 Content-Length: 2
 #body escaped
 ab(close)
+
+#name
+Upgrade: in response
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+"Upgrade: WebSocket"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+Upgrade: WebSocket
+#body escaped
+ab(close)
+
+#name
+Upgrade: in response
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+"Upgrade: h2c"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+Upgrade: h2c
+#body escaped
+ab(close)

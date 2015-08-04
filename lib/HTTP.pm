@@ -47,13 +47,12 @@ sub _process_rbuf ($$) {
       $res->{version} = '1.0';
       if ($start_line =~ s{\A/}{}) {
         if ($start_line =~ s{\A([0-9]+)}{}) {
-          my $major = 0+$1;
+          my $major = $1;
+          $major = 0 if $major =~ /^0/;
           if ($start_line =~ s{\A\.}{}) {
             if ($start_line =~ s{\A([0-9]+)}{}) {
-              my $minor = 0+$1;
-              if ($major > 1 or ($major == 1 and $minor > 0)) {
-                $res->{version} = '1.1';
-              }
+              my $n = 0+"$major.$1";
+              $res->{version} = '1.1' if $n >= 1.1;
             }
           }
         }
@@ -321,15 +320,20 @@ sub is_active ($) {
 sub send_request ($$) {
   my ($self, $req) = @_;
   my $method = $req->{method} // '';
-  if (not length $method or $method =~ /[\x0D\x0A\x09\x20]/) {
+  if (not defined $method or
+      not length $method or
+      $method =~ /[\x0D\x0A\x09\x20]/) {
     die "Bad |method|: |$method|";
   }
   my $url = $req->{target};
-  if (not defined $url or $url =~ /[\x0D\x0A]/ or
-      $url =~ /\A[\x0D\x0A\x09\x20]/ or
-      $url =~ /[\x0D\x0A\x09\x20]\z/) {
+  if (not defined $url or
+      not length $url or
+      $url =~ /[\x0D\x0A]/ or
+      $url =~ /\A[\x09\x20]/ or
+      $url =~ /[\x09\x20]\z/) {
     die "Bad |url|: |$url|";
   }
+  # XXX check body_ref vs Content-Length
   # XXX utf8 flag
 
   if (not defined $self->{state}) {
@@ -345,10 +349,12 @@ sub send_request ($$) {
                        headers => []};
   $self->{state} = 'before response';
   $self->{request_state} = 'sending';
+  # XXX Connection: close
   my $req_done = Promise->new (sub { $self->{request_done} = $_[0] });
   AE::postpone {
     $self->{handle}->push_write ("$method $url HTTP/1.1\x0D\x0A\x0D\x0A");
-    # XXX request body
+    # XXX headers
+    $self->{handle}->push_write (${$req->{body_ref}}) if defined $req->{body_ref};
     $self->{handle}->on_drain (sub {
       $self->{request_state} = 'sent';
       $self->onevent->($self, $req, 'requestsent');

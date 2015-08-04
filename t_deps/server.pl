@@ -53,14 +53,23 @@ sub run_commands ($$$$) {
         $then->();
         return;
       }
-    } elsif ($command =~ /^receive "([^"]+)"(, showlength|)$/) {
+    } elsif ($command =~ /^receive "([^"]+)"(, showlength|)(?:, timeout ([0-9]+)|)$/) {
       my $x = $1;
       my $showlength = $2;
+      my $timeout = $3;
       #warn "[$states->{id}] receive [$states->{received}]";
+      my $timer;
+      if (defined $timeout) {
+        $timer = AE::timer $timeout, 0, sub {
+          $hdl->push_shutdown;
+          undef $timer;
+        };
+      }
       if ($states->{received} =~ /\Q$x\E/) {
         AE::log error => "[$states->{id}] received length = @{[length $states->{received}]}"
             if $showlength;
         $states->{received} =~ s/^.*?\Q$x\E//s;
+        undef $timer;
       } else {
         unshift @{$states->{commands}}, $command;
         $then->();

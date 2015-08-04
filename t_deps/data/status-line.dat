@@ -1088,3 +1088,48 @@ close
 abc  \u0020
 #body escaped
 aa(close)
+
+#name
+Status line: HTTP/2
+#method GET
+#url /
+#data escaped
+"HTTP/2 201 abc"CRLF
+CRLF
+"aa"
+close
+#status 201
+#reason escaped
+abc
+#body escaped
+aa(close)
+
+#name
+Status line: HTTP/2.
+#method GET
+#url /
+#data escaped
+"HTTP/2. 201 abc"CRLF
+CRLF
+"aa"
+close
+#status 201
+#reason escaped
+abc
+#body escaped
+aa(close)
+
+#name
+Status line: HTTP/02.
+#method GET
+#url /
+#data escaped
+"HTTP/02. 201 abc"CRLF
+CRLF
+"aa"
+close
+#status 201
+#reason escaped
+abc
+#body escaped
+aa(close)

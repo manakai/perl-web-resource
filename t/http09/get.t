@@ -99,12 +99,12 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
             my $try; $try = sub {
               my $req = $get_req->(
                 method => $test->{method}->[1]->[0],
-                url => $test->{url}->[1]->[0],
+                target => $test->{url}->[1]->[0],
               );
               if ($test_type eq 'largerequest-second') {
                 $req->{body} = 'x' x (1024*1024);
               }
-              unless ($http->can_send_request) {
+              unless ($http->is_active) {
                 return $http->close->then (sub {
                   $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
                   $http->onevent ($onev);
@@ -140,7 +140,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->ch
           } else {
             my $req = $get_req->(
               method => $test->{method}->[1]->[0],
-              url => $test->{url}->[1]->[0],
+              target => $test->{url}->[1]->[0],
             );
             if ($test_type eq 'largerequest') {
               $req->{body} = 'x' x (1024*1024);

@@ -136,17 +136,32 @@ sub _process_rbuf ($$) {
       }
 
       if (100 <= $res->{status} and $res->{status} <= 199) {
-        push @{$res->{'1xxes'} ||= []}, {
-          version => $res->{version},
-          status => $res->{status},
-          reason => $res->{reason},
-          headers => $res->{headers},
-        };
-        $res->{version} = '0.9';
-        $res->{status} = '200';
-        $res->{reason} = 'OK';
-        $res->{headers} = [];
-        $self->{state} = 'before response';
+        if ($self->{request}->{method} eq 'CONNECT') {
+          $self->onevent->($self, $self->{request}, 'responseerror', {
+            message => "1xx response to CONNECT",
+          });
+          $self->{no_new_request} = 1;
+          $self->{request_state} = 'sent';
+          $self->_next;
+          return;
+        } else {
+          push @{$res->{'1xxes'} ||= []}, {
+            version => $res->{version},
+            status => $res->{status},
+            reason => $res->{reason},
+            headers => $res->{headers},
+          };
+          $res->{version} = '0.9';
+          $res->{status} = '200';
+          $res->{reason} = 'OK';
+          $res->{headers} = [];
+          $self->{state} = 'before response';
+        }
+      } elsif ($res->{status} == 200 and
+               $self->{request}->{method} eq 'CONNECT') {
+        $self->onevent->($self, $self->{request}, 'headers', $res);
+        $self->{no_new_request} = 1;
+        $self->{state} = 'tunnel';
       } elsif ($res->{status} == 204 or
                $res->{status} == 205 or
                $res->{status} == 304 or
@@ -202,6 +217,11 @@ sub _process_rbuf ($$) {
       $handle->{rbuf} = '';
     }
   }
+  if ($self->{state} eq 'tunnel') {
+    $self->onevent->($self, $self->{request}, 'data', $handle->{rbuf})
+        if length $handle->{rbuf};
+    $handle->{rbuf} = '';
+  }
   if ($self->{state} eq 'waiting' or $self->{state} eq 'sending') {
     $handle->{rbuf} = '';
   }
@@ -235,6 +255,11 @@ sub _process_rbuf_eof ($$;%) {
         defined $self->{unread_length} and $self->{unread_length} > 0) {
       $self->{response}->{incomplete} = 1;
     }
+    $self->onevent->($self, $self->{request}, 'complete');
+        # XXX
+        #abort => $args{abort},
+        #errno => $args{errno},
+  } elsif ($self->{state} eq 'tunnel') {
     $self->onevent->($self, $self->{request}, 'complete');
         # XXX
         #abort => $args{abort},
@@ -364,6 +389,15 @@ sub send_request ($$) {
   return $req_done;
 } # send_request
 
+sub send_through_tunnel ($$) {
+  my $self = $_[0];
+  unless (defined $self->{state} and $self->{state} eq 'tunnel') {
+    die "Tunnel is not open";
+  }
+  return unless length $_[1];
+  $self->{handle}->push_write ($_[1]);
+} # send_through_tunnel
+
 sub close ($) {
   my $self = $_[0];
   if (not defined $self->{state}) {
@@ -371,7 +405,9 @@ sub close ($) {
   }
 
   $self->{no_new_request} = 1;
-  if ($self->{state} eq 'initial' or $self->{state} eq 'waiting') {
+  if ($self->{state} eq 'initial' or
+      $self->{state} eq 'waiting' or
+      $self->{state} eq 'tunnel') {
     $self->{handle}->push_shutdown;
   }
 

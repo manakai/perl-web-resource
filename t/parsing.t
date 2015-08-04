@@ -40,6 +40,7 @@ sub server_as_cv ($) {
 
 for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_deps/data/*.dat')) {
   for_each_test $path, {
+    'tunnel-send' => {is_prefixed => 1, multiple => 1},
     '1xx' => {is_prefixed => 1, multiple => 1},
     headers => {is_prefixed => 1},
     body => {is_prefixed => 1},
@@ -59,6 +60,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           push @{$result->{events} ||= []}, [$type];
           if ($type eq 'headers') {
             $result->{response} = $_[3];
+            if ($req->{method} eq 'CONNECT') {
+              $req->{_tunnel}->();
+            }
           }
           if ($type eq 'data') {
             $result->{body} //= '';
@@ -88,6 +92,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             id => $next_req_id++,
           };
           $req->{done} = Promise->new (sub { $req->{_ok} = $_[0] });
+          $req->{tunnel} = Promise->new (sub { $req->{_tunnel} = $_[0] })
+              if $req->{method} eq 'CONNECT';
           return $req;
         }; # $get_req
 
@@ -115,6 +121,13 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 });
               }
               $http->send_request ($req);
+              if ($req->{method} eq 'CONNECT') {
+                $req->{tunnel}->then (sub {
+                  for (@{$test->{'tunnel-send'} or []}) {
+                    $http->send_through_tunnel ($_->[0]);
+                  }
+                });
+              }
               return $req->{done}->then (sub {
                 unless ($try_count++) {
                   return Promise->new (sub {
@@ -147,6 +160,13 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               $req->{body_ref} = \('x' x (1024*1024));
             }
             $http->send_request ($req);
+            if ($req->{method} eq 'CONNECT') {
+              $req->{tunnel}->then (sub {
+                for (@{$test->{'tunnel-send'} or []}) {
+                  $http->send_through_tunnel ($_->[0]);
+                }
+              });
+            }
             return $req->{done}->then (sub {
               return $req_results->{$req->{id}};
             });

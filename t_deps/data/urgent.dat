@@ -1,0 +1,35 @@
+#name
+urgent data
+#method GET
+#url /
+#data
+receive LF
+"abc"
+urgent "xyz"
+"def"
+close
+#status 200
+#reason OK
+#body
+abcxydef(close)
+
+#method GET
+#url /
+#data
+urgent "a"
+close
+#status 0
+#body
+(close)
+
+#method GET
+#url /
+#data
+CR
+urgent "a"
+LF
+close
+#status 200
+#reason OK
+#body escaped
+\u000D\u000A(close)

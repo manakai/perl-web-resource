@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 use Path::Tiny;
-use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/modules/*/lib');
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
 use Test::HTCT::Parser;
@@ -19,7 +19,7 @@ sub server_as_cv ($) {
   my $data = '';
   my $port = int (rand 10000) + 1024;
   run_cmd
-      ['perl', path (__FILE__)->parent->parent->parent->child ('t_deps/server.pl'), '127.0.0.1', $port],
+      ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), '127.0.0.1', $port],
       '<' => \$code,
       '>' => sub {
         $data .= $_[0] if defined $_[0];
@@ -38,7 +38,7 @@ sub server_as_cv ($) {
   return $cv;
 } # server_as_cv
 
-for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->parent->child ('t_deps/data/*.dat')) {
+for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_deps/data/*.dat')) {
   for_each_test $path, {
     '1xx' => {is_prefixed => 1, multiple => 1},
     headers => {is_prefixed => 1},

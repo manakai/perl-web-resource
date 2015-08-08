@@ -287,6 +287,27 @@ close
 (close)
 
 #name
+304 bad Content-Length, Transfer-Encoding
+#method HEAD
+#url /
+#data escaped
+"HTTP/1.1 304 notmodified"CRLF
+"Transfer-Encoding: chunked"CRLF
+"Content-Length:3"CRLF
+"Content-Length:2"CRLF
+CRLF
+"abcd"
+close
+#status 304
+#reason notmodified
+#headers
+Transfer-Encoding: chunked
+Content-Length: 3
+Content-Length: 2
+#body escaped
+(close)
+
+#name
 HEAD bad Content-Length
 #method HEAD
 #url /

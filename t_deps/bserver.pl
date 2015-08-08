@@ -77,6 +77,7 @@ for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.d
     '1xx' => {is_prefixed => 1, multiple => 1},
     headers => {is_prefixed => 1},
     body => {is_prefixed => 1},
+    'tunnel-send' => {is_prefixed => 1, multiple => 1},
   }, sub {
     my $test = $_[0];
     my $name = join ' - ', $file_name, $test->{name}->[0] // '';

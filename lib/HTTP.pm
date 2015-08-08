@@ -93,13 +93,16 @@ sub _process_rbuf ($$) {
       }
       my %length;
       my $has_broken_length = 0;
+      my $te = '';
       for (@{$res->{headers}}) {
         $_->[0] =~ s/[\x09\x20]+\z//;
         $_->[1] =~ s/\A[\x09\x20]+//;
         $_->[1] =~ s/[\x09\x20]+\z//;
         $_->[2] = $_->[0];
         $_->[2] =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-        if ($_->[2] eq 'content-length') {
+        if ($_->[2] eq 'transfer-encoding') {
+          $te .= ',' . $_->[1];
+        } elsif ($_->[2] eq 'content-length') {
           for (split /[\x09\x20]*,[\x09\x20]*/, $_->[1]) {
             if (/\A[0-9]+\z/) {
               $length{$_}++;
@@ -109,7 +112,15 @@ sub _process_rbuf ($$) {
           }
         }
       }
+      $te =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
+      my $chunked = !!grep { $_ eq 'chunked' } split /[\x09\x20]*,[\x09\x20]*/, $te;
       delete $self->{unread_length};
+      if ($chunked and $self->{response}->{version} eq '1.1') {
+        $has_broken_length = 0;
+        %length = ();
+      } else {
+        $chunked = 0;
+      }
       if (($has_broken_length and keys %length) or 1 < keys %length) {
         $self->onevent->($self, $self->{request}, 'responseerror', {
           message => "Inconsistent content-length values",
@@ -171,7 +182,11 @@ sub _process_rbuf ($$) {
         $self->{state} = 'response body';
       } else {
         $self->onevent->($self, $self->{request}, 'headers', $res);
-        $self->{state} = 'response body';
+        if ($chunked) {
+          $self->{state} = 'before response chunk';
+        } else {
+          $self->{state} = 'response body';
+        }
       }
     }
   }
@@ -217,6 +232,103 @@ sub _process_rbuf ($$) {
       $handle->{rbuf} = '';
     }
   }
+  if ($self->{state} eq 'before response chunk') {
+    if ($handle->{rbuf} =~ /^[0-9A-Fa-f]/) {
+      $self->{state} = 'response chunk size';
+    } elsif (length $handle->{rbuf}) {
+      $self->{response}->{incomplete} = 1;
+      $self->{no_new_request} = 1;
+      $self->{request_state} = 'sent';
+      $self->onevent->($self, $self->{request}, 'complete');
+      $self->_next;
+      return;
+    }
+  }
+  if ($self->{state} eq 'response chunk size') {
+    if ($handle->{rbuf} =~ s/^([0-9A-Fa-f]+)(?![0-9A-Fa-f])//) {
+      my $h = $1;
+      $h =~ tr/A-F/a-f/;
+      $h =~ s/^0+//;
+      $h ||= 0;
+      my $n = hex $h;
+      if (not $h eq sprintf '%x', $n) { # overflow
+        $self->{response}->{incomplete} = 1;
+        $self->{no_new_request} = 1;
+        $self->{request_state} = 'sent';
+        $self->onevent->($self, $self->{request}, 'complete');
+        $self->_next;
+        return;
+      }
+      if ($n == 0) {
+        $self->{state} = 'before response trailer';
+      } else {
+        $self->{unread_length} = $n;
+        if ($handle->{rbuf} =~ s/^\x0A//) {
+          $self->{state} = 'response chunk data';
+        } else {
+          $self->{state} = 'response chunk extension';
+        }
+      }
+    }
+  }
+  if ($self->{state} eq 'response chunk extension') {
+    $handle->{rbuf} =~ s/^[^\x0A]+//;
+    if ($handle->{rbuf} =~ s/^\x0A//) {
+      $self->{state} = 'response chunk data';
+    }
+  }
+  if ($self->{state} eq 'response chunk data') {
+    if ($self->{unread_length} > 0) {
+      if ($self->{unread_length} >= (my $len = length $handle->{rbuf})) {
+        $self->onevent->($self, $self->{request}, 'data', $handle->{rbuf});
+        $handle->{rbuf} = '';
+        $self->{unread_length} -= $len;
+      } else {
+        $self->onevent->($self, $self->{request}, 'data', substr $handle->{rbuf}, 0, $self->{unread_length});
+        substr ($handle->{rbuf}, 0, $self->{unread_length}) = '';
+        $self->{unread_length} = 0;
+      }
+    }
+    if ($self->{unread_length} <= 0) {
+      delete $self->{unread_length};
+      if ($handle->{rbuf} =~ s/^\x0D?\x0A//) {
+        $self->{state} = 'before response chunk';
+      } elsif ($handle->{rbuf} =~ /^(?:\x0D[^\x0A]|[^\x0D\x0A])/) {
+        $self->{response}->{incomplete} = 1;
+        $self->{no_new_request} = 1;
+        $self->{request_state} = 'sent';
+        $self->onevent->($self, $self->{request}, 'complete');
+        $self->_next;
+        return;
+      }
+    }
+  }
+  if ($self->{state} eq 'before response trailer') {
+    if (2**18-1 < length $handle->{rbuf}) {
+      $self->{no_new_request} = 1;
+      $self->{request_state} = 'sent';
+      $self->onevent->($self, $self->{request}, 'complete');
+      $self->_next;
+      return;
+    } elsif ($handle->{rbuf} =~ s/^(.*?)\x0A\x0D?\x0A//s) {
+      $self->onevent->($self, $self->{request}, 'complete');
+      my $connection = '';
+      for (@{$self->{response}->{headers} || []}) {
+        if ($_->[2] eq 'connection') {
+          $connection .= ',' . $_->[1];
+        }
+      }
+      $connection =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+      for (split /[\x09\x20]*,[\x09\x20]*/, $connection) {
+        if ($_ eq 'close') {
+          $self->{no_new_request} = 1;
+          last;
+        }
+      }
+      $self->_next;
+      return;
+    }
+  }
   if ($self->{state} eq 'tunnel') {
     $self->onevent->($self, $self->{request}, 'data', $handle->{rbuf})
         if length $handle->{rbuf};
@@ -259,6 +371,18 @@ sub _process_rbuf_eof ($$;%) {
         # XXX
         #abort => $args{abort},
         #errno => $args{errno},
+  } elsif ({
+    'before response chunk' => 1,
+    'response chunk size' => 1,
+    'response chunk extension' => 1,
+    'response chunk data' => 1,
+  }->{$self->{state}}) {
+    $self->{response}->{incomplete} = 1;
+    $self->{request_state} = 'sent';
+    $self->onevent->($self, $self->{request}, 'complete');
+  } elsif ($self->{state} eq 'before response trailer') {
+    $self->{request_state} = 'sent';
+    $self->onevent->($self, $self->{request}, 'complete');
   } elsif ($self->{state} eq 'tunnel') {
     $self->onevent->($self, $self->{request}, 'complete');
         # XXX

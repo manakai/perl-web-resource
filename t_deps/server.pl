@@ -4,6 +4,8 @@ use Socket;
 use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
+use Digest::SHA qw(sha1);
+use MIME::Base64 qw(encode_base64);
 
 my $host = shift;
 my $port = shift // die "Usage: $0 listen-host listen-port\n";
@@ -45,6 +47,12 @@ sub run_commands ($$$$) {
       $hdl->push_write (pack 'C', hex $1);
     } elsif ($command =~ /^client$/) {
       $hdl->push_write ($states->{client_host} . ':' . $states->{client_port});
+    } elsif ($command =~ /^ws-accept$/) {
+      $states->{captured} =~ /^Sec-WebSocket-Key:\s*(\S+)\s*$/im;
+      my $key = $1 // '';
+      my $sha = encode_base64 sha1 ($key . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), '';
+      #warn "$key / $sha";
+      $hdl->push_write ($sha);
     } elsif ($command =~ /^receive LF$/) {
       if ($states->{received} =~ /\x0A/) {
         $states->{received} =~ s/^.*?\x0A//s;
@@ -53,10 +61,20 @@ sub run_commands ($$$$) {
         $then->();
         return;
       }
-    } elsif ($command =~ /^receive "([^"]+)"(, showlength|)(?:, timeout ([0-9]+)|)$/) {
+    } elsif ($command =~ /^receive CRLFCRLF, end capture$/) {
+      if ($states->{received} =~ /\x0D\x0A\x0D\x0A/) {
+        $states->{received} =~ s/^(.*?\x0D\x0A\x0D\x0A)//s;
+        $states->{captured} .= $1;
+      } else {
+        unshift @{$states->{commands}}, $command;
+        $then->();
+        return;
+      }
+    } elsif ($command =~ /^receive "([^"]+)"(, start capture|, end capture|)(, showlength|)(?:, timeout ([0-9]+)|)$/) {
       my $x = $1;
-      my $showlength = $2;
-      my $timeout = $3;
+      my $capture = $2;
+      my $showlength = $3;
+      my $timeout = $4;
       #warn "[$states->{id}] receive [$states->{received}]";
       my $timer;
       if (defined $timeout) {
@@ -68,7 +86,15 @@ sub run_commands ($$$$) {
       if ($states->{received} =~ /\Q$x\E/) {
         AE::log error => "[$states->{id}] received length = @{[length $states->{received}]}"
             if $showlength;
-        $states->{received} =~ s/^.*?\Q$x\E//s;
+        if ($capture eq ', start capture') {
+          $states->{received} =~ s/^.*?(\Q$x\E)//s;
+          $states->{captured} = $1;
+        } elsif ($capture eq ', end capture') {
+          $states->{received} =~ s/^(.*?\Q$x\E)//s;
+          $states->{captured} .= $1;
+        } else {
+          $states->{received} =~ s/^.*?\Q$x\E//s;
+        }
         undef $timer;
       } else {
         unshift @{$states->{commands}}, $command;
@@ -89,6 +115,8 @@ sub run_commands ($$$$) {
       $hdl->push_shutdown; # let $hdl report an error
     } elsif ($command =~ /^showreceivedlength$/) {
       AE::log error => qq{[$states->{id}] length of rbuf = @{[length $states->{received}]}};
+    } elsif ($command =~ /^showcaptured$/) {
+      AE::log error => qq{[$states->{id}] captured = |$states->{captured}|};
     } elsif ($command =~ /\S/) {
       die "Unknown command: |$command|";
     }

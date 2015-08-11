@@ -105,6 +105,97 @@ sub run_commands ($$$$) {
       sleep $1;
     } elsif ($command =~ /^urgent "([^"]*)"$/) {
       send $hdl->{fh}, $1, MSG_OOB;
+    } elsif ($command =~ /^ws-receive-header$/) {
+      if ($states->{received} =~ /^(.)(.)/s) {
+        my $fin = !!(0x80 & ord $1);
+        my $rsv1 = !!(0x40 & ord $1);
+        my $rsv2 = !!(0x20 & ord $1);
+        my $rsv3 = !!(0x10 & ord $1);
+        my $opcode = 0x0F & ord $1;
+        my $has_mask = !!(0x80 & ord $2);
+        my $length = 0x7F & ord $2;
+        if ($length == 0xFE) {
+          if ($states->{received} =~ s/^..(.)(.)//s) {
+            $length = (ord $1) * 0x100 + ord $2;
+          } else {
+            undef $length;
+          }
+        } elsif ($length == 0xFF) {
+          if ($states->{received} =~ s/^..(.)(.)(.)(.)//s) {
+            if (0x80 & ord $1) {
+              undef $length;
+            } else {
+              $length = (ord $1) * 0x1_00_00_00 + (ord $2) * 0x1_00_00 + (ord $3) * 0x100 + ord $4;
+            }
+          } else {
+            undef $length;
+          }
+        } else {
+          $states->{received} =~ s/^..//s;
+        }
+        my $mask = undef;
+        if ($has_mask) {
+          if ($states->{received} =~ s/^(....)//s) {
+            $mask = $1;
+          } else {
+            undef $length;
+          }
+        }
+        if (defined $length) {
+          AE::log error => qq{WS FIN=%d RSV1=%d RSV2=%d RSV3=%d opcode=0x%X masking=%d length=%d mask=0x%02X%02X%02X%02X},
+              $fin, $rsv1, $rsv2, $rsv3, $opcode, $has_mask, $length,
+              (ord substr $mask, 0, 1),
+              (ord substr $mask, 1, 1),
+              (ord substr $mask, 2, 1),
+              (ord substr $mask, 3, 1);
+          $states->{ws_length} = $length;
+          $states->{ws_mask} = $mask;
+          next;
+        }
+      }
+      unshift @{$states->{commands}}, $command;
+      $then->();
+      return;
+    } elsif ($command =~ /^ws-receive-data$/) {
+      if (length $states->{received} >= $states->{ws_length}) {
+        my @data = split //, substr $states->{received}, 0, $states->{ws_length};
+        substr ($states->{received}, 0, $states->{ws_length}) = '';
+        if (defined $states->{ws_mask}) {
+          for (0..$#data) {
+            $data[$_] = $data[$_] ^ substr $states->{ws_mask}, $_ % 4, 1;
+          }
+        }
+        AE::log error => join '', @data;
+        next;
+      }
+      unshift @{$states->{commands}}, $command;
+      $then->();
+      return;
+    } elsif ($command =~ /^ws-send-header((?:\s+\w+=\S*)+)$/) {
+      my $args = $1;
+      my $fields = {FIN => 1, RSV1 => 0, RSV2 => 0, RSV3 => 0,
+                    opcode => 0, masking => 0, length => 0};
+      while ($args =~ s/^\s+(\w+)=(\S*)//) {
+        $fields->{$1} = $2;
+      }
+      $hdl->push_write (pack 'C', ($fields->{FIN} << 7) |
+                                  ($fields->{RSV1} << 6) |
+                                  ($fields->{RSV2} << 5) |
+                                  ($fields->{RSV3} << 4) |
+                                  $fields->{opcode});
+      if ($fields->{length} < 0xFE) {
+        $hdl->push_write (pack 'C', $fields->{length});
+      } elsif ($fields->{length} < 0x10000) {
+        $hdl->push_write ("\xFE");
+        $hdl->push_write (pack 'n', $fields->{length});
+      } else {
+        $hdl->push_write ("\xFF");
+        $hdl->push_write (pack 'Q>', $fields->{length});
+      }
+      if ($fields->{masking}) {
+        # XXX
+
+      }
     } elsif ($command =~ /^close$/) {
       $hdl->push_shutdown;
     } elsif ($command =~ /^close read$/) {
@@ -120,7 +211,7 @@ sub run_commands ($$$$) {
     } elsif ($command =~ /\S/) {
       die "Unknown command: |$command|";
     }
-  }
+  } # while
   $then->();
 } # run_commands
 
@@ -164,3 +255,11 @@ my $server = tcp_server $host, $port, sub {
 syswrite STDOUT, "[server $host $port]\x0A";
 
 $cv->recv;
+
+__END__
+
+echo -e 'receive "GET", start capture\nreceive CRLFCRLF, end capture
+showcaptured\n"HTTP/1.0 101 OK"CRLF\n"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "\nws-accept\nCRLF\n"Connection: Upgrade"CRLF
+CRLF\nws-receive-header\nws-receive-data\nws-send-header opcode=1 length=3
+"abc"' | ./perl t_deps/server.pl 0 4355

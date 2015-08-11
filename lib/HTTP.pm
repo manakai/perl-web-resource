@@ -7,6 +7,8 @@ use AnyEvent::Handle;
 use AnyEvent::Socket;
 use Promise;
 
+my $DEBUG = $ENV{WEBUA_DEBUG};
+
 sub new_from_host_and_port ($$$) {
   return bless {host => $_[1], port => $_[2]}, $_[0];
 } # new_from_host_and_port
@@ -18,7 +20,7 @@ sub _process_rbuf ($$) {
       $self->{state} = 'before response header';
     } elsif (8 <= length $handle->{rbuf}) {
       if ($self->{request}->{method} eq 'PUT') {
-        $self->onevent->($self, $self->{request}, 'responseerror', {
+        $self->_ev ('responseerror', {
           message => "HTTP/0.9 response to PUT request",
         });
         $self->{no_new_request} = 1;
@@ -26,14 +28,14 @@ sub _process_rbuf ($$) {
         $self->_next;
         return;
       } else {
-        $self->onevent->($self, $self->{request}, 'headers', $self->{response});
+        $self->_ev ('headers', $self->{response});
         $self->{state} = 'response body';
         delete $self->{unread_length};
       }
     }
   } elsif ($self->{state} eq 'before response header') {
     if (2**18-1 < length $handle->{rbuf}) {
-      $self->onevent->($self, $self->{request}, 'responseerror', {
+      $self->_ev ('responseerror', {
         message => "Header section too large",
       });
       $self->{no_new_request} = 1;
@@ -122,7 +124,7 @@ sub _process_rbuf ($$) {
         $chunked = 0;
       }
       if (($has_broken_length and keys %length) or 1 < keys %length) {
-        $self->onevent->($self, $self->{request}, 'responseerror', {
+        $self->_ev ('responseerror', {
           message => "Inconsistent content-length values",
         });
         $self->{no_new_request} = 1;
@@ -136,7 +138,7 @@ sub _process_rbuf ($$) {
         if ($length eq 0+$length) { # overflow check
           $self->{unread_length} = $res->{content_length} = 0+$length;
         } else {
-          $self->onevent->($self, $self->{request}, 'responseerror', {
+          $self->_ev ('responseerror', {
             message => "Inconsistent content-length values",
           });
           $self->{no_new_request} = 1;
@@ -148,7 +150,7 @@ sub _process_rbuf ($$) {
 
       if (100 <= $res->{status} and $res->{status} <= 199) {
         if ($self->{request}->{method} eq 'CONNECT') {
-          $self->onevent->($self, $self->{request}, 'responseerror', {
+          $self->_ev ('responseerror', {
             message => "1xx response to CONNECT",
           });
           $self->{no_new_request} = 1;
@@ -170,18 +172,18 @@ sub _process_rbuf ($$) {
         }
       } elsif ($res->{status} == 200 and
                $self->{request}->{method} eq 'CONNECT') {
-        $self->onevent->($self, $self->{request}, 'headers', $res);
+        $self->_ev ('headers', $res);
         $self->{no_new_request} = 1;
         $self->{state} = 'tunnel';
       } elsif ($res->{status} == 204 or
                $res->{status} == 205 or
                $res->{status} == 304 or
                $self->{request}->{method} eq 'HEAD') {
-        $self->onevent->($self, $self->{request}, 'headers', $res);
+        $self->_ev ('headers', $res);
         $self->{unread_length} = 0;
         $self->{state} = 'response body';
       } else {
-        $self->onevent->($self, $self->{request}, 'headers', $res);
+        $self->_ev ('headers', $res);
         if ($chunked) {
           $self->{state} = 'before response chunk';
         } else {
@@ -194,17 +196,17 @@ sub _process_rbuf ($$) {
     if (defined $self->{unread_length}) {
       if ($self->{unread_length} >= (my $len = length $handle->{rbuf})) {
         if ($len) {
-          $self->onevent->($self, $self->{request}, 'data', $handle->{rbuf});
+          $self->_ev ('data', $handle->{rbuf});
           $handle->{rbuf} = '';
           $self->{unread_length} -= $len;
         }
       } elsif ($self->{unread_length} > 0) {
-        $self->onevent->($self, $self->{request}, 'data', substr $handle->{rbuf}, 0, $self->{unread_length});
+        $self->_ev ('data', substr $handle->{rbuf}, 0, $self->{unread_length});
         substr ($handle->{rbuf}, 0, $self->{unread_length}) = '';
         $self->{unread_length} = 0;
       }
       if ($self->{unread_length} <= 0) {
-        $self->onevent->($self, $self->{request}, 'complete');
+        $self->_ev ('complete');
 
         my $connection = '';
         my $keep_alive = $self->{response}->{version} eq '1.1';
@@ -227,7 +229,7 @@ sub _process_rbuf ($$) {
         $self->_next;
       }
     } else {
-      $self->onevent->($self, $self->{request}, 'data', $handle->{rbuf})
+      $self->_ev ('data', $handle->{rbuf})
           if length $handle->{rbuf};
       $handle->{rbuf} = '';
     }
@@ -239,7 +241,7 @@ sub _process_rbuf ($$) {
       $self->{response}->{incomplete} = 1;
       $self->{no_new_request} = 1;
       $self->{request_state} = 'sent';
-      $self->onevent->($self, $self->{request}, 'complete');
+      $self->_ev ('complete');
       $self->_next;
       return;
     }
@@ -255,7 +257,7 @@ sub _process_rbuf ($$) {
         $self->{response}->{incomplete} = 1;
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
-        $self->onevent->($self, $self->{request}, 'complete');
+        $self->_ev ('complete');
         $self->_next;
         return;
       }
@@ -280,11 +282,11 @@ sub _process_rbuf ($$) {
   if ($self->{state} eq 'response chunk data') {
     if ($self->{unread_length} > 0) {
       if ($self->{unread_length} >= (my $len = length $handle->{rbuf})) {
-        $self->onevent->($self, $self->{request}, 'data', $handle->{rbuf});
+        $self->_ev ('data', $handle->{rbuf});
         $handle->{rbuf} = '';
         $self->{unread_length} -= $len;
       } else {
-        $self->onevent->($self, $self->{request}, 'data', substr $handle->{rbuf}, 0, $self->{unread_length});
+        $self->_ev ('data', substr $handle->{rbuf}, 0, $self->{unread_length});
         substr ($handle->{rbuf}, 0, $self->{unread_length}) = '';
         $self->{unread_length} = 0;
       }
@@ -297,7 +299,7 @@ sub _process_rbuf ($$) {
         $self->{response}->{incomplete} = 1;
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
-        $self->onevent->($self, $self->{request}, 'complete');
+        $self->_ev ('complete');
         $self->_next;
         return;
       }
@@ -307,11 +309,11 @@ sub _process_rbuf ($$) {
     if (2**18-1 < length $handle->{rbuf}) {
       $self->{no_new_request} = 1;
       $self->{request_state} = 'sent';
-      $self->onevent->($self, $self->{request}, 'complete');
+      $self->_ev ('complete');
       $self->_next;
       return;
     } elsif ($handle->{rbuf} =~ s/^(.*?)\x0A\x0D?\x0A//s) {
-      $self->onevent->($self, $self->{request}, 'complete');
+      $self->_ev ('complete');
       my $connection = '';
       for (@{$self->{response}->{headers} || []}) {
         if ($_->[2] eq 'connection') {
@@ -330,7 +332,7 @@ sub _process_rbuf ($$) {
     }
   }
   if ($self->{state} eq 'tunnel') {
-    $self->onevent->($self, $self->{request}, 'data', $handle->{rbuf})
+    $self->_ev ('data', $handle->{rbuf})
         if length $handle->{rbuf};
     $handle->{rbuf} = '';
   }
@@ -344,20 +346,20 @@ sub _process_rbuf_eof ($$;%) {
   if ($self->{state} eq 'before response') {
     if (length $handle->{rbuf}) {
       if ($self->{request}->{method} eq 'PUT') {
-        $self->onevent->($self, $self->{request}, 'responseerror', {
+        $self->_ev ('responseerror', {
           message => "HTTP/0.9 response to PUT request",
         });
       } else {
-        $self->onevent->($self, $self->{request}, 'headers', $self->{response});
-        $self->onevent->($self, $self->{request}, 'data', $handle->{rbuf});
+        $self->_ev ('headers', $self->{response});
+        $self->_ev ('data', $handle->{rbuf});
         # XXX
         #abort => $args{abort},
         #errno => $args{errno},
-        $self->onevent->($self, $self->{request}, 'complete');
+        $self->_ev ('complete');
       }
       $handle->{rbuf} = '';
     } else {
-      $self->onevent->($self, $self->{request}, 'responseerror', {
+      $self->_ev ('responseerror', {
         message => "Connection closed without response",
         errno => $args{errno},
       });
@@ -367,7 +369,7 @@ sub _process_rbuf_eof ($$;%) {
         defined $self->{unread_length} and $self->{unread_length} > 0) {
       $self->{response}->{incomplete} = 1;
     }
-    $self->onevent->($self, $self->{request}, 'complete');
+    $self->_ev ('complete');
         # XXX
         #abort => $args{abort},
         #errno => $args{errno},
@@ -379,17 +381,17 @@ sub _process_rbuf_eof ($$;%) {
   }->{$self->{state}}) {
     $self->{response}->{incomplete} = 1;
     $self->{request_state} = 'sent';
-    $self->onevent->($self, $self->{request}, 'complete');
+    $self->_ev ('complete');
   } elsif ($self->{state} eq 'before response trailer') {
     $self->{request_state} = 'sent';
-    $self->onevent->($self, $self->{request}, 'complete');
+    $self->_ev ('complete');
   } elsif ($self->{state} eq 'tunnel') {
-    $self->onevent->($self, $self->{request}, 'complete');
+    $self->_ev ('complete');
         # XXX
         #abort => $args{abort},
         #errno => $args{errno},
   } elsif ($self->{state} eq 'before response header') {
-    $self->onevent->($self, $self->{request}, 'responseerror', {
+    $self->_ev ('responseerror', {
       message => "Connection closed in response header",
       errno => $args{errno},
     });
@@ -434,7 +436,7 @@ sub connect ($) {
            on_error => sub {
              my ($hdl, $fatal, $msg) = @_;
              if ($!{ECONNRESET}) {
-               $self->onevent->($self, $self->{request}, 'reset')
+               $self->_ev ('reset')
                    if defined $self->{request};
                $self->{no_new_request} = 1;
                $self->{request_state} = 'sent';
@@ -480,7 +482,13 @@ sub send_request ($$) {
       $url =~ /[\x0D\x0A]/ or
       $url =~ /\A[\x09\x20]/ or
       $url =~ /[\x09\x20]\z/) {
-    die "Bad |url|: |$url|";
+    die "Bad |target|: |$url|";
+  }
+  for (@{$req->{headers} or []}) {
+    die "Bad header name |$_->[0]|"
+        unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
+    die "Bad header value |$_->[1]|"
+        unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
   }
   # XXX check body_ref vs Content-Length
   # XXX utf8 flag
@@ -493,6 +501,12 @@ sub send_request ($$) {
     return Promise->reject ("Connection is busy");
   }
 
+  $req->{id} = int rand 1000000;
+  if ($DEBUG) {
+    warn "$req->{id}: ========== $$ @{[__PACKAGE__]}\n";
+    warn "$req->{id}: @{[scalar gmtime]}\n";
+  }
+
   $self->{request} = $req;
   $self->{response} = {status => 200, reason => 'OK', version => '0.9',
                        headers => []};
@@ -501,15 +515,35 @@ sub send_request ($$) {
   # XXX Connection: close
   my $req_done = Promise->new (sub { $self->{request_done} = $_[0] });
   AE::postpone {
-    $self->{handle}->push_write ("$method $url HTTP/1.1\x0D\x0A\x0D\x0A");
-    # XXX headers
-    $self->{handle}->push_write (${$req->{body_ref}}) if defined $req->{body_ref};
+    $self->{handle}->push_write ("$method $url HTTP/1.1\x0D\x0A");
+    $self->{handle}->push_write (join '', map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []});
+    $self->{handle}->push_write ("\x0D\x0A");
+    if ($DEBUG) {
+      warn "$req->{id}: S: $method $url HTTP/1.1\n";
+      for (@{$req->{headers} || []}) {
+        warn "$req->{id}: S: $_->[0]: $_->[1]\n";
+      }
+    }
+    if (defined $req->{body_ref}) {
+      $self->{handle}->push_write (${$req->{body_ref}});
+      if ($DEBUG > 1) {
+        warn "$req->{id}: S: \n";
+        for (split /\x0D?\x0A/, ${$req->{body_ref}}, -1) {
+          warn "$req->{id}: S: $_\n";
+        }
+      }
+    }
     $self->{handle}->on_drain (sub {
       $self->{request_state} = 'sent';
-      $self->onevent->($self, $req, 'requestsent');
+      $self->_ev ('requestsent');
       $self->_next if $self->{state} eq 'sending';
     });
   };
+  if ($DEBUG) {
+    $req_done = $req_done->then (sub {
+      warn "$req->{id}: ==========\n";
+    });
+  }
   return $req_done;
 } # send_request
 
@@ -557,6 +591,26 @@ sub onevent ($;$) {
   }
   return $_[0]->{onevent} ||= sub { };
 } # onevent
+
+sub _ev ($$;$) {
+  my $self = shift;
+  my $req = $self->{request};
+  if ($DEBUG) {
+    warn "$req->{id}: $_[0] @{[scalar gmtime]}\n";
+    if ($_[0] eq 'data' and $DEBUG > 1) {
+      for (split /\x0D?\x0A/, $_[1], -1) {
+        warn "$req->{id}: R: $_\n";
+      }
+    } elsif ($_[0] eq 'headers') {
+      warn "$req->{id}: R: HTTP/$_[1]->{version} $_[1]->{status} $_[1]->{reason}\n";
+      for (@{$_[1]->{headers}}) {
+        warn "$req->{id}: R: $_->[0]: $_->[1]\n";
+      }
+      warn "$req->{id}: R: \n" if $DEBUG > 1;
+    }
+  }
+  $self->onevent->($self, $req, @_);
+} # _ev
 
 sub DESTROY ($) {
   $_[0]->abort if defined $_[0]->{handle};

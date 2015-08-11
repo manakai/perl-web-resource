@@ -4,27 +4,32 @@ use AnyEvent;
 use HTTP;
 use Data::Dumper;
 
+my $hostname = 'wiki.suikawiki.org';
+my $port = 80;
+my $host = "$hostname:$port";
+my $target = q</n/HomePage>;
+
 my $http = HTTP->new_from_host_and_port
-#    ('suikawiki.org', 80);
-    ('192.168.11.14', 5255);
+    ($hostname, $port);
 
 my $cv = AE::cv;
 
-$http->onresponsestart (sub {
-  warn Dumper $_[0];
-});
-
-$http->ondata (sub {
-  warn "Data[$_[0]]: |$_[1]|";
-});
-
-$http->onclose (sub {
-  $cv->send;
+$http->onevent (sub {
+  #warn $_[2], "\t", Dumper $_[3];
 });
 
 $http->connect->then (sub {
-  return $http->send_request ({method => 'GET', url => '/'});
-})->catch (sub {
+  $http->send_request ({
+    method => 'GET',
+    target => $target,
+    headers => [
+      [Host => $host],
+    ],
+  });
+  return $http->close;
+})->then (sub {
+  $cv->send;
+}, sub {
   $cv->croak ($_[0]);
 });
 

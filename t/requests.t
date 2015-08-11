@@ -120,4 +120,44 @@ test {
   });
 } n => 2, name => 'connection already closed';
 
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    sleep 1
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    $http->connect->then (sub {
+      my @p;
+      for my $subtest (
+        [['' => 'abc']],
+        [['[]' => 'abc']],
+        [["\x{100}" => 'abc']],
+        [['Hoge' => "abc \x0A"]],
+        [['Hoge' => "abc \x0Db"]],
+        [['Hoge' => "\x0D\x0A"]],
+        [['Hoge' => "\x{4000}"]],
+      ) {
+        push @p, Promise->resolve->then (sub {
+          $http->send_request
+              ({method => 'GET', target => '/',
+                headers => $subtest});
+        })->catch (sub {
+          my $error = $_[0];
+          test {
+            like $error, qr{Bad header };
+          } $c;
+        });
+      }
+    })->then (sub{
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 7, name => 'send_request with bad headers';
+
 run_tests;

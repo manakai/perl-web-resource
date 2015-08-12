@@ -160,4 +160,65 @@ test {
   });
 } n => 7, name => 'send_request with bad headers';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $error;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      $error = $data if $type eq 'responseerror';
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      test {
+        ok not $error->{can_retry};
+      } $c;
+    })->then (sub{
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'first empty response';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 200 OK"CRLF
+    "Content-Length: 0"CRLF
+    CRLF
+    receive "GET"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $error;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      $error = $data if $type eq 'responseerror';
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      test {
+        ok $error->{can_retry};
+      } $c;
+    })->then (sub{
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'second empty response';
+
 run_tests;

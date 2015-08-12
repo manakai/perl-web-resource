@@ -997,3 +997,135 @@ Content-Length: 2
 Upgrade: h2c
 #body escaped
 ab(close)
+
+#name
+POST -> HTTP/1.1
+#method POST
+#url /
+#data escaped
+receive "HTTP"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+receive "HTTP"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+POST -> close
+#method POST
+#url /
+#data escaped
+receive "POST", start capture
+receive "HTTP", end capture
+show "req1"
+showcaptured
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+CRLF
+"anc"
+receive "POST", start capture
+receive "HTTP", end capture
+show "req2"
+showcaptured
+close
+#test-type second
+#status 202
+#reason hoge
+#headers
+Content-Length: 3
+#body escaped
+anc(close)
+
+#name
+GET -> close
+#method GET
+#url /
+#data escaped
+receive "GET", start capture
+receive "HTTP", end capture
+show "req1"
+showcaptured
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+CRLF
+"anc"
+receive "GET", start capture
+receive "HTTP", end capture
+show "req2"
+showcaptured
+close
+#test-type second
+#status 202
+#reason hoge
+#headers
+Content-Length: 3
+#body escaped
+anc(close)
+
+#name
+POST -> HTTP/0.9
+#method POST
+#url /
+#data escaped
+receive "POST", start capture
+receive "HTTP", end capture
+show "req1"
+showcaptured
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry:1"CRLF
+CRLF
+"anc"
+receive "POST", start capture
+receive "HTTP", end capture
+show "req2"
+showcaptured
+"x"
+close
+#test-type second
+#status 200
+#reason OK
+#headers
+#body escaped
+x(close)
+
+#name
+POST -> "HTTP/1.1"
+#method POST
+#url /
+#data escaped
+receive "POST", start capture
+receive "HTTP", end capture
+show "req1"
+showcaptured
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry:1"CRLF
+CRLF
+"anc"
+receive "POST", start capture
+receive "HTTP", end capture
+show "req2"
+showcaptured
+"HTTP/1.1"
+close
+#test-type second
+#status 200
+#reason OK
+#headers
+#body escaped
+(close)
+#incomplete

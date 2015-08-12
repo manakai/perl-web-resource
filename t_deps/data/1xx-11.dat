@@ -298,6 +298,11 @@ CRLF
 CRLF
 "abc"
 close
+#1xx
+| #status 101
+| #reason switching
+| #headers
+| Upgrade: websocket
 #status 200
 #reason OK
 #body escaped
@@ -314,6 +319,11 @@ receive "GET"
 CRLF
 "abcdefghijklmn"
 close
+#1xx
+| #status 101
+| #reason switching
+| #headers
+| Upgrade: websocket
 #status 200
 #reason OK
 #body escaped
@@ -332,6 +342,11 @@ CRLF
 CRLF
 "abc"
 close
+#1xx
+| #status 101
+| #reason switching
+| #headers
+| Upgrade: hoge
 #status 200
 #reason OK
 #body escaped
@@ -348,6 +363,11 @@ receive "GET"
 CRLF
 "abcdefghijklmn"
 close
+#1xx
+| #status 101
+| #reason switching
+| #headers
+| Upgrade: hoge
 #status 200
 #reason OK
 #body escaped
@@ -366,6 +386,11 @@ CRLF
 CRLF
 "abc"
 close
+#1xx
+| #status 102
+| #reason switching
+| #headers
+| Upgrade: hoge
 #status 200
 #reason OK
 #body escaped
@@ -382,6 +407,11 @@ receive "GET"
 CRLF
 "abcdefghijklmn"
 close
+#1xx
+| #status 102
+| #reason switching
+| #headers
+| Upgrade: hoge
 #status 200
 #reason OK
 #body escaped
@@ -400,6 +430,11 @@ CRLF
 CRLF
 "abc"
 close
+#1xx
+| #status 156
+| #reason switching
+| #headers
+| Upgrade: hoge
 #status 200
 #reason OK
 #body escaped
@@ -416,6 +451,11 @@ receive "GET"
 CRLF
 "abcdefghijklmn"
 close
+#1xx
+| #status 156
+| #reason switching
+| #headers
+| Upgrade: hoge
 #status 200
 #reason OK
 #body escaped

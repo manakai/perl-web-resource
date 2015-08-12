@@ -217,7 +217,7 @@ $httpd->reg_cb ('' => sub {
                   var tryCount = 0;
                   var tryReq = function () {
                     var x = new XMLHttpRequest;
-                    x.open (test.method[1][0], url, true);
+                    x.open (test.method[1][0], url + ';' + tryCount, true);
                     x.onreadystatechange = function () {
                       if (x.readyState === 4) {
                         if (x.getResponseHeader ('x-test-retry') && tryCount++ < 10) {

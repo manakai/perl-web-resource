@@ -13,12 +13,14 @@ sub new_from_host_and_port ($$$) {
   return bless {host => $_[1], port => $_[2]}, $_[0];
 } # new_from_host_and_port
 
-sub _process_rbuf ($$) {
-  my ($self, $handle) = @_;
+sub _process_rbuf ($$;%) {
+  my ($self, $handle, %args) = @_;
   if ($self->{state} eq 'before response') {
     if ($handle->{rbuf} =~ s/^.{0,4}[Hh][Tt][Tt][Pp]//s) {
       $self->{state} = 'before response header';
+      $self->{response_received} = 1;
     } elsif (8 <= length $handle->{rbuf}) {
+      $self->{response_received} = 1;
       if ($self->{request}->{method} eq 'PUT') {
         $self->_ev ('responseerror', {
           message => "HTTP/0.9 response to PUT request",
@@ -42,9 +44,12 @@ sub _process_rbuf ($$) {
       $self->{request_state} = 'sent';
       $self->_next;
       return;
-    } elsif ($handle->{rbuf} =~ s/^(.*?)\x0A\x0D?\x0A//s) {
-      my $headers = [split /[\x0D\x0A]+/, $1, -1]; # XXX report CR
+    } elsif ($handle->{rbuf} =~ s/^(.*?)\x0A\x0D?\x0A//s or
+             ($args{eof} and $handle->{rbuf} =~ s/\A(.*)\z//s and
+              $self->{response}->{incomplete} = 1)) {
+      my $headers = [split /[\x0D\x0A]+/, $1, -1];
       my $start_line = shift @$headers;
+      $start_line = '' unless defined $start_line;
       my $res = $self->{response};
       $res->{version} = '1.0';
       if ($start_line =~ s{\A/}{}) {
@@ -362,6 +367,7 @@ sub _process_rbuf_eof ($$;%) {
       $self->_ev ('responseerror', {
         message => "Connection closed without response",
         errno => $args{errno},
+        can_retry => $self->{response_received},
       });
     }
   } elsif ($self->{state} eq 'response body') {
@@ -442,7 +448,7 @@ sub connect ($) {
                $self->{request_state} = 'sent';
                $self->_next;
              } else {
-               $self->_process_rbuf ($hdl);
+               $self->_process_rbuf ($hdl, eof => 1);
                $self->_process_rbuf_eof ($hdl, abort => 1, errno => $!);
              }
              $self->{handle}->destroy;
@@ -451,7 +457,7 @@ sub connect ($) {
            },
            on_eof => sub {
              my ($hdl) = @_;
-             $self->_process_rbuf ($hdl);
+             $self->_process_rbuf ($hdl, eof => 1);
              $self->_process_rbuf_eof ($hdl);
              delete $self->{handle};
              $onclosed->();
@@ -515,9 +521,10 @@ sub send_request ($$) {
   # XXX Connection: close
   my $req_done = Promise->new (sub { $self->{request_done} = $_[0] });
   AE::postpone {
-    $self->{handle}->push_write ("$method $url HTTP/1.1\x0D\x0A");
-    $self->{handle}->push_write (join '', map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []});
-    $self->{handle}->push_write ("\x0D\x0A");
+    my $handle = $self->{handle} or return;
+    $handle->push_write ("$method $url HTTP/1.1\x0D\x0A");
+    $handle->push_write (join '', map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []});
+    $handle->push_write ("\x0D\x0A");
     if ($DEBUG) {
       warn "$req->{id}: S: $method $url HTTP/1.1\n";
       for (@{$req->{headers} || []}) {
@@ -525,7 +532,7 @@ sub send_request ($$) {
       }
     }
     if (defined $req->{body_ref}) {
-      $self->{handle}->push_write (${$req->{body_ref}});
+      $handle->push_write (${$req->{body_ref}});
       if ($DEBUG > 1) {
         warn "$req->{id}: S: \n";
         for (split /\x0D?\x0A/, ${$req->{body_ref}}, -1) {
@@ -533,10 +540,11 @@ sub send_request ($$) {
         }
       }
     }
-    $self->{handle}->on_drain (sub {
+    $handle->on_drain (sub {
       $self->{request_state} = 'sent';
       $self->_ev ('requestsent');
       $self->_next if $self->{state} eq 'sending';
+      $_[0]->on_drain (undef);
     });
   };
   if ($DEBUG) {

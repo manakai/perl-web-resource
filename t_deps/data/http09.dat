@@ -1,3 +1,5 @@
+#name
+empty response
 #method GET
 #url /
 #data
@@ -6,10 +8,14 @@ close
 #body
 (close)
 
+#name
+empty response
 #method GET
 #url /
 #data
-receive LF
+receive "GET", start capture
+receive LF, end capture
+showcaptured
 close
 #status 0
 #body
@@ -191,3 +197,313 @@ close
 #status 0
 #body escaped
 (close)
+
+#name
+"H" close
+#method GET
+#url /
+#data
+"H"
+close
+#status 200
+#reason OK
+#body escaped
+H(close)
+
+#name
+"HT" close
+#method GET
+#url /
+#data
+"HT"
+close
+#status 200
+#reason OK
+#body escaped
+HT(close)
+
+#name
+"HTT" close
+#method GET
+#url /
+#data
+"HTT"
+close
+#status 200
+#reason OK
+#body escaped
+HTT(close)
+
+#name
+"XHTT" close
+#method GET
+#url /
+#data
+"XHTT"
+close
+#status 200
+#reason OK
+#body escaped
+XHTT(close)
+
+#name
+"ABCHTT" close
+#method GET
+#url /
+#data
+"ABCHTT"
+close
+#status 200
+#reason OK
+#body escaped
+ABCHTT(close)
+
+#name
+"HTTP" close
+#method GET
+#url /
+#data
+"HTTP"
+close
+#status 200
+#reason OK
+#body escaped
+(close)
+#incomplete
+
+#name
+"http" close
+#method GET
+#url /
+#data
+"http"
+close
+#status 200
+#reason OK
+#body escaped
+(close)
+#incomplete
+
+#name
+"XHTTP" close
+#method GET
+#url /
+#data
+"XHTTP"
+close
+#status 200
+#reason OK
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/" close
+#method GET
+#url /
+#data
+"HTTP/"
+close
+#status 200
+#reason OK
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1" close
+#method GET
+#url /
+#data
+"HTTP/1"
+close
+#status 200
+#reason OK
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1." close
+#method GET
+#url /
+#data
+"HTTP/1."
+close
+#status 200
+#reason OK
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.0" close
+#method GET
+#url /
+#data
+"HTTP/1.0"
+close
+#status 200
+#reason OK
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1" close
+#method GET
+#url /
+#data
+"HTTP/1.1"
+close
+#status 200
+#reason OK
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1 " close
+#method GET
+#url /
+#data
+"HTTP/1.1 "
+close
+#status 200
+#reason OK
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1 2" close
+#method GET
+#url /
+#data
+"HTTP/1.1 2"
+close
+#status 2
+#reason 
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1 200" close
+#method GET
+#url /
+#data
+"HTTP/1.1 200"
+close
+#status 200
+#reason
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1 200 " close
+#method GET
+#url /
+#data
+"HTTP/1.1 200 "
+close
+#status 200
+#reason 
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1 200 OK." close
+#method GET
+#url /
+#data
+"HTTP/1.1 200 OK."
+close
+#status 200
+#reason OK.
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1 200 OK\r\n" close
+#method GET
+#url /
+#data
+"HTTP/1.1 200 OK"CRLF
+close
+#status 200
+#reason OK
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1 200 OK\r\nheader:value" close
+#method GET
+#url /
+#data
+"HTTP/1.1 200 OK"CRLF
+"Header:Value"
+close
+#status 200
+#reason OK
+#headers
+Header: Value
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1 200 OK\r\nheader:value\r\n" close
+#method GET
+#url /
+#data
+"HTTP/1.1 200 OK"CRLF
+"Header:Value"CRLF
+close
+#status 200
+#reason OK
+#headers
+Header: Value
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1 200 OK\r\nheader:value" close
+#method GET
+#url /
+#data
+"HTTP/1.1 200 OK"CRLF
+"Foo:1"CRLF
+"Header:Value"
+close
+#status 200
+#reason OK
+#headers
+Foo: 1
+Header: Value
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1 200 OK\r\nheader:value\r\n" close
+#method GET
+#url /
+#data
+"HTTP/1.1 200 OK"CRLF
+"Foo:1"CRLF
+"Header:Value"CRLF
+close
+#status 200
+#reason OK
+#headers
+Foo: 1
+Header: Value
+#body escaped
+(close)
+#incomplete

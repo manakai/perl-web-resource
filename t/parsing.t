@@ -76,6 +76,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             $result->{body} //= '';
             $result->{body} .= '(close)';
             $result->{is_error} = 1 unless $type eq 'complete';
+            $result->{can_retry} = 1 if $type eq 'responseerror' and $_[3]->{can_retry};
             if ($type eq 'reset') {
               delete $result->{response};
               $result->{body} = '(close)';
@@ -143,6 +144,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   if ($_->[2] eq 'x-test-retry') {
                     return $try->() if $try_count < 10;
                   }
+                }
+                if ($result->{can_retry}) {
+                  return $try->() if $try_count < 10;
                 }
                 return $result;
               })->then (sub {

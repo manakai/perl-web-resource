@@ -61,6 +61,15 @@ sub run_commands ($$$$) {
         $then->();
         return;
       }
+    } elsif ($command =~ /^receive LF, end capture$/) {
+      if ($states->{received} =~ /\x0A/) {
+        $states->{received} =~ s/^(.*?\x0A)//s;
+        $states->{captured} .= $1;
+      } else {
+        unshift @{$states->{commands}}, $command;
+        $then->();
+        return;
+      }
     } elsif ($command =~ /^receive CRLFCRLF, end capture$/) {
       if ($states->{received} =~ /\x0D\x0A\x0D\x0A/) {
         $states->{received} =~ s/^(.*?\x0D\x0A\x0D\x0A)//s;
@@ -208,6 +217,8 @@ sub run_commands ($$$$) {
       AE::log error => qq{[$states->{id}] length of rbuf = @{[length $states->{received}]}};
     } elsif ($command =~ /^showcaptured$/) {
       AE::log error => qq{[$states->{id}] captured = |$states->{captured}|};
+    } elsif ($command =~ /^show\s+"([^"]*)"$/) {
+      AE::log error => $1;
     } elsif ($command =~ /\S/) {
       die "Unknown command: |$command|";
     }

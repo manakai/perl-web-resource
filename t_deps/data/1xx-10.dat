@@ -284,3 +284,139 @@ close
 #status 0
 #body escaped
 (close)
+
+#name
+Upgrade: websocket in response (HTTP/1.0)
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.0 101 switching"CRLF
+"Upgrade: websocket"CRLF
+CRLF
+"HTTP/1.0 200 OK"CRLF
+CRLF
+"abc"
+close
+#status 200
+#reason OK
+#body escaped
+abc(close)
+
+#name
+Upgrade: websocket in response (HTTP/0.9)
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.0 101 switching"CRLF
+"Upgrade: websocket"CRLF
+CRLF
+"abcdefghijklmn"
+close
+#status 200
+#reason OK
+#body escaped
+abcdefghijklmn(close)
+
+#name
+Upgrade: hoge in response (HTTP/1.0)
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.0 101 switching"CRLF
+"Upgrade: hoge"CRLF
+CRLF
+"HTTP/1.0 200 OK"CRLF
+CRLF
+"abc"
+close
+#status 200
+#reason OK
+#body escaped
+abc(close)
+
+#name
+Upgrade: hoge in response (HTTP/0.9)
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.0 101 switching"CRLF
+"Upgrade: hoge"CRLF
+CRLF
+"abcdefghijklmn"
+close
+#status 200
+#reason OK
+#body escaped
+abcdefghijklmn(close)
+
+#name
+102 with Upgrade: hoge in response (HTTP/1.0)
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.0 102 switching"CRLF
+"Upgrade: hoge"CRLF
+CRLF
+"HTTP/1.0 200 OK"CRLF
+CRLF
+"abc"
+close
+#status 200
+#reason OK
+#body escaped
+abc(close)
+
+#name
+102 with Upgrade: hoge in response (HTTP/0.9)
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.0 102 switching"CRLF
+"Upgrade: hoge"CRLF
+CRLF
+"abcdefghijklmn"
+close
+#status 200
+#reason OK
+#body escaped
+abcdefghijklmn(close)
+
+#name
+156 with Upgrade: hoge in response (HTTP/1.0)
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.0 156 switching"CRLF
+"Upgrade: hoge"CRLF
+CRLF
+"HTTP/1.0 200 OK"CRLF
+CRLF
+"abc"
+close
+#status 200
+#reason OK
+#body escaped
+abc(close)
+
+#name
+156 with Upgrade: hoge in response (HTTP/0.9)
+#method GET
+#url /
+#data escaped
+receive "GET"
+"HTTP/1.0 156 switching"CRLF
+"Upgrade: hoge"CRLF
+CRLF
+"abcdefghijklmn"
+close
+#status 200
+#reason OK
+#body escaped
+abcdefghijklmn(close)

@@ -11,6 +11,7 @@ use Test::HTCT::Parser;
 
 my $host = '0';
 my $port = 4355;
+my $tlsport = 14355;
 my $test_port = int (rand 10000) + 1024;
 
 my $server_pids = {};
@@ -72,6 +73,7 @@ sub timer ($$) {
 
 my $filter = $ENV{TEST_METHOD} ? qr/$ENV{TEST_METHOD}/ : qr//;
 my @test;
+my @tlstest;
 for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.dat')) {
   for_each_test $file_name, {
     '1xx' => {is_prefixed => 1, multiple => 1},
@@ -83,56 +85,79 @@ for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.d
     my $name = join ' - ', $file_name, $test->{name}->[0] // '';
     $name =~ /$filter/o or return;
     $test->{_file_name} = $file_name;
-    push @test, $test;
+    if ($test->{tls}) {
+      push @tlstest, $test;
+    } else {
+      push @test, $test;
+    }
   };
 }
 
+my $root_path = path (__FILE__)->parent->parent->absolute;
+my $cert_path = $root_path->child ('local/cert');
+my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
 my $httpd = AnyEvent::HTTPD->new (host => $host, port => $port);
+my $tlshttpd = AnyEvent::HTTPD->new (host => $host, port => $tlsport, ssl => {
+  ca_path => $cert_path->child ('ca-cert.pem'),
+  cert_file => $cert_path->child ($cn . '-cert.pem'),
+  key_file => $cert_path->child ($cn . '-key-pkcs1.pem'),
+});
 my $cv = AE::cv;
 
-$httpd->reg_cb ('' => sub {
+my $httpdcb = sub {
   my ($httpd, $req) = @_;
   my $host = $req->headers->{host} // $host;
   $host =~ s/\s+//g;
   $host =~ s/:[0-9]+$//;
   my $path = $req->url->path;
   if ($path eq '/') {
-    server_as_cv (qq{
+    server_as_cv ($httpd->port == $port ? qq{
       "HTTP/1.0 200 OK"CRLF
       "Content-Type: text/html; charset=utf-8"CRLF
       CRLF
       "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico><link rel=stylesheet href=http://$host:$port/css><body><script src=http://$host:$port/runner></script>"
       close
+    } : qq{
+      starttls
+      receive "GET"
+      "HTTP/1.0 200 OK"CRLF
+      "Content-Type: text/html; charset=utf-8"CRLF
+      CRLF
+      "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico><link rel=stylesheet href=https://$host:$tlsport/css><body><script src=https://$host:$tlsport/runner></script>"
+      close
     })->cb (sub {
       my $server = $_[0]->recv;
+      my $scheme = $httpd->port == $port ? 'http' : 'https';
       $req->respond ([302, 'Redirect', {
-        'Location' => "http://$host:$test_port/?" . rand,
+        'Location' => "$scheme://$host:$test_port/?" . rand,
       }, '302 Redirect']);
       timer 10, sub { $server->{stop}->() };
     });
   } elsif ($path =~ m{^/start/([0-9]+)$}) {
     my $test_name = $1;
     #warn "start $test_name\n";
-    my $test = $test[$test_name];
+    my $test = $httpd->port == $port ? $test[$test_name] : $tlstest[$test_name];
     if (defined $test) {
       server_as_cv ($test->{data}->[0])->cb (sub {
         my $server = $_[0]->recv;
+        my $scheme = $httpd->port == $port ? 'http' : 'https';
         $req->respond ([200, 'OK', {
           'Access-Control-Allow-Origin' => '*',
-        }, "http://$host:$test_port/?" . rand]);
+        }, "$scheme://$host:$test_port/?" . rand]);
         timer 10, sub { $server->{stop}->() };
       });
     } else {
       $req->respond ([404, 'Not found', {}, '404 Test not found']);
     }
   } elsif ($path eq '/runner') {
-    my $tests_json = perl2json_chars \@test;
+    my $tests_json = perl2json_chars ($httpd->port == $port ? \@test : \@tlstest);
     $req->respond ([200, 'OK', {
       'Content-Type' => 'text/javascript; charset=utf-8',
     }, encode_utf8 qq{
       var link = document.createElement ('p');
-      link.innerHTML = '<a href>Run again</a>';
+      link.innerHTML = '<a href>Run http: tests</a> <a href>Run https: tests</a>';
       link.firstChild.href = 'http://$host:$port/';
+      link.lastChild.href = 'https://$host:$tlsport/';
       document.body.appendChild (link);
 
       var resultsContainer = document.createElement ('div');
@@ -203,7 +228,11 @@ $httpd->reg_cb ('' => sub {
 
       function runTest (test, testNumber, then) {
         var xhr = new XMLHttpRequest ();
-        xhr.open ('GET', 'http://$host:$port/start/' + encodeURIComponent (testNumber) + '?' + Math.random (), true);
+        if (location.protocol === "http:") {
+          xhr.open ('GET', 'http://$host:$port/start/' + encodeURIComponent (testNumber) + '?' + Math.random (), true);
+        } else {
+          xhr.open ('GET', 'https://$host:$tlsport/start/' + encodeURIComponent (testNumber) + '?' + Math.random (), true);
+        }
         xhr.onreadystatechange = function () {
           if (xhr.readyState === 4 && xhr.status === 200) {
             var url = xhr.responseText;
@@ -269,7 +298,11 @@ $httpd->reg_cb ('' => sub {
           runTest (tests[nextTest], nextTest++, runNext);
         } else {
           var xhr = new XMLHttpRequest;
-          xhr.open ('GET', 'http://$host:$port/last?' + Math.random (), true);
+          if (location.protocol === "http:") {
+            xhr.open ('GET', 'http://$host:$port/last?' + Math.random (), true);
+          } else {
+            xhr.open ('GET', 'https://$host:$tlsport/last?' + Math.random (), true);
+          }
           xhr.send (null);
         }
       }
@@ -291,9 +324,11 @@ $httpd->reg_cb ('' => sub {
   } else {
     $req->respond ([404, 'OK', {}, '404 Not Found']);
   }
-});
+}; # $httpdcb
+$httpd->reg_cb ('' => $httpdcb);
+$tlshttpd->reg_cb ('' => $httpdcb);
 
-warn "Listening $host:$port...";
+warn "Listening http://$host:$port & https://$host:$tlsport ...";
 warn "(Using $test_port)";
 
 $cv->recv;

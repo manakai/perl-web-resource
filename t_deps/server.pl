@@ -1,5 +1,6 @@
 use strict;
 use warnings;
+use Path::Tiny;
 use Socket;
 use AnyEvent;
 use AnyEvent::Socket;
@@ -26,7 +27,9 @@ sub run_commands ($$$$) {
     my $command = shift @{$states->{commands}};
     $command =~ s/^\s+//;
     $command =~ s/\s+$//;
-    if ($command =~ /^"([^"]*)"$/) {
+    if ($command =~ /^#/) {
+      #
+    } elsif ($command =~ /^"([^"]*)"$/) {
       $hdl->push_write ($1);
     } elsif ($command =~ /^"([^"]*)"CRLF$/) {
       $hdl->push_write ("$1\x0D\x0A");
@@ -213,6 +216,36 @@ sub run_commands ($$$$) {
       setsockopt $hdl->{fh}, SOL_SOCKET, SO_LINGER, pack "II", 1, 0;
       close $hdl->{fh};
       $hdl->push_shutdown; # let $hdl report an error
+    } elsif ($command =~ /^starttls$/) {
+      my $root_path = path (__FILE__)->parent->parent->absolute;
+      my $cert_path = $root_path->child ('local/cert');
+      my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
+      unless ($cert_path->child ($cn . '-key-pkcs1.pem')->is_file) {
+        system $root_path->child ('perl'), $root_path->child ('t_deps/bin/generate-certs-for-tests.pl'), $cert_path, $cn;
+        sleep 2;
+      }
+      $states->{starttls_waiting} = 1;
+      $hdl->on_starttls (sub {
+        delete $states->{starttls_waiting};
+        $_[0]->on_starttls (undef);
+        run_commands ($context, $_[0], $states, $then);
+      });
+      $hdl->starttls ('accept', {
+        ca_path => $cert_path->child ('ca-cert.pem'),
+        cert_file => $cert_path->child ($cn . '-cert.pem'),
+        key_file => $cert_path->child ($cn . '-key-pkcs1.pem'),
+        #cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK',
+        cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA',
+      });
+      unshift @{$states->{commands}}, 'waitstarttls';
+      return;
+    } elsif ($command =~ /^waitstarttls$/) {
+      if ($states->{starttls_waiting}) {
+        $then->();
+        return;
+      }
+    } elsif ($command =~ /^stoptls$/) {
+      $hdl->stoptls;
     } elsif ($command =~ /^showreceivedlength$/) {
       AE::log error => qq{[$states->{id}] length of rbuf = @{[length $states->{received}]}};
     } elsif ($command =~ /^showcaptured$/) {

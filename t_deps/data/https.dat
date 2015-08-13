@@ -1,0 +1,142 @@
+#name
+TLS + HTTP/0.9
+#tls
+#method GET
+#url /
+#data
+starttls
+receive "GET"
+"abc"
+close
+#status 200
+#reason OK
+#headers escaped
+#body
+abc(close)
+
+#name
+TLS + HTTP/1.0
+#tls
+#method GET
+#url /
+#data
+starttls
+receive "GET"
+"HTTP/1.0 200 OK"CRLF
+"Foo: bar"CRLF
+CRLF
+"abc"
+close
+#status 200
+#reason OK
+#headers escaped
+Foo: bar
+#body
+abc(close)
+
+#name
+TLS + HTTP/1.0 + Content-Length
+#tls
+#method GET
+#url /
+#data
+starttls
+receive "GET"
+"HTTP/1.0 200 OK"CRLF
+"Content-Length: 3"CRLF
+"Foo: bar"CRLF
+CRLF
+"abc"
+close
+#status 200
+#reason OK
+#headers escaped
+Content-Length: 3
+Foo: bar
+#body
+abc(close)
+
+#name
+TLS + HTTP/1.0 + Content-Length + redundant
+#tls
+#method GET
+#url /
+#data
+starttls
+receive "GET"
+"HTTP/1.0 200 OK"CRLF
+"Content-Length: 3"CRLF
+"Foo: bar"CRLF
+CRLF
+"abcd"
+close
+#status 200
+#reason OK
+#headers escaped
+Content-Length: 3
+Foo: bar
+#body
+abc(close)
+
+#name
+TLS + HTTP/1.0 + Content-Length (shorter than content-length)
+#tls
+#method GET
+#url /
+#data
+starttls
+receive "GET"
+"HTTP/1.0 200 OK"CRLF
+"Content-Length: 3"CRLF
+"Foo: bar"CRLF
+CRLF
+"ab"
+close
+#status 200
+#reason OK
+#headers escaped
+Content-Length: 3
+Foo: bar
+#body
+ab(close)
+#incomplete
+
+#name
+TLS + HTTP/1.1 + Content-Length
+#tls
+#method GET
+#url /
+#data
+starttls
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+"Foo: bar"CRLF
+CRLF
+"abc"
+close
+#status 200
+#reason OK
+#headers escaped
+Content-Length: 3
+Foo: bar
+#body
+abc(close)
+
+#name
+TLS + HTTP/1.1 + Content-Length (shorter than content-length)
+#tls
+#method GET
+#url /
+#data
+starttls
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+CRLF
+"ab"
+close
+#status 0
+#headers
+#body
+(close)

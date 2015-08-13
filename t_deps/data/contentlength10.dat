@@ -45,6 +45,8 @@ Content-Length: 2
 #body escaped
 aa(close)
 
+#name
+shorter than content-length
 #method GET
 #url /
 #data escaped

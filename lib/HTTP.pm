@@ -374,8 +374,18 @@ sub _process_rbuf_eof ($$;%) {
     if ($args{abort} or
         defined $self->{unread_length} and $self->{unread_length} > 0) {
       $self->{response}->{incomplete} = 1;
+      $self->{request_state} = 'sent';
+      if ($self->{response}->{version} eq '1.1') {
+        $self->_ev ('reset', {
+          message => "Connection truncated",
+          errno => $args{errno},
+        });
+      } else {
+        $self->_ev ('complete');
+      }
+    } else {
+      $self->_ev ('complete');
     }
-    $self->_ev ('complete');
         # XXX
         #abort => $args{abort},
         #errno => $args{errno},

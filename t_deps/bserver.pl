@@ -140,7 +140,9 @@ my $httpdcb = sub {
     if (defined $test) {
       server_as_cv ($test->{data}->[0])->cb (sub {
         my $server = $_[0]->recv;
+        my $ws = ($test->{'test-type'} || ['', ['']])->[1]->[0] eq 'ws';
         my $scheme = $httpd->port == $port ? 'http' : 'https';
+        $scheme =~ s/http/ws/ if $ws;
         $req->respond ([200, 'OK', {
           'Access-Control-Allow-Origin' => '*',
         }, "$scheme://$host:$test_port/?" . rand]);
@@ -238,7 +240,60 @@ my $httpdcb = sub {
             var url = xhr.responseText;
 
             var testType = (test['test-type'] || ['', ['']])[1][0];
-            if (testType === 'second' || testType === 'largerequest-second') {
+            if (testType === 'ws') {
+              var y = new WebSocket (url, (test['ws-protocol'] || [''])[0].split (/\\n/).filter (function (_) { return _.length }));
+              var status = "noevent";
+              var data = "";
+              var events = [];
+              y.onopen = function (ev) {
+                if (status === "noevent") status = "open";
+                y.send ("abc");
+                events.push (ev.type);
+              };
+              y.onmessage = function (ev) {
+                data += ev.data;
+                y.close ();
+                events.push (ev.type);
+              };
+              y.onerror = function (ev) {
+                if (status === "noevent") status = "error";
+                events.push (ev.type);
+              };
+              y.onclose = function (ev) {
+                events.push (ev.type);
+                var tr = document.createElement ('tr');
+                tr.className = 'FAIL';
+                var failed = false;
+                tr.appendChild (document.createElement ('th')).appendChild (document.createTextNode (testNumber));
+                var resultCell = tr.appendChild (document.createElement ('th'));
+                resultCell.textContent = 'FAIL';
+
+                var cell = tr.appendChild (document.createElement ('td'));
+                var expected = test["handshake-error"] ? "error" : "open";
+                setResult (cell, expected === status, status, expected) || (failed = true);
+                cell.title = events;
+
+                var cell = tr.appendChild (document.createElement ('td'));
+                setResult (cell, true, "", "") || (failed = true);
+
+                var cell = tr.appendChild (document.createElement ('td'));
+                setResult (cell, true, "", "") || (failed = true);
+
+                var cell = tr.appendChild (document.createElement ('td'));
+                var expected = test["received"] ? test["received"][0] : "";
+                setResult (cell, expected === data, data, expected) || (failed = true);
+
+                if (!failed) {
+                  resultCell.textContent = 'PASS';
+                  tr.className = 'PASS';
+                }
+                tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode (test._file_name));
+                tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode ((test.name || {})[0]));
+                results.appendChild (tr);
+
+                then ();
+              };
+            } else if (testType === 'second' || testType === 'largerequest-second') {
               var y = new XMLHttpRequest;
               y.open (test.method[1][0], url, true);
               y.onreadystatechange = function () {

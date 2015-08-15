@@ -475,6 +475,8 @@ sub dump_tls ($;%) {
   }
 } # dump_tls
 
+my $DUMP = $ENV{DUMP};
+
 require Net::SSLeay;
 require AnyEvent::Handle;
 {
@@ -485,7 +487,7 @@ require AnyEvent::Handle;
       dump_tls $_[0];
     }
     goto &$orig;
-  };
+  } if $DUMP;
 }
 {
   my $orig = AnyEvent::Handle->can ('_dotls');
@@ -495,14 +497,14 @@ require AnyEvent::Handle;
       $_dump_tls->{$_[0]->{_rbio}, 'id'} = $CurrentID;
     }
     goto &$orig;
-  };
+  } if $DUMP;
 }
 
 warn "Listening $host:$port...\n";
 my $server = tcp_server $host, $port, sub {
   my ($fh, $client_host, $client_port) = @_;
   my $id = int rand 100000;
-  warn "... $client_host:$client_port [$id]\n";
+  warn "[$id] connected by $client_host:$client_port\n" if $DUMP;
   $cv->begin;
   my $states = {commands => [@$Commands], received => '', id => $id,
                 client_host => $client_host, client_port => $client_port};
@@ -512,21 +514,24 @@ my $server = tcp_server $host, $port, sub {
        on_error => sub {
          my (undef, $fatal, $msg) = @_;
          if ($fatal) {
-           AE::log error => "[$id] $msg (fatal)";
+           warn "[$id] $msg (fatal)\n" if $DUMP;
            $hdl->destroy;
            $cv->end;
          } else {
-           AE::log error => "[$id] $msg";
+           warn "[$id] $msg\n" if $DUMP;
          }
        },
        on_eof => sub {
-         warn "[$id] EOF\n";
+         warn "[$id] EOF\n" if $DUMP;
          $hdl->destroy;
          $cv->end;
        },
        on_read => sub {
          $states->{received} .= $_[0]->{rbuf};
-         #warn "[$id] $_[0]->{rbuf}\n";
+         if ($DUMP) {
+           warn "[$id]\n";
+           warn hex_dump ($_[0]->{rbuf}), "\n";
+         }
          $_[0]->{rbuf} = '';
          run_commands 'read', $_[0], $states, sub { };
        });

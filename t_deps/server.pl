@@ -19,6 +19,9 @@ my $input;
 
 my $Commands = [split /\x0D?\x0A/, $input];
 
+my $_dump_tls = {};
+our $CurrentID;
+
 sub run_commands ($$$$);
 sub run_commands ($$$$) {
   my ($context, $hdl, $states, $then) = @_;
@@ -230,6 +233,7 @@ sub run_commands ($$$$) {
         $_[0]->on_starttls (undef);
         run_commands ($context, $_[0], $states, $then);
       });
+      local $CurrentID = $states->{id};
       $hdl->starttls ('accept', {
         ca_path => $cert_path->child ('ca-cert.pem'),
         cert_file => $cert_path->child ($cn . '-cert.pem'),
@@ -263,6 +267,237 @@ my $cv = AE::cv;
 $cv->begin;
 my $sig = AE::signal TERM => sub { $cv->end };
 
+sub hex_dump ($) {
+  my $s = $_[0];
+  my @x;
+  for (my $i = 0; $i * 16 < length $s; $i++) {
+    my @d = map {
+      my $index = $i*16+$_;
+      if ($index < length $s) {
+        ord substr $s, $index, 1;
+      } else {
+        undef;
+      }
+    } 0..15;
+    push @x, (join ' ', map { defined $_ ? sprintf '%02X', $_ : '  ' } @d) . '  ' .
+             (join '', map { defined $_ ? ((0x20 <= $_ and $_ <= 0x7E) ? pack 'C', $_ : '.') : ' ' } @d);
+  }
+  return join "\n", @x;
+} # hex_dump
+
+sub dump_tls ($;%);
+sub dump_tls ($;%) {
+  my ($key, %args) = @_;
+  my $header_length = defined $args{content_type} ? 4 : 5;
+  my $id = $_dump_tls->{[split /\Q$;\E/, $key]->[0], 'id'} // '???:'.$key;
+  while ($header_length <= length $_dump_tls->{$_[0]}) {
+    my $record = {};
+    if (defined $args{content_type}) {
+      $record->{msg_type} = ord substr $_dump_tls->{$_[0]}, 0, 1;
+      $record->{length} = (ord substr $_dump_tls->{$_[0]}, 1, 1) * 0x10000
+                        + (ord substr $_dump_tls->{$_[0]}, 2, 1) * 0x100
+                        + (ord substr $_dump_tls->{$_[0]}, 3, 1);
+    } else {
+      $record->{content_type} = ord substr $_dump_tls->{$_[0]}, 0, 1;
+      $record->{version}->{major} = ord substr $_dump_tls->{$_[0]}, 1, 1;
+      $record->{version}->{minor} = ord substr $_dump_tls->{$_[0]}, 2, 1;
+      $record->{length} = (ord substr $_dump_tls->{$_[0]}, 3, 1) * 0x100
+                        + (ord substr $_dump_tls->{$_[0]}, 4, 1);
+    }
+    if ($header_length + $record->{length} <= length $_dump_tls->{$_[0]}) {
+      $record->{fragment} = substr $_dump_tls->{$_[0]}, $header_length, $record->{length};
+      substr ($_dump_tls->{$_[0]}, 0, $header_length + $record->{length}) = '';
+      if (defined $args{content_type}) {
+        if ($record->{msg_type} == 1) { # ClientHello
+          $record->{client_version}->{major} = ord substr $record->{fragment}, 0, 1;
+          $record->{client_version}->{minor} = ord substr $record->{fragment}, 1, 1;
+          $record->{random}->{gmt_unix_time}
+              = (ord substr $record->{fragment}, 2, 1) * 0x1000000
+              + (ord substr $record->{fragment}, 3, 1) * 0x10000
+              + (ord substr $record->{fragment}, 4, 1) * 0x100
+              + (ord substr $record->{fragment}, 5, 1);
+          $record->{random}->{random_bytes} = substr $record->{fragment}, 6, 28;
+          my $next = 34;
+          $record->{session_id}->{length} = ord substr $record->{fragment}, $next, 1;
+          $next += 1;
+          $record->{session_id}->{value} = substr $record->{fragment}, $next, $record->{session_id}->{length};
+          $next += $record->{session_id}->{length};
+          $record->{cipher_suites}->{length} = (ord substr $record->{fragment}, $next, 1) * 0x100
+                                             + (ord substr $record->{fragment}, $next + 1, 1);
+          $next += 2;
+          $record->{cipher_suites}->{value} = substr $record->{fragment}, $next, $record->{cipher_suites}->{length};
+          $next += $record->{cipher_suites}->{length};
+          $record->{compression_method}->{length} = ord substr $record->{fragment}, $next, 1;
+          $next += 1;
+          $record->{compression_method}->{value} = substr $record->{fragment}, $next, $record->{compression_method}->{length};
+          $next += $record->{compression_method}->{length};
+          if ($next <= length $record->{fragment}) {
+            $record->{extensions}->{length} = (ord substr $record->{fragment}, $next, 1) * 0x100
+                                            + (ord substr $record->{fragment}, $next + 1, 1);
+            $next += 2;
+            $record->{extensions}->{value} = substr $record->{fragment}, $next, $record->{extensions}->{length};
+            $next += $record->{extensions}->{length};
+          }
+          warn sprintf "[%s] TLS handshake %d (%s) L=%d: %d.%d %s\n",
+              $id,
+              $record->{msg_type},
+              'ClientHello',
+              $record->{length},
+              $record->{client_version}->{major},
+              $record->{client_version}->{minor},
+              do {
+                my @c = split //, $record->{cipher_suites}->{value};
+                my @v;
+                while (@c) {
+                  my $c1 = ord shift @c;
+                  my $c2 = ord shift @c;
+                  push @v, sprintf '%02X,%02X', $c1, $c2;
+                }
+                join ' ', @v;
+              };
+          warn sprintf "  random time=%d bytes=%s\n",
+              $record->{random}->{gmt_unix_time},
+              hex_dump $record->{random}->{random_bytes};
+          warn sprintf "  sid=%s\n", hex_dump $record->{session_id}->{value};
+          {
+            my $next = 0;
+            while ($next < length $record->{extensions}->{value}) {
+              my $type = (ord substr $record->{extensions}->{value}, $next, 1) * 0x100
+                       + (ord substr $record->{extensions}->{value}, $next + 1, 1);
+              $next += 2;
+              my $length = (ord substr $record->{extensions}->{value}, $next, 1) * 0x100
+                         + (ord substr $record->{extensions}->{value}, $next + 1, 1);
+              $next += 2;
+              my $data = substr $record->{extensions}->{value}, $next, $length;
+              $next += $length;
+              if ($type == 0) {
+                my $list_length = (ord substr $data, 0, 1) * 0x100
+                                + (ord substr $data, 1, 1);
+                my $list = substr $data, 2, $list_length;
+                my $next = 0;
+                my @host_name;
+                while ($next < length $list) {
+                  my $name_type = ord substr $list, $next, 1;
+                  $next++;
+                  # if $name_type == 0
+                  my $host_name_length = (ord substr $list, $next, 1) * 0x100
+                                       + (ord substr $list, $next+1, 1);
+                  $next += 2;
+                  my $host_name = substr $list, $next, $host_name_length;
+                  $next += $host_name_length;
+                  push @host_name, "name=$host_name";
+                }
+                warn sprintf "  0 (SNI) %s\n", join ', ', @host_name;
+              } elsif ($type == 16) {
+                my $list_length = (ord substr $data, 0, 1) * 0x100
+                                + (ord substr $data, 1, 1);
+                my $list = substr $data, 2, $list_length;
+                my $next = 0;
+                my @name;
+                while ($next < length $list) {
+                  my $name_length = (ord substr $list, $next, 1);
+                  $next += 1;
+                  my $name = substr $list, $next, $name_length;
+                  $next += $name_length;
+                  push @name, $name;
+                }
+                warn sprintf "  16 (ALPN) %s\n", join ', ', @name;
+              } else {
+                warn sprintf "  %d (%s) L=%d %s\n",
+                    $type, {
+                      0 => 'SNI',
+                      5 => 'status_request',
+                      10 => 'supported_groups',
+                      11 => 'ec_point_formats',
+                      13 => 'signature_algorithms',
+                      16 => 'ALPN',
+                      18 => 'signed_certificate_timestamp',
+                      21 => 'padding',
+                      23 => 'extended_master_secret',
+                      35 => 'SessionTicket',
+                      13172 => 'NPN',
+                      30032 => 'channel_id',
+                      65281 => 'renegotiation_info',
+                    }->{$type} // '', $length, hex_dump $data;
+              }
+            }
+          }
+        } else {
+          warn sprintf "[%s] TLS handshake %d (%s) L=%d\n",
+              $id,
+              $record->{msg_type},
+              {
+                0 => 'hello_request',
+                16 => 'client_key_exchange',
+              }->{$record->{msg_type}} // '',
+              $record->{length};
+        }
+      } else {
+        if (defined $_dump_tls->{$key, 'last_content_type'} and
+            not $_dump_tls->{$key, 'last_content_type'} == $record->{content_type}) {
+          dump_tls $key . $; . $_dump_tls->{$key, 'last_content_type'}, end => 1, content_type => $_dump_tls->{$key, 'last_content_type'};
+          delete $_dump_tls->{$key, 'last_content_type'};
+        }
+
+        warn sprintf "[%s] TLS record %d (%s) %d.%d L=%d\n",
+            $id,
+            $record->{content_type},
+            {
+              22 => 'handshake',
+              21 => 'alert',
+              20 => 'change_cipher_spec',
+              23 => 'application_data',
+              24 => 'heartbeat',
+            }->{$record->{content_type}} // '',
+            $record->{version}->{major}, $record->{version}->{minor},
+            $record->{length};
+        #warn hex_dump ($record->{fragment}), "\n"
+        #    unless $_dump_tls->{$key, 'changed'};
+
+        $_dump_tls->{$key, 'changed'} = 1 if $record->{content_type} == 20;
+        unless ($_dump_tls->{$key, 'changed'}) {
+          if (not defined $_dump_tls->{$key, 'last_content_type'}) {
+            $_dump_tls->{$key, 'last_content_type'} = $record->{content_type};
+            $_dump_tls->{$key, $record->{content_type}} = '';
+          }
+          $_dump_tls->{$key, $record->{content_type}} .= $record->{fragment};
+          dump_tls $key . $; . $record->{content_type}, content_type => $record->{content_type};
+        }
+      }
+      next;
+    }
+    last;
+  }
+  if ($args{end} and length $_dump_tls->{$key}) {
+    warn "Unexpected end of data for |$key| (L=@{[length $_dump_tls->{$key}]})"
+        if defined $args{content_type} and $args{content_type} == 22;
+    delete $_dump_tls->{$key};
+  }
+} # dump_tls
+
+require Net::SSLeay;
+require AnyEvent::Handle;
+{
+  my $orig = Net::SSLeay->can ('BIO_write');
+  *Net::SSLeay::BIO_write = sub ($$) {
+    if (defined $_dump_tls->{$_[0]}) {
+      $_dump_tls->{$_[0]} .= $_[1] if defined $_[1];
+      dump_tls $_[0];
+    }
+    goto &$orig;
+  };
+}
+{
+  my $orig = AnyEvent::Handle->can ('_dotls');
+  *AnyEvent::Handle::_dotls = sub {
+    $_dump_tls->{$_[0]->{_rbio}} //= '';
+    if (defined $CurrentID) {
+      $_dump_tls->{$_[0]->{_rbio}, 'id'} = $CurrentID;
+    }
+    goto &$orig;
+  };
+}
+
 warn "Listening $host:$port...\n";
 my $server = tcp_server $host, $port, sub {
   my ($fh, $client_host, $client_port) = @_;
@@ -271,6 +506,7 @@ my $server = tcp_server $host, $port, sub {
   $cv->begin;
   my $states = {commands => [@$Commands], received => '', id => $id,
                 client_host => $client_host, client_port => $client_port};
+
   my $hdl; $hdl = AnyEvent::Handle->new
       (fh => $fh,
        on_error => sub {

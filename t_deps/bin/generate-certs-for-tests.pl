@@ -16,7 +16,7 @@ unless ($ca_key_path->is_file) {
   x "openssl genrsa -out \Q$ca_key_path\E 2048";
 
   my $ca_subj = '/CN=ca.test';
-  x "openssl req -new -x509 -nodes -days 1 -key \Q$ca_key_path\E -out \Q$ca_cert_path\E -subj \Q$ca_subj\E -sha256";
+  x "openssl req -new -x509 -nodes -days 1 -key \Q$ca_key_path\E -out \Q$ca_cert_path\E -subj \Q$ca_subj\E -sha256 -set_serial @{[time]}";
 }
 
 for my $prefix (@ARGV) {

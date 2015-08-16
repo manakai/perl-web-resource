@@ -1,7 +1,10 @@
 use strict;
 use warnings;
 use Path::Tiny;
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
+use Time::HiRes qw(time);
 use Socket;
+use JSON::PS;
 use AnyEvent;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
@@ -23,6 +26,12 @@ my $DUMP = $ENV{DUMP};
 my $_dump_tls = {};
 our $CurrentID;
 
+sub pe_b ($) {
+  my $s = $_[0];
+  $s =~ s/([^\x21-\x24\x26-\x7E])/sprintf '%%%02X', ord $1/ge;
+  return $s;
+} # pe_b
+
 sub run_commands ($$$$);
 sub run_commands ($$$$) {
   my ($context, $hdl, $states, $then) = @_;
@@ -43,7 +52,16 @@ sub run_commands ($$$$) {
     } elsif ($command =~ /^"([^"]*)"CR$/) {
       $hdl->push_write ("$1\x0D");
     } elsif ($command =~ /^"([^"]*)"\s+x\s+([0-9]+)$/) {
-      $hdl->push_write ($1 x $2);
+      my $v = $1;
+      my $n = $2;
+      unless ($n eq 0+$n) {
+        warn "|$n| (= @{[0+$n]}) might be overflowed";
+      }
+      while ($n > 2**30) {
+        $hdl->push_write ($v x (2**30));
+        $n -= 2**30;
+      }
+      $hdl->push_write ($v x $n);
     } elsif ($command =~ /^CRLF$/) {
       $hdl->push_write ("\x0D\x0A");
     } elsif ($command =~ /^LF$/) {
@@ -158,14 +176,18 @@ sub run_commands ($$$$) {
           }
         }
         if (defined $length) {
-          AE::log error => qq{WS FIN=%d RSV1=%d RSV2=%d RSV3=%d opcode=0x%X masking=%d length=%d mask=0x%02X%02X%02X%02X},
-              $fin, $rsv1, $rsv2, $rsv3, $opcode, $has_mask, $length,
+          my $info = sprintf q{WS FIN=%d RSV=0b%d%d%d opcode=0x%X masking=%d length=%d},
+              $fin, $rsv1, $rsv2, $rsv3, $opcode, $has_mask, $length;
+          warn sprintf qq{[$states->{id}] @{[time]} @{[scalar gmtime]}\n%s mask=0x%02X%02X%02X%02X\n},
+              $info,
               (ord substr $mask, 0, 1),
               (ord substr $mask, 1, 1),
               (ord substr $mask, 2, 1),
               (ord substr $mask, 3, 1);
           $states->{ws_length} = $length;
           $states->{ws_mask} = $mask;
+          $states->{ws_opcode} = $opcode;
+          syswrite STDOUT, "[data ".(perl2json_bytes $info)."]\n";
           next;
         }
       }
@@ -181,7 +203,23 @@ sub run_commands ($$$$) {
             $data[$_] = $data[$_] ^ substr $states->{ws_mask}, $_ % 4, 1;
           }
         }
-        AE::log error => join '', @data;
+        my $data = join '', @data;
+        if ($states->{ws_opcode} == 0x8) {
+          my $code = length $data >= 2 ? ((ord substr $data, 0, 1) * 0x100 + (ord substr $data, 1, 1)) : -1;
+          my $reason = length $data > 2 ? substr $data, 2 : '';
+          warn "  code=$code reason:\n";
+          warn hex_dump ($reason), "\n";
+          syswrite STDOUT, sprintf "[data %s]\n",
+              perl2json_bytes "  code=$code reason=@{[pe_b $reason]}";
+        } elsif ($states->{ws_opcode} == 0x9) { # pong
+          warn hex_dump ($data), "\n";
+          syswrite STDOUT, sprintf "[data %s]\n",
+              perl2json_bytes "  @{[pe_b $data]}";
+        } else {
+          warn hex_dump ($data), "\n";
+          syswrite STDOUT, sprintf "[data %s]\n",
+              perl2json_bytes "  @{[pe_b $data]}";
+        }
         next;
       }
       unshift @{$states->{commands}}, $command;
@@ -199,18 +237,21 @@ sub run_commands ($$$$) {
                                   ($fields->{RSV2} << 5) |
                                   ($fields->{RSV3} << 4) |
                                   $fields->{opcode});
-      if ($fields->{length} < 0xFE) {
-        $hdl->push_write (pack 'C', $fields->{length});
+      my $m = $fields->{masking} ? 0x80 : 0;
+      if ($fields->{length} < 0x7E) {
+        $hdl->push_write (pack 'C', $m | $fields->{length});
       } elsif ($fields->{length} < 0x10000) {
-        $hdl->push_write ("\xFE");
+        $hdl->push_write (pack 'C', $m | 0x7E);
         $hdl->push_write (pack 'n', $fields->{length});
       } else {
-        $hdl->push_write ("\xFF");
+        $hdl->push_write (pack 'C', $m | 0x7F);
         $hdl->push_write (pack 'Q>', $fields->{length});
       }
-      if ($fields->{masking}) {
-        # XXX
-
+      if ($fields->{masking} and not $fields->{nomask}) {
+        my $mask = '';
+        $mask .= pack 'C', rand 256 for 1..4;
+        $hdl->push_write ($mask);
+        $states->{ws_send_mask} = $mask;
       }
     } elsif ($command =~ /^close$/) {
       $hdl->push_shutdown;
@@ -511,7 +552,7 @@ warn "Listening $host:$port...\n";
 my $server = tcp_server $host, $port, sub {
   my ($fh, $client_host, $client_port) = @_;
   my $id = int rand 100000;
-  warn "[$id] connected by $client_host:$client_port\n" if $DUMP;
+  warn "[$id] @{[time]} @{[scalar gmtime]} connected by $client_host:$client_port\n" if $DUMP;
   $cv->begin;
   my $states = {commands => [@$Commands], received => '', id => $id,
                 client_host => $client_host, client_port => $client_port};
@@ -521,22 +562,22 @@ my $server = tcp_server $host, $port, sub {
        on_error => sub {
          my (undef, $fatal, $msg) = @_;
          if ($fatal) {
-           warn "[$id] $msg (fatal)\n" if $DUMP;
+           warn "[$id] @{[time]} @{[scalar gmtime]} $msg (fatal)\n" if $DUMP;
            $hdl->destroy;
            $cv->end;
          } else {
-           warn "[$id] $msg\n" if $DUMP;
+           warn "[$id] @{[time]} @{[scalar gmtime]} $msg\n" if $DUMP;
          }
        },
        on_eof => sub {
-         warn "[$id] EOF\n" if $DUMP;
+         warn "[$id] @{[time]} @{[scalar gmtime]} EOF\n" if $DUMP;
          $hdl->destroy;
          $cv->end;
        },
        on_read => sub {
          $states->{received} .= $_[0]->{rbuf};
          if ($DUMP) {
-           warn "[$id]\n";
+           warn "[$id] @{[time]} @{[scalar gmtime]}\n";
            warn hex_dump ($_[0]->{rbuf}), "\n";
          }
          $_[0]->{rbuf} = '';
@@ -547,11 +588,3 @@ my $server = tcp_server $host, $port, sub {
 syswrite STDOUT, "[server $host $port]\x0A";
 
 $cv->recv;
-
-__END__
-
-echo -e 'receive "GET", start capture\nreceive CRLFCRLF, end capture
-showcaptured\n"HTTP/1.0 101 OK"CRLF\n"Upgrade: websocket"CRLF
-"Sec-WebSocket-Accept: "\nws-accept\nCRLF\n"Connection: Upgrade"CRLF
-CRLF\nws-receive-header\nws-receive-data\nws-send-header opcode=1 length=3
-"abc"' | ./perl t_deps/server.pl 0 4355

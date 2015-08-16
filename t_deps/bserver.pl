@@ -10,9 +10,11 @@ use JSON::PS;
 use Test::HTCT::Parser;
 
 my $host = '0';
-my $port = 4355;
-my $tlsport = 14355;
+my $port = $ENV{SERVER_PORT} || 4355;
+my $tlsport = $ENV{SERVER_TLS_PORT} || 14355;
 my $test_port = int (rand 10000) + 1024;
+
+my $root_path = path (__FILE__)->parent->parent->absolute;
 
 my $server_pids = {};
 END { kill 'KILL', $_ for keys %$server_pids }
@@ -34,15 +36,19 @@ sub server_as_cv ($) {
         $_[0]->() if $_[0];
       }
     }; # $stopper
+    my $resultdata = [];
     my $cmd_cv = run_cmd
-        ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), 0, $test_port],
+        [$root_path->child ('perl'), $root_path->child ('t_deps/server.pl'), 0, $test_port],
         '<' => \$code,
         '>' => sub {
           $data .= $_[0] if defined $_[0];
+          while ($data =~ s/^\[data (.+)\]$//m) {
+            push @$resultdata, json_bytes2perl $1;
+          }
           return if $started;
           if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
             $cv->send ({pid => $pid, host => $1, port => $2,
-                        stop => $stopper});
+                        data => $resultdata, stop => $stopper});
             $started = 1;
           }
         },
@@ -93,9 +99,12 @@ for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.d
   };
 }
 
-my $root_path = path (__FILE__)->parent->parent->absolute;
 my $cert_path = $root_path->child ('local/cert');
 my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
+unless ($cert_path->child ($cn . '-key-pkcs1.pem')->is_file) {
+  system $root_path->child ('perl'), $root_path->child ('t_deps/bin/generate-certs-for-tests.pl'), $cert_path, $cn;
+  sleep 2;
+}
 my $httpd = AnyEvent::HTTPD->new (host => $host, port => $port);
 my $tlshttpd = AnyEvent::HTTPD->new (host => $host, port => $tlsport, ssl => {
   ca_path => $cert_path->child ('ca-cert.pem'),
@@ -104,6 +113,7 @@ my $tlshttpd = AnyEvent::HTTPD->new (host => $host, port => $tlsport, ssl => {
 });
 my $cv = AE::cv;
 
+my $test_result_data = {};
 my $httpdcb = sub {
   my ($httpd, $req) = @_;
   my $host = $req->headers->{host} // $host;
@@ -140,6 +150,7 @@ my $httpdcb = sub {
     if (defined $test) {
       server_as_cv ($test->{data}->[0])->cb (sub {
         my $server = $_[0]->recv;
+        $test_result_data->{$test_name} = $server->{data};
         my $ws = ($test->{'test-type'} || ['', ['']])->[1]->[0] eq 'ws';
         my $scheme = $httpd->port == $port ? 'http' : 'https';
         $scheme =~ s/http/ws/ if $ws;
@@ -151,6 +162,12 @@ my $httpdcb = sub {
     } else {
       $req->respond ([404, 'Not found', {}, '404 Test not found']);
     }
+  } elsif ($path =~ m{^/resultdata/([0-9]+)$}) {
+    my $test_name = $1;
+    $req->respond ([200, 'OK', {
+      'Content-Type' => 'application/json; charset=utf-8',
+      'Access-Control-Allow-Origin' => '*',
+    }, perl2json_bytes $test_result_data->{$test_name}]);
   } elsif ($path eq '/runner') {
     my $tests_json = perl2json_chars ($httpd->port == $port ? \@test : \@tlstest);
     $req->respond ([200, 'OK', {
@@ -163,7 +180,7 @@ my $httpdcb = sub {
       document.body.appendChild (link);
 
       var resultsContainer = document.createElement ('div');
-      resultsContainer.innerHTML = '<table><thead><tr><th>#<th>Result<th><code>status</code><th><code>statusText</code><th>Headers<th><code>responseText</code><th>File<th>Name<tbody></table>';
+      resultsContainer.innerHTML = '<table><thead><tr><th>#<th>Result<th><code>status</code><th><code>statusText</code><th>Headers<th><code>responseText</code><th>Data<th>File<th>Name<tbody></table>';
       var results = resultsContainer.firstChild;
       document.body.appendChild (resultsContainer);
       results = results.appendChild (document.createElement ('tbody'));
@@ -184,21 +201,15 @@ my $httpdcb = sub {
         return result;
       } // setResult
 
-      function compareResponse (test, testNumber, x) {
+      function compareResponse (test, testNumber, x, tr) {
                 var body = x.responseText;
-                var tr = document.createElement ('tr');
-                tr.className = 'FAIL';
-                var failed = false;
-                tr.appendChild (document.createElement ('th')).appendChild (document.createTextNode (testNumber));
-                var resultCell = tr.appendChild (document.createElement ('th'));
-                resultCell.textContent = 'FAIL';
                 var cell = tr.appendChild (document.createElement ('td'));
-                setResult (cell, x.status == test.status[1][0], x.status, test.status[1][0]) || (failed = true);
+                setResult (cell, x.status == test.status[1][0], x.status, test.status[1][0]);
                 var cell = tr.appendChild (document.createElement ('td'));
                 var reason = test.reason || ['', ['']];
                 reason = reason[1][0] || reason[0];
                 if (reason === undefined) reason = '';
-                setResult (cell, x.statusText == reason, x.statusText, reason) || (failed = true);
+                setResult (cell, x.statusText == reason, x.statusText, reason);
                 var cell = tr.appendChild (document.createElement ('td'));
                 var eHeaders = (test.headers || [''])[0];
                 var aHeaderNames = x.getAllResponseHeaders ()
@@ -215,20 +226,51 @@ my $httpdcb = sub {
                     return '';
                   }
                 }).filter (function (_) { return _.length }).join ("\\u000A");
-                setResult (cell, aHeaders == eHeaders, aHeaders, eHeaders) || (failed = true);
+                setResult (cell, aHeaders == eHeaders, aHeaders, eHeaders);
                 var cell = tr.appendChild (document.createElement ('td'));
                 var expected = test.body[0].replace (/\\(boundary\\)/g, '');
-                setResult (cell, x.responseText + '(close)' == expected, x.responseText + '(close)', expected) || (failed = true);
-                if (!failed) {
-                  resultCell.textContent = 'PASS';
-                  tr.className = 'PASS';
-                }
-                tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode (test._file_name));
-                tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode ((test.name || {})[0]));
-                results.appendChild (tr);
+                setResult (cell, x.responseText + '(close)' == expected, x.responseText + '(close)', expected);
       } // compareResponse
 
-      function runTest (test, testNumber, then) {
+      function runTest (test, testNumber, _then) {
+        var tr = document.createElement ('tr');
+        tr.className = 'FAIL';
+        tr.appendChild (document.createElement ('th')).appendChild (document.createTextNode (testNumber));
+        var resultCell = tr.appendChild (document.createElement ('th'));
+        resultCell.textContent = 'FAIL (script)';
+
+        var then = function () {
+          var x = new XMLHttpRequest;
+          if (location.protocol === "http:") {
+            x.open ('GET', 'http://$host:$port/resultdata/' + encodeURIComponent (testNumber) + '?' + Math.random (), true);
+          } else {
+            x.open ('GET', 'https://$host:$tlsport/resultdata/' + encodeURIComponent (testNumber) + '?' + Math.random (), true);
+          }
+          x.onreadystatechange = function () {
+            if (x.readyState === 4) {
+              var json = JSON.parse (x.responseText);
+
+              var cell = tr.appendChild (document.createElement ('td'));
+              var expected = JSON.stringify (JSON.parse ((test["result-data"] || ["[]"])[0]));
+              var actual = JSON.stringify (json);
+              setResult (cell, expected === actual, actual, expected);
+
+              if (tr.querySelector ('.FAIL')) {
+                resultCell.textContent = 'FAIL';
+              } else {
+                resultCell.textContent = 'PASS';
+                tr.className = 'PASS';
+              }
+              tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode (test._file_name));
+              tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode ((test.name || {})[0]));
+              results.appendChild (tr);
+
+              _then ();
+            }
+          };
+          x.send (null);
+        }; // then
+
         var xhr = new XMLHttpRequest ();
         if (location.protocol === "http:") {
           xhr.open ('GET', 'http://$host:$port/start/' + encodeURIComponent (testNumber) + '?' + Math.random (), true);
@@ -247,7 +289,6 @@ my $httpdcb = sub {
               var events = [];
               y.onopen = function (ev) {
                 if (status === "noevent") status = "open";
-                y.send ("abc");
                 events.push (ev.type);
               };
               y.onmessage = function (ev) {
@@ -261,35 +302,26 @@ my $httpdcb = sub {
               };
               y.onclose = function (ev) {
                 events.push (ev.type);
-                var tr = document.createElement ('tr');
-                tr.className = 'FAIL';
-                var failed = false;
-                tr.appendChild (document.createElement ('th')).appendChild (document.createTextNode (testNumber));
-                var resultCell = tr.appendChild (document.createElement ('th'));
-                resultCell.textContent = 'FAIL';
 
                 var cell = tr.appendChild (document.createElement ('td'));
                 var expected = test["handshake-error"] ? "error" : "open";
-                setResult (cell, expected === status, status, expected) || (failed = true);
+                setResult (cell, expected === status, status, expected);
                 cell.title = events;
 
                 var cell = tr.appendChild (document.createElement ('td'));
-                setResult (cell, true, "", "") || (failed = true);
+                setResult (cell, true, "", "");
 
                 var cell = tr.appendChild (document.createElement ('td'));
-                setResult (cell, true, "", "") || (failed = true);
+                setResult (cell, true, "", "");
 
                 var cell = tr.appendChild (document.createElement ('td'));
-                var expected = test["received"] ? test["received"][0] : "";
-                setResult (cell, expected === data, data, expected) || (failed = true);
-
-                if (!failed) {
-                  resultCell.textContent = 'PASS';
-                  tr.className = 'PASS';
+                if (!test["received"] && test["received-length"]) {
+                  var expected = test["received-length"][1];
+                  setResult (cell, expected == data.length, data.length, expected);
+                } else {
+                  var expected = test["received"] ? test["received"][0] : "";
+                  setResult (cell, expected === data, data, expected);
                 }
-                tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode (test._file_name));
-                tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode ((test.name || {})[0]));
-                results.appendChild (tr);
 
                 then ();
               };
@@ -307,7 +339,7 @@ my $httpdcb = sub {
                         if (x.getResponseHeader ('x-test-retry') && tryCount++ < 10) {
                           tryReq ();
                         } else {
-                          compareResponse (test, testNumber, x);
+                          compareResponse (test, testNumber, x, tr);
                           then ();
                         }
                       }
@@ -329,7 +361,7 @@ my $httpdcb = sub {
               x.open (test.method[1][0], url, true);
               x.onreadystatechange = function () {
                 if (x.readyState === 4) {
-                  compareResponse (test, testNumber, x);
+                  compareResponse (test, testNumber, x, tr);
                   then ();
                 }
               };

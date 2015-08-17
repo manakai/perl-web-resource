@@ -491,6 +491,24 @@ Header: Value
 #incomplete
 
 #name
+"HTTP/1.0 200 OK\r\nheader:value\r\n" close
+#method GET
+#url /
+#data
+"HTTP/1.0 200 OK"CRLF
+"Foo:1"CRLF
+"Header:Value"CRLF
+close
+#status 200
+#reason OK
+#headers
+Foo: 1
+Header: Value
+#body escaped
+(close)
+#incomplete
+
+#name
 "HTTP/1.1 200 OK\r\nheader:value\r\n" close
 #method GET
 #url /
@@ -504,6 +522,26 @@ close
 #headers
 Foo: 1
 Header: Value
+#body escaped
+(close)
+#incomplete
+
+#name
+"HTTP/1.1 200 OK\r\nheader:value\r\nContent-Length: 0\r\n" close
+#method GET
+#url /
+#data
+"HTTP/1.1 200 OK"CRLF
+"Foo:1"CRLF
+"Header:Value"CRLF
+"Content-Length: 0"CRLF
+close
+#status 200
+#reason OK
+#headers
+Foo: 1
+Header: Value
+Content-Length: 0
 #body escaped
 (close)
 #incomplete

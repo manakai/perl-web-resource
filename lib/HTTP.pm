@@ -371,18 +371,21 @@ sub _process_rbuf_eof ($$;%) {
       });
     }
   } elsif ($self->{state} eq 'response body') {
-    if ($args{abort} or
-        defined $self->{unread_length} and $self->{unread_length} > 0) {
+    if (defined $self->{unread_length} and $self->{unread_length} > 0) {
       $self->{response}->{incomplete} = 1;
       $self->{request_state} = 'sent';
       if ($self->{response}->{version} eq '1.1') {
-        $self->_ev ('reset', {
+        $self->_ev ('responseerror', {
           message => "Connection truncated",
           errno => $args{errno},
         });
       } else {
         $self->_ev ('complete');
       }
+    } elsif ($args{abort} and
+             defined $self->{unread_length} and $self->{unread_length} == 0) {
+      $self->{request_state} = 'sent';
+      $self->_ev ('complete');
     } else {
       $self->_ev ('complete');
     }

@@ -78,6 +78,7 @@ sub timer ($$) {
 } # timer
 
 my $filter = $ENV{TEST_METHOD} ? qr/$ENV{TEST_METHOD}/ : qr//;
+my $filter_x = $ENV{TEST_METHOD_EXCLUDED} ? qr/$ENV{TEST_METHOD_EXCLUDED}/ : qr/(?!)/;
 my @test;
 my @tlstest;
 for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.dat')) {
@@ -90,6 +91,7 @@ for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.d
     my $test = $_[0];
     my $name = join ' - ', $file_name, $test->{name}->[0] // '';
     $name =~ /$filter/o or return;
+    $name =~ /$filter_x/o and return;
     $test->{_file_name} = $file_name;
     if ($test->{tls}) {
       push @tlstest, $test;
@@ -284,6 +286,7 @@ my $httpdcb = sub {
             var testType = (test['test-type'] || ['', ['']])[1][0];
             if (testType === 'ws') {
               var y = new WebSocket (url, (test['ws-protocol'] || [''])[0].split (/\\n/).filter (function (_) { return _.length }));
+              y.binaryType = 'arraybuffer';
               var status = "noevent";
               var data = "";
               var events = [];
@@ -292,7 +295,14 @@ my $httpdcb = sub {
                 events.push (ev.type);
               };
               y.onmessage = function (ev) {
-                data += ev.data;
+                if (ev.data instanceof ArrayBuffer) {
+                  var view = new Uint8Array (ev.data);
+                  for (var i = 0; i < view.length; i++) {
+                    data += String.fromCharCode (view[i]);
+                  }
+                } else {
+                  data += ev.data;
+                }
                 y.close ();
                 events.push (ev.type);
               };

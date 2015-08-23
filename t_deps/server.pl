@@ -4,6 +4,7 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Time::HiRes qw(time);
 use Socket;
+use Errno;
 use JSON::PS;
 use AnyEvent;
 use AnyEvent::Socket;
@@ -148,26 +149,23 @@ sub run_commands ($$$$) {
         my $opcode = 0x0F & ord $1;
         my $has_mask = !!(0x80 & ord $2);
         my $length = 0x7F & ord $2;
-        if ($length == 0xFE) {
+        if ($length == 0x7E) {
           if ($states->{received} =~ s/^..(.)(.)//s) {
             $length = (ord $1) * 0x100 + ord $2;
           } else {
             undef $length;
           }
-        } elsif ($length == 0xFF) {
-          if ($states->{received} =~ s/^..(.)(.)(.)(.)//s) {
-            if (0x80 & ord $1) {
-              undef $length;
-            } else {
-              $length = (ord $1) * 0x1_00_00_00 + (ord $2) * 0x1_00_00 + (ord $3) * 0x100 + ord $4;
-            }
+        } elsif ($length == 0x7F) {
+          if ($states->{received} =~ s/^..(........)//s) {
+            $length = unpack 'Q>', $1;
+            undef $length if $length >= 2**63;
           } else {
             undef $length;
           }
         } else {
           $states->{received} =~ s/^..//s;
         }
-        my $mask = undef;
+        my $mask = "\x00\x00\x00\x00";
         if ($has_mask) {
           if ($states->{received} =~ s/^(....)//s) {
             $mask = $1;
@@ -216,9 +214,15 @@ sub run_commands ($$$$) {
           syswrite STDOUT, sprintf "[data %s]\n",
               perl2json_bytes "  @{[pe_b $data]}";
         } else {
-          warn hex_dump ($data), "\n";
-          syswrite STDOUT, sprintf "[data %s]\n",
-              perl2json_bytes "  @{[pe_b $data]}";
+          if (length $data > 2**10) {
+            warn hex_dump (substr $data, 0, 2**10), "\n";
+            warn "...\n";
+            syswrite STDOUT, sprintf "[data-length %d]\n", length $data;
+          } else {
+            warn hex_dump ($data), "\n";
+            syswrite STDOUT, sprintf "[data %s]\n",
+                perl2json_bytes "  @{[pe_b $data]}";
+          }
         }
         next;
       }
@@ -260,7 +264,7 @@ sub run_commands ($$$$) {
     } elsif ($command =~ /^reset$/) {
       setsockopt $hdl->{fh}, SOL_SOCKET, SO_LINGER, pack "II", 1, 0;
       close $hdl->{fh};
-      $hdl->push_shutdown; # let $hdl report an error
+      $hdl->on_drain (sub { eval { shutdown $_[0]->{fh}, 1; 1 } or warn $@ }); # let $hdl report an error
     } elsif ($command =~ /^starttls$/) {
       my $root_path = path (__FILE__)->parent->parent->absolute;
       my $cert_path = $root_path->child ('local/cert');
@@ -305,7 +309,7 @@ sub run_commands ($$$$) {
     } elsif ($command =~ /^showcaptured$/) {
       AE::log error => qq{[$states->{id}] captured = |$states->{captured}|};
     } elsif ($command =~ /^show\s+"([^"]*)"$/) {
-      AE::log error => $1;
+      warn "[$states->{id}] @{[time]} @{[scalar gmtime]} $1\n";
     } elsif ($command =~ /\S/) {
       die "Unknown command: |$command|";
     }
@@ -571,8 +575,13 @@ my $server = tcp_server $host, $port, sub {
        },
        on_eof => sub {
          warn "[$id] @{[time]} @{[scalar gmtime]} EOF\n" if $DUMP;
-         $hdl->destroy;
-         $cv->end;
+         $hdl->on_drain (sub {
+           warn "[$id] @{[time]} @{[scalar gmtime]} drain\n" if $DUMP;
+           syswrite STDOUT, "[server done]\n";
+           $hdl->destroy;
+           $cv->end;
+           $_[0]->on_drain (undef);
+         });
        },
        on_read => sub {
          $states->{received} .= $_[0]->{rbuf};
@@ -588,3 +597,4 @@ my $server = tcp_server $host, $port, sub {
 syswrite STDOUT, "[server $host $port]\x0A";
 
 $cv->recv;
+#warn "end";

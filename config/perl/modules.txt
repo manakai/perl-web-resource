@@ -1,3 +1,6 @@
 AnyEvent
 AnyEvent::Handle
 AnyEvent::Socket
+Digest::SHA
+Errno
+MIME::Base64

@@ -1057,6 +1057,8 @@ close
 #received-length 0
 #result-data
 [
+  "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
+  "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
 
 #name
@@ -1093,6 +1095,8 @@ close
 #received-length 0
 #result-data
 [
+  "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
+  "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
 
 #name
@@ -1118,7 +1122,7 @@ CRLF
 0xFF
 0xFF
 0xFF
-"x" x 2147483647
+"x" x 2147483
 show "..."
 "y"
 ws-send-header opcode=8 length=0
@@ -1129,6 +1133,8 @@ close
 #received-length 0
 #result-data
 [
+  "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
+  "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
 
 #name
@@ -1156,8 +1162,8 @@ close
 #received-length 2147483647
 #result-data
 [
-  "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
-  "  code=-1 reason="
+  "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
+  "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
 
 #name

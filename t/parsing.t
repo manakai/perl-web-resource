@@ -5,6 +5,7 @@ use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
 use Test::HTCT::Parser;
+use JSON::PS;
 use HTTP;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
@@ -18,14 +19,26 @@ sub server_as_cv ($) {
   my $pid;
   my $data = '';
   my $port = int (rand 10000) + 1024;
-  run_cmd
+  my $resultdata = [];
+  my $after_server_close_cv;
+  my $close_server = 0;
+  $after_server_close_cv = run_cmd
       ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), '127.0.0.1', $port],
       '<' => \$code,
       '>' => sub {
         $data .= $_[0] if defined $_[0];
+        while ($data =~ s/^\[data (.+)\]$//m) {
+          push @$resultdata, json_bytes2perl $1;
+        }
+        if ($data =~ s/^\[server done\]$//m) {
+          kill 'TERM', $pid if $close_server;
+        }
         return if $started;
         if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
           $cv->send ({pid => $pid, host => $1, port => $2,
+                      resultdata => $resultdata,
+                      close_server_ref => \$close_server,
+                      after_server_close_cv => $after_server_close_cv,
                       stop => sub {
                         kill 'TERM', $pid;
                         delete $server_pids->{$pid};
@@ -44,6 +57,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
     '1xx' => {is_prefixed => 1, multiple => 1},
     headers => {is_prefixed => 1},
     body => {is_prefixed => 1},
+    'ws-protocol' => {multiple => 1},
   }, sub {
     my $test = $_[0];
     test {
@@ -51,10 +65,11 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
       server_as_cv ($test->{data}->[0])->cb (sub {
         my $server = $_[0]->recv;
         my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+        my $test_type = $test->{'test-type'}->[1]->[0] // '';
         
         my $req_results = {};
         my $onev = sub {
-          my ($http, $req, $type) = @_;
+          my ($http, $req, $type, undef, $flag) = @_;
           #warn "$req $type";
           my $result = $req_results->{$req->{id}} ||= {};
           push @{$result->{events} ||= []}, [$type];
@@ -62,6 +77,12 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             $result->{response} = $_[3];
             if ($req->{method} eq 'CONNECT') {
               $req->{_tunnel}->();
+            }
+            if ($flag) {
+              $result->{ws_established} = 1;
+              if ($test_type eq 'ws' and $test->{'ws-send'}) {
+                $http->send_ws_message ('text', 'stu');
+              }
             }
           }
           if ($type eq 'data') {
@@ -93,16 +114,30 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             id => $next_req_id++,
           };
           $req->{done} = Promise->new (sub { $req->{_ok} = $_[0] });
+          if ($test_type eq 'ws') {
+            ${$server->{close_server_ref}} = 1;
+            $req->{done} = $req->{done}->then (sub {
+              return Promise->from_cv ($server->{after_server_close_cv});
+            });
+          }
           $req->{tunnel} = Promise->new (sub { $req->{_tunnel} = $_[0] })
               if $req->{method} eq 'CONNECT';
           return $req;
         }; # $get_req
 
-        my $test_type = $test->{'test-type'}->[1]->[0] // '';
-
         $http->connect->then (sub {
-          if ($test_type eq 'second' or
-              $test_type eq 'largerequest-second') {
+          if ($test_type eq 'ws') {
+            my $req = $get_req->(
+              method => 'GET',
+              target => $test->{url}->[1]->[0],
+              ws => 1,
+            );
+            $http->send_request ($req, ws => 1, ws_protocols => [map { $_->[0] } @{$test->{'ws-protocol'} or []}]);
+            return $req->{done}->then (sub {
+              return $req_results->{$req->{id}};
+            });
+          } elsif ($test_type eq 'second' or
+                   $test_type eq 'largerequest-second') {
             my $try_count = 0;
             my $try; $try = sub {
               my $req = $get_req->(
@@ -155,7 +190,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               });
             };
             return $try->();
-          } else {
+          } else { # $test_type
             my $req = $get_req->(
               method => $test->{method}->[1]->[0],
               target => $test->{url}->[1]->[0],
@@ -179,8 +214,14 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           my $result = $_[0];
           my $res = $result->{response};
           test {
-            my $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
-            is !!$result->{is_error}, !!$is_error, 'is error';
+            my $is_error;
+            if ($test_type eq 'ws') {
+              $is_error = !$result->{ws_established};
+              is !!$is_error, !!$test->{'handshake-error'}, 'is error (ws)';
+            } else {
+              $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
+              is !!$result->{is_error}, !!$is_error, 'is error';
+            }
 
             my $expected_1xxes = $test->{'1xx'} || [];
             my $actual_1xxes = $res->{'1xxes'} || [];
@@ -202,13 +243,31 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               };
             }
 
-            is $res->{status}, $is_error ? undef : $test->{status}->[1]->[0];
-            is $res->{reason}, $is_error ? undef : $test->{reason}->[1]->[0] // $test->{reason}->[0] // '';
-            is join ("\x0A", map {
-              $_->[0] . ': ' . $_->[1];
-            } @{$res->{headers}}), $test->{headers}->[0] // '';
-            is $result->{body}, $test->{body}->[0], 'body';
-            is !!$result->{response}->{incomplete}, !!$test->{incomplete}, 'incomplete message';
+            if ($test_type eq 'ws') {
+              if ($is_error) {
+                ok 1;
+              } else {
+                if ($test->{'received-length'}) {
+                  is length ($result->{body}), $test->{'received-length'}->[1]->[0] + length '(close)', 'received length';
+                } else {
+                  is $result->{body}, ($test->{received}->[0] // '') . '(close)', 'received';
+                }
+              }
+              my $expected = perl2json_bytes_for_record (json_bytes2perl (($test->{"result-data"} || ["[]"])->[0]));
+              my $actual = perl2json_bytes_for_record $server->{resultdata};
+              is $actual, $expected, 'resultdata';
+              ok 1;
+              ok 1;
+              ok 1;
+            } else {
+              is $res->{status}, $is_error ? undef : $test->{status}->[1]->[0];
+              is $res->{reason}, $is_error ? undef : $test->{reason}->[1]->[0] // $test->{reason}->[0] // '';
+              is join ("\x0A", map {
+                $_->[0] . ': ' . $_->[1];
+              } @{$res->{headers}}), $test->{headers}->[0] // '';
+              is $result->{body}, $test->{body}->[0], 'body';
+              is !!$result->{response}->{incomplete}, !!$test->{incomplete}, 'incomplete message';
+            }
           } $c;
           return $http->close;
         })->then (sub {
@@ -220,7 +279,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           undef $c;
         });
       });
-    } n => 7 + 3*@{$test->{'1xx'} || []}, name => [$path, $test->{name}->[0]];
+    } n => 7 + 3*@{$test->{'1xx'} || []}, name => [$path, $test->{name}->[0]],
+        timeout => (($test->{name}->[0] // '') =~ /length=/ ? 90 : 20);
   };
 } # $path
 

@@ -2,16 +2,28 @@ package HTTP;
 use strict;
 use warnings;
 use Errno;
+use MIME::Base64 qw(encode_base64);
+use Digest::SHA qw(sha1);
+use Encode qw(decode);
 use AnyEvent;
 use AnyEvent::Handle;
 use AnyEvent::Socket;
 use Promise;
 
-my $DEBUG = $ENV{WEBUA_DEBUG};
+my $DEBUG = $ENV{WEBUA_DEBUG} || 0;
+
+sub MAX_BYTES () { 2**31-1 }
 
 sub new_from_host_and_port ($$$) {
   return bless {host => $_[1], port => $_[2]}, $_[0];
 } # new_from_host_and_port
+
+sub _e4d ($) {
+  return $_[0] unless $_[0] =~ /[^\x20-\x5B\x5D-\x7E]/;
+  my $x = $_[0];
+  $x =~ s/([^\x20-\x5B\x5D-\x7E])/sprintf '\x%02X', ord $1/ge;
+  return $x;
+} # _e4d
 
 sub _process_rbuf ($$;%) {
   my ($self, $handle, %args) = @_;
@@ -153,10 +165,86 @@ sub _process_rbuf ($$;%) {
         }
       }
 
-      if (100 <= $res->{status} and $res->{status} <= 199) {
-        if ($self->{request}->{method} eq 'CONNECT') {
+      if ($res->{status} == 200 and
+          $self->{request}->{method} eq 'CONNECT') {
+        $self->_ev ('headers', $res);
+        $self->{no_new_request} = 1;
+        $self->{state} = 'tunnel';
+      } elsif (defined $self->{ws_state} and
+               $self->{ws_state} eq 'CONNECTING' and
+               $res->{status} == 101) {
+        my $failed = 0;
+        {
+          my $ug = '';
+          my $con = '';
+          my $accept = '';
+          my $proto;
+          my $exts = '';
+          for (@{$res->{headers}}) {
+            if ($_->[2] eq 'upgrade') {
+              $ug .= ',' . $_->[1];
+            } elsif ($_->[2] eq 'connection') {
+              $con .= ',' . $_->[1];
+            } elsif ($_->[2] eq 'sec-websocket-accept') {
+              $accept .= ',' if not defined $accept;
+              $accept .= $_->[1];
+            } elsif ($_->[2] eq 'sec-websocket-protocol') {
+              $proto .= ',' if defined $proto;
+              $proto .= $_->[1];
+            } elsif ($_->[2] eq 'sec-websocket-extensions') {
+              $exts .= ',' . $_->[2];
+            }
+          }
+          $ug =~ tr/A-Z/a-z/;
+          do { $failed = 1; last } unless
+              grep { $_ eq 'websocket' } map {
+                s/\A[\x09\x0A\x0D\x20]+//; s/[\x09\x0A\x0D\x20]+\z//; $_;
+              } split /,/, $ug;
+          $con =~ tr/A-Z/a-z/;
+          do { $failed = 1; last } unless
+              grep { $_ eq 'upgrade' } map {
+                s/\A[\x09\x0A\x0D\x20]+//; s/[\x09\x0A\x0D\x20]+\z//; $_;
+              } split /,/, $con;
+          do { $failed = 1; last } unless
+              $accept eq encode_base64 sha1 ($self->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), '';
+          if (defined $proto) {
+            do { $failed = 1; last }
+                if not grep { $_ eq $proto } @{$self->{ws_protos}};
+          } else {
+            do { $failed = 1; last } if @{$self->{ws_protos}};
+          }
+          do { $failed = 1; last }
+              if grep { length $_ } split /,/, $exts;
+        }
+        if ($failed) {
+          $self->_ev ('headers', $res);
+          $self->_ev ('complete', {failed => 1, status => 1006, reason => ''});
+          $self->{no_new_request} = 1;
+          $self->{request_state} = 'sent';
+          $self->_next;
+          return;
+        } else {
+          $self->{ws_state} = 'OPEN';
+          $self->_ev ('headers', $res, 1);
+          $self->{no_new_request} = 1;
+          $self->{state} = 'before ws frame';
+          if (defined $self->{pending_frame}) {
+            $self->{ws_state} = 'CLOSING';
+            $self->{handle}->push_write ($self->{pending_frame});
+            $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if $DEBUG;
+            $self->{timer} = AE::timer 20, 0, sub {
+              warn "$self->{request}->{id}: WS timeout (20)\n" if $DEBUG;
+              delete $self->{timer};
+              $self->_next;
+            };
+          }
+        }
+      } elsif (100 <= $res->{status} and $res->{status} <= 199) {
+        if ($self->{request}->{method} eq 'CONNECT' or
+            (defined $self->{ws_state} and
+             $self->{ws_state} eq 'CONNECTING')) {
           $self->_ev ('responseerror', {
-            message => "1xx response to CONNECT",
+            message => "1xx response to CONNECT or WS",
           });
           $self->{no_new_request} = 1;
           $self->{request_state} = 'sent';
@@ -175,11 +263,6 @@ sub _process_rbuf ($$;%) {
           $res->{headers} = [];
           $self->{state} = 'before response';
         }
-      } elsif ($res->{status} == 200 and
-               $self->{request}->{method} eq 'CONNECT') {
-        $self->_ev ('headers', $res);
-        $self->{no_new_request} = 1;
-        $self->{state} = 'tunnel';
       } elsif ($res->{status} == 204 or
                $res->{status} == 205 or
                $res->{status} == 304 or
@@ -189,7 +272,21 @@ sub _process_rbuf ($$;%) {
         $self->{state} = 'response body';
       } else {
         $self->_ev ('headers', $res);
-        if ($chunked) {
+        if (($chunked or
+             not defined $self->{unread_length} or
+             $self->{unread_length} > 0) and
+            ($self->{request}->{method} eq 'CONNECT' or
+             (defined $self->{ws_state} and
+              $self->{ws_state} eq 'CONNECTING'))) {
+          $self->{response}->{incomplete} = 1;
+          $self->_ev ('responseerror', {
+            message => "non-empty response to CONNECT or WS",
+          });
+          $self->{no_new_request} = 1;
+          $self->{request_state} = 'sent';
+          $self->_next;
+          return;
+        } elsif ($chunked) {
           $self->{state} = 'before response chunk';
         } else {
           $self->{state} = 'response body';
@@ -211,7 +308,7 @@ sub _process_rbuf ($$;%) {
         $self->{unread_length} = 0;
       }
       if ($self->{unread_length} <= 0) {
-        $self->_ev ('complete');
+        $self->_ev ('complete', {});
 
         my $connection = '';
         my $keep_alive = $self->{response}->{version} eq '1.1';
@@ -246,7 +343,7 @@ sub _process_rbuf ($$;%) {
       $self->{response}->{incomplete} = 1;
       $self->{no_new_request} = 1;
       $self->{request_state} = 'sent';
-      $self->_ev ('complete');
+      $self->_ev ('complete', {});
       $self->_next;
       return;
     }
@@ -262,7 +359,7 @@ sub _process_rbuf ($$;%) {
         $self->{response}->{incomplete} = 1;
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
-        $self->_ev ('complete');
+        $self->_ev ('complete', {});
         $self->_next;
         return;
       }
@@ -304,7 +401,7 @@ sub _process_rbuf ($$;%) {
         $self->{response}->{incomplete} = 1;
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
-        $self->_ev ('complete');
+        $self->_ev ('complete', {});
         $self->_next;
         return;
       }
@@ -314,11 +411,11 @@ sub _process_rbuf ($$;%) {
     if (2**18-1 < length $handle->{rbuf}) {
       $self->{no_new_request} = 1;
       $self->{request_state} = 'sent';
-      $self->_ev ('complete');
+      $self->_ev ('complete', {});
       $self->_next;
       return;
     } elsif ($handle->{rbuf} =~ s/^(.*?)\x0A\x0D?\x0A//s) {
-      $self->_ev ('complete');
+      $self->_ev ('complete', {});
       my $connection = '';
       for (@{$self->{response}->{headers} || []}) {
         if ($_->[2] eq 'connection') {
@@ -336,12 +433,245 @@ sub _process_rbuf ($$;%) {
       return;
     }
   }
+  my $ws_failed;
+  WS: {
+    if ($self->{state} eq 'before ws frame') {
+      my $rlength = length $handle->{rbuf};
+      last WS if $rlength < 2;
+      my $b1 = ord substr $handle->{rbuf}, 0, 1;
+      my $b2 = ord substr $handle->{rbuf}, 1, 1;
+      my $fin = $b1 & 0b10000000;
+      my $opcode = $b1 & 0b1111;
+      my $mask = $b2 & 0b10000000;
+      $self->{unread_length} = $b2 & 0b01111111;
+      if ($self->{unread_length} == 126) {
+        if ($opcode >= 8) {
+          $ws_failed = '';
+          last WS;
+        }
+        last WS unless $rlength >= 4;
+        $self->{unread_length} = unpack 'n', substr $handle->{rbuf}, 2, 2;
+        pos ($handle->{rbuf}) = 4;
+        if ($self->{unread_length} < 126) {
+          $ws_failed = '';
+          last WS;
+        }
+      } elsif ($self->{unread_length} == 127) {
+        if ($opcode >= 8) {
+          $ws_failed = '';
+          last WS;
+        }
+        last WS unless $rlength >= 10;
+        $self->{unread_length} = unpack 'Q>', substr $handle->{rbuf}, 2, 8;
+        pos ($handle->{rbuf}) = 10;
+        if ($self->{unread_length} > MAX_BYTES) { # spec limit=2**63
+          $ws_failed = '';
+          last WS;
+        }
+        if ($self->{unread_length} < 2**16) {
+          $ws_failed = '';
+          last WS;
+        }
+      } else {
+        pos ($handle->{rbuf}) = 2;
+      }
+      if ($mask) {
+        last WS unless $rlength >= pos ($handle->{rbuf}) + 4;
+        $self->{ws_decode_mask_key} = substr $handle->{rbuf}, pos ($handle->{rbuf}), 4;
+        pos ($handle->{rbuf}) += 4;
+        # XXX if client,
+        $ws_failed = 'Masked frame from server';
+        last WS;
+      } else {
+        delete $self->{ws_decode_mask_key};
+        # XXX error if server
+      }
+      $self->_ws_debug ('R', '',
+                        FIN => !!$fin,
+                        RSV1 => !!($b1 & 0b01000000),
+                        RSV2 => !!($b1 & 0b00100000),
+                        RSV3 => !!($b1 & 0b00010000),
+                        opcode => $opcode,
+                        mask => $self->{ws_decode_mask_key},
+                        length => $self->{unread_length}) if $DEBUG;
+      if (not $fin and ($opcode == 8 or $opcode == 9 or $opcode == 10)) {
+        $ws_failed = '';
+        last WS;
+      }
+      if ($b1 & 0b01110000) {
+        $ws_failed = 'Invalid reserved bit';
+        last WS;
+      }
+      if ((3 <= $opcode and $opcode <= 7) or
+          (11 <= $opcode and $opcode <= 15)) {
+        $ws_failed = 'Unknown opcode';
+        last WS;
+      }
+      if ($opcode == 0) {
+        if (not defined $self->{ws_data_frame}) {
+          $ws_failed = 'Unexpected continuation';
+          last WS;
+        }
+        $self->{ws_frame} = $self->{ws_data_frame};
+      } elsif ($opcode == 1 or $opcode == 2) {
+        if (defined $self->{ws_data_frame}) {
+          $ws_failed = 'Previous data frame unfinished';
+          last WS;
+        }
+        $self->{ws_data_frame} = $self->{ws_frame} = [$opcode, []];
+      } else {
+        $self->{ws_frame} = [$opcode, []];
+      }
+      $self->{ws_frame}->[2] = 1 if $fin;
+      substr ($handle->{rbuf}, 0, pos $handle->{rbuf}) = '';
+      $self->{state} = 'ws data';
+    }
+    if ($self->{state} eq 'ws data') {
+      if ($self->{unread_length} > 0 and
+          length ($handle->{rbuf}) >= $self->{unread_length}) {
+        # XXX xor if ws_decode_mask_key
+        push @{$self->{ws_frame}->[1]}, substr $handle->{rbuf}, 0, $self->{unread_length};
+        #if ($DEBUG > 1 or
+        #    ($DEBUG and $self->{ws_frame}->[0] >= 8)) {
+        if ($DEBUG and $self->{ws_frame}->[0] == 8) {
+          if ($self->{ws_frame}->[0] == 8 and
+              $self->{unread_length} > 1) {
+            warn sprintf "$self->{request}->{id}: R: status=%d %s\n",
+                unpack ('n', substr $handle->{rbuf}, 0, 2),
+                _e4d substr ($handle->{rbuf}, 2, $self->{unread_length});
+          } else {
+            warn sprintf "$self->{request}->{id}: R: %s\n",
+                _e4d substr ($handle->{rbuf}, 0, $self->{unread_length});
+          }
+        }
+        substr ($handle->{rbuf}, 0, $self->{unread_length}) = '';
+        $self->{unread_length} = 0;
+      }
+      if ($self->{unread_length} <= 0) {
+        if ($self->{ws_frame}->[0] == 8) {
+          my $data = join '', @{$self->{ws_frame}->[1]};
+          if (1 == length $data) {
+            $ws_failed = '-';
+            last WS;
+          }
+          my $status;
+          my $reason;
+          if (length $data) {
+            $status = unpack 'n', substr $data, 0, 2;
+            if ($status == 1005 or $status == 1006) {
+              $ws_failed = '-';
+              last WS;
+            }
+            my $buffer = substr $data, 2;
+            $reason = eval { decode 'utf-8', $buffer, Encode::FB_CROAK }; # XXX Encoding Standard
+            if (length $buffer) {
+              $ws_failed = 'Invalid UTF-8 in Close frame';
+              last WS;
+            }
+          }
+          unless ($self->{ws_state} eq 'CLOSING') {
+            $self->{ws_state} = 'CLOSING';
+            $self->_ev ('closing');
+            my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+            for (0..((length $data)-1)) {
+              substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+            }
+            $self->{handle}->push_write
+                (pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
+                 $mask . $data);
+            $self->_ws_debug ('S', $reason // '', FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $status) if $DEBUG;
+          }
+          $self->{state} = 'ws terminating';
+          $self->{exit} = {status => $status, reason => $reason};
+          # if server, $self->_next;
+          $self->{timer} = AE::timer 1, 0, sub {
+            warn "$self->{request}->{id}: WS timeout (1)\n" if $DEBUG;
+            delete $self->{timer};
+            $self->_next;
+          };
+          return;
+        } elsif ($self->{ws_frame}->[0] <= 2) { # 0, 1, 2
+          if ($self->{ws_frame}->[2]) { # FIN
+            my $length = 0;
+            if ($self->{ws_frame}->[0] == 1) {
+              my $buffer = join '', @{$self->{ws_frame}->[1]};
+              $self->{ws_frame}->[1] = [eval { decode 'utf-8', $buffer, Encode::FB_CROAK }]; # XXX Encoding Standard # XXX streaming decoder
+              if (length $buffer) {
+                $ws_failed = 'Invalid UTF-8 in text frame';
+                last WS;
+              }
+            } else {
+              for (@{$self->{ws_frame}->[1]}) {
+                $length += length $_;
+              }
+            }
+            $self->_ev ('wsmessagestart', {opcode => $self->{ws_frame}->[0],
+                                           length => $length});
+            for (@{$self->{ws_frame}->[1]}) {
+              $self->_ev ('data', $_);
+            }
+            $self->_ev ('wsmessageend');
+            delete $self->{ws_data_frame};
+          }
+        } elsif ($self->{ws_frame}->[0] == 9) {
+          my $data = join '', @{$self->{ws_frame}->[1]};
+          my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+          for (0..((length $data)-1)) {
+            substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+          }
+          $self->{handle}->push_write
+              (pack ('CC', 0b10000000 | 10, 0b10000000 | length $data) .
+               $mask . $data);
+          $self->_ws_debug ('S', $data, FIN => 1, opcode => 10, mask => $mask, length => length $data) if $DEBUG;
+          $self->_ev ('ping', $data, 0);
+        } elsif ($self->{ws_frame}->[0] == 10) {
+          $self->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 1);
+        } # frame type
+        delete $self->{ws_frame};
+        delete $self->{ws_decode_mask_key};
+        $self->{state} = 'before ws frame';
+        redo WS;
+      }
+    }
+  } # WS
+  if (defined $ws_failed) {
+    $self->{ws_state} = 'CLOSING';
+    $ws_failed = 'WebSocket Protocol Error' unless length $ws_failed;
+    $ws_failed = '' if $ws_failed eq '-';
+    $self->{exit} = {failed => 1, status => 1002, reason => $ws_failed};
+    my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+    my $data = pack 'n', $self->{exit}->{status};
+    $data .= $self->{exit}->{reason};
+    for (0..((length $data)-1)) {
+      substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+    }
+    # length $data must be < 126
+    $self->{handle}->push_write
+        (pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
+         $mask . $data);
+    $self->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $self->{exit}->{status}) if $DEBUG;
+    $self->{state} = 'ws terminating';
+    $self->{no_new_request} = 1;
+    $self->{request_state} = 'sent';
+    $self->_next;
+    return;
+  }
+  if ($self->{state} eq 'ws terminating') {
+    unless ($self->{exit}->{failed}) {
+      $self->{exit}->{failed} = 1;
+      $self->{exit}->{status} = 1006;
+      $self->{exit}->{reason} = '';
+    }
+    $handle->{rbuf} = '';
+  }
   if ($self->{state} eq 'tunnel') {
     $self->_ev ('data', $handle->{rbuf})
         if length $handle->{rbuf};
     $handle->{rbuf} = '';
   }
-  if ($self->{state} eq 'waiting' or $self->{state} eq 'sending') {
+  if ($self->{state} eq 'waiting' or
+      $self->{state} eq 'sending' or
+      $self->{state} eq 'stopped') {
     $handle->{rbuf} = '';
   }
 } # _process_rbuf
@@ -360,7 +690,7 @@ sub _process_rbuf_eof ($$;%) {
         # XXX
         #abort => $args{abort},
         #errno => $args{errno},
-        $self->_ev ('complete');
+        $self->_ev ('complete', {});
       }
       $handle->{rbuf} = '';
     } else {
@@ -380,14 +710,14 @@ sub _process_rbuf_eof ($$;%) {
           errno => $args{errno},
         });
       } else {
-        $self->_ev ('complete');
+        $self->_ev ('complete', {});
       }
     } elsif ($args{abort} and
              defined $self->{unread_length} and $self->{unread_length} == 0) {
       $self->{request_state} = 'sent';
-      $self->_ev ('complete');
+      $self->_ev ('complete', {});
     } else {
-      $self->_ev ('complete');
+      $self->_ev ('complete', {});
     }
         # XXX
         #abort => $args{abort},
@@ -400,12 +730,12 @@ sub _process_rbuf_eof ($$;%) {
   }->{$self->{state}}) {
     $self->{response}->{incomplete} = 1;
     $self->{request_state} = 'sent';
-    $self->_ev ('complete');
+    $self->_ev ('complete', {});
   } elsif ($self->{state} eq 'before response trailer') {
     $self->{request_state} = 'sent';
-    $self->_ev ('complete');
+    $self->_ev ('complete', {});
   } elsif ($self->{state} eq 'tunnel') {
-    $self->_ev ('complete');
+    $self->_ev ('complete', {});
         # XXX
         #abort => $args{abort},
         #errno => $args{errno},
@@ -414,6 +744,17 @@ sub _process_rbuf_eof ($$;%) {
       message => "Connection closed in response header",
       errno => $args{errno},
     });
+  } elsif ($self->{state} eq 'before ws frame' or
+           $self->{state} eq 'ws data') {
+    $self->{ws_state} = 'CLOSING';
+    $self->{exit} = {failed => 1, status => 1006, reason => ''};
+  } elsif ($self->{state} eq 'ws terminating') {
+    $self->{ws_state} = 'CLOSING';
+    if ($args{abort} and not $self->{exit}->{failed}) {
+      $self->{exit}->{failed} = 1;
+      $self->{exit}->{status} = 1006;
+      $self->{exit}->{reason} = '';
+    }
   }
 
   $self->{no_new_request} = 1;
@@ -425,15 +766,29 @@ sub _next ($) {
   my $self = $_[0];
   return if $self->{state} eq 'stopped';
 
+  delete $self->{timer};
+  if (defined $self->{ws_state} and $self->{ws_state} eq 'CLOSING') {
+    $self->_ev ('complete', $self->{exit});
+  }
+
   if (not $self->{no_new_request} and $self->{request_state} eq 'sending') {
     $self->{state} = 'sending';
   } else {
     delete $self->{request};
     delete $self->{response};
     $self->{request_state} = 'initial';
-    $self->{state} = $self->{no_new_request} ? 'stopped' : 'waiting';
     (delete $self->{request_done})->() if defined $self->{request_done};
-    $self->{handle}->push_shutdown if $self->{no_new_request};
+    if ($self->{no_new_request}) {
+      $self->{handle}->push_shutdown;
+      my $fh = $self->{handle}->fh;
+      my $timer; $timer = AE::timer 1, 0, sub {
+        shutdown $fh, 2;
+        undef $timer;
+      };
+      $self->{state} = 'stopped';
+    } else {
+      $self->{state} = 'waiting';
+    }
   }
 } # _next
 
@@ -472,8 +827,11 @@ sub connect ($) {
              my ($hdl) = @_;
              $self->_process_rbuf ($hdl, eof => 1);
              $self->_process_rbuf_eof ($hdl);
-             delete $self->{handle};
-             $onclosed->();
+             $self->{handle}->on_drain (sub {
+               shutdown $fh, 1;
+               delete $self->{handle};
+               $onclosed->();
+             });
            });
       $self->{state} = 'initial';
       $self->{request_state} = 'initial';
@@ -487,8 +845,8 @@ sub is_active ($) {
   return defined $_[0]->{state} && !$_[0]->{no_new_request};
 } # is_active
 
-sub send_request ($$) {
-  my ($self, $req) = @_;
+sub send_request ($$;%) {
+  my ($self, $req, %args) = @_;
   my $method = $req->{method} // '';
   if (not defined $method or
       not length $method or
@@ -510,6 +868,8 @@ sub send_request ($$) {
         unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
   }
   # XXX check body_ref vs Content-Length
+  # XXX transfer-encoding
+  # XXX WS protocols
   # XXX utf8 flag
 
   if (not defined $self->{state}) {
@@ -530,28 +890,41 @@ sub send_request ($$) {
   $self->{response} = {status => 200, reason => 'OK', version => '0.9',
                        headers => []};
   $self->{state} = 'before response';
-  $self->{request_state} = 'sending';
   # XXX Connection: close
+  if ($args{ws}) {
+    $self->{ws_state} = 'CONNECTING';
+    $self->{ws_key} = encode_base64 join ('', map { pack 'C', rand 256 } 1..16), '';
+    push @{$req->{headers} ||= []},
+        ['Sec-WebSocket-Key', $self->{ws_key}],
+        ['Sec-WebSocket-Version', '13'];
+    $self->{ws_protos} = $args{ws_protocols} || [];
+    if (@{$self->{ws_protos}}) {
+      push @{$req->{headers}},
+          ['Sec-WebSocket-Protocol', join ',', @{$self->{ws_protos}}];
+    }
+    # XXX extension
+  }
+  $self->{request_state} = 'sending';
   my $req_done = Promise->new (sub { $self->{request_done} = $_[0] });
   AE::postpone {
     my $handle = $self->{handle} or return;
+    if ($DEBUG) {
+      warn "$req->{id}: S: @{[_e4d $method]} @{[_e4d $url]} HTTP/1.1\n";
+      for (@{$req->{headers} || []}) {
+        warn "$req->{id}: S: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
+      }
+      warn "$req->{id}: S: \n";
+    }
     $handle->push_write ("$method $url HTTP/1.1\x0D\x0A");
     $handle->push_write (join '', map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []});
     $handle->push_write ("\x0D\x0A");
-    if ($DEBUG) {
-      warn "$req->{id}: S: $method $url HTTP/1.1\n";
-      for (@{$req->{headers} || []}) {
-        warn "$req->{id}: S: $_->[0]: $_->[1]\n";
-      }
-    }
     if (defined $req->{body_ref}) {
-      $handle->push_write (${$req->{body_ref}});
       if ($DEBUG > 1) {
-        warn "$req->{id}: S: \n";
         for (split /\x0D?\x0A/, ${$req->{body_ref}}, -1) {
-          warn "$req->{id}: S: $_\n";
+          warn "$req->{id}: S: @{[_e4d $_]}\n";
         }
       }
+      $handle->push_write (${$req->{body_ref}});
     }
     $handle->on_drain (sub {
       $self->{request_state} = 'sent';
@@ -568,6 +941,37 @@ sub send_request ($$) {
   return $req_done;
 } # send_request
 
+sub send_ws_message ($$$) {
+  my $self = $_[0];
+  my $type = $_[1];
+  die "Unknown type" unless $type eq 'text' or $type eq 'binary';
+  die "Data too large"
+      if MAX_BYTES < length $_[2]; # spec limit 2**63
+  die "Bad state"
+      unless defined $self->{ws_state} and $self->{ws_state} eq 'OPEN';
+
+  my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+  my $data = $_[2];
+  for (0..((length $data)-1)) {
+    substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+  }
+  my $length = length $data;
+  my $length0 = $length;
+  my $len = '';
+  if ($length >= 2**16) {
+    $length0 = 0x7F;
+    $len = pack 'n', $length;
+  } elsif ($length >= 0x7E) {
+    $length0 = 0x7E;
+    $len = pack 'Q>', $length;
+  }
+  my $opcode = $type eq 'text' ? 1 : 2;
+  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => $opcode, mask => $mask, length => $length) if $DEBUG;
+  $self->{handle}->push_write
+      (pack ('CC', 0b10000000 | $opcode, 0b10000000 | $length0) .
+       $len . $mask . $data);
+} # send_ws_message
+
 sub send_through_tunnel ($$) {
   my $self = $_[0];
   unless (defined $self->{state} and $self->{state} eq 'tunnel') {
@@ -577,10 +981,43 @@ sub send_through_tunnel ($$) {
   $self->{handle}->push_write ($_[1]);
 } # send_through_tunnel
 
-sub close ($) {
-  my $self = $_[0];
+sub close ($;%) {
+  my ($self, %args) = @_;
   if (not defined $self->{state}) {
     return Promise->reject ("Connection has not been established");
+  }
+
+  # XXX check status & reason
+
+  if (defined $self->{ws_state} and
+      ($self->{ws_state} eq 'OPEN' or
+       $self->{ws_state} eq 'CONNECTING')) {
+    my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+    my $data = '';
+    if (defined $args{status}) {
+      $data = pack 'n', $args{status};
+      $data .= $args{reason};
+      for (0..((length $data)-1)) {
+        substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+      }
+    }
+    my $frame = pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
+        $mask . $data;
+    if ($self->{ws_state} eq 'CONNECTING') {
+      $self->{pending_frame} = $frame;
+      $self->{pending_frame_info} = [$args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}] if $DEBUG;
+    } else {
+      $self->_ws_debug ('S', $args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}) if $DEBUG;
+      $self->{handle}->push_write ($frame);
+      $self->{ws_state} = 'CLOSING';
+      $self->{timer} = AE::timer 20, 0, sub {
+        warn "$self->{request}->{id}: WS timeout (20)\n" if $DEBUG;
+        # XXX set exit ?
+        $self->_next;
+        delete $self->{timer};
+      };
+      $self->_ev ('closing');
+    }
   }
 
   $self->{no_new_request} = 1;
@@ -602,6 +1039,8 @@ sub abort ($) {
   $self->{no_new_request} = 1;
   $self->{request_state} = 'sent';
   $self->_next;
+  $self->{handle}->destroy;
+  delete $self->{handle};
 
   return $self->{closed};
 } # abort
@@ -613,25 +1052,68 @@ sub onevent ($;$) {
   return $_[0]->{onevent} ||= sub { };
 } # onevent
 
-sub _ev ($$;$) {
+sub _ev ($$;$$) {
   my $self = shift;
   my $req = $self->{request};
   if ($DEBUG) {
     warn "$req->{id}: $_[0] @{[scalar gmtime]}\n";
     if ($_[0] eq 'data' and $DEBUG > 1) {
       for (split /\x0D?\x0A/, $_[1], -1) {
-        warn "$req->{id}: R: $_\n";
+        warn "$req->{id}: R: @{[_e4d $_]}\n";
       }
     } elsif ($_[0] eq 'headers') {
       warn "$req->{id}: R: HTTP/$_[1]->{version} $_[1]->{status} $_[1]->{reason}\n";
       for (@{$_[1]->{headers}}) {
-        warn "$req->{id}: R: $_->[0]: $_->[1]\n";
+        warn "$req->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
       }
       warn "$req->{id}: R: \n" if $DEBUG > 1;
+      warn "$req->{id}: + WS established\n" if $DEBUG and $_[2];
+    } elsif ($_[0] eq 'complete' or $_[0] eq 'responseerror') {
+      my $err = join ' ',
+          $_[1]->{reset} ? 'reset' : (),
+          $self->{response}->{incomplete} ? 'incomplete' : (),
+          $_[1]->{failed} ? 'failed' : (),
+          $_[1]->{cleanly} ? 'cleanly' : (),
+          $_[1]->{can_retry} ? 'retryable' : (),
+          defined $_[1]->{status} ? 'status=' . $_[1]->{status} : (),
+          defined $_[1]->{reason} ? '"' . $_[1]->{reason} . '"' : ();
+      warn "$req->{id}: + @{[_e4d $err]}\n" if length $err;
     }
   }
   $self->onevent->($self, $req, @_);
 } # _ev
+
+sub _ws_debug ($$$%) {
+  my $self = $_[0];
+  my $side = $_[1];
+  my %args = @_[3..$#_];
+
+  my $id = $self->{request}->{id};
+  warn sprintf "$id: %s: WS %s L=%d\n",
+      $side,
+      (join ' ',
+          $args{opcode},
+          ({
+            0 => '(continue)',
+            1 => '(text)',
+            2 => '(binary)',
+            8 => '(close)',
+            9 => '(ping)',
+            10 => '(pong)',
+          }->{$args{opcode}} // ()),
+          ($args{FIN} ? 'F' : ()),
+          ($args{RSV1} ? 'R1' : ()),
+          ($args{RSV2} ? 'R2' : ()),
+          ($args{RSV3} ? 'R3' : ()),
+          (defined $args{mask} ? sprintf 'mask=%02X%02X%02X%02X',
+                                     unpack 'CCCC', $args{mask} : ())),
+      $args{length};
+  if ($args{opcode} == 8 and defined $args{status}) {
+    warn "$id: S: status=$args{status} @{[_e4d $_[2]]}\n";
+  } elsif (($DEBUG > 1 or $args{opcode} >= 8) and length $_[2]) {
+    warn "$id: S: @{[_e4d $_[2]]}\n";
+  }
+} # _ws_sent
 
 sub DESTROY ($) {
   $_[0]->abort if defined $_[0]->{handle};

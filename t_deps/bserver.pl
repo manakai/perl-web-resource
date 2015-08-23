@@ -293,6 +293,9 @@ my $httpdcb = sub {
               y.onopen = function (ev) {
                 if (status === "noevent") status = "open";
                 events.push (ev.type);
+                if (test["ws-send"]) {
+                  y.send ("stu");
+                }
               };
               y.onmessage = function (ev) {
                 if (ev.data instanceof ArrayBuffer) {

@@ -945,6 +945,7 @@ sub send_ws_message ($$$) {
   my $self = $_[0];
   my $type = $_[1];
   die "Unknown type" unless $type eq 'text' or $type eq 'binary';
+  die "Data is utf8-flagged" if utf8::is_utf8 $_[2];
   die "Data too large"
       if MAX_BYTES < length $_[2]; # spec limit 2**63
   die "Bad state"
@@ -987,7 +988,15 @@ sub close ($;%) {
     return Promise->reject ("Connection has not been established");
   }
 
-  # XXX check status & reason
+  if (defined $args{status} and $args{status} > 0xFFFF) {
+    return Promise->reject ("Bad status");
+  }
+  if (defined $args{reason}) {
+    return Promise->reject ("Reason is utf8-flagged")
+        if utf8::is_utf8 $args{reason};
+    return Promise->reject ("Reason is too long")
+        if 0x7D < length $args{reason};
+  }
 
   if (defined $self->{ws_state} and
       ($self->{ws_state} eq 'OPEN' or
@@ -996,7 +1005,7 @@ sub close ($;%) {
     my $data = '';
     if (defined $args{status}) {
       $data = pack 'n', $args{status};
-      $data .= $args{reason};
+      $data .= $args{reason} // '';
       for (0..((length $data)-1)) {
         substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
       }
@@ -1038,9 +1047,17 @@ sub abort ($) {
 
   $self->{no_new_request} = 1;
   $self->{request_state} = 'sent';
+  if (defined $self->{request}) {
+    if (defined $self->{ws_state} and not $self->{ws_state} eq 'CLOSED') {
+      $self->{ws_state} = 'CLOSING';
+      $self->{exit} = {failed => 1};
+    } else {
+      $self->_ev ('responseerror', {
+        message => "Aborted",
+      });
+    }
+  }
   $self->_next;
-  $self->{handle}->destroy;
-  delete $self->{handle};
 
   return $self->{closed};
 } # abort

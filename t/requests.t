@@ -821,4 +821,326 @@ CRLF
   });
 } n => 1, name => 'ws then abort';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=10 length=3
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $sent = 0;
+    my $pong = 0;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        $http->send_ping;
+        $sent++;
+      } elsif ($type eq 'ping') {
+        $pong++;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub{
+      test {
+        is $sent, 1;
+        is $pong, 1;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'ws ping';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=10 length=3
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $sent = 0;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        $http->send_ping (pong => 1);
+        $sent++;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub{
+      test {
+        is $sent, 1;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'ws ping pong';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=10 length=3
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $sent = 0;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        $http->send_ping (data => "ab c");
+        $sent++;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub{
+      test {
+        is $sent, 1;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'ws ping data';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=10 length=3
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $error = 0;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        eval {
+          $http->send_ping (data => "ab c\x{500}");
+        } or do {
+          test {
+            like $@, qr{^Data is utf8-flagged};
+            $error++;
+          } $c;
+        };
+        $http->close;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub{
+      test {
+        is $error, 1;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'ws ping utf8 data';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=10 length=3
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $error = 0;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        eval {
+          $http->send_ping (data => 'x' x 126);
+        } or do {
+          test {
+            like $@, qr{^Data too large};
+            $error++;
+          } $c;
+        };
+        $http->close;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub{
+      test {
+        is $error, 1;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'ws ping long data';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=10 length=3
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $error = 0;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        $http->close->then (sub {
+          $http->send_ping (data => 'x');
+        })->then (sub {
+          test { ok 0 } $c;
+        }, sub {
+          my $err = $_[0];
+          test {
+            like $err, qr{^Bad state}, 'error text';
+            $error++;
+          } $c;
+        });
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub{
+      test {
+        is $error, 1, 'error count';
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'ws ping after closed';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=10 length=3
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $error = 0;
+    $http->connect->then (sub {
+      return $http->send_ping;
+    })->then (sub{
+      test { ok 0 } $c;
+    }, sub {
+      my $err = $_[0];
+      test {
+        like $err, qr{^Bad state}, 'error text';
+        $error++;
+      } $c;
+    })->then (sub {
+      test {
+        is $error, 1, 'error count';
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'ws ping bad context';
+
 run_tests;

@@ -973,6 +973,25 @@ sub send_ws_message ($$$) {
        $len . $mask . $data);
 } # send_ws_message
 
+sub send_ping ($;%) {
+  my ($self, %args) = @_;
+  $args{data} //= '';
+  die "Data is utf8-flagged" if utf8::is_utf8 $args{data};
+  die "Data too large" if 0x7D < length $args{data}; # spec limit 2**63
+  die "Bad state"
+      unless defined $self->{ws_state} and $self->{ws_state} eq 'OPEN';
+
+  my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+  for (0..((length $args{data})-1)) {
+    substr ($args{data}, $_, 1) = substr ($args{data}, $_, 1) ^ substr ($mask, $_ % 4, 1);
+  }
+  my $opcode = $args{pong} ? 10 : 9;
+  $self->{handle}->push_write
+      (pack ('CC', 0b10000000 | $opcode, 0b10000000 | length $args{data}) .
+       $mask . $args{data});
+  $self->_ws_debug ('S', $args{data}, FIN => 1, opcode => $opcode, mask => $mask, length => length $args{data}) if $DEBUG;
+} # send_ping
+
 sub send_through_tunnel ($$) {
   my $self = $_[0];
   unless (defined $self->{state} and $self->{state} eq 'tunnel') {

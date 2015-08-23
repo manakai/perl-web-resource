@@ -83,6 +83,11 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               if ($test_type eq 'ws' and $test->{'ws-send'}) {
                 $http->send_ws_message ('text', 'stu');
               }
+            } else {
+              if ($test_type eq 'ws') {
+                $req->{_ok}->();
+                AE::postpone { $http->abort };
+              }
             }
           }
           if ($type eq 'data') {

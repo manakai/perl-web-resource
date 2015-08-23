@@ -372,8 +372,6 @@ ws-accept
 CRLF
 "Connection: Upgrade"CRLF
 CRLF
-ws-receive-header
-ws-receive-data
 ws-send-header opcode=1 length=3
 "xyz"
 close
@@ -394,8 +392,6 @@ ws-accept
 CRLF
 "Connection: Upgrade"CRLF
 CRLF
-ws-receive-header
-ws-receive-data
 ws-send-header opcode=1 length=3
 "xyz"
 close

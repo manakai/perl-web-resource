@@ -276,21 +276,7 @@ sub _process_rbuf ($$;%) {
         $self->{state} = 'response body';
       } else {
         $self->_ev ('headers', $res);
-        if (($chunked or
-             not defined $self->{unread_length} or
-             $self->{unread_length} > 0) and
-            ($self->{request}->{method} eq 'CONNECT' or
-             (defined $self->{ws_state} and
-              $self->{ws_state} eq 'CONNECTING'))) {
-          $res->{incomplete} = 1;
-          $self->_ev ('responseerror', {
-            message => "non-empty response to CONNECT or WS",
-          });
-          $self->{no_new_request} = 1;
-          $self->{request_state} = 'sent';
-          $self->_next;
-          return;
-        } elsif ($chunked) {
+        if ($chunked) {
           $self->{state} = 'before response chunk';
         } else {
           $self->{state} = 'response body';

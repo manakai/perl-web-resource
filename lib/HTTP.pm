@@ -168,8 +168,12 @@ sub _process_rbuf ($$;%) {
       if ($res->{status} == 200 and
           $self->{request}->{method} eq 'CONNECT') {
         $self->_ev ('headers', $res);
+        $self->_ev ('datastart', {});
         $self->{no_new_request} = 1;
         $self->{state} = 'tunnel';
+        $self->{handle}->on_drain (sub {
+          $self->_ev ('drain');
+        });
       } elsif (defined $self->{ws_state} and
                $self->{ws_state} eq 'CONNECTING' and
                $res->{status} == 101) {
@@ -605,12 +609,12 @@ sub _process_rbuf ($$;%) {
                 $length += length $_;
               }
             }
-            $self->_ev ('wsmessagestart', {opcode => $self->{ws_frame}->[0],
-                                           length => $length});
+            $self->_ev ('datastart', {opcode => $self->{ws_frame}->[0],
+                                      length => $length});
             for (@{$self->{ws_frame}->[1]}) {
               $self->_ev ('data', $_);
             }
-            $self->_ev ('wsmessageend');
+            $self->_ev ('dataend');
             delete $self->{ws_data_frame};
           }
         } elsif ($self->{ws_frame}->[0] == 9) {
@@ -736,12 +740,14 @@ sub _process_rbuf_eof ($$;%) {
     $self->{request_state} = 'sent';
     $self->_ev ('complete', {});
   } elsif ($self->{state} eq 'tunnel') {
+    $self->_ev ('dataend');
     unless ($args{abort}) {
       $self->{no_new_request} = 1;
       $self->{state} = 'tunnel sending';
       return;
     }
   } elsif ($self->{state} eq 'tunnel receiving') {
+    $self->_ev ('dataend');
     $self->_ev ('complete', {failed => $args{abort}});
   } elsif ($self->{state} eq 'before response header') {
     $self->_ev ('responseerror', {
@@ -1022,6 +1028,9 @@ sub send_through_tunnel ($$) {
   return unless length $_[1];
   warn "$self->{request}->{id}: S: @{[_e4d $_[1]]}\n" if $DEBUG > 1;
   $self->{handle}->push_write ($_[1]);
+  $self->{handle}->on_drain (sub {
+    $self->_ev ('drain');
+  });
 } # send_through_tunnel
 
 sub close ($;%) {

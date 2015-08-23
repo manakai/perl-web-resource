@@ -90,6 +90,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             $result->{body} .= $_[3];
             $result->{body} .= '(boundary)' if $test->{boundary};
           }
+          if ($type eq 'dataend' and $req->{method} eq 'CONNECT') {
+            AE::postpone { $http->close };
+          }
           if ({
             complete => 1, abort => 1, reset => 1, cancel => 1,
             responseerror => 1,

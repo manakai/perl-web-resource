@@ -1156,8 +1156,10 @@ close
     my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
     my $sent = 0;
     my $received = '';
+    my @ev;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
+      push @ev, $type if $type eq 'drain' or $type eq 'complete';
       if ($type eq 'headers') {
         AE::postpone {
           $http->send_through_tunnel ('abc');
@@ -1174,6 +1176,10 @@ close
       test {
         is $sent, 1;
         is $received, 'xyz';
+        is $ev[-1], 'complete';
+        pop @ev;
+        ok @ev;
+        ok grep { $_ eq 'drain' } @ev;
       } $c;
       return $http->close;
     })->then (sub {
@@ -1181,7 +1187,7 @@ close
       undef $c;
     });
   });
-} n => 2, name => 'connect';
+} n => 5, name => 'connect';
 
 test {
   my $c = shift;
@@ -1195,6 +1201,8 @@ close
     my $server = $_[0]->recv;
     my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
     my $error = 0;
+    my $x;
+    my $p = Promise->new (sub { $x = $_[0] });
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'headers') {
@@ -1207,7 +1215,7 @@ close
             my $err = $_[0];
             test {
               like $err, qr{^Bad state};
-              $error++;
+              $x->();
             } $c;
           });
         };
@@ -1216,16 +1224,13 @@ close
     $http->connect->then (sub {
       return $http->send_request ({method => 'CONNECT', target => 'test'});
     })->then (sub{
-      test {
-        is $error, 1;
-      } $c;
-      return $http->close;
+      return $p;
     })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 2, name => 'connect data after close';
+} n => 1, name => 'connect data after close';
 
 test {
   my $c = shift;

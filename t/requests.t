@@ -1143,4 +1143,163 @@ close
   });
 } n => 2, name => 'ws ping bad context';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $sent = 0;
+    my $received = '';
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        AE::postpone {
+          $http->send_through_tunnel ('abc');
+          $http->close;
+          $sent++;
+        };
+      } elsif ($type eq 'data') {
+        $received .= $data;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'CONNECT', target => 'test'});
+    })->then (sub{
+      test {
+        is $sent, 1;
+        is $received, 'xyz';
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'connect';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $error = 0;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        AE::postpone {
+          $http->close->then (sub {
+            $http->send_through_tunnel ('abc');
+          })->then (sub {
+            test { ok 0 } $c;
+          }, sub {
+            my $err = $_[0];
+            test {
+              like $err, qr{^Bad state};
+              $error++;
+            } $c;
+          });
+        };
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'CONNECT', target => 'test'});
+    })->then (sub{
+      test {
+        is $error, 1;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'connect data after close';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+show "sleep"
+sleep 1
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $received = '';
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        $received .= '(headers)';
+        AE::postpone {
+          $http->close;
+        };
+      } elsif ($type eq 'data') {
+        $received .= $data;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'CONNECT', target => 'test'});
+    })->then (sub{
+      test {
+        is $received, '(headers)xyz';
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'connect received after send-shutdown';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        my $timer; $timer = AE::timer 1, 0, sub {
+          $http->send_through_tunnel ('abc');
+          AE::postpone {
+            $http->close;
+          };
+          undef $timer;
+        };
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'CONNECT', target => 'test'});
+    })->then (sub{
+      test {
+        ok 1;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'connect sending after EOF';
+
 run_tests;

@@ -278,7 +278,7 @@ sub _process_rbuf ($$;%) {
             ($self->{request}->{method} eq 'CONNECT' or
              (defined $self->{ws_state} and
               $self->{ws_state} eq 'CONNECTING'))) {
-          $self->{response}->{incomplete} = 1;
+          $res->{incomplete} = 1;
           $self->_ev ('responseerror', {
             message => "non-empty response to CONNECT or WS",
           });
@@ -664,13 +664,14 @@ sub _process_rbuf ($$;%) {
     }
     $handle->{rbuf} = '';
   }
-  if ($self->{state} eq 'tunnel') {
+  if ($self->{state} eq 'tunnel' or $self->{state} eq 'tunnel receiving') {
     $self->_ev ('data', $handle->{rbuf})
         if length $handle->{rbuf};
     $handle->{rbuf} = '';
   }
   if ($self->{state} eq 'waiting' or
       $self->{state} eq 'sending' or
+      $self->{state} eq 'tunnel sending' or
       $self->{state} eq 'stopped') {
     $handle->{rbuf} = '';
   }
@@ -735,10 +736,13 @@ sub _process_rbuf_eof ($$;%) {
     $self->{request_state} = 'sent';
     $self->_ev ('complete', {});
   } elsif ($self->{state} eq 'tunnel') {
-    $self->_ev ('complete', {});
-        # XXX
-        #abort => $args{abort},
-        #errno => $args{errno},
+    unless ($args{abort}) {
+      $self->{no_new_request} = 1;
+      $self->{state} = 'tunnel sending';
+      return;
+    }
+  } elsif ($self->{state} eq 'tunnel receiving') {
+    $self->_ev ('complete', {failed => $args{abort}});
   } elsif ($self->{state} eq 'before response header') {
     $self->_ev ('responseerror', {
       message => "Connection closed in response header",
@@ -774,15 +778,19 @@ sub _next ($) {
   if (not $self->{no_new_request} and $self->{request_state} eq 'sending') {
     $self->{state} = 'sending';
   } else {
+    my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
     delete $self->{request};
     delete $self->{response};
     $self->{request_state} = 'initial';
     (delete $self->{request_done})->() if defined $self->{request_done};
     if ($self->{no_new_request}) {
-      $self->{handle}->push_shutdown;
+      $self->{handle}->on_drain (sub {
+        warn $id."S: shutdown\n" if $DEBUG;
+        shutdown $_[0]->fh, 1;
+      });
       my $fh = $self->{handle}->fh;
       my $timer; $timer = AE::timer 1, 0, sub {
-        shutdown $fh, 2;
+        shutdown $fh, 0;
         undef $timer;
       };
       $self->{state} = 'stopped';
@@ -809,6 +817,8 @@ sub connect ($) {
            },
            on_error => sub {
              my ($hdl, $fatal, $msg) = @_;
+             my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
+             warn $id."R: Error - $msg\n" if $DEBUG;
              if ($!{ECONNRESET}) {
                $self->_ev ('reset')
                    if defined $self->{request};
@@ -825,13 +835,25 @@ sub connect ($) {
            },
            on_eof => sub {
              my ($hdl) = @_;
+             my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
+             warn $id."R: EOF\n" if $DEBUG;
              $self->_process_rbuf ($hdl, eof => 1);
              $self->_process_rbuf_eof ($hdl);
-             $self->{handle}->on_drain (sub {
+             $self->{shutdown} = sub {
+               if ($self->{state} eq 'tunnel sending') {
+                 (delete $self->{request_done})->()
+                     if defined $self->{request_done};
+                 $self->{state} = 'stopped';
+                 $self->_ev ('complete');
+               }
+               warn $id."S: shutdown\n" if $DEBUG;
                shutdown $fh, 1;
                delete $self->{handle};
                $onclosed->();
-             });
+             };
+             unless ($self->{state} eq 'tunnel sending') {
+               $self->{handle}->on_drain (delete $self->{shutdown});
+             }
            });
       $self->{state} = 'initial';
       $self->{request_state} = 'initial';
@@ -994,10 +1016,11 @@ sub send_ping ($;%) {
 
 sub send_through_tunnel ($$) {
   my $self = $_[0];
-  unless (defined $self->{state} and $self->{state} eq 'tunnel') {
-    die "Tunnel is not open";
-  }
+  die "Bad state"
+      unless defined $self->{state} and
+          ($self->{state} eq 'tunnel' or $self->{state} eq 'tunnel sending');
   return unless length $_[1];
+  warn "$self->{request}->{id}: S: @{[_e4d $_[1]]}\n" if $DEBUG > 1;
   $self->{handle}->push_write ($_[1]);
 } # send_through_tunnel
 
@@ -1051,8 +1074,14 @@ sub close ($;%) {
   $self->{no_new_request} = 1;
   if ($self->{state} eq 'initial' or
       $self->{state} eq 'waiting' or
-      $self->{state} eq 'tunnel') {
-    $self->{handle}->push_shutdown;
+      $self->{state} eq 'tunnel' or
+      $self->{state} eq 'tunnel sending') {
+    my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
+    $self->{handle}->on_drain ((delete $self->{shutdown}) || sub {
+      warn $id."S: shutdown\n" if $DEBUG;
+      shutdown $_[0]->fh, 1;
+    });
+    $self->{state} = 'tunnel receiving' if $self->{state} eq 'tunnel';
   }
 
   return $self->{closed};

@@ -23,12 +23,9 @@ close
 CRLF
 "aabde"
 close
-#status 407
-#reason foo
-#headers
-Proxy-Authenticate: Basic realm=x
+#status 0
 #body escaped
-aabde(close)
+(close)
 
 #method CONNECT
 #url /
@@ -46,12 +43,9 @@ CRLF
 "ab"
 close
 #test-type second
-#status 407
-#reason fuga
-#headers
-Content-Length: 2
+#status 0
 #body escaped
-ab(close)
+(close)
 
 #method CONNECT
 #url /

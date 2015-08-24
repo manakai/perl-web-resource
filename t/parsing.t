@@ -237,25 +237,25 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               is !!$result->{is_error}, !!$is_error, 'is error';
             }
 
-            my $expected_1xxes = $test->{'1xx'} || [];
-            my $actual_1xxes = $res->{'1xxes'} || [];
-            is 0+@$actual_1xxes, 0+@$expected_1xxes, '# of 1xx responses';
-            for my $i (0..$#$expected_1xxes) {
-              my $expected = ($expected_1xxes->[$i] || [''])->[0];
-              my $actual = $actual_1xxes->[$i] || {};
-              for_each_test \$expected, {
-                headers => {is_prefixed => 1},
-              }, sub {
-                my $t = $_[0];
-                test {
-                  is $actual->{status}, $t->{status}->[1]->[0];
-                  is $actual->{reason}, $t->{reason}->[1]->[0] // $t->{reason}->[0] // '';
-                  is join ("\x0A", map {
-                    $_->[0] . ': ' . $_->[1];
-                  } @{$actual->{headers}}), $t->{headers}->[0] // '';
-                } $c, name => $i;
-              };
-            }
+            #my $expected_1xxes = $test->{'1xx'} || [];
+            #my $actual_1xxes = $res->{'1xxes'} || [];
+            #is 0+@$actual_1xxes, 0+@$expected_1xxes, '# of 1xx responses';
+            #for my $i (0..$#$expected_1xxes) {
+            #  my $expected = ($expected_1xxes->[$i] || [''])->[0];
+            #  my $actual = $actual_1xxes->[$i] || {};
+            #  for_each_test \$expected, {
+            #    headers => {is_prefixed => 1},
+            #  }, sub {
+            #    my $t = $_[0];
+            #    test {
+            #      is $actual->{status}, $t->{status}->[1]->[0];
+            #      is $actual->{reason}, $t->{reason}->[1]->[0] // $t->{reason}->[0] // '';
+            #      is join ("\x0A", map {
+            #        $_->[0] . ': ' . $_->[1];
+            #      } @{$actual->{headers}}), $t->{headers}->[0] // '';
+            #    } $c, name => $i;
+            #  };
+            #}
 
             if ($test_type eq 'ws') {
               if ($is_error) {
@@ -293,7 +293,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           undef $c;
         });
       });
-    } n => 7 + 3*@{$test->{'1xx'} || []}, name => [$path, $test->{name}->[0]],
+    } n => 6 # + 1 + 3*@{$test->{'1xx'} || []}
+      , name => [$path, $test->{name}->[0]],
         timeout => (($test->{name}->[0] // '') =~ /length=/ ? 90 : 20);
   };
 } # $path

@@ -261,12 +261,12 @@ sub _process_rbuf ($$;%) {
           $self->_next;
           return;
         } else {
-          push @{$res->{'1xxes'} ||= []}, {
-            version => $res->{version},
-            status => $res->{status},
-            reason => $res->{reason},
-            headers => $res->{headers},
-          };
+          #push @{$res->{'1xxes'} ||= []}, {
+          #  version => $res->{version},
+          #  status => $res->{status},
+          #  reason => $res->{reason},
+          #  headers => $res->{headers},
+          #};
           $res->{version} = '0.9';
           $res->{status} = '200';
           $res->{reason} = 'OK';

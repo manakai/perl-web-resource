@@ -5,8 +5,9 @@ use Errno;
 use MIME::Base64 qw(encode_base64);
 use Digest::SHA qw(sha1);
 use Encode qw(decode);
+use Errno qw(ECONNRESET);
 use AnyEvent;
-use AnyEvent::Handle;
+use Transport::TCP;
 use AnyEvent::Socket;
 use Promise;
 
@@ -15,7 +16,9 @@ my $DEBUG = $ENV{WEBUA_DEBUG} || 0;
 sub MAX_BYTES () { 2**31-1 }
 
 sub new_from_host_and_port ($$$) {
-  return bless {host => $_[1], port => $_[2]}, $_[0];
+  return bless {host => $_[1], port => $_[2],
+                req_id => 0,
+                rbuf => \(my $x = '')}, $_[0];
 } # new_from_host_and_port
 
 sub _e4d ($) {
@@ -26,12 +29,13 @@ sub _e4d ($) {
 } # _e4d
 
 sub _process_rbuf ($$;%) {
-  my ($self, $handle, %args) = @_;
+  my ($self, $ref, %args) = @_;
+  HEADER: {
   if ($self->{state} eq 'before response') {
-    if ($handle->{rbuf} =~ s/^.{0,4}[Hh][Tt][Tt][Pp]//s) {
+    if ($$ref =~ s/^.{0,4}[Hh][Tt][Tt][Pp]//s) {
       $self->{state} = 'before response header';
       $self->{response_received} = 1;
-    } elsif (8 <= length $handle->{rbuf}) {
+    } elsif (8 <= length $$ref) {
       $self->{response_received} = 1;
       if ($self->{request}->{method} eq 'PUT') {
         $self->_ev ('responseerror', {
@@ -47,8 +51,9 @@ sub _process_rbuf ($$;%) {
         delete $self->{unread_length};
       }
     }
-  } elsif ($self->{state} eq 'before response header') {
-    if (2**18-1 < length $handle->{rbuf}) {
+  }
+  if ($self->{state} eq 'before response header') {
+    if (2**18-1 < length $$ref) {
       $self->_ev ('responseerror', {
         message => "Header section too large",
       });
@@ -56,8 +61,8 @@ sub _process_rbuf ($$;%) {
       $self->{request_state} = 'sent';
       $self->_next;
       return;
-    } elsif ($handle->{rbuf} =~ s/^(.*?)\x0A\x0D?\x0A//s or
-             ($args{eof} and $handle->{rbuf} =~ s/\A(.*)\z//s and
+    } elsif ($$ref =~ s/^(.*?)\x0A\x0D?\x0A//s or
+             ($args{eof} and $$ref =~ s/\A(.*)\z//s and
               $self->{response}->{incomplete} = 1)) {
       my $headers = [split /[\x0D\x0A]+/, $1, -1];
       my $start_line = shift @$headers;
@@ -171,9 +176,10 @@ sub _process_rbuf ($$;%) {
         $self->_ev ('datastart', {});
         $self->{no_new_request} = 1;
         $self->{state} = 'tunnel';
-        $self->{handle}->on_drain (sub {
-          $self->_ev ('drain');
-        });
+#XXX
+#        $self->{handle}->on_drain (sub {
+#          $self->_ev ('drain');
+#        });
       } elsif (defined $self->{ws_state} and
                $self->{ws_state} eq 'CONNECTING' and
                $res->{status} == 101) {
@@ -234,7 +240,7 @@ sub _process_rbuf ($$;%) {
           $self->{state} = 'before ws frame';
           if (defined $self->{pending_frame}) {
             $self->{ws_state} = 'CLOSING';
-            $self->{handle}->push_write ($self->{pending_frame});
+            $self->{transport}->push_write (\($self->{pending_frame}));
             $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if $DEBUG;
             $self->{timer} = AE::timer 20, 0, sub {
               warn "$self->{request}->{id}: WS timeout (20)\n" if $DEBUG;
@@ -266,6 +272,7 @@ sub _process_rbuf ($$;%) {
           $res->{reason} = 'OK';
           $res->{headers} = [];
           $self->{state} = 'before response';
+          redo HEADER;
         }
       } elsif ($res->{status} == 204 or
                $res->{status} == 205 or
@@ -284,17 +291,18 @@ sub _process_rbuf ($$;%) {
       }
     }
   }
+  } # HEADER
   if ($self->{state} eq 'response body') {
     if (defined $self->{unread_length}) {
-      if ($self->{unread_length} >= (my $len = length $handle->{rbuf})) {
+      if ($self->{unread_length} >= (my $len = length $$ref)) {
         if ($len) {
-          $self->_ev ('data', $handle->{rbuf});
-          $handle->{rbuf} = '';
+          $self->_ev ('data', $$ref);
+          $$ref = '';
           $self->{unread_length} -= $len;
         }
       } elsif ($self->{unread_length} > 0) {
-        $self->_ev ('data', substr $handle->{rbuf}, 0, $self->{unread_length});
-        substr ($handle->{rbuf}, 0, $self->{unread_length}) = '';
+        $self->_ev ('data', substr $$ref, 0, $self->{unread_length});
+        substr ($$ref, 0, $self->{unread_length}) = '';
         $self->{unread_length} = 0;
       }
       if ($self->{unread_length} <= 0) {
@@ -321,15 +329,16 @@ sub _process_rbuf ($$;%) {
         $self->_next;
       }
     } else {
-      $self->_ev ('data', $handle->{rbuf})
-          if length $handle->{rbuf};
-      $handle->{rbuf} = '';
+      $self->_ev ('data', $$ref)
+          if length $$ref;
+      $$ref = '';
     }
   }
+  CHUNK: {
   if ($self->{state} eq 'before response chunk') {
-    if ($handle->{rbuf} =~ /^[0-9A-Fa-f]/) {
+    if ($$ref =~ /^[0-9A-Fa-f]/) {
       $self->{state} = 'response chunk size';
-    } elsif (length $handle->{rbuf}) {
+    } elsif (length $$ref) {
       $self->{response}->{incomplete} = 1;
       $self->{no_new_request} = 1;
       $self->{request_state} = 'sent';
@@ -339,7 +348,7 @@ sub _process_rbuf ($$;%) {
     }
   }
   if ($self->{state} eq 'response chunk size') {
-    if ($handle->{rbuf} =~ s/^([0-9A-Fa-f]+)(?![0-9A-Fa-f])//) {
+    if ($$ref =~ s/^([0-9A-Fa-f]+)(?![0-9A-Fa-f])//) {
       my $h = $1;
       $h =~ tr/A-F/a-f/;
       $h =~ s/^0+//;
@@ -357,7 +366,7 @@ sub _process_rbuf ($$;%) {
         $self->{state} = 'before response trailer';
       } else {
         $self->{unread_length} = $n;
-        if ($handle->{rbuf} =~ s/^\x0A//) {
+        if ($$ref =~ s/^\x0A//) {
           $self->{state} = 'response chunk data';
         } else {
           $self->{state} = 'response chunk extension';
@@ -366,28 +375,29 @@ sub _process_rbuf ($$;%) {
     }
   }
   if ($self->{state} eq 'response chunk extension') {
-    $handle->{rbuf} =~ s/^[^\x0A]+//;
-    if ($handle->{rbuf} =~ s/^\x0A//) {
+    $$ref =~ s/^[^\x0A]+//;
+    if ($$ref =~ s/^\x0A//) {
       $self->{state} = 'response chunk data';
     }
   }
   if ($self->{state} eq 'response chunk data') {
     if ($self->{unread_length} > 0) {
-      if ($self->{unread_length} >= (my $len = length $handle->{rbuf})) {
-        $self->_ev ('data', $handle->{rbuf});
-        $handle->{rbuf} = '';
+      if ($self->{unread_length} >= (my $len = length $$ref)) {
+        $self->_ev ('data', $$ref);
+        $$ref = '';
         $self->{unread_length} -= $len;
       } else {
-        $self->_ev ('data', substr $handle->{rbuf}, 0, $self->{unread_length});
-        substr ($handle->{rbuf}, 0, $self->{unread_length}) = '';
+        $self->_ev ('data', substr $$ref, 0, $self->{unread_length});
+        substr ($$ref, 0, $self->{unread_length}) = '';
         $self->{unread_length} = 0;
       }
     }
     if ($self->{unread_length} <= 0) {
       delete $self->{unread_length};
-      if ($handle->{rbuf} =~ s/^\x0D?\x0A//) {
+      if ($$ref =~ s/^\x0D?\x0A//) {
         $self->{state} = 'before response chunk';
-      } elsif ($handle->{rbuf} =~ /^(?:\x0D[^\x0A]|[^\x0D\x0A])/) {
+        redo CHUNK;
+      } elsif ($$ref =~ /^(?:\x0D[^\x0A]|[^\x0D\x0A])/) {
         $self->{response}->{incomplete} = 1;
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
@@ -397,14 +407,15 @@ sub _process_rbuf ($$;%) {
       }
     }
   }
+  } # CHUNK
   if ($self->{state} eq 'before response trailer') {
-    if (2**18-1 < length $handle->{rbuf}) {
+    if (2**18-1 < length $$ref) {
       $self->{no_new_request} = 1;
       $self->{request_state} = 'sent';
       $self->_ev ('complete', {});
       $self->_next;
       return;
-    } elsif ($handle->{rbuf} =~ s/^(.*?)\x0A\x0D?\x0A//s) {
+    } elsif ($$ref =~ s/^(.*?)\x0A\x0D?\x0A//s) {
       $self->_ev ('complete', {});
       my $connection = '';
       for (@{$self->{response}->{headers} || []}) {
@@ -426,10 +437,10 @@ sub _process_rbuf ($$;%) {
   my $ws_failed;
   WS: {
     if ($self->{state} eq 'before ws frame') {
-      my $rlength = length $handle->{rbuf};
+      my $rlength = length $$ref;
       last WS if $rlength < 2;
-      my $b1 = ord substr $handle->{rbuf}, 0, 1;
-      my $b2 = ord substr $handle->{rbuf}, 1, 1;
+      my $b1 = ord substr $$ref, 0, 1;
+      my $b2 = ord substr $$ref, 1, 1;
       my $fin = $b1 & 0b10000000;
       my $opcode = $b1 & 0b1111;
       my $mask = $b2 & 0b10000000;
@@ -440,8 +451,8 @@ sub _process_rbuf ($$;%) {
           last WS;
         }
         last WS unless $rlength >= 4;
-        $self->{unread_length} = unpack 'n', substr $handle->{rbuf}, 2, 2;
-        pos ($handle->{rbuf}) = 4;
+        $self->{unread_length} = unpack 'n', substr $$ref, 2, 2;
+        pos ($$ref) = 4;
         if ($self->{unread_length} < 126) {
           $ws_failed = '';
           last WS;
@@ -452,8 +463,8 @@ sub _process_rbuf ($$;%) {
           last WS;
         }
         last WS unless $rlength >= 10;
-        $self->{unread_length} = unpack 'Q>', substr $handle->{rbuf}, 2, 8;
-        pos ($handle->{rbuf}) = 10;
+        $self->{unread_length} = unpack 'Q>', substr $$ref, 2, 8;
+        pos ($$ref) = 10;
         if ($self->{unread_length} > MAX_BYTES) { # spec limit=2**63
           $ws_failed = '';
           last WS;
@@ -463,12 +474,12 @@ sub _process_rbuf ($$;%) {
           last WS;
         }
       } else {
-        pos ($handle->{rbuf}) = 2;
+        pos ($$ref) = 2;
       }
       if ($mask) {
-        last WS unless $rlength >= pos ($handle->{rbuf}) + 4;
-        $self->{ws_decode_mask_key} = substr $handle->{rbuf}, pos ($handle->{rbuf}), 4;
-        pos ($handle->{rbuf}) += 4;
+        last WS unless $rlength >= pos ($$ref) + 4;
+        $self->{ws_decode_mask_key} = substr $$ref, pos ($$ref), 4;
+        pos ($$ref) += 4;
         # XXX if client,
         $ws_failed = 'Masked frame from server';
         last WS;
@@ -513,28 +524,28 @@ sub _process_rbuf ($$;%) {
         $self->{ws_frame} = [$opcode, []];
       }
       $self->{ws_frame}->[2] = 1 if $fin;
-      substr ($handle->{rbuf}, 0, pos $handle->{rbuf}) = '';
+      substr ($$ref, 0, pos $$ref) = '';
       $self->{state} = 'ws data';
     }
     if ($self->{state} eq 'ws data') {
       if ($self->{unread_length} > 0 and
-          length ($handle->{rbuf}) >= $self->{unread_length}) {
+          length ($$ref) >= $self->{unread_length}) {
         # XXX xor if ws_decode_mask_key
-        push @{$self->{ws_frame}->[1]}, substr $handle->{rbuf}, 0, $self->{unread_length};
+        push @{$self->{ws_frame}->[1]}, substr $$ref, 0, $self->{unread_length};
         #if ($DEBUG > 1 or
         #    ($DEBUG and $self->{ws_frame}->[0] >= 8)) {
         if ($DEBUG and $self->{ws_frame}->[0] == 8) {
           if ($self->{ws_frame}->[0] == 8 and
               $self->{unread_length} > 1) {
             warn sprintf "$self->{request}->{id}: R: status=%d %s\n",
-                unpack ('n', substr $handle->{rbuf}, 0, 2),
-                _e4d substr ($handle->{rbuf}, 2, $self->{unread_length});
+                unpack ('n', substr $$ref, 0, 2),
+                _e4d substr ($$ref, 2, $self->{unread_length});
           } else {
             warn sprintf "$self->{request}->{id}: R: %s\n",
-                _e4d substr ($handle->{rbuf}, 0, $self->{unread_length});
+                _e4d substr ($$ref, 0, $self->{unread_length});
           }
         }
-        substr ($handle->{rbuf}, 0, $self->{unread_length}) = '';
+        substr ($$ref, 0, $self->{unread_length}) = '';
         $self->{unread_length} = 0;
       }
       if ($self->{unread_length} <= 0) {
@@ -566,10 +577,10 @@ sub _process_rbuf ($$;%) {
             for (0..((length $data)-1)) {
               substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
             }
-            $self->{handle}->push_write
-                (pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
-                 $mask . $data);
             $self->_ws_debug ('S', $reason // '', FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $status) if $DEBUG;
+            $self->{transport}->push_write
+                (\(pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
+                   $mask . $data));
           }
           $self->{state} = 'ws terminating';
           $self->{exit} = {status => $status, reason => $reason};
@@ -609,10 +620,10 @@ sub _process_rbuf ($$;%) {
           for (0..((length $data)-1)) {
             substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
           }
-          $self->{handle}->push_write
-              (pack ('CC', 0b10000000 | 10, 0b10000000 | length $data) .
-               $mask . $data);
           $self->_ws_debug ('S', $data, FIN => 1, opcode => 10, mask => $mask, length => length $data) if $DEBUG;
+          $self->{transport}->push_write
+              (\(pack ('CC', 0b10000000 | 10, 0b10000000 | length $data) .
+                 $mask . $data));
           $self->_ev ('ping', $data, 0);
         } elsif ($self->{ws_frame}->[0] == 10) {
           $self->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 1);
@@ -636,10 +647,10 @@ sub _process_rbuf ($$;%) {
       substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
     }
     # length $data must be < 126
-    $self->{handle}->push_write
-        (pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
-         $mask . $data);
     $self->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $self->{exit}->{status}) if $DEBUG;
+    $self->{transport}->push_write
+        (\(pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
+           $mask . $data));
     $self->{state} = 'ws terminating';
     $self->{no_new_request} = 1;
     $self->{request_state} = 'sent';
@@ -652,38 +663,38 @@ sub _process_rbuf ($$;%) {
       $self->{exit}->{status} = 1006;
       $self->{exit}->{reason} = '';
     }
-    $handle->{rbuf} = '';
+    $$ref = '';
   }
   if ($self->{state} eq 'tunnel' or $self->{state} eq 'tunnel receiving') {
-    $self->_ev ('data', $handle->{rbuf})
-        if length $handle->{rbuf};
-    $handle->{rbuf} = '';
+    $self->_ev ('data', $$ref)
+        if length $$ref;
+    $$ref = '';
   }
   if ($self->{state} eq 'waiting' or
       $self->{state} eq 'sending' or
       $self->{state} eq 'tunnel sending' or
       $self->{state} eq 'stopped') {
-    $handle->{rbuf} = '';
+    $$ref = '';
   }
 } # _process_rbuf
 
 sub _process_rbuf_eof ($$;%) {
-  my ($self, $handle, %args) = @_;
+  my ($self, $ref, %args) = @_;
   if ($self->{state} eq 'before response') {
-    if (length $handle->{rbuf}) {
+    if (length $$ref) {
       if ($self->{request}->{method} eq 'PUT') {
         $self->_ev ('responseerror', {
           message => "HTTP/0.9 response to PUT request",
         });
       } else {
         $self->_ev ('headers', $self->{response});
-        $self->_ev ('data', $handle->{rbuf});
+        $self->_ev ('data', $$ref);
         # XXX
         #abort => $args{abort},
         #errno => $args{errno},
         $self->_ev ('complete', {});
       }
-      $handle->{rbuf} = '';
+      $$ref = '';
     } else {
       $self->_ev ('responseerror', {
         message => "Connection closed without response",
@@ -776,14 +787,10 @@ sub _next ($) {
     $self->{request_state} = 'initial';
     (delete $self->{request_done})->() if defined $self->{request_done};
     if ($self->{no_new_request}) {
-      $self->{handle}->on_drain (sub {
-        warn $id."S: shutdown\n" if $DEBUG;
-        shutdown $_[0]->fh, 1;
-      });
-      my $fh = $self->{handle}->fh;
-      my $timer; $timer = AE::timer 1, 0, sub {
-        shutdown $fh, 0;
-        undef $timer;
+      my $transport = $self->{transport};
+      $transport->push_shutdown unless $transport->write_to_be_closed;
+      $self->{timer} = AE::timer 1, 0, sub {
+        $transport->abort;
       };
       $self->{state} = 'stopped';
     } else {
@@ -800,53 +807,69 @@ sub connect ($) {
       my $fh = shift or return $ng->($!);
       my $onclosed;
       my $closed = Promise->new (sub { $onclosed = $_[0] });
-      $self->{handle} = AnyEvent::Handle->new
-          (fh => $fh,
-           oobinline => 0,
-           on_read => sub {
-             my ($handle) = @_;
-             $self->_process_rbuf ($handle);
-           },
-           on_error => sub {
-             my ($hdl, $fatal, $msg) = @_;
-             my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
-             warn $id."R: Error - $msg\n" if $DEBUG;
-             if ($!{ECONNRESET}) {
-               $self->_ev ('reset')
-                   if defined $self->{request};
-               $self->{no_new_request} = 1;
-               $self->{request_state} = 'sent';
-               $self->_next;
-             } else {
-               $self->_process_rbuf ($hdl, eof => 1);
-               $self->_process_rbuf_eof ($hdl, abort => 1, errno => $!);
-             }
-             $self->{handle}->destroy;
-             delete $self->{handle};
-             $onclosed->();
-           },
-           on_eof => sub {
-             my ($hdl) = @_;
-             my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
-             warn $id."R: EOF\n" if $DEBUG;
-             $self->_process_rbuf ($hdl, eof => 1);
-             $self->_process_rbuf_eof ($hdl);
-             $self->{shutdown} = sub {
-               if ($self->{state} eq 'tunnel sending') {
-                 (delete $self->{request_done})->()
-                     if defined $self->{request_done};
-                 $self->{state} = 'stopped';
-                 $self->_ev ('complete');
-               }
-               warn $id."S: shutdown\n" if $DEBUG;
-               shutdown $fh, 1;
-               delete $self->{handle};
-               $onclosed->();
-             };
-             unless ($self->{state} eq 'tunnel sending') {
-               $self->{handle}->on_drain (delete $self->{shutdown});
-             }
-           });
+      $self->{transport} = Transport::TCP->new_from_fh_and_cb ($fh, sub {
+        my ($transport, $type) = @_;
+        if ($type eq 'readdata') {
+          ${$self->{rbuf}} .= ${$_[2]};
+          $self->_process_rbuf ($self->{rbuf});
+        } elsif ($type eq 'readeof') {
+          my $data = $_[2];
+          if ($DEBUG) {
+            my $id = $self->{transport}->id;
+            if (defined $data->{message}) {
+              warn "$id: R: EOF ($data->{message})\n";
+            } else {
+              warn "$id: R: EOF\n";
+            }
+          }
+
+          if ($data->{failed}) {
+            if (defined $data->{errno} and $data->{errno} == ECONNRESET) {
+              $self->_ev ('reset') if defined $self->{request};
+              $self->{no_new_request} = 1;
+              $self->{request_state} = 'sent';
+              $self->_next;
+            } else {
+              $self->_process_rbuf ($self->{rbuf}, eof => 1);
+              $self->_process_rbuf_eof
+                  ($self->{rbuf}, abort => $data->{failed}, errno => $data->{errno});
+              $transport->abort;
+            }
+          } else {
+            $self->_process_rbuf ($self->{rbuf}, eof => 1);
+            $self->_process_rbuf_eof ($self->{rbuf});
+            unless ($self->{state} eq 'tunnel sending') {
+              $transport->push_shutdown unless $transport->write_to_be_closed;
+            }
+          }
+        } elsif ($type eq 'writeeof') {
+          my $data = $_[2];
+          if ($DEBUG) {
+            my $id = $self->{transport}->id;
+            if (defined $data->{message}) {
+              warn "$id: S: EOF ($data->{message})\n";
+            } else {
+              warn "$id: S: EOF\n";
+            }
+          }
+
+          if ($self->{state} eq 'tunnel sending') {
+            $self->_ev ('complete', {});
+            (delete $self->{request_done})->() if defined $self->{request_done};
+          }
+        } elsif ($type eq 'close') {
+          if ($DEBUG) {
+            my $id = $self->{transport}->id;
+            warn "$id: Closed\n";
+          }
+          $onclosed->();
+#          delete $self->{transport};
+#          undef $self;
+#          undef $onclosed;
+#          undef $ok;
+#          undef $ng;
+        }
+      }); # $self->{transport}
       $self->{state} = 'initial';
       $self->{request_state} = 'initial';
       $self->{closed} = $closed;
@@ -885,6 +908,7 @@ sub send_request ($$;%) {
   # XXX transfer-encoding
   # XXX WS protocols
   # XXX utf8 flag
+  # XXX header size
 
   if (not defined $self->{state}) {
     return Promise->reject ("Connection has not been established");
@@ -894,7 +918,7 @@ sub send_request ($$;%) {
     return Promise->reject ("Connection is busy");
   }
 
-  $req->{id} = int rand 1000000;
+  $req->{id} = $self->{transport}->id . '.' . ++$self->{req_id};
   if ($DEBUG) {
     warn "$req->{id}: ========== $$ @{[__PACKAGE__]}\n";
     warn "$req->{id}: @{[scalar gmtime]}\n";
@@ -921,30 +945,28 @@ sub send_request ($$;%) {
   $self->{request_state} = 'sending';
   my $req_done = Promise->new (sub { $self->{request_done} = $_[0] });
   AE::postpone {
-    my $handle = $self->{handle} or return;
+    my $header = join '',
+        "$method $url HTTP/1.1\x0D\x0A",
+        (map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []}),
+        "\x0D\x0A";
     if ($DEBUG) {
-      warn "$req->{id}: S: @{[_e4d $method]} @{[_e4d $url]} HTTP/1.1\n";
-      for (@{$req->{headers} || []}) {
-        warn "$req->{id}: S: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
-      }
-      warn "$req->{id}: S: \n";
+      my $h = _e4d $header;
+      $h =~ s/^/$req->{id}: S: /gm;
+      warn "$h\n";
     }
-    $handle->push_write ("$method $url HTTP/1.1\x0D\x0A");
-    $handle->push_write (join '', map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []});
-    $handle->push_write ("\x0D\x0A");
+    $self->{transport}->push_write (\$header);
     if (defined $req->{body_ref}) {
       if ($DEBUG > 1) {
         for (split /\x0D?\x0A/, ${$req->{body_ref}}, -1) {
           warn "$req->{id}: S: @{[_e4d $_]}\n";
         }
       }
-      $handle->push_write (${$req->{body_ref}});
+      $self->{transport}->push_write ($req->{body_ref});
     }
-    $handle->on_drain (sub {
+    $self->{transport}->push_promise->then (sub {
       $self->{request_state} = 'sent';
       $self->_ev ('requestsent');
       $self->_next if $self->{state} eq 'sending';
-      $_[0]->on_drain (undef);
     });
   };
   if ($DEBUG) {
@@ -982,9 +1004,9 @@ sub send_ws_message ($$$) {
   }
   my $opcode = $type eq 'text' ? 1 : 2;
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => $opcode, mask => $mask, length => $length) if $DEBUG;
-  $self->{handle}->push_write
-      (pack ('CC', 0b10000000 | $opcode, 0b10000000 | $length0) .
-       $len . $mask . $data);
+  $self->{transport}->push_write
+      (\(pack ('CC', 0b10000000 | $opcode, 0b10000000 | $length0) .
+         $len . $mask . $data));
 } # send_ws_message
 
 sub send_ping ($;%) {
@@ -1000,10 +1022,10 @@ sub send_ping ($;%) {
     substr ($args{data}, $_, 1) = substr ($args{data}, $_, 1) ^ substr ($mask, $_ % 4, 1);
   }
   my $opcode = $args{pong} ? 10 : 9;
-  $self->{handle}->push_write
-      (pack ('CC', 0b10000000 | $opcode, 0b10000000 | length $args{data}) .
-       $mask . $args{data});
   $self->_ws_debug ('S', $args{data}, FIN => 1, opcode => $opcode, mask => $mask, length => length $args{data}) if $DEBUG;
+  $self->{transport}->push_write
+      (\(pack ('CC', 0b10000000 | $opcode, 0b10000000 | length $args{data}) .
+         $mask . $args{data}));
 } # send_ping
 
 sub send_through_tunnel ($$) {
@@ -1013,10 +1035,11 @@ sub send_through_tunnel ($$) {
           ($self->{state} eq 'tunnel' or $self->{state} eq 'tunnel sending');
   return unless length $_[1];
   warn "$self->{request}->{id}: S: @{[_e4d $_[1]]}\n" if $DEBUG > 1;
-  $self->{handle}->push_write ($_[1]);
-  $self->{handle}->on_drain (sub {
-    $self->_ev ('drain');
-  });
+  $self->{transport}->push_write (\($_[1]));
+#XXX
+#  $self->{handle}->on_drain (sub {
+#    $self->_ev ('drain');
+#  });
 } # send_through_tunnel
 
 sub close ($;%) {
@@ -1054,7 +1077,7 @@ sub close ($;%) {
       $self->{pending_frame_info} = [$args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}] if $DEBUG;
     } else {
       $self->_ws_debug ('S', $args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}) if $DEBUG;
-      $self->{handle}->push_write ($frame);
+      $self->{transport}->push_write (\$frame);
       $self->{ws_state} = 'CLOSING';
       $self->{timer} = AE::timer 20, 0, sub {
         warn "$self->{request}->{id}: WS timeout (20)\n" if $DEBUG;
@@ -1072,10 +1095,8 @@ sub close ($;%) {
       $self->{state} eq 'tunnel' or
       $self->{state} eq 'tunnel sending') {
     my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
-    $self->{handle}->on_drain ((delete $self->{shutdown}) || sub {
-      warn $id."S: shutdown\n" if $DEBUG;
-      shutdown $_[0]->fh, 1;
-    });
+    $self->{transport}->push_shutdown
+        unless $self->{transport}->write_to_be_closed;
     $self->{state} = 'tunnel receiving' if $self->{state} eq 'tunnel';
   }
 
@@ -1090,17 +1111,19 @@ sub abort ($) {
 
   $self->{no_new_request} = 1;
   $self->{request_state} = 'sent';
-  if (defined $self->{request}) {
-    if (defined $self->{ws_state} and not $self->{ws_state} eq 'CLOSED') {
-      $self->{ws_state} = 'CLOSING';
-      $self->{exit} = {failed => 1};
-    } else {
-      $self->_ev ('responseerror', {
-        message => "Aborted",
-      });
-    }
-  }
-  $self->_next;
+  $self->{transport}->abort;
+#XXX
+#  if (defined $self->{request}) {
+#    if (defined $self->{ws_state} and not $self->{ws_state} eq 'CLOSED') {
+#      $self->{ws_state} = 'CLOSING';
+#      $self->{exit} = {failed => 1};
+#    } else {
+#      $self->_ev ('responseerror', {
+#        message => "Aborted",
+#      });
+#    }
+#  }
+#  $self->_next;
 
   return $self->{closed};
 } # abort
@@ -1119,14 +1142,17 @@ sub _ev ($$;$$) {
     warn "$req->{id}: $_[0] @{[scalar gmtime]}\n";
     if ($_[0] eq 'data' and $DEBUG > 1) {
       for (split /\x0D?\x0A/, $_[1], -1) {
-        warn "$req->{id}: R: @{[_e4d $_]}\n";
+        warn "$req->{id}: + @{[_e4d $_]}\n";
       }
     } elsif ($_[0] eq 'headers') {
-      warn "$req->{id}: R: HTTP/$_[1]->{version} $_[1]->{status} $_[1]->{reason}\n";
-      for (@{$_[1]->{headers}}) {
-        warn "$req->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
+      if ($_[1]->{version} eq '0.9') {
+        warn "$req->{id}: + HTTP/0.9\n";
+      } else {
+        warn "$req->{id}: + HTTP/$_[1]->{version} $_[1]->{status} $_[1]->{reason}\n";
+        for (@{$_[1]->{headers}}) {
+          warn "$req->{id}: + @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
+        }
       }
-      warn "$req->{id}: R: \n" if $DEBUG > 1;
       warn "$req->{id}: + WS established\n" if $DEBUG and $_[2];
     } elsif ($_[0] eq 'complete' or $_[0] eq 'responseerror') {
       my $err = join ' ',
@@ -1136,8 +1162,14 @@ sub _ev ($$;$$) {
           $_[1]->{cleanly} ? 'cleanly' : (),
           $_[1]->{can_retry} ? 'retryable' : (),
           defined $_[1]->{status} ? 'status=' . $_[1]->{status} : (),
-          defined $_[1]->{reason} ? '"' . $_[1]->{reason} . '"' : ();
+          defined $_[1]->{reason} ? 'reason=' . $_[1]->{reason} : ();
       warn "$req->{id}: + @{[_e4d $err]}\n" if length $err;
+    } elsif ($_[0] eq 'ping') {
+      if ($_[2]) {
+        warn "$req->{id}: + pong data=@{[_e4d $_[1]]}\n";
+      } else {
+        warn "$req->{id}: + data=@{[_e4d $_[1]]}\n";
+      }
     }
   }
   $self->onevent->($self, $req, @_);
@@ -1176,7 +1208,13 @@ sub _ws_debug ($$$%) {
 } # _ws_sent
 
 sub DESTROY ($) {
-  $_[0]->abort if defined $_[0]->{handle};
+  $_[0]->abort if defined $_[0]->{transport};
+
+  local $@;
+  eval { die };
+  warn "Possible memory leak detected (HTTP)\n"
+      if $@ =~ /during global destruction/;
+
 } # DESTROY
 
 1;

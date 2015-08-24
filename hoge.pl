@@ -6,8 +6,8 @@ use Data::Dumper;
 
 my $hostname = 'wiki.suikawiki.org';
 my $port = 80;
-$hostname = 'localhost';
-$port = 4359;
+#$hostname = 'localhost';
+#$port = 4359;
 my $host = "$hostname:$port";
 my $target = q</n/HomePage>;
 my $method = 'GET';
@@ -20,7 +20,7 @@ push @$headers, [Host => $host];
 my $http;
 
 my $timer;
-if (1) {
+if (0) {
   $ws = 1;
   push @$headers, [Upgrade => 'websocket'], [Connection => 'Upgrade'];
 
@@ -39,7 +39,7 @@ my $cv = AE::cv;
 $http->onevent (sub {
   #warn $_[2], "\t", Dumper $_[3];
   if ($_[2] eq 'headers' and $_[3]) { # ws established
-    $_[0]->send_ws_message ('text', "abcde");
+#    $_[0]->send_ws_message ('text', "abcde");
   }
 });
 
@@ -60,5 +60,6 @@ $http->connect->then (sub {
 
 warn "wait...";
 $cv->recv;
+undef $http;
 
 warn "done!";

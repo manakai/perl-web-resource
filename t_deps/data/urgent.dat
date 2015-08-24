@@ -3,7 +3,9 @@ urgent data
 #method GET
 #url /
 #data
+show "wait..."
 receive LF
+show "received LF"
 "abc"
 urgent "xyz"
 "def"

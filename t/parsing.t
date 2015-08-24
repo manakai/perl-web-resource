@@ -5,10 +5,15 @@ use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
 use Test::HTCT::Parser;
+use Encode;
 use JSON::PS;
 use HTTP;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
+
+sub _a ($) {
+  return encode 'utf-8', $_[0];
+} # _a
 
 my $server_pids = {};
 END { kill 'KILL', $_ for keys %$server_pids }
@@ -136,11 +141,11 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
         $http->connect->then (sub {
           if ($test_type eq 'ws') {
             my $req = $get_req->(
-              method => 'GET',
-              target => $test->{url}->[1]->[0],
+              method => _a 'GET',
+              target => _a $test->{url}->[1]->[0],
               ws => 1,
             );
-            $http->send_request ($req, ws => 1, ws_protocols => [map { $_->[0] } @{$test->{'ws-protocol'} or []}]);
+            $http->send_request ($req, ws => 1, ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}]);
             return $req->{done}->then (sub {
               return $req_results->{$req->{id}};
             });
@@ -149,8 +154,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             my $try_count = 0;
             my $try; $try = sub {
               my $req = $get_req->(
-                method => $test->{method}->[1]->[0],
-                target => $test->{url}->[1]->[0],
+                method => _a $test->{method}->[1]->[0],
+                target => _a $test->{url}->[1]->[0],
               );
               if ($test_type eq 'largerequest-second') {
                 $req->{body} = 'x' x (1024*1024);
@@ -168,7 +173,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               if ($req->{method} eq 'CONNECT') {
                 $req->{tunnel}->then (sub {
                   for (@{$test->{'tunnel-send'} or []}) {
-                    $http->send_through_tunnel ($_->[0]);
+                    $http->send_through_tunnel (_a $_->[0]);
                   }
                 });
               }
@@ -200,8 +205,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             return $try->();
           } else { # $test_type
             my $req = $get_req->(
-              method => $test->{method}->[1]->[0],
-              target => $test->{url}->[1]->[0],
+              method => _a $test->{method}->[1]->[0],
+              target => _a $test->{url}->[1]->[0],
             );
             if ($test_type eq 'largerequest') {
               $req->{body_ref} = \('x' x (1024*1024));
@@ -210,7 +215,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             if ($req->{method} eq 'CONNECT') {
               $req->{tunnel}->then (sub {
                 for (@{$test->{'tunnel-send'} or []}) {
-                  $http->send_through_tunnel ($_->[0]);
+                  $http->send_through_tunnel (_a $_->[0]);
                 }
               });
             }

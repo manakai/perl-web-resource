@@ -778,13 +778,16 @@ sub _next ($) {
     $self->_ev ('complete', $self->{exit});
   }
 
-  if (not $self->{no_new_request} and $self->{request_state} eq 'sending') {
+  if (defined $self->{request_state} and
+      ($self->{request_state} eq 'sending headers' or
+       $self->{request_state} eq 'sending body')) {
     $self->{state} = 'sending';
   } else {
     my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
     delete $self->{request};
     delete $self->{response};
-    $self->{request_state} = 'initial';
+    delete $self->{request_state};
+    delete $self->{request_body_length};
     (delete $self->{request_done})->() if defined $self->{request_done};
     if ($self->{no_new_request}) {
       my $transport = $self->{transport};
@@ -863,15 +866,9 @@ sub connect ($) {
             warn "$id: Closed\n";
           }
           $onclosed->();
-#          delete $self->{transport};
-#          undef $self;
-#          undef $onclosed;
-#          undef $ok;
-#          undef $ng;
         }
       }); # $self->{transport}
       $self->{state} = 'initial';
-      $self->{request_state} = 'initial';
       $self->{closed} = $closed;
       $ok->();
     };
@@ -898,13 +895,18 @@ sub send_request ($$;%) {
       $url =~ /[\x09\x20]\z/) {
     die "Bad |target|: |$url|";
   }
+  $self->{request_body_length} = 0;
   for (@{$req->{headers} or []}) {
     die "Bad header name |$_->[0]|"
         unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
     die "Bad header value |$_->[1]|"
         unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
+    my $n = $_->[0];
+    $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
+    if ($n eq 'content-length') {
+      $self->{request_body_length} = $_->[1]; # XXX
+    }
   }
-  # XXX check body_ref vs Content-Length
   # XXX transfer-encoding
   # XXX WS protocols
   # XXX utf8 flag
@@ -942,33 +944,29 @@ sub send_request ($$;%) {
     }
     # XXX extension
   }
-  $self->{request_state} = 'sending';
   my $req_done = Promise->new (sub { $self->{request_done} = $_[0] });
-  AE::postpone {
-    my $header = join '',
-        "$method $url HTTP/1.1\x0D\x0A",
-        (map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []}),
-        "\x0D\x0A";
-    if ($DEBUG) {
-      my $h = _e4d $header;
-      $h =~ s/^/$req->{id}: S: /gm;
-      warn "$h\n";
+  my $header = join '',
+      "$method $url HTTP/1.1\x0D\x0A",
+      (map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []}),
+      "\x0D\x0A";
+  if ($DEBUG) {
+    for (split /\x0A/, $header) {
+      warn "$req->{id}: S: @{[_e4d $_]}\n";
     }
-    $self->{transport}->push_write (\$header);
-    if (defined $req->{body_ref}) {
-      if ($DEBUG > 1) {
-        for (split /\x0D?\x0A/, ${$req->{body_ref}}, -1) {
-          warn "$req->{id}: S: @{[_e4d $_]}\n";
-        }
-      }
-      $self->{transport}->push_write ($req->{body_ref});
-    }
+  }
+  $self->{request_state} = 'sending headers';
+  $self->{transport}->push_write (\$header);
+  if ($self->{request_body_length} <= 0) {
     $self->{transport}->push_promise->then (sub {
       $self->{request_state} = 'sent';
       $self->_ev ('requestsent');
       $self->_next if $self->{state} eq 'sending';
     });
-  };
+  } else {
+    $self->{transport}->push_promise->then (sub {
+      $self->{request_state} = 'sending body';
+    });
+  }
   if ($DEBUG) {
     $req_done = $req_done->then (sub {
       warn "$req->{id}: ==========\n";
@@ -976,6 +974,31 @@ sub send_request ($$;%) {
   }
   return $req_done;
 } # send_request
+
+sub send_data ($$;%) {
+  my ($self, $ref, %args) = @_;
+  die "Bad state"
+      if not defined $self->{request_body_length} or
+         $self->{request_body_length} <= 0;
+  die "Data too long"
+      if $self->{request_body_length} < length $$ref;
+  die "Data is utf8-flagged" if utf8::is_utf8 $$ref;
+  return unless length $$ref;
+
+  if ($DEBUG > 1) {
+    warn "$self->{request}->{id}: S: @{[_e4d $$ref]}\n";
+  }
+  $self->{transport}->push_write ($ref);
+
+  $self->{request_body_length} -= length $$ref;
+  if ($self->{request_body_length} <= 0) {
+    $self->{transport}->push_promise->then (sub {
+      $self->{request_state} = 'sent';
+      $self->_ev ('requestsent');
+      $self->_next if $self->{state} eq 'sending';
+    });
+  }
+} # send_data
 
 sub send_ws_message ($$$) {
   my $self = $_[0];
@@ -1046,6 +1069,11 @@ sub close ($;%) {
   my ($self, %args) = @_;
   if (not defined $self->{state}) {
     return Promise->reject ("Connection has not been established");
+  }
+  if (defined $self->{request_state}) {
+    if ($self->{request_body_length} > 0) {
+      return Promise->reject ("Request body is not sent");
+    }
   }
 
   if (defined $args{status} and $args{status} > 0xFFFF) {

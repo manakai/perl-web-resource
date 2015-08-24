@@ -156,6 +156,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               my $req = $get_req->(
                 method => _a $test->{method}->[1]->[0],
                 target => _a $test->{url}->[1]->[0],
+                headers => [['Content-Length' => $test_type eq 'largerequest-second' ? 1024*1024 : 0]],
               );
               if ($test_type eq 'largerequest-second') {
                 $req->{body} = 'x' x (1024*1024);
@@ -170,6 +171,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 });
               }
               $http->send_request ($req);
+              $http->send_data (\('x' x (1024*1024))) if $test_type eq 'largerequest-second';
               if ($req->{method} eq 'CONNECT') {
                 $req->{tunnel}->then (sub {
                   for (@{$test->{'tunnel-send'} or []}) {
@@ -207,11 +209,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             my $req = $get_req->(
               method => _a $test->{method}->[1]->[0],
               target => _a $test->{url}->[1]->[0],
+              headers => [['Content-Length' => $test_type eq 'largerequest' ? 1024*1024 : 0]],
             );
-            if ($test_type eq 'largerequest') {
-              $req->{body_ref} = \('x' x (1024*1024));
-            }
             $http->send_request ($req);
+            $http->send_data (\('x' x (1024*1024))) if $test_type eq 'largerequest';
             if ($req->{method} eq 'CONNECT') {
               $req->{tunnel}->then (sub {
                 for (@{$test->{'tunnel-send'} or []}) {

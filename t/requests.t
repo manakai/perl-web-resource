@@ -1350,4 +1350,230 @@ close
   });
 } n => 1, name => 'connect sending after EOF';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "hoge"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"OK"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'data') {
+        test {
+          is $data, 'OK';
+        } $c;
+      }
+    });
+    $http->connect->then (sub {
+      my $p = $http->send_request ({method => 'GET', target => 'test',
+                                    headers => [['Content-Length' => 4]]});
+      $http->send_data (\"hoge");
+      return $p;
+    })->then (sub {
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'with request body';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "hoge"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"NG"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'data') {
+        test {
+          ok 0;
+        } $c;
+      }
+    });
+    $http->connect->then (sub {
+      my $p = $http->send_request ({method => 'GET', target => 'test',
+                                    headers => [['Content-Length' => 4]]});
+      test {
+        eval {
+          $http->send_data (\"hoge!");
+        } or do {
+          like $@, qr/^Data too long/;
+          $http->abort;
+        };
+      } $c;
+      return $p;
+    })->then (sub {
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'with request body - too long';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "hoge"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"NG"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'data') {
+        test {
+          ok 0;
+        } $c;
+      }
+    });
+    $http->connect->then (sub {
+      my $p = $http->send_request ({method => 'GET', target => 'test',
+                                    headers => [['Content-Length' => 4]]});
+      $http->send_data (\"ho");
+      test {
+        eval {
+          $http->send_data (\"ge!");
+        } or do {
+          like $@, qr/^Data too long/;
+          $http->abort;
+        };
+      } $c;
+      return $p;
+    })->then (sub {
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'with request body - too long';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "hoge"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"NG"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'data') {
+        test {
+          ok 0;
+        } $c;
+      }
+    });
+    $http->connect->then (sub {
+      my $p = $http->send_request ({method => 'GET', target => 'test',
+                                    headers => [['Content-Length' => 0]]});
+      test {
+        eval {
+          $http->send_data (\"hoge");
+        } or do {
+          like $@, qr/^Bad state/;
+          $http->abort;
+        };
+      } $c;
+      return $p;
+    })->then (sub {
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'with request body - not allowed';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "hoge"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 0"CRLF
+CRLF
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+    });
+    $http->connect->then (sub {
+      my $p = $http->send_request ({method => 'GET', target => 'test',
+                                    headers => [['Content-Length' => 4]]});
+      return $http->close->catch (sub {
+        my $err = $_[0];
+        test {
+          like $err, qr{^Request body is not sent};
+        } $c;
+        return $http->send_data (\'hoge');
+      })->then (sub { return $p });
+    })->then (sub {
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'with request body - closed without body';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "hoge"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"NG"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'data') {
+        test {
+          ok 0;
+        } $c;
+      }
+    });
+    $http->connect->then (sub {
+      my $p = $http->send_request ({method => 'GET', target => 'test',
+                                    headers => [['Content-Length' => 4]]});
+      test {
+        eval {
+          $http->send_data (\"ge\x{500}");
+        } or do {
+          like $@, qr/^Data is utf8-flagged/;
+          $http->abort;
+        };
+      } $c;
+      return $p;
+    })->then (sub {
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'with request body - utf8';
+
 run_tests;

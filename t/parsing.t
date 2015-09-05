@@ -270,11 +270,11 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   is $result->{body}, ($test->{received}->[0] // '') . '(close)', 'received';
                 }
               }
+              is $result->{exit}->{status}, $test->{'ws-status'}->[1]->[0], 'WS status code';
+              is $result->{exit}->{reason}, $test->{'ws-reason'}->[0], 'WS reason';
               my $expected = perl2json_bytes_for_record (json_bytes2perl (($test->{"result-data"} || ["[]"])->[0]));
               my $actual = perl2json_bytes_for_record $server->{resultdata};
               is $actual, $expected, 'resultdata';
-              ok 1;
-              ok 1;
               ok 1;
             } else {
               is $res->{status}, $is_error ? undef : $test->{status}->[1]->[0];

@@ -23,6 +23,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 pong not empty
@@ -50,6 +53,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 pong bad utf8
@@ -78,6 +84,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 ping empty
@@ -104,6 +113,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0xA masking=1 length=0",
   "  "
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 ping not empty
@@ -131,6 +143,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0xA masking=1 length=6",
   "  abcdef"
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 ping bad utf8
@@ -159,6 +174,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0xA masking=1 length=6",
   "  abcde%FE"
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 ping multiple
@@ -194,6 +212,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0xA masking=1 length=1",
   "  b"
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 pong with continue
@@ -224,6 +245,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 ping with continue
@@ -254,3 +277,5 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason

@@ -23,6 +23,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=22",
   "  code=1002 reason=Invalid%20reserved%20bit"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 reserved2
@@ -49,6 +51,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=22",
   "  code=1002 reason=Invalid%20reserved%20bit"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 reserved3
@@ -75,6 +79,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=22",
   "  code=1002 reason=Invalid%20reserved%20bit"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 reserved3 + close
@@ -102,6 +108,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=22",
   "  code=1002 reason=Invalid%20reserved%20bit"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 reserved3 + ping
@@ -129,6 +137,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=22",
   "  code=1002 reason=Invalid%20reserved%20bit"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 reserved3 + pong
@@ -156,6 +166,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=22",
   "  code=1002 reason=Invalid%20reserved%20bit"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 masked from server
@@ -184,6 +196,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=Masked%20frame%20from%20server"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 masked from server
@@ -212,6 +226,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=Masked%20frame%20from%20server"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown opcode (0x3)
@@ -240,6 +256,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown opcode (0x4)
@@ -268,6 +286,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown opcode (0x5)
@@ -296,6 +316,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown opcode (0x6)
@@ -324,6 +346,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown opcode (0x7)
@@ -352,6 +376,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown opcode (0xb)
@@ -380,6 +406,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown opcode (0xc)
@@ -408,6 +436,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown opcode (0xd)
@@ -436,6 +466,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown opcode (0xe)
@@ -464,6 +496,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown opcode (0xf)
@@ -492,6 +526,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 truncated
@@ -515,6 +551,8 @@ ws-receive-data
 #result-data
 [
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 truncated
@@ -539,6 +577,8 @@ ws-receive-data
 #result-data
 [
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 truncated
@@ -563,6 +603,8 @@ ws-receive-data
 #result-data
 [
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 truncated
@@ -585,6 +627,8 @@ ws-receive-data
 #result-data
 [
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 truncated
@@ -608,6 +652,8 @@ ws-receive-data
 #result-data
 [
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 reserved1 + unknown non-control opcode
@@ -634,6 +680,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=22",
   "  code=1002 reason=Invalid%20reserved%20bit"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 reserved1 + unknown control opcode
@@ -660,6 +708,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=22",
   "  code=1002 reason=Invalid%20reserved%20bit"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 reserved1 + masking
@@ -686,6 +736,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=Masked%20frame%20from%20server"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 masking + unknown opcode
@@ -712,6 +764,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=Masked%20frame%20from%20server"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 non shortest length
@@ -741,6 +795,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 non shortest length 2
@@ -776,6 +832,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 non shortest length + RSV
@@ -805,6 +863,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 empty data length=0
@@ -831,6 +891,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 length=125
@@ -860,6 +923,9 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 length=126
@@ -889,6 +955,9 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 length=127
@@ -918,6 +987,9 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 length=128
@@ -947,6 +1019,9 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 length=65535
@@ -975,6 +1050,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 length=65536
@@ -1003,6 +1081,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 length=65537
@@ -1031,6 +1112,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 length=2147483648 (overflow?)
@@ -1060,6 +1144,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 length=0x7FFFFFFFFFFFFFFF (overflow?)
@@ -1098,6 +1184,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 length=0xFFFFFFFFFFFFFFFF (bad MSB)
@@ -1136,6 +1224,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 length=2147483647 (Chrome might be crashed by this test...)
@@ -1165,6 +1255,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 control frame > 125
@@ -1191,6 +1283,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 control frame > 125 + masking
@@ -1217,6 +1311,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown non-control with continue
@@ -1245,6 +1341,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 unknown control with continue
@@ -1273,6 +1371,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 control FIN=0
@@ -1299,6 +1399,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 control masked
@@ -1325,6 +1427,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=Masked%20frame%20from%20server"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 control masked
@@ -1351,6 +1455,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=Masked%20frame%20from%20server"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 control masked
@@ -1377,3 +1483,5 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=Masked%20frame%20from%20server"
 ]
+#ws-status 1006
+#ws-reason

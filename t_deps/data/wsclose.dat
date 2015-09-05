@@ -22,6 +22,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 close code
@@ -49,6 +52,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=2",
   "  code=4660 reason="
 ]
+#ws-status 4660
+#ws-reason
+#ws-was-clean
 
 #name
 close code reason
@@ -77,6 +83,10 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=6",
   "  code=4660 reason=abcd"
 ]
+#ws-status 4660
+#ws-reason
+abcd
+#ws-was-clean
 
 #name
 close 1byte
@@ -103,6 +113,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=2",
   "  code=1002 reason="
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 close utf8
@@ -134,6 +146,10 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=6",
   "  code=4660 reason=%E4%BA%8Ca"
 ]
+#ws-status 4660
+#ws-reason escaped
+\u4E8Ca
+#ws-was-clean
 
 #name
 close broken utf8
@@ -165,6 +181,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=30",
   "  code=1002 reason=Invalid%20UTF-8%20in%20Close%20frame"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 close code=0
@@ -193,6 +211,10 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=3",
   "  code=0 reason=a"
 ]
+#ws-status 0
+#ws-reason
+a
+#ws-was-clean
 
 #name
 close code=1
@@ -221,6 +243,10 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=3",
   "  code=1 reason=a"
 ]
+#ws-status 1
+#ws-reason
+a
+#ws-was-clean
 
 #name
 close code=0xFFFF
@@ -249,6 +275,10 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=3",
   "  code=65535 reason=a"
 ]
+#ws-status 65535
+#ws-reason
+a
+#ws-was-clean
 
 #name
 close code=1005
@@ -277,6 +307,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=2",
   "  code=1002 reason="
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 close code=1006
@@ -305,6 +337,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=2",
   "  code=1002 reason="
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 redundant data
@@ -332,6 +366,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 redundant close
@@ -361,6 +397,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 close with continue
@@ -389,3 +427,5 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=26",
   "  code=1002 reason=WebSocket%20Protocol%20Error"
 ]
+#ws-status 1006
+#ws-reason

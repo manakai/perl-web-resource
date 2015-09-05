@@ -20,6 +20,8 @@ close
 xyz
 #result-data
 ["WS FIN=1 RSV=0b000 opcode=0x1 masking=1 length=3","  stu"]
+#ws-status 1006
+#ws-reason
 
 #name
 HTTP/1.0
@@ -45,6 +47,8 @@ close
 xyz
 #result-data
 ["WS FIN=1 RSV=0b000 opcode=0x1 masking=1 length=3","  stu"]
+#ws-status 1006
+#ws-reason
 
 #name
 Upgrade: WebSocket
@@ -70,6 +74,8 @@ close
 xyz
 #result-data
 ["WS FIN=1 RSV=0b000 opcode=0x1 masking=1 length=3","  stu"]
+#ws-status 1006
+#ws-reason
 
 #name
 LF
@@ -95,6 +101,8 @@ close
 xyz
 #result-data
 ["WS FIN=1 RSV=0b000 opcode=0x1 masking=1 length=3","  stu"]
+#ws-status 1006
+#ws-reason
 
 #name
 Connection: Keep-Alive
@@ -120,6 +128,8 @@ close
 xyz
 #result-data
 ["WS FIN=1 RSV=0b000 opcode=0x1 masking=1 length=3","  stu"]
+#ws-status 1006
+#ws-reason
 
 #name
 Connection: Close
@@ -146,6 +156,8 @@ close
 xyz
 #result-data
 ["WS FIN=1 RSV=0b000 opcode=0x1 masking=1 length=3","  stu"]
+#ws-status 1006
+#ws-reason
 
 #name
 404 then wait
@@ -357,6 +369,8 @@ close
 #test-type ws
 #ws-send
 #received
+#ws-status 1006
+#ws-reason
 
 #name
 302
@@ -588,6 +602,8 @@ close
 xyz
 #result-data
 ["WS FIN=1 RSV=0b000 opcode=0x1 masking=1 length=3","  stu"]
+#ws-status 1006
+#ws-reason
 
 #name
 Different subprotocol
@@ -813,6 +829,9 @@ close
 xyz
 #result-data
 ["WS FIN=1 RSV=0b000 opcode=0x1 masking=1 length=3","  stu"]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 Transfer-Encoding: chunked
@@ -840,6 +859,9 @@ close
 xyz
 #result-data
 ["WS FIN=1 RSV=0b000 opcode=0x1 masking=1 length=3","  stu"]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 100 + 101

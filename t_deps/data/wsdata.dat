@@ -23,6 +23,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 text frame
@@ -51,6 +54,9 @@ abc
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 text frame, utf8
@@ -82,6 +88,9 @@ a\u307B
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 text frame, utf8 broken
@@ -114,6 +123,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=29",
   "  code=1002 reason=Invalid%20UTF-8%20in%20text%20frame"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 binary frame, empty
@@ -140,6 +151,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 binary frame
@@ -168,6 +182,9 @@ abc
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 binary frame
@@ -198,6 +215,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 text frame, continue frame
@@ -228,6 +248,9 @@ ab
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 text frame, continue frames
@@ -260,6 +283,9 @@ abc
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 text frame, continue frames, utf8 bytes
@@ -292,6 +318,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 byte frame, continue frames, utf8 bytes
@@ -324,6 +353,9 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 continue frame after FIN frame
@@ -356,6 +388,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=25",
   "  code=1002 reason=Unexpected%20continuation"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 continue frame, no leading frame
@@ -385,6 +419,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=25",
   "  code=1002 reason=Unexpected%20continuation"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 text frame, continue frame, pong frame, continue frame
@@ -418,6 +454,9 @@ abc
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 text frame, continue frame, ping frame, continue frame
@@ -451,6 +490,9 @@ abc
   "WS FIN=1 RSV=0b000 opcode=0xA masking=1 length=0",
   "  "
 ]
+#ws-status 1005
+#ws-reason
+#ws-was-clean
 
 #name
 text frame, continue frame, close frame, continue frame
@@ -483,6 +525,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=0",
   "  code=-1 reason="
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 text frame, continue frame FIN=0, text frame
@@ -514,6 +558,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=32",
   "  code=1002 reason=Previous%20data%20frame%20unfinished"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 binary frame, continue frame FIN=0, text frame
@@ -545,6 +591,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=32",
   "  code=1002 reason=Previous%20data%20frame%20unfinished"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 binary frame FIN=0, text frame
@@ -574,6 +622,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=32",
   "  code=1002 reason=Previous%20data%20frame%20unfinished"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 binary frame FIN=0, text frame + RSV
@@ -603,6 +653,8 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=22",
   "  code=1002 reason=Invalid%20reserved%20bit"
 ]
+#ws-status 1006
+#ws-reason
 
 #name
 binary frame FIN=0, unknown data frame
@@ -632,3 +684,5 @@ close
   "WS FIN=1 RSV=0b000 opcode=0x8 masking=1 length=16",
   "  code=1002 reason=Unknown%20opcode"
 ]
+#ws-status 1006
+#ws-reason

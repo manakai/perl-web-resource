@@ -321,8 +321,12 @@ my $httpdcb = sub {
                 setResult (cell, expected === status, status, expected);
                 cell.title = events;
 
+                var aStatus = ev.wasClean + ' ' + ev.code + ' ' + ev.reason;
+                var xStatus = (test["ws-was-clean"] ? 'true' : 'false')
+                            + ' ' + (test["ws-status"] ? test["ws-status"][1][0] : test["handshake-error"] ? 1006 : null)
+                            + ' ' + (test["ws-reason"] ? test["ws-reason"][0] : test["handshake-error"] ? '' : null);
                 var cell = tr.appendChild (document.createElement ('td'));
-                setResult (cell, true, "", "");
+                setResult (cell, aStatus === xStatus, aStatus, xStatus);
 
                 var cell = tr.appendChild (document.createElement ('td'));
                 setResult (cell, true, "", "");

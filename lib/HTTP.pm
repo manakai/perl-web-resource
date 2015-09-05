@@ -595,25 +595,25 @@ sub _process_rbuf ($$;%) {
           return;
         } elsif ($self->{ws_frame}->[0] <= 2) { # 0, 1, 2
           if ($self->{ws_frame}->[2]) { # FIN
-            my $length = 0;
-            if ($self->{ws_frame}->[0] == 1) {
+            if ($self->{ws_frame}->[0] == 1) { # text
               my $buffer = join '', @{$self->{ws_frame}->[1]};
               $self->{ws_frame}->[1] = [eval { decode 'utf-8', $buffer, Encode::FB_CROAK }]; # XXX Encoding Standard # XXX streaming decoder
               if (length $buffer) {
                 $ws_failed = 'Invalid UTF-8 in text frame';
                 last WS;
               }
-            } else {
+              $self->_ev ('textstart', {});
               for (@{$self->{ws_frame}->[1]}) {
-                $length += length $_;
+                $self->_ev ('text', $_);
               }
+              $self->_ev ('textend');
+            } else { # binary
+              $self->_ev ('datastart', {});
+              for (@{$self->{ws_frame}->[1]}) {
+                $self->_ev ('data', $_);
+              }
+              $self->_ev ('dataend');
             }
-            $self->_ev ('datastart', {opcode => $self->{ws_frame}->[0],
-                                      length => $length});
-            for (@{$self->{ws_frame}->[1]}) {
-              $self->_ev ('data', $_);
-            }
-            $self->_ev ('dataend');
             delete $self->{ws_data_frame};
           }
         } elsif ($self->{ws_frame}->[0] == 9) {

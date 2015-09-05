@@ -94,7 +94,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               }
             }
           }
-          if ($type eq 'data') {
+          if ($type eq 'data' or $type eq 'text') {
             $result->{body} //= '';
             $result->{body} .= $_[3];
             $result->{body} .= '(boundary)' if $test->{boundary};

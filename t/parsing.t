@@ -77,7 +77,12 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           my ($http, $req, $type, undef, $flag) = @_;
           #warn "$req $type";
           my $result = $req_results->{$req->{id}} ||= {};
-          push @{$result->{events} ||= []}, [$type];
+          if (not {requestsent => 1}->{$type}) {
+            push @{$result->{r_events} ||= []}, $type;
+          }
+          if ({requestsent => 1, complete => 1}->{$type}) {
+            push @{$result->{s_events} ||= []}, $type;
+          }
           if ($type eq 'headers') {
             $result->{response} = $_[3];
             if ($req->{method} eq 'CONNECT') {
@@ -105,20 +110,14 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           if ($type eq 'complete') {
             $result->{body} //= '';
             $result->{body} .= '(close)';
-            $result->{is_error} = 1 if not $type eq 'complete' or $_[3]->{failed};
-            $result->{can_retry} = 1 if $type eq 'complete' and $_[3]->{can_retry};
-            if ($_[3]->{reset}) {
-              delete $result->{response};
-              $result->{body} = '';
-            }
+            $result->{is_error} = 1 if $_[3]->{failed};
+            $result->{can_retry} = 1 if $_[3]->{can_retry};
+            $result->{body} = '' if $_[3]->{reset};
             if ($_[3]->{failed}) {
               delete $result->{response};
-              if (defined $_[3]->{status}) {
-                #
-              } else {
-                $result->{body} = '(close)';
-              }
+              $result->{body} = '(close)' unless defined $_[3]->{status};
             }
+            $result->{exit} = $_[3];
             $req->{_ok}->();
           }
         }; # $onev
@@ -286,6 +285,28 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               is $result->{body}, $test->{body}->[0], 'body';
               is !!$result->{response}->{incomplete}, !!$test->{incomplete}, 'incomplete message';
             }
+            if ($result->{exit}->{reset}) {
+              is $result->{r_events}->[-1], 'complete', 'r_events';
+              is $result->{s_events}->[-1], 'complete', 's_events';
+            } else {
+              my $r_events = join (',', @{$result->{r_events} || []});
+              1 while $r_events =~ s/,data,data,/,data,/g;
+              $r_events =~ s/,datastart,dataend,/,datastart,data,dataend,/g;
+              $r_events =~ s/,textstart,textend,/,textstart,text,textend,/g;
+              if ($test_type eq 'ws') {
+                like $r_events, qr{^(?:
+                  (?:
+                    headers,
+                    (?:datastart,data,dataend,|textstart,text,textend,|ping,)*
+                    (?:closing,|)
+                  |)
+                  complete
+                )$}x, 'r_events';
+              } else {
+                like $r_events, qr{^(?:headers,datastart,data,dataend,|)complete$}, 'r_events';
+              }
+              is join (',', @{$result->{s_events} || []}), 'requestsent,complete', 's_events';
+            }
           } $c;
           return $http->close;
         })->then (sub {
@@ -297,7 +318,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           undef $c;
         });
       });
-    } n => 6 # + 1 + 3*@{$test->{'1xx'} || []}
+    } n => 8 # + 1 + 3*@{$test->{'1xx'} || []}
       , name => [$path, $test->{name}->[0]],
         timeout => (($test->{name}->[0] // '') =~ /length=/ ? 90 : 20);
   };

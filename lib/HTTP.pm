@@ -275,6 +275,7 @@ sub _process_rbuf ($$;%) {
                $res->{status} == 304 or
                $self->{request}->{method} eq 'HEAD') {
         $self->_ev ('headers', $res);
+        $self->_ev ('datastart', {});
         $self->{unread_length} = 0;
         $self->{state} = 'response body';
       } else {

@@ -1692,7 +1692,7 @@ CRLF
       return $http->close->catch (sub {
         my $err = $_[0];
         test {
-          like $err, qr{^Request body is not sent};
+          like $err, qr{^Body is not sent};
         } $c;
         return $http->send_data (\'hoge');
       })->then (sub { return $p });

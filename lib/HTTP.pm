@@ -1172,18 +1172,8 @@ sub abort ($) {
 
   $self->{no_new_request} = 1;
   $self->{request_state} = 'sent';
+  delete $self->{request_body_length};
   $self->{transport}->abort;
-#XXX
-#  if (defined $self->{request}) {
-#    if (defined $self->{ws_state} and not $self->{ws_state} eq 'CLOSED') {
-#      $self->{ws_state} = 'CLOSING';
-#      $self->{exit} = {failed => 1};
-#      #XXX closing
-#    } else {
-#      $self->{exit} = {failed => 1, message => "Aborted"};
-#    }
-#  }
-#  $self->_next;
 
   return $self->{closed};
 } # abort

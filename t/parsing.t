@@ -105,7 +105,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             $result->{body} .= $_[3];
             $result->{body} .= '(boundary)' if $test->{boundary};
           }
-          if ($type eq 'dataend' and $req->{method} eq 'CONNECT') {
+          if ($type eq 'dataend' and
+              $req->{method} eq 'CONNECT' and
+              $result->{response}->{status} == 200) {
             AE::postpone { $http->close };
           }
           if ($type eq 'complete') {
@@ -184,7 +186,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               if ($req->{method} eq 'CONNECT') {
                 $req->{tunnel}->then (sub {
                   for (@{$test->{'tunnel-send'} or []}) {
-                    $http->send_through_tunnel (_a $_->[0]);
+                    $http->send_data (\_a $_->[0]);
                   }
                 });
               }
@@ -225,7 +227,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             if ($req->{method} eq 'CONNECT') {
               $req->{tunnel}->then (sub {
                 for (@{$test->{'tunnel-send'} or []}) {
-                  $http->send_through_tunnel (_a $_->[0]);
+                  $http->send_data (\_a $_->[0]);
                 }
               });
             }

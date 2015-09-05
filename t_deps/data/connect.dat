@@ -69,6 +69,8 @@ Content-Length: 3
 #body escaped
 anchoge(close)
 
+#name
+data then reset
 #method CONNECT
 #url /
 #data escaped

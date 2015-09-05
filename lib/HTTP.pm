@@ -174,10 +174,6 @@ sub _process_rbuf ($$;%) {
         $self->_ev ('datastart', {});
         $self->{no_new_request} = 1;
         $self->{state} = 'tunnel';
-#XXX
-#        $self->{handle}->on_drain (sub {
-#          $self->_ev ('drain');
-#        });
       } elsif (defined $self->{ws_state} and
                $self->{ws_state} eq 'CONNECTING' and
                $res->{status} == 101) {

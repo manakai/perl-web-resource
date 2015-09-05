@@ -41,7 +41,7 @@ sub server_as_cv ($) {
 test {
   my $c = shift;
   my $http = HTTP->new_from_host_and_port ('localhost', rand);
-  my $p = $http->send_request ({method => 'GET', target => '/'});
+  my $p = $http->send_request_headers ({method => 'GET', target => '/'});
   isa_ok $p, 'Promise';
   $p->then (sub {
     test {
@@ -66,9 +66,9 @@ test {
     my $server = $_[0]->recv;
     my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'});
+      return $http->send_request_headers ({method => 'GET', target => '/'});
     })->then (sub {
-      my $p = $http->send_request ({method => 'GET', target => '/'});
+      my $p = $http->send_request_headers ({method => 'GET', target => '/'});
       test {
         isa_ok $p, 'Promise';
       } $c;
@@ -98,8 +98,8 @@ test {
     my $server = $_[0]->recv;
     my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
     $http->connect->then (sub {
-      my $p1 = $http->send_request ({method => 'GET', target => '/'});
-      my $p = $http->send_request ({method => 'GET', target => '/'});
+      my $p1 = $http->send_request_headers ({method => 'GET', target => '/'});
+      my $p = $http->send_request_headers ({method => 'GET', target => '/'});
       test {
         isa_ok $p, 'Promise';
       } $c;
@@ -141,7 +141,7 @@ test {
         [['Hoge' => "\x{4000}"]],
       ) {
         push @p, Promise->resolve->then (sub {
-          $http->send_request
+          $http->send_request_headers
               ({method => 'GET', target => '/',
                 headers => $subtest});
         })->catch (sub {
@@ -158,7 +158,7 @@ test {
       undef $c;
     });
   });
-} n => 7, name => 'send_request with bad headers';
+} n => 7, name => 'send_request_headers with bad headers';
 
 test {
   my $c = shift;
@@ -173,7 +173,7 @@ test {
       $error = $data if $type eq 'complete';
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'});
+      return $http->send_request_headers ({method => 'GET', target => '/'});
     })->then (sub {
       test {
         ok not $error->{can_retry};
@@ -205,9 +205,9 @@ test {
       $error = $data if $type eq 'complete';
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'});
+      return $http->send_request_headers ({method => 'GET', target => '/'});
     })->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'});
+      return $http->send_request_headers ({method => 'GET', target => '/'});
     })->then (sub {
       test {
         ok $error->{can_retry};
@@ -274,7 +274,7 @@ test {
       $error = $data->{reason} if $type eq 'complete';
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       return $http->send_ws_message ('text', 'abc');
     })->then (sub {
@@ -322,7 +322,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $sent, 1;
@@ -367,7 +367,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $error, 1;
@@ -412,7 +412,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $error, 1;
@@ -457,7 +457,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $error, 1;
@@ -499,7 +499,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $sent, 1;
@@ -541,7 +541,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $sent, 1;
@@ -583,7 +583,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $sent, 1;
@@ -632,7 +632,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $sent, 1;
@@ -681,7 +681,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $sent, 1;
@@ -730,7 +730,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $sent, 1;
@@ -765,7 +765,7 @@ CRLF
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'});
+      return $http->send_request_headers ({method => 'GET', target => '/'});
     })->then (sub{
       test {
         is $sent, 1, "abort called";
@@ -806,7 +806,7 @@ CRLF
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $sent, 1, "abort called";
@@ -853,7 +853,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $sent, 1;
@@ -896,7 +896,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $sent, 1;
@@ -938,7 +938,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $sent, 1;
@@ -987,7 +987,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $error, 1;
@@ -1036,7 +1036,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       test {
         is $error, 1;
@@ -1087,7 +1087,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       return $http->close;
     })->then (sub {
@@ -1128,7 +1128,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub{
       return $http->close;
     })->then (sub {
@@ -1215,7 +1215,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
     })->then (sub{
       test {
         is $sent, 1;
@@ -1269,7 +1269,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
     })->then (sub{
       test {
         is $sent, 1;
@@ -1315,7 +1315,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
     })->then (sub{
       test {
         is $sent, 1;
@@ -1364,7 +1364,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
     })->then (sub{
       return $p;
     })->then (sub {
@@ -1400,7 +1400,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
     })->then (sub{
       test {
         is $received, '(headers)xyz';
@@ -1436,7 +1436,7 @@ close
       }
     });
     $http->connect->then (sub {
-      return $http->send_request ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
     })->then (sub{
       test {
         ok 1;
@@ -1469,7 +1469,7 @@ CRLF
       }
     });
     $http->connect->then (sub {
-      my $p = $http->send_request ({method => 'GET', target => 'test',
+      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
                                     headers => [['Content-Length' => 4]]});
       $http->send_data (\"hoge");
       return $p;
@@ -1502,7 +1502,7 @@ CRLF
       }
     });
     $http->connect->then (sub {
-      my $p = $http->send_request ({method => 'GET', target => 'test',
+      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
                                     headers => [['Content-Length' => 4]]});
       test {
         eval {
@@ -1542,7 +1542,7 @@ CRLF
       }
     });
     $http->connect->then (sub {
-      my $p = $http->send_request ({method => 'GET', target => 'test',
+      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
                                     headers => [['Content-Length' => 4]]});
       $http->send_data (\"ho");
       test {
@@ -1583,7 +1583,7 @@ CRLF
       }
     });
     $http->connect->then (sub {
-      my $p = $http->send_request ({method => 'GET', target => 'test',
+      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
                                     headers => [['Content-Length' => 0]]});
       test {
         eval {
@@ -1617,7 +1617,7 @@ CRLF
       my ($http, $req, $type, $data) = @_;
     });
     $http->connect->then (sub {
-      my $p = $http->send_request ({method => 'GET', target => 'test',
+      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
                                     headers => [['Content-Length' => 4]]});
       return $http->close->catch (sub {
         my $err = $_[0];
@@ -1655,7 +1655,7 @@ CRLF
       }
     });
     $http->connect->then (sub {
-      my $p = $http->send_request ({method => 'GET', target => 'test',
+      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
                                     headers => [['Content-Length' => 4]]});
       test {
         eval {

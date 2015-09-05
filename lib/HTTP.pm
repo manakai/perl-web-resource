@@ -880,7 +880,7 @@ sub is_active ($) {
   return defined $_[0]->{state} && !$_[0]->{no_new_request};
 } # is_active
 
-sub send_request ($$;%) {
+sub send_request_headers ($$;%) {
   my ($self, $req, %args) = @_;
   my $method = $req->{method} // '';
   if (not defined $method or
@@ -974,7 +974,7 @@ sub send_request ($$;%) {
     });
   }
   return $req_done;
-} # send_request
+} # send_request_headers
 
 sub send_data ($$;%) {
   my ($self, $ref, %args) = @_;

@@ -229,7 +229,7 @@ sub _process_rbuf ($$;%) {
         }
         if ($failed) {
           $self->_ev ('headers', $res);
-          $self->_ev ('complete', {failed => 1, status => 1006, reason => ''});
+          $self->{exit} = {failed => 1, status => 1006, reason => ''};
           $self->{no_new_request} = 1;
           $self->{request_state} = 'sent';
           $self->_next;
@@ -309,7 +309,6 @@ sub _process_rbuf ($$;%) {
       }
       if ($self->{unread_length} <= 0) {
         $self->_ev ('dataend', {});
-        $self->_ev ('complete', {});
 
         my $connection = '';
         my $keep_alive = $self->{response}->{version} eq '1.1';
@@ -329,6 +328,7 @@ sub _process_rbuf ($$;%) {
         }
         $self->{no_new_request} = 1 unless $keep_alive;
 
+        $self->{exit} = {};
         $self->_next;
       }
     } else {
@@ -346,7 +346,7 @@ sub _process_rbuf ($$;%) {
       $self->{no_new_request} = 1;
       $self->{request_state} = 'sent';
       $self->_ev ('dataend', {});
-      $self->_ev ('complete', {});
+      $self->{exit} = {};
       $self->_next;
       return;
     }
@@ -363,7 +363,7 @@ sub _process_rbuf ($$;%) {
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
         $self->_ev ('dataend', {});
-        $self->_ev ('complete', {});
+        $self->{exit} = {};
         $self->_next;
         return;
       }
@@ -408,7 +408,7 @@ sub _process_rbuf ($$;%) {
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
         $self->_ev ('dataend', {});
-        $self->_ev ('complete', {});
+        $self->{exit} = {};
         $self->_next;
         return;
       }
@@ -419,11 +419,10 @@ sub _process_rbuf ($$;%) {
     if (2**18-1 < length $$ref) {
       $self->{no_new_request} = 1;
       $self->{request_state} = 'sent';
-      $self->_ev ('complete', {});
+      $self->{exit} = {};
       $self->_next;
       return;
     } elsif ($$ref =~ s/^(.*?)\x0A\x0D?\x0A//s) {
-      $self->_ev ('complete', {});
       my $connection = '';
       for (@{$self->{response}->{headers} || []}) {
         if ($_->[2] eq 'connection') {
@@ -437,6 +436,7 @@ sub _process_rbuf ($$;%) {
           last;
         }
       }
+      $self->{exit} = {};
       $self->_next;
       return;
     }
@@ -698,10 +698,7 @@ sub _process_rbuf_eof ($$;%) {
         $self->_ev ('datastart', {});
         $self->_ev ('data', $$ref);
         $self->_ev ('dataend', {});
-        # XXX
-        #abort => $args{abort},
-        #errno => $args{errno},
-        $self->_ev ('complete', {});
+        $self->{exit} = {};
       }
       $$ref = '';
     } else {
@@ -722,20 +719,16 @@ sub _process_rbuf_eof ($$;%) {
           errno => $args{errno},
         });
       } else {
-        $self->_ev ('complete', {});
+        $self->{exit} = {};
       }
     } elsif ($args{abort} and
              defined $self->{unread_length} and $self->{unread_length} == 0) {
       $self->{request_state} = 'sent';
       $self->_ev ('dataend', {});
-      $self->_ev ('complete', {});
     } else {
       $self->_ev ('dataend', {});
-      $self->_ev ('complete', {});
     }
-        # XXX
-        #abort => $args{abort},
-        #errno => $args{errno},
+    $self->{exit} = {};
   } elsif ({
     'before response chunk' => 1,
     'response chunk size' => 1,
@@ -745,10 +738,10 @@ sub _process_rbuf_eof ($$;%) {
     $self->{response}->{incomplete} = 1;
     $self->{request_state} = 'sent';
     $self->_ev ('dataend', {});
-    $self->_ev ('complete', {});
+    $self->{exit} = {};
   } elsif ($self->{state} eq 'before response trailer') {
     $self->{request_state} = 'sent';
-    $self->_ev ('complete', {});
+    $self->{exit} = {};
   } elsif ($self->{state} eq 'tunnel') {
     $self->_ev ('dataend');
     unless ($args{abort}) {
@@ -758,7 +751,7 @@ sub _process_rbuf_eof ($$;%) {
     }
   } elsif ($self->{state} eq 'tunnel receiving') {
     $self->_ev ('dataend');
-    $self->_ev ('complete', {failed => $args{abort}});
+    $self->{exit} = {failed => $args{abort}};
   } elsif ($self->{state} eq 'before response header') {
     $self->_ev ('responseerror', {
       message => "Connection closed in response header",
@@ -787,21 +780,20 @@ sub _next ($) {
   return if $self->{state} eq 'stopped';
 
   delete $self->{timer};
-  if (defined $self->{ws_state} and $self->{ws_state} eq 'CLOSING') {
-    $self->_ev ('complete', $self->{exit});
-  }
-
   if (defined $self->{request_state} and
       ($self->{request_state} eq 'sending headers' or
        $self->{request_state} eq 'sending body')) {
     $self->{state} = 'sending';
   } else {
+    if (defined $self->{request_state} and
+        $self->{request_state} eq 'sent') {
+      $self->_ev ('complete', $self->{exit});
+    }
     my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
     delete $self->{request};
     delete $self->{response};
     delete $self->{request_state};
     delete $self->{request_body_length};
-    (delete $self->{request_done})->() if defined $self->{request_done};
     if ($self->{no_new_request}) {
       my $transport = $self->{transport};
       $transport->push_shutdown unless $transport->write_to_be_closed;
@@ -871,7 +863,6 @@ sub connect ($) {
 
           if ($self->{state} eq 'tunnel sending') {
             $self->_ev ('complete', {});
-            (delete $self->{request_done})->() if defined $self->{request_done};
           }
         } elsif ($type eq 'close') {
           if ($DEBUG) {
@@ -1158,6 +1149,7 @@ sub abort ($) {
 #    if (defined $self->{ws_state} and not $self->{ws_state} eq 'CLOSED') {
 #      $self->{ws_state} = 'CLOSING';
 #      $self->{exit} = {failed => 1};
+#      #XXX closing
 #    } else {
 #      $self->_ev ('responseerror', {
 #        message => "Aborted",
@@ -1212,6 +1204,9 @@ sub _ev ($$;$$) {
         warn "$req->{id}: + data=@{[_e4d $_[1]]}\n";
       }
     }
+  }
+  if ($_[0] eq 'complete') {
+    (delete $self->{request_done})->();
   }
   $self->onevent->($self, $req, @_);
 } # _ev

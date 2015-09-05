@@ -113,7 +113,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             $result->{can_retry} = 1 if $type eq 'responseerror' and $_[3]->{can_retry};
             if ($type eq 'reset' or $type eq 'responseerror') {
               delete $result->{response};
-              $result->{body} = '(close)';
+              $result->{body} = '';
             }
             $req->{_ok}->();
           }

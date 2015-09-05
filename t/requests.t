@@ -170,7 +170,7 @@ test {
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
-      $error = $data if $type eq 'responseerror';
+      $error = $data if $type eq 'complete';
     });
     $http->connect->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
@@ -202,7 +202,7 @@ test {
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
-      $error = $data if $type eq 'responseerror';
+      $error = $data if $type eq 'complete';
     });
     $http->connect->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
@@ -236,7 +236,7 @@ test {
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
-      $error = $data if $type eq 'responseerror';
+      $error = $data->{reason} if $type eq 'complete';
     });
     $http->connect->then (sub {
       return $http->send_ws_message ('text', 'abc');
@@ -271,7 +271,7 @@ test {
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
-      $error = $data if $type eq 'responseerror';
+      $error = $data->{reason} if $type eq 'complete';
     });
     $http->connect->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);

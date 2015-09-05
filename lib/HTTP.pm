@@ -38,11 +38,10 @@ sub _process_rbuf ($$;%) {
     } elsif (8 <= length $$ref) {
       $self->{response_received} = 1;
       if ($self->{request}->{method} eq 'PUT') {
-        $self->_ev ('responseerror', {
-          message => "HTTP/0.9 response to PUT request",
-        });
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
+        $self->{exit} = {failed => 1,
+                         message => "HTTP/0.9 response to PUT request"};
         $self->_next;
         return;
       } else {
@@ -55,11 +54,10 @@ sub _process_rbuf ($$;%) {
   }
   if ($self->{state} eq 'before response header') {
     if (2**18-1 < length $$ref) {
-      $self->_ev ('responseerror', {
-        message => "Header section too large",
-      });
       $self->{no_new_request} = 1;
       $self->{request_state} = 'sent';
+      $self->{exit} = {failed => 1,
+                       message => "Header section too large"};
       $self->_next;
       return;
     } elsif ($$ref =~ s/^(.*?)\x0A\x0D?\x0A//s or
@@ -147,11 +145,10 @@ sub _process_rbuf ($$;%) {
         $chunked = 0;
       }
       if (($has_broken_length and keys %length) or 1 < keys %length) {
-        $self->_ev ('responseerror', {
-          message => "Inconsistent content-length values",
-        });
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
+        $self->{exit} = {failed => 1,
+                         message => "Inconsistent content-length values"};
         $self->_next;
         return;
       } elsif (1 == keys %length) {
@@ -161,11 +158,10 @@ sub _process_rbuf ($$;%) {
         if ($length eq 0+$length) { # overflow check
           $self->{unread_length} = $res->{content_length} = 0+$length;
         } else {
-          $self->_ev ('responseerror', {
-            message => "Inconsistent content-length values",
-          });
           $self->{no_new_request} = 1;
           $self->{request_state} = 'sent';
+          $self->{exit} = {failed => 1,
+                           message => "Inconsistent content-length values"};
           $self->_next;
           return;
         }
@@ -254,11 +250,10 @@ sub _process_rbuf ($$;%) {
         if ($self->{request}->{method} eq 'CONNECT' or
             (defined $self->{ws_state} and
              $self->{ws_state} eq 'CONNECTING')) {
-          $self->_ev ('responseerror', {
-            message => "1xx response to CONNECT or WS",
-          });
           $self->{no_new_request} = 1;
           $self->{request_state} = 'sent';
+          $self->{exit} = {failed => 1,
+                           message => "1xx response to CONNECT or WS"};
           $self->_next;
           return;
         } else {
@@ -690,9 +685,8 @@ sub _process_rbuf_eof ($$;%) {
   if ($self->{state} eq 'before response') {
     if (length $$ref) {
       if ($self->{request}->{method} eq 'PUT') {
-        $self->_ev ('responseerror', {
-          message => "HTTP/0.9 response to PUT request",
-        });
+        $self->{exit} = {failed => 1,
+                         message => "HTTP/0.9 response to PUT request"};
       } else {
         $self->_ev ('headers', $self->{response});
         $self->_ev ('datastart', {});
@@ -702,11 +696,10 @@ sub _process_rbuf_eof ($$;%) {
       }
       $$ref = '';
     } else {
-      $self->_ev ('responseerror', {
-        message => "Connection closed without response",
-        errno => $args{errno},
-        can_retry => $self->{response_received},
-      });
+      $self->{exit} = {failed => 1,
+                       message => "Connection closed without response",
+                       errno => $args{errno},
+                       can_retry => $self->{response_received}};
     }
   } elsif ($self->{state} eq 'response body') {
     if (defined $self->{unread_length} and $self->{unread_length} > 0) {
@@ -714,10 +707,9 @@ sub _process_rbuf_eof ($$;%) {
       $self->{request_state} = 'sent';
       $self->_ev ('dataend', {});
       if ($self->{response}->{version} eq '1.1') {
-        $self->_ev ('responseerror', {
-          message => "Connection truncated",
-          errno => $args{errno},
-        });
+        $self->{exit} = {failed => 1,
+                         message => "Connection truncated",
+                         errno => $args{errno}};
       } else {
         $self->{exit} = {};
       }
@@ -753,10 +745,9 @@ sub _process_rbuf_eof ($$;%) {
     $self->_ev ('dataend');
     $self->{exit} = {failed => $args{abort}};
   } elsif ($self->{state} eq 'before response header') {
-    $self->_ev ('responseerror', {
-      message => "Connection closed in response header",
-      errno => $args{errno},
-    });
+    $self->{exit} = {failed => 1,
+                     message => "Connection closed within response headers",
+                     errno => $args{errno}};
   } elsif ($self->{state} eq 'before ws frame' or
            $self->{state} eq 'ws data') {
     $self->{ws_state} = 'CLOSING';
@@ -1075,7 +1066,8 @@ sub close ($;%) {
     return Promise->reject ("Connection has not been established");
   }
   if (defined $self->{request_state}) {
-    if ($self->{request_body_length} > 0) {
+    if (defined $self->{request_body_length} and
+        $self->{request_body_length} > 0) {
       return Promise->reject ("Request body is not sent");
     }
   }
@@ -1151,9 +1143,7 @@ sub abort ($) {
 #      $self->{exit} = {failed => 1};
 #      #XXX closing
 #    } else {
-#      $self->_ev ('responseerror', {
-#        message => "Aborted",
-#      });
+#      $self->{exit} = {failed => 1, message => "Aborted"};
 #    }
 #  }
 #  $self->_next;
@@ -1187,13 +1177,15 @@ sub _ev ($$;$$) {
         }
       }
       warn "$req->{id}: + WS established\n" if $DEBUG and $_[2];
-    } elsif ($_[0] eq 'complete' or $_[0] eq 'responseerror') {
+    } elsif ($_[0] eq 'complete') {
       my $err = join ' ',
           $_[1]->{reset} ? 'reset' : (),
           $self->{response}->{incomplete} ? 'incomplete' : (),
           $_[1]->{failed} ? 'failed' : (),
           $_[1]->{cleanly} ? 'cleanly' : (),
           $_[1]->{can_retry} ? 'retryable' : (),
+          defined $_[1]->{errno} ? 'errno=' . $_[1]->{errno} : (),
+          defined $_[1]->{message} ? 'message=' . $_[1]->{message} : (),
           defined $_[1]->{status} ? 'status=' . $_[1]->{status} : (),
           defined $_[1]->{reason} ? 'reason=' . $_[1]->{reason} : ();
       warn "$req->{id}: + @{[_e4d $err]}\n" if length $err;

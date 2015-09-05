@@ -567,6 +567,7 @@ my $server = tcp_server $host, $port, sub {
          my (undef, $fatal, $msg) = @_;
          if ($fatal) {
            warn "[$id] @{[time]} @{[scalar gmtime]} $msg (fatal)\n" if $DUMP;
+           syswrite STDOUT, "[server done]\n";
            $hdl->destroy;
            $cv->end;
          } else {

@@ -90,7 +90,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               }
             } else {
               if ($test_type eq 'ws') {
-                $req->{_ok}->();
                 AE::postpone { $http->abort };
               }
             }
@@ -105,15 +104,22 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           }
           if ({
             complete => 1, abort => 1, reset => 1, cancel => 1,
-            responseerror => 1,
           }->{$type}) {
             $result->{body} //= '';
             $result->{body} .= '(close)';
-            $result->{is_error} = 1 unless $type eq 'complete';
-            $result->{can_retry} = 1 if $type eq 'responseerror' and $_[3]->{can_retry};
-            if ($type eq 'reset' or $type eq 'responseerror') {
+            $result->{is_error} = 1 if not $type eq 'complete' or $_[3]->{failed};
+            $result->{can_retry} = 1 if $type eq 'complete' and $_[3]->{can_retry};
+            if ($type eq 'reset') {
               delete $result->{response};
               $result->{body} = '';
+            }
+            if ($_[3]->{failed}) {
+              delete $result->{response};
+              if (defined $_[3]->{status}) {
+                #
+              } else {
+                $result->{body} = '(close)';
+              }
             }
             $req->{_ok}->();
           }

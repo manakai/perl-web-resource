@@ -978,51 +978,61 @@ sub send_request_headers ($$;%) {
 
 sub send_data ($$;%) {
   my ($self, $ref, %args) = @_;
-  my $is_reqbody = (defined $self->{request_body_length} and
-                    $self->{request_body_length} > 0);
+  my $is_body = (defined $self->{request_body_length} and
+                 $self->{request_body_length} > 0);
   my $is_tunnel = (defined $self->{state} and
                    ($self->{state} eq 'tunnel' or
                     $self->{state} eq 'tunnel sending'));
   croak "Bad state"
-      if not $is_reqbody and not $is_tunnel;
-  croak "Data too long"
-      if $is_reqbody and $self->{request_body_length} < length $$ref;
+      if not $is_body and not $is_tunnel;
+  croak "Data too large"
+      if $is_body and $self->{request_body_length} < length $$ref;
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   return unless length $$ref;
 
   if ($DEBUG > 1) {
     warn "$self->{request}->{id}: S: @{[_e4d $$ref]}\n";
   }
-  $self->{transport}->push_write ($ref);
 
-  if ($is_reqbody) {
-    $self->{request_body_length} -= length $$ref;
-    if ($self->{request_body_length} <= 0) {
-      $self->{transport}->push_promise->then (sub {
-        $self->{request_state} = 'sent';
-        $self->_ev ('requestsent');
-        $self->_next if $self->{state} eq 'sending';
-      });
+  if (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') {
+    my @data;
+    my $mask = $self->{ws_encode_mask_key};
+    my $o = $self->{ws_sent_length};
+    for (0..((length $$ref)-1)) {
+      push @data, substr ($$ref, $_, 1) ^ substr ($mask, ($o+$_) % 4, 1);
     }
-  } # $is_reqbody
+    $self->{ws_sent_length} += length $$ref;
+    $self->{request_body_length} -= length $$ref;
+    $self->{transport}->push_write (\join '', @data);
+  } else {
+    $self->{transport}->push_write ($ref);
+
+    if ($is_body) {
+      $self->{request_body_length} -= length $$ref;
+      if ($self->{request_body_length} <= 0) {
+        $self->{transport}->push_promise->then (sub {
+          $self->{request_state} = 'sent';
+          $self->_ev ('requestsent');
+          $self->_next if $self->{state} eq 'sending';
+        });
+      }
+    } # $is_body
+  }
 } # send_data
 
-sub send_ws_message ($$$) {
-  my $self = $_[0];
-  my $type = $_[1];
-  croak "Unknown type" unless $type eq 'text' or $type eq 'binary';
+sub send_text_header ($$) {
+  my ($self, $length) = @_;
   croak "Data is utf8-flagged" if utf8::is_utf8 $_[2];
-  croak "Data too large"
-      if MAX_BYTES < length $_[2]; # spec limit 2**63
+  croak "Data too large" if MAX_BYTES < $length; # spec limit 2**63
   croak "Bad state"
-      unless defined $self->{ws_state} and $self->{ws_state} eq 'OPEN';
+      if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
+         (defined $self->{request_body_length} and $self->{request_body_length} > 0);
 
+  $self->{ws_encode_mask_key} =
   my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
-  my $data = $_[2];
-  for (0..((length $data)-1)) {
-    substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
-  }
-  my $length = length $data;
+  $self->{ws_sent_length} = 0;
+  $self->{request_body_length} = $length;
+
   my $length0 = $length;
   my $len = '';
   if ($length >= 2**16) {
@@ -1032,12 +1042,39 @@ sub send_ws_message ($$$) {
     $length0 = 0x7E;
     $len = pack 'Q>', $length;
   }
-  my $opcode = $type eq 'text' ? 1 : 2;
-  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => $opcode, mask => $mask, length => $length) if $DEBUG;
+  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 1, mask => $mask, length => $length) if $DEBUG;
   $self->{transport}->push_write
-      (\(pack ('CC', 0b10000000 | $opcode, 0b10000000 | $length0) .
-         $len . $mask . $data));
-} # send_ws_message
+      (\(pack ('CC', 0b10000000 | 1, 0b10000000 | $length0) .
+         $len . $mask));
+} # send_text_header
+
+sub send_binary_header ($$) {
+  my ($self, $length) = @_;
+  croak "Data is utf8-flagged" if utf8::is_utf8 $_[2];
+  croak "Data too large" if MAX_BYTES < $length; # spec limit 2**63
+  croak "Bad state"
+      if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
+         (defined $self->{request_body_length} and $self->{request_body_length} > 0);
+
+  $self->{ws_encode_mask_key} =
+  my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+  $self->{ws_sent_length} = 0;
+  $self->{request_body_length} = $length;
+
+  my $length0 = $length;
+  my $len = '';
+  if ($length >= 2**16) {
+    $length0 = 0x7F;
+    $len = pack 'n', $length;
+  } elsif ($length >= 0x7E) {
+    $length0 = 0x7E;
+    $len = pack 'Q>', $length;
+  }
+  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask, length => $length) if $DEBUG;
+  $self->{transport}->push_write
+      (\(pack ('CC', 0b10000000 | 2, 0b10000000 | $length0) .
+         $len . $mask));
+} # send_binary_header
 
 sub send_ping ($;%) {
   my ($self, %args) = @_;
@@ -1045,7 +1082,8 @@ sub send_ping ($;%) {
   croak "Data is utf8-flagged" if utf8::is_utf8 $args{data};
   croak "Data too large" if 0x7D < length $args{data}; # spec limit 2**63
   croak "Bad state"
-      unless defined $self->{ws_state} and $self->{ws_state} eq 'OPEN';
+      if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
+         (defined $self->{request_body_length} and $self->{request_body_length} > 0);
 
   my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
   for (0..((length $args{data})-1)) {
@@ -1063,10 +1101,11 @@ sub close ($;%) {
   if (not defined $self->{state}) {
     return Promise->reject ("Connection has not been established");
   }
-  if (defined $self->{request_state}) {
+  if (defined $self->{request_state} or
+      (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN')) {
     if (defined $self->{request_body_length} and
         $self->{request_body_length} > 0) {
-      return Promise->reject ("Request body is not sent");
+      return Promise->reject ("Body is not sent");
     }
   }
 

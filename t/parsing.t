@@ -91,7 +91,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             if ($flag) {
               $result->{ws_established} = 1;
               if ($test_type eq 'ws' and $test->{'ws-send'}) {
-                $http->send_ws_message ('text', 'stu');
+                $http->send_text_header (3);
+                $http->send_data (\'stu');
               }
             } else {
               if ($test_type eq 'ws') {

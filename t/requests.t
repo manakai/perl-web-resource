@@ -221,6 +221,8 @@ test {
   });
 } n => 1, name => 'second empty response';
 
+for my $tbmethod (qw(send_text_header send_binary_header)) {
+
 test {
   my $c = shift;
   server_as_cv (q{
@@ -239,7 +241,8 @@ test {
       $error = $data->{reason} if $type eq 'complete';
     });
     $http->connect->then (sub {
-      return $http->send_ws_message ('text', 'abc');
+      $http->$tbmethod (3);
+      $http->send_data (\'abc');
     })->then (sub {
       test { ok 0 } $c;
     }, sub {
@@ -254,7 +257,7 @@ test {
       undef $c;
     });
   });
-} n => 1, name => 'send_ws_message before request';
+} n => 1, name => ['send_ws_message before request', $tbmethod];
 
 test {
   my $c = shift;
@@ -276,7 +279,8 @@ test {
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
-      return $http->send_ws_message ('text', 'abc');
+      $http->$tbmethod (3);
+      $http->send_data (\'abc');
     })->then (sub {
       test { ok 0 } $c;
     }, sub {
@@ -291,7 +295,7 @@ test {
       undef $c;
     });
   });
-} n => 1, name => 'send_ws_message after bad handshake';
+} n => 1, name => ['send_ws_message after bad handshake', $tbmethod];
 
 test {
   my $c = shift;
@@ -317,7 +321,8 @@ close
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'headers') {
-        $http->send_ws_message ('text', 'abc');
+        $http->$tbmethod (3);
+        $http->send_data (\'abc');
         $sent++;
       }
     });
@@ -333,7 +338,7 @@ close
       undef $c;
     });
   });
-} n => 1, name => 'send_ws_message ok';
+} n => 1, name => ['send_ws_message ok', $tbmethod];
 
 test {
   my $c = shift;
@@ -356,53 +361,9 @@ close
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'headers') {
+        $http->$tbmethod (2);
         eval {
-          $http->send_ws_message ('text?', 'abc');
-        } or do {
-          test {
-            like $@, qr{^Unknown type};
-          } $c;
-          $error++;
-        }
-      }
-    });
-    $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
-    })->then (sub{
-      test {
-        is $error, 1;
-      } $c;
-      return $http->close;
-    })->then (sub {
-      done $c;
-      undef $c;
-    });
-  });
-} n => 2, name => 'send_ws_message unknown type';
-
-test {
-  my $c = shift;
-  server_as_cv (q{
-receive "GET", start capture
-receive CRLFCRLF, end capture
-"HTTP/1.1 101 OK"CRLF
-"Upgrade: websocket"CRLF
-"Sec-WebSocket-Accept: "
-ws-accept
-CRLF
-"Connection: Upgrade"CRLF
-CRLF
-sleep 1
-close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
-    my $error = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        eval {
-          $http->send_ws_message ('text', 'a' x (2**31));
+          $http->send_data (\'abc');
         } or do {
           test {
             like $@, qr{^Data too large};
@@ -423,7 +384,7 @@ close
       undef $c;
     });
   });
-} n => 2, name => 'send_ws_message data too large';
+} n => 2, name => ['send_ws_message data too large', $tbmethod];
 
 test {
   my $c = shift;
@@ -446,8 +407,9 @@ close
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'headers') {
+        $http->$tbmethod (2);
         eval {
-          $http->send_ws_message ('text', "\x{100}");
+          $http->send_data (\"\x{100}");
         } or do {
           test {
             like $@, qr{^Data is utf8-flagged};
@@ -468,7 +430,115 @@ close
       undef $c;
     });
   });
-} n => 2, name => 'send_ws_message data utf8 flagged';
+} n => 2, name => ['send_ws_message data utf8 flagged', $tbmethod];
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+sleep 1
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $error = 0;
+    my @p;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        $http->$tbmethod (3);
+        $http->send_data (\'ab');
+        for my $code (
+          sub { $http->send_text_header (4); },
+          sub { $http->send_binary_header (4); },
+          sub { $http->send_ping },
+          sub { $http->send_ping (pong => 1) },
+          sub { $http->close },
+        ) {
+          push @p,
+          Promise->resolve->then ($code)->then (sub { test { ok 0 } $c }, sub {
+            my $err = $_[0];
+            test {
+              like $err, qr{^(?:Bad state|Body is not sent)};
+            } $c;
+            $error++;
+          });
+        }
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub{
+      test {
+        is $error, 5;
+      } $c;
+      return Promise->all (\@p);
+    })->then (sub {
+      return $http->abort;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => ['send_ws_message then bad method', $tbmethod];
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-header
+ws-receive-data
+ws-receive-header
+ws-send-header opcode=1 length=3
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $sent = 0;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'headers') {
+        $http->$tbmethod (0);
+        $http->$tbmethod (3);
+        $http->send_data (\'a');
+        $http->send_data (\'bc');
+        $http->$tbmethod (0);
+        $sent++;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub{
+      test {
+        is $sent, 1;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => ['send_ws_message zero length', $tbmethod];
+
+}
 
 test {
   my $c = shift;
@@ -1508,7 +1578,7 @@ CRLF
         eval {
           $http->send_data (\"hoge!");
         } or do {
-          like $@, qr/^Data too long/;
+          like $@, qr/^Data too large/;
           $http->abort;
         };
       } $c;
@@ -1549,7 +1619,7 @@ CRLF
         eval {
           $http->send_data (\"ge!");
         } or do {
-          like $@, qr/^Data too long/;
+          like $@, qr/^Data too large/;
           $http->abort;
         };
       } $c;

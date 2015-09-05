@@ -69,6 +69,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 203
 #reason fuga
 #headers
@@ -93,6 +94,7 @@ receive "GET"
 CRLF
 "ab"
 #test-type second
+#version 1.0
 #status 203
 #reason fuga
 #headers
@@ -124,6 +126,7 @@ receive "GET"
 CRLF
 "ab"
 #test-type second
+#version 1.0
 #status 203
 #reason fuga
 #headers
@@ -155,6 +158,7 @@ receive "GET"
 CRLF
 "ab"
 #test-type second
+#version 1.0
 #status 203
 #reason fuga
 #headers
@@ -453,6 +457,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 0.9
 #status 200
 #reason OK
 #headers
@@ -696,6 +701,7 @@ receive "GET"
 CRLF
 "ab"
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -721,6 +727,7 @@ receive "GET"
 CRLF
 "ab"
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -748,6 +755,7 @@ receive "GET"
 CRLF
 "ab"
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -776,6 +784,7 @@ receive "GET"
 CRLF
 "ab"
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -1096,6 +1105,7 @@ showcaptured
 "x"
 close
 #test-type second
+#version 0.9
 #status 200
 #reason OK
 #headers

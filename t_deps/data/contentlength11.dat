@@ -8,6 +8,7 @@ CRLF
 close
 #headers
 Content-Length: 3
+#version 1.1
 #status 200
 #reason OK
 #body escaped
@@ -25,6 +26,7 @@ CRLF
 close
 #headers
 Content-Length: 0003
+#version 1.1
 #status 200
 #reason OK
 #body escaped
@@ -40,6 +42,7 @@ CRLF
 close
 #headers
 Content-Length: 2
+#version 1.1
 #status 200
 #reason OK
 #body escaped
@@ -121,6 +124,7 @@ bad content length (abc)
 CRLF
 "aabde"
 close
+#version 1.1
 #status 200
 #reason OK
 #headers
@@ -138,6 +142,7 @@ bad content length (3.0)
 CRLF
 "aabde"
 close
+#version 1.1
 #status 200
 #reason OK
 #headers
@@ -155,6 +160,7 @@ bad content length (3abc)
 CRLF
 "aabde"
 close
+#version 1.1
 #status 200
 #reason OK
 #headers
@@ -204,6 +210,7 @@ CRLF
 close
 #headers
 Content-Length: 3,3
+#version 1.1
 #status 200
 #reason OK
 #body escaped
@@ -249,6 +256,7 @@ bad content length (3 abc)
 CRLF
 "aabde"
 close
+#version 1.1
 #status 200
 #reason OK
 #headers
@@ -283,6 +291,7 @@ multiple content length (3\n3)
 CRLF
 "aabde"
 close
+#version 1.1
 #status 200
 #reason OK
 #headers
@@ -350,6 +359,7 @@ multiple content length (3abc\n3abc)
 CRLF
 "aabde"
 close
+#version 1.1
 #status 200
 #reason OK
 #headers

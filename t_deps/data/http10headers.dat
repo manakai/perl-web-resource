@@ -6,6 +6,7 @@
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -21,6 +22,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -37,6 +39,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -54,6 +57,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -70,6 +74,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -89,6 +94,7 @@ CR
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -109,6 +115,7 @@ LF
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -126,6 +133,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -142,6 +150,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -158,6 +167,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -175,6 +185,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -193,6 +204,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -210,6 +222,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -226,6 +239,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -243,6 +257,7 @@ space before :
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -260,6 +275,7 @@ space before :
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -277,6 +293,7 @@ space before :
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -294,6 +311,7 @@ U+0009 after :
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -311,6 +329,7 @@ U+000C after :
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -328,6 +347,7 @@ U+0009 after :
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -345,6 +365,7 @@ space after value
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -362,6 +383,7 @@ space after value
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -381,6 +403,7 @@ has bad line
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -401,6 +424,7 @@ has bad line
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -421,6 +445,7 @@ has bad line
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -439,6 +464,7 @@ empty value
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -456,6 +482,7 @@ empty value
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -473,6 +500,7 @@ empty value
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -490,6 +518,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -506,6 +535,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -526,6 +556,7 @@ space-only line
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -546,6 +577,7 @@ abc(close)
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -570,6 +602,7 @@ bad header name
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -596,6 +629,7 @@ non-ASCII header name
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -618,6 +652,7 @@ non-ASCII header value
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -640,6 +675,7 @@ non-ASCII header value
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -663,6 +699,7 @@ non-ASCII header value
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -684,6 +721,7 @@ CR
 CRLF
 "def"
 close
+#version 1.0
 #status 201
 #reason foo
 #headers escaped
@@ -703,6 +741,7 @@ CR
 CRLF
 "def"
 close
+#version 1.0
 #status 201
 #reason foo
 #headers escaped
@@ -722,6 +761,7 @@ CRLF
 CRLF
 "def"
 close
+#version 1.0
 #status 201
 #reason foo
 #headers escaped
@@ -744,6 +784,7 @@ CRLF
 CRLF
 "def"
 close
+#version 1.0
 #status 201
 #reason escaped
 foo
@@ -770,6 +811,7 @@ CRLF
 CRLF
 "def"
 close
+#version 1.0
 #status 201
 #reason escaped
 foo

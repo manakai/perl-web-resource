@@ -10,6 +10,7 @@ show "received LF"
 urgent "xyz"
 "def"
 close
+#version 0.9
 #status 200
 #reason OK
 #body
@@ -33,6 +34,7 @@ LF
 close
 #status 200
 #reason OK
+#version 0.9
 #body escaped
 \u000D\u000A(close)
 
@@ -48,6 +50,7 @@ urgent "b"
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers
@@ -67,6 +70,7 @@ CRLF
 urgent "b"
 "c"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers

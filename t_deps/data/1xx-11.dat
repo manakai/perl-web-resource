@@ -11,6 +11,7 @@ close
 #1xx
 | #status 190
 | #reason cont.
+#version 1.1
 #status 201
 #reason foo
 #headers
@@ -38,6 +39,7 @@ close
 #1xx
 | #status 190
 | #reason cont.
+#version 1.1
 #status 201
 #reason foo
 #headers
@@ -62,6 +64,7 @@ close
 | #reason cont.
 | #headers
 | Content-Length: 3
+#version 1.1
 #status 201
 #reason foo
 #headers
@@ -69,6 +72,8 @@ Hoge: 3
 #body escaped
 xyz(close)
 
+#name
+1xx with Content-Length
 #method GET
 #url /
 #data escaped
@@ -86,6 +91,7 @@ close
 | #reason cont.
 | #headers
 | Content-Length: 8
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -107,6 +113,7 @@ close
 | #reason cont.
 | #headers
 | Content-Length: 3
+#version 0.9
 #status 200
 #reason OK
 #headers
@@ -129,6 +136,7 @@ close
 | #reason cont.
 | #headers
 | Content-Length: 3
+#version 1.1
 #status 201
 #reason foo
 #headers
@@ -151,6 +159,7 @@ close
 | #reason cont.
 | #headers
 | Content-Length: 3
+#version 1.0
 #status 201
 #reason foo
 #headers
@@ -167,6 +176,7 @@ close
 #1xx
 | #status 190
 | #reason cont.
+#version 0.9
 #status 200
 #reason OK
 #headers
@@ -188,6 +198,7 @@ close
 #1xx
 | #status 190
 | #reason cont.
+#version 0.9
 #status 200
 #reason OK
 #headers
@@ -221,6 +232,7 @@ close
 | #reason cont.
 | #headers
 | connection: close
+#version 1.1
 #status 201
 #reason foo
 #headers
@@ -241,6 +253,7 @@ close
 #1xx
 | #status 190
 | #reason cont.
+#version 1.1
 #status 201
 #reason foo
 #headers
@@ -258,6 +271,7 @@ CRLF
 CRLF
 "xyz"
 close
+#version 1.1
 #status 99
 #reason cont.
 #body escaped
@@ -303,6 +317,7 @@ close
 | #reason switching
 | #headers
 | Upgrade: websocket
+#version 1.1
 #status 200
 #reason OK
 #body escaped
@@ -324,6 +339,7 @@ close
 | #reason switching
 | #headers
 | Upgrade: websocket
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -347,6 +363,7 @@ close
 | #reason switching
 | #headers
 | Upgrade: hoge
+#version 1.1
 #status 200
 #reason OK
 #body escaped
@@ -368,6 +385,7 @@ close
 | #reason switching
 | #headers
 | Upgrade: hoge
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -391,6 +409,7 @@ close
 | #reason switching
 | #headers
 | Upgrade: hoge
+#version 1.1
 #status 200
 #reason OK
 #body escaped
@@ -412,6 +431,7 @@ close
 | #reason switching
 | #headers
 | Upgrade: hoge
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -435,6 +455,7 @@ close
 | #reason switching
 | #headers
 | Upgrade: hoge
+#version 1.1
 #status 200
 #reason OK
 #body escaped
@@ -456,6 +477,7 @@ close
 | #reason switching
 | #headers
 | Upgrade: hoge
+#version 0.9
 #status 200
 #reason OK
 #body escaped

@@ -2,7 +2,6 @@
 reset
 #method GET
 #url /
-#version 0.9
 #data
 receive LF
 reset
@@ -14,7 +13,6 @@ reset
 data then reset
 #method GET
 #url /
-#version 0.9
 #data
 receive LF
 "hoge"

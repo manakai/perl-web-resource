@@ -6,6 +6,7 @@ receive LF
 CRLF
 "A"
 close
+#version 1.0
 #status 200
 #reason OK
 #body
@@ -13,13 +14,13 @@ A(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "HTTP/1.0 200 OK"LF
 LF
 "A"
 close
+#version 1.0
 #status 200
 #reason OK
 #body
@@ -27,13 +28,13 @@ A(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "XHTTP/1.0 200 OK"CRLF
 CRLF
 "A"
 close
+#version 1.0
 #status 200
 #reason OK
 #body
@@ -41,13 +42,13 @@ A(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "http/1.0 200 OK"CRLF
 CRLF
 "A"
 close
+#version 1.0
 #status 200
 #reason OK
 #body
@@ -55,7 +56,6 @@ A(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "HTTP/1.1 200 OK"CRLF
@@ -69,13 +69,13 @@ A(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "HTTP/0. 201 OK"CRLF
 CRLF
 "A"
 close
+#version 1.0
 #status 201
 #reason OK
 #body
@@ -83,13 +83,13 @@ A(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "HTTP/1. 201 OK"CRLF
 CRLF
 "A"
 close
+#version 1.0
 #status 201
 #reason OK
 #body
@@ -97,13 +97,13 @@ A(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "HTTP/01. 201 OK"CRLF
 CRLF
 "A"
 close
+#version 1.0
 #status 201
 #reason OK
 #body
@@ -111,13 +111,13 @@ A(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "HTTP/1 201 OK"CRLF
 CRLF
 "A"
 close
+#version 1.0
 #status 201
 #reason OK
 #body
@@ -125,13 +125,13 @@ A(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "HTTP/ 202 hoe"CRLF
 CRLF
 "A"
 close
+#version 1.0
 #status 202
 #reason hoe
 #body
@@ -139,13 +139,13 @@ A(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "XHTTP/ 202 hoe"CRLF
 CRLF
 "A"
 close
+#version 1.0
 #status 202
 #reason hoe
 #body
@@ -153,13 +153,13 @@ A(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "HTTP 203 OK"CRLF
 CRLF
 "B"
 close
+#version 1.0
 #status 203
 #reason OK
 #body escaped
@@ -167,13 +167,13 @@ B(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "http 209 foo"CRLF
 CRLF
 "B"
 close
+#version 1.0
 #status 209
 #reason foo
 #body escaped
@@ -181,13 +181,13 @@ B(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "htTp 209 foo"CRLF
 CRLF
 "B"
 close
+#version 1.0
 #status 209
 #reason foo
 #body escaped
@@ -195,13 +195,13 @@ B(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "HTT 203 notOK"CRLF
 CRLF
 "A"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -209,13 +209,13 @@ HTT 203 notOK\u000D\u000A\u000D\u000AA(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "203 notOK"CRLF
 CRLF
 "A"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -223,13 +223,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "AHTTP hoge"CRLF
 CRLF
 "a"
 close
+#version 1.0
 #status 200
 #reason OK
 #body
@@ -237,13 +237,13 @@ a(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDHTTP hoge"CRLF
 CRLF
 "a"
 close
+#version 1.0
 #status 200
 #reason OK
 #body
@@ -251,13 +251,13 @@ a(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDHTTP/1. hoge"CRLF
 CRLF
 "ax"
 close
+#version 1.0
 #status 200
 #reason OK
 #body
@@ -265,7 +265,6 @@ ax(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 LF
@@ -273,6 +272,7 @@ LF
 CRLF
 "ax"
 close
+#version 1.0
 #status 200
 #reason OK
 #body
@@ -280,7 +280,6 @@ ax(close)
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 LF
@@ -288,6 +287,7 @@ LF
 CRLF
 "bb"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -298,13 +298,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDEHTTP hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -314,13 +314,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDEHTTP/1. hoge"CRLF
 CRLF
 "b"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -330,13 +330,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDEFHTTP hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -346,13 +346,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDEFHTTP/1. hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -362,13 +362,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDEFGHTTP hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -378,13 +378,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDEFGHTTP/1. hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -394,13 +394,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDEFGHHTTP/1. hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -410,13 +410,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDEFGHIHTTP/1. hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -426,13 +426,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDEFGHIJKHTTP/1. hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -442,13 +442,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDEFGHIJKMNOHTTP/1. hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -458,13 +458,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "ABCDEFGHIJKLMNOPQRSTUVWXYZHTTP hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -474,13 +474,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "01234567 HTTP hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -490,13 +490,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "0123456789ABCDEF HTTP hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -506,13 +506,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "0123456789ABCDEF0123HTTP/1.0 hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -522,13 +522,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "0123456789ABCDEF0123 HTTP hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -538,13 +538,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "0123456789ABCDEF01234567 HTTP hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -554,13 +554,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "0123456789ABCDEF012345678HTTP"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -570,13 +570,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "0123456789ABCDEF012345678HTTP hoge"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -586,13 +586,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "0123456789ABCDEF0123456789HTTP"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -602,13 +602,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "0123456789ABCDEF0123456789ABCDEFHTTP"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -618,13 +618,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "X0123456789ABCDEF0123456789ABCDEFHTTP"CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -634,13 +634,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "X0123456789ABCDEF0123456789ABCDEFHTTP "CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -650,13 +650,13 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "X0123456789ABCDEF0123456789ABCDEFHTTP/1. "CRLF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -666,7 +666,6 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "0123456789ABCDEF"LF
@@ -674,6 +673,7 @@ receive LF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -684,7 +684,6 @@ close
 
 #method GET
 #url /
-#version 1.0
 #data
 receive LF
 "0123456789ABCDEF"LF
@@ -694,6 +693,7 @@ LF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -715,6 +715,7 @@ LF
 CRLF
 "a"
 close
+#version 0.9
 #status 200
 #reason OK
 #body escaped
@@ -732,6 +733,7 @@ close
 CRLF
 "aa"
 close
+#version 1.0
 #status 200
 #reason OK
 #body escaped
@@ -744,6 +746,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 200
 #reason OK
 #body escaped
@@ -756,6 +759,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 200
 #reason OK
 #body escaped
@@ -768,6 +772,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 201
 #reason ok...
 #body escaped
@@ -780,6 +785,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 203
 #reason xyz
 #body escaped
@@ -796,6 +802,7 @@ urgent "1"
 CRLF
 "aa"
 close
+#version 1.0
 #status 203
 #reason xx
 #body escaped
@@ -808,6 +815,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 200
 #reason OK
 #body escaped
@@ -820,6 +828,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 0
 #reason abc
 #body escaped
@@ -832,6 +841,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 12
 #body escaped
 aa(close)
@@ -843,6 +853,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 12
 #reason abc
 #body escaped
@@ -855,6 +866,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 12
 #reason abc
 #body escaped
@@ -867,6 +879,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 2001
 #reason abc
 #body escaped
@@ -879,6 +892,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 2001
 #reason 
 #body escaped
@@ -891,6 +905,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 400
 #reason abc
 #body escaped
@@ -903,6 +918,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 65536
 #reason abc
 #body escaped
@@ -915,6 +931,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 9965536
 #reason abc
 #body escaped
@@ -927,6 +944,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 2147483647
 #reason abc
 #body escaped
@@ -939,6 +957,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 2147483647
 #reason abc
 #body escaped
@@ -951,6 +970,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 400
 #reason abc
 #body escaped
@@ -965,6 +985,7 @@ U+0009
 CRLF
 "aa"
 close
+#version 1.0
 #status 200
 #reason OK
 #body escaped
@@ -977,6 +998,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 200
 #reason OK
 #body escaped
@@ -989,6 +1011,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 200
 #reason OK
 #body escaped
@@ -1001,6 +1024,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 200
 #reason OK
 #body escaped
@@ -1013,6 +1037,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 200
 #reason OK
 #body escaped
@@ -1025,6 +1050,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 201
 #reason abc
 #body escaped
@@ -1037,6 +1063,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 201
 #reason abc
 #body escaped
@@ -1049,6 +1076,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 200
 #reason OK
 #body escaped
@@ -1061,6 +1089,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 201
 #reason 
 #body escaped
@@ -1073,6 +1102,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 201
 #reason abc
 #body escaped
@@ -1085,6 +1115,7 @@ aa(close)
 CRLF
 "aa"
 close
+#version 1.0
 #status 201
 #reason escaped
 abc  \u0020
@@ -1100,6 +1131,7 @@ Status line: HTTP/2
 CRLF
 "aa"
 close
+#version 1.0
 #status 201
 #reason escaped
 abc
@@ -1115,6 +1147,7 @@ Status line: HTTP/2.
 CRLF
 "aa"
 close
+#version 1.0
 #status 201
 #reason escaped
 abc
@@ -1130,6 +1163,7 @@ Status line: HTTP/02.
 CRLF
 "aa"
 close
+#version 1.0
 #status 201
 #reason escaped
 abc

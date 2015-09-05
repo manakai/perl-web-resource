@@ -29,6 +29,7 @@ CRLF
 "0"CRLF
 CRLF
 close
+#version 1.0
 #status 200
 #reason OK
 #headers

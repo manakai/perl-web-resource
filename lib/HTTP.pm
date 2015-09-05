@@ -47,6 +47,7 @@ sub _process_rbuf ($$;%) {
         return;
       } else {
         $self->_ev ('headers', $self->{response});
+        $self->_ev ('datastart', {});
         $self->{state} = 'response body';
         delete $self->{unread_length};
       }
@@ -283,6 +284,7 @@ sub _process_rbuf ($$;%) {
         $self->{state} = 'response body';
       } else {
         $self->_ev ('headers', $res);
+        $self->_ev ('datastart', {});
         if ($chunked) {
           $self->{state} = 'before response chunk';
         } else {
@@ -306,6 +308,7 @@ sub _process_rbuf ($$;%) {
         $self->{unread_length} = 0;
       }
       if ($self->{unread_length} <= 0) {
+        $self->_ev ('dataend', {});
         $self->_ev ('complete', {});
 
         my $connection = '';
@@ -342,6 +345,7 @@ sub _process_rbuf ($$;%) {
       $self->{response}->{incomplete} = 1;
       $self->{no_new_request} = 1;
       $self->{request_state} = 'sent';
+      $self->_ev ('dataend', {});
       $self->_ev ('complete', {});
       $self->_next;
       return;
@@ -358,11 +362,13 @@ sub _process_rbuf ($$;%) {
         $self->{response}->{incomplete} = 1;
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
+        $self->_ev ('dataend', {});
         $self->_ev ('complete', {});
         $self->_next;
         return;
       }
       if ($n == 0) {
+        $self->_ev ('dataend', {});
         $self->{state} = 'before response trailer';
       } else {
         $self->{unread_length} = $n;
@@ -401,6 +407,7 @@ sub _process_rbuf ($$;%) {
         $self->{response}->{incomplete} = 1;
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
+        $self->_ev ('dataend', {});
         $self->_ev ('complete', {});
         $self->_next;
         return;
@@ -688,7 +695,9 @@ sub _process_rbuf_eof ($$;%) {
         });
       } else {
         $self->_ev ('headers', $self->{response});
+        $self->_ev ('datastart', {});
         $self->_ev ('data', $$ref);
+        $self->_ev ('dataend', {});
         # XXX
         #abort => $args{abort},
         #errno => $args{errno},
@@ -706,6 +715,7 @@ sub _process_rbuf_eof ($$;%) {
     if (defined $self->{unread_length} and $self->{unread_length} > 0) {
       $self->{response}->{incomplete} = 1;
       $self->{request_state} = 'sent';
+      $self->_ev ('dataend', {});
       if ($self->{response}->{version} eq '1.1') {
         $self->_ev ('responseerror', {
           message => "Connection truncated",
@@ -717,8 +727,10 @@ sub _process_rbuf_eof ($$;%) {
     } elsif ($args{abort} and
              defined $self->{unread_length} and $self->{unread_length} == 0) {
       $self->{request_state} = 'sent';
+      $self->_ev ('dataend', {});
       $self->_ev ('complete', {});
     } else {
+      $self->_ev ('dataend', {});
       $self->_ev ('complete', {});
     }
         # XXX
@@ -732,6 +744,7 @@ sub _process_rbuf_eof ($$;%) {
   }->{$self->{state}}) {
     $self->{response}->{incomplete} = 1;
     $self->{request_state} = 'sent';
+    $self->_ev ('dataend', {});
     $self->_ev ('complete', {});
   } elsif ($self->{state} eq 'before response trailer') {
     $self->{request_state} = 'sent';

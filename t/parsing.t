@@ -102,14 +102,12 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           if ($type eq 'dataend' and $req->{method} eq 'CONNECT') {
             AE::postpone { $http->close };
           }
-          if ({
-            complete => 1, abort => 1, reset => 1, cancel => 1,
-          }->{$type}) {
+          if ($type eq 'complete') {
             $result->{body} //= '';
             $result->{body} .= '(close)';
             $result->{is_error} = 1 if not $type eq 'complete' or $_[3]->{failed};
             $result->{can_retry} = 1 if $type eq 'complete' and $_[3]->{can_retry};
-            if ($type eq 'reset') {
+            if ($_[3]->{reset}) {
               delete $result->{response};
               $result->{body} = '';
             }

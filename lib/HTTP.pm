@@ -717,10 +717,11 @@ sub _process_rbuf_eof ($$;%) {
              defined $self->{unread_length} and $self->{unread_length} == 0) {
       $self->{request_state} = 'sent';
       $self->_ev ('dataend', {});
+      $self->{exit} = {};
     } else {
       $self->_ev ('dataend', {});
+      $self->{exit} = {};
     }
-    $self->{exit} = {};
   } elsif ({
     'before response chunk' => 1,
     'response chunk size' => 1,
@@ -824,16 +825,16 @@ sub connect ($) {
 
           if ($data->{failed}) {
             if (defined $data->{errno} and $data->{errno} == ECONNRESET) {
-              $self->_ev ('reset') if defined $self->{request};
               $self->{no_new_request} = 1;
               $self->{request_state} = 'sent';
+              $self->{exit} = {failed => 1, reset => 1};
               $self->_next;
             } else {
               $self->_process_rbuf ($self->{rbuf}, eof => 1);
               $self->_process_rbuf_eof
                   ($self->{rbuf}, abort => $data->{failed}, errno => $data->{errno});
-              $transport->abort;
             }
+            $transport->abort;
           } else {
             $self->_process_rbuf ($self->{rbuf}, eof => 1);
             $self->_process_rbuf_eof ($self->{rbuf});

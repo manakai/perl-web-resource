@@ -1,6 +1,7 @@
 package HTTP;
 use strict;
 use warnings;
+use Carp qw(croak);
 use Errno;
 use MIME::Base64 qw(encode_base64);
 use Digest::SHA qw(sha1);
@@ -885,7 +886,7 @@ sub send_request ($$;%) {
   if (not defined $method or
       not length $method or
       $method =~ /[\x0D\x0A\x09\x20]/) {
-    die "Bad |method|: |$method|";
+    croak "Bad |method|: |$method|";
   }
   my $url = $req->{target};
   if (not defined $url or
@@ -893,13 +894,13 @@ sub send_request ($$;%) {
       $url =~ /[\x0D\x0A]/ or
       $url =~ /\A[\x09\x20]/ or
       $url =~ /[\x09\x20]\z/) {
-    die "Bad |target|: |$url|";
+    croak "Bad |target|: |$url|";
   }
   $self->{request_body_length} = 0;
   for (@{$req->{headers} or []}) {
-    die "Bad header name |$_->[0]|"
+    croak "Bad header name |$_->[0]|"
         unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
-    die "Bad header value |$_->[1]|"
+    croak "Bad header value |$_->[1]|"
         unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
     my $n = $_->[0];
     $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
@@ -977,12 +978,16 @@ sub send_request ($$;%) {
 
 sub send_data ($$;%) {
   my ($self, $ref, %args) = @_;
-  die "Bad state"
-      if not defined $self->{request_body_length} or
-         $self->{request_body_length} <= 0;
-  die "Data too long"
-      if $self->{request_body_length} < length $$ref;
-  die "Data is utf8-flagged" if utf8::is_utf8 $$ref;
+  my $is_reqbody = (defined $self->{request_body_length} and
+                    $self->{request_body_length} > 0);
+  my $is_tunnel = (defined $self->{state} and
+                   ($self->{state} eq 'tunnel' or
+                    $self->{state} eq 'tunnel sending'));
+  croak "Bad state"
+      if not $is_reqbody and not $is_tunnel;
+  croak "Data too long"
+      if $is_reqbody and $self->{request_body_length} < length $$ref;
+  croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   return unless length $$ref;
 
   if ($DEBUG > 1) {
@@ -990,24 +995,26 @@ sub send_data ($$;%) {
   }
   $self->{transport}->push_write ($ref);
 
-  $self->{request_body_length} -= length $$ref;
-  if ($self->{request_body_length} <= 0) {
-    $self->{transport}->push_promise->then (sub {
-      $self->{request_state} = 'sent';
-      $self->_ev ('requestsent');
-      $self->_next if $self->{state} eq 'sending';
-    });
-  }
+  if ($is_reqbody) {
+    $self->{request_body_length} -= length $$ref;
+    if ($self->{request_body_length} <= 0) {
+      $self->{transport}->push_promise->then (sub {
+        $self->{request_state} = 'sent';
+        $self->_ev ('requestsent');
+        $self->_next if $self->{state} eq 'sending';
+      });
+    }
+  } # $is_reqbody
 } # send_data
 
 sub send_ws_message ($$$) {
   my $self = $_[0];
   my $type = $_[1];
-  die "Unknown type" unless $type eq 'text' or $type eq 'binary';
-  die "Data is utf8-flagged" if utf8::is_utf8 $_[2];
-  die "Data too large"
+  croak "Unknown type" unless $type eq 'text' or $type eq 'binary';
+  croak "Data is utf8-flagged" if utf8::is_utf8 $_[2];
+  croak "Data too large"
       if MAX_BYTES < length $_[2]; # spec limit 2**63
-  die "Bad state"
+  croak "Bad state"
       unless defined $self->{ws_state} and $self->{ws_state} eq 'OPEN';
 
   my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
@@ -1035,9 +1042,9 @@ sub send_ws_message ($$$) {
 sub send_ping ($;%) {
   my ($self, %args) = @_;
   $args{data} //= '';
-  die "Data is utf8-flagged" if utf8::is_utf8 $args{data};
-  die "Data too large" if 0x7D < length $args{data}; # spec limit 2**63
-  die "Bad state"
+  croak "Data is utf8-flagged" if utf8::is_utf8 $args{data};
+  croak "Data too large" if 0x7D < length $args{data}; # spec limit 2**63
+  croak "Bad state"
       unless defined $self->{ws_state} and $self->{ws_state} eq 'OPEN';
 
   my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
@@ -1050,20 +1057,6 @@ sub send_ping ($;%) {
       (\(pack ('CC', 0b10000000 | $opcode, 0b10000000 | length $args{data}) .
          $mask . $args{data}));
 } # send_ping
-
-sub send_through_tunnel ($$) {
-  my $self = $_[0];
-  die "Bad state"
-      unless defined $self->{state} and
-          ($self->{state} eq 'tunnel' or $self->{state} eq 'tunnel sending');
-  return unless length $_[1];
-  warn "$self->{request}->{id}: S: @{[_e4d $_[1]]}\n" if $DEBUG > 1;
-  $self->{transport}->push_write (\($_[1]));
-#XXX
-#  $self->{handle}->on_drain (sub {
-#    $self->_ev ('drain');
-#  });
-} # send_through_tunnel
 
 sub close ($;%) {
   my ($self, %args) = @_;

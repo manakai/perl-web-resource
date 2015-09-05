@@ -1201,12 +1201,14 @@ close
     my @ev;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
-      push @ev, $type if $type eq 'drain' or $type eq 'complete';
+      push @ev, $type if $type eq 'complete';
       if ($type eq 'headers') {
         AE::postpone {
-          $http->send_through_tunnel ('abc');
-          $http->close;
-          $sent++;
+          test {
+            $http->send_data (\'abc');
+            $http->close;
+            $sent++;
+          } $c;
         };
       } elsif ($type eq 'data') {
         $received .= $data;
@@ -1220,9 +1222,6 @@ close
         is $received, 'xyz';
         is $ev[-1], 'complete';
         pop @ev;
-#XXX
-#        ok @ev;
-#        ok grep { $_ eq 'drain' } @ev;
       } $c;
       return $http->close;
     })->then (sub {
@@ -1243,6 +1242,106 @@ close
   })->cb (sub {
     my $server = $_[0]->recv;
     my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $sent = 0;
+    my $received = '';
+    my @ev;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      push @ev, $type if $type eq 'complete';
+      if ($type eq 'headers') {
+        AE::postpone {
+          test {
+            eval {
+              $http->send_data (\"\x{5000}");
+            };
+            like $@, qr{^Data is utf8-flagged};
+          } $c;
+        };
+        AE::postpone {
+          test {
+            $http->send_data (\'abc');
+            $http->close;
+            $sent++;
+          } $c;
+        };
+      } elsif ($type eq 'data') {
+        $received .= $data;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'CONNECT', target => 'test'});
+    })->then (sub{
+      test {
+        is $sent, 1;
+        is $received, 'xyz';
+        is $ev[-1], 'complete';
+        pop @ev;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'connect send_data utf8';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $sent = 0;
+    my $received = '';
+    my @ev;
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      push @ev, $type if $type eq 'complete';
+      if ($type eq 'headers') {
+        AE::postpone {
+          test {
+            $http->send_data (\'');
+            $http->close;
+            $sent++;
+          } $c;
+        };
+      } elsif ($type eq 'data') {
+        $received .= $data;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'CONNECT', target => 'test'});
+    })->then (sub{
+      test {
+        is $sent, 1;
+        is $received, 'xyz';
+        is $ev[-1], 'complete';
+        pop @ev;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'connect send_data empty';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
     my $error = 0;
     my $x;
     my $p = Promise->new (sub { $x = $_[0] });
@@ -1251,7 +1350,7 @@ close
       if ($type eq 'headers') {
         AE::postpone {
           $http->close->then (sub {
-            $http->send_through_tunnel ('abc');
+            $http->send_data (\'abc');
           })->then (sub {
             test { ok 0 } $c;
           }, sub {
@@ -1328,7 +1427,7 @@ close
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'headers') {
         my $timer; $timer = AE::timer 1, 0, sub {
-          $http->send_through_tunnel ('abc');
+          $http->send_data (\'abc');
           AE::postpone {
             $http->close;
           };

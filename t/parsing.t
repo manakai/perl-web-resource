@@ -270,12 +270,22 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   is $result->{body}, ($test->{received}->[0] // '') . '(close)', 'received';
                 }
               }
-              is $result->{exit}->{status}, $test->{'ws-status'}->[1]->[0], 'WS status code';
-              is $result->{exit}->{reason}, $test->{'ws-reason'}->[0], 'WS reason';
+              if (not $result->{ws_established}) {
+                $result->{exit}->{status} = 1006;
+                $result->{exit}->{reason} = '';
+              } elsif (not defined $result->{exit}->{status}) {
+                $result->{exit}->{status} = 1005;
+                $result->{exit}->{reason} = '';
+              } elsif ($result->{exit}->{status} == 1002) {
+                $result->{exit}->{status} = 1006;
+                $result->{exit}->{reason} = '';
+              }
+              is $result->{exit}->{status}, $test->{'ws-status'} ? $test->{'ws-status'}->[1]->[0] : $test->{'handshake-error'} ? 1006 : undef, 'WS status code';
+              is $result->{exit}->{reason}, $test->{'ws-reason'} ? $test->{'ws-reason'}->[0] : $test->{'handshake-error'} ? '' : undef, 'WS reason';
+              is !!$result->{exit}->{cleanly}, !!$test->{'ws-was-clean'}, 'WS wasClean';
               my $expected = perl2json_bytes_for_record (json_bytes2perl (($test->{"result-data"} || ["[]"])->[0]));
               my $actual = perl2json_bytes_for_record $server->{resultdata};
               is $actual, $expected, 'resultdata';
-              ok 1;
             } else {
               is $res->{status}, $is_error ? undef : $test->{status}->[1]->[0];
               is $res->{reason}, $is_error ? undef : $test->{reason}->[1]->[0] // $test->{reason}->[0] // '';

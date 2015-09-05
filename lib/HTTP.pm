@@ -586,7 +586,7 @@ sub _process_rbuf ($$;%) {
                    $mask . $data));
           }
           $self->{state} = 'ws terminating';
-          $self->{exit} = {status => $status, reason => $reason};
+          $self->{exit} = {status => $status, reason => $reason, cleanly => 1};
           # if server, $self->_next;
           $self->{timer} = AE::timer 1, 0, sub {
             warn "$self->{request}->{id}: WS timeout (1)\n" if $DEBUG;
@@ -661,12 +661,15 @@ sub _process_rbuf ($$;%) {
     return;
   }
   if ($self->{state} eq 'ws terminating') {
-    unless ($self->{exit}->{failed}) {
-      $self->{exit}->{failed} = 1;
-      $self->{exit}->{status} = 1006;
-      $self->{exit}->{reason} = '';
+    if (length $$ref) {
+      if (not $self->{exit}->{failed}) {
+        $self->{exit}->{failed} = 1;
+        $self->{exit}->{status} = 1006;
+        $self->{exit}->{reason} = '';
+        delete $self->{exit}->{cleanly};
+      }
+      $$ref = '';
     }
-    $$ref = '';
   }
   if ($self->{state} eq 'tunnel' or $self->{state} eq 'tunnel receiving') {
     $self->_ev ('data', $$ref)

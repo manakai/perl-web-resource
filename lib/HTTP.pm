@@ -808,7 +808,8 @@ sub connect ($) {
       my $fh = shift or return $ng->($!);
       my $onclosed;
       my $closed = Promise->new (sub { $onclosed = $_[0] });
-      $self->{transport} = Transport::TCP->new_from_fh_and_cb ($fh, sub {
+      $self->{transport} = Transport::TCP->new_from_fh ($fh);
+      $self->{transport}->start (sub {
         my ($transport, $type) = @_;
         if ($type eq 'readdata') {
           ${$self->{rbuf}} .= ${$_[2]};

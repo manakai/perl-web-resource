@@ -7,12 +7,19 @@ use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE);
 use AnyEvent::Util qw(WSAEWOULDBLOCK);
 use Promise;
 
-sub new_from_fh_and_cb ($$$) {
-  my $self = bless {fh => $_[1], cb => $_[2]}, $_[0];
-
+sub new_from_fh ($$) {
+  my $self = bless {fh => $_[1]}, $_[0];
   $self->{id} = int rand 100000;
+  return $self;
+} # new_from_fh
+
+sub start ($$) {
+  my $self = $_[0];
+  croak "Bad state" if defined $self->{wq};
+  $self->{cb} = $_[1];
 
   my $fh = $self->{fh};
+  AnyEvent::Util::fh_nonblocking $fh, 1;
   setsockopt $fh, SOL_SOCKET, SO_OOBINLINE, 0;
   setsockopt $fh, IPPROTO_TCP, TCP_NODELAY, 1;
   setsockopt $fh, SOL_SOCKET, SO_KEEPALIVE, 1;
@@ -50,8 +57,8 @@ sub new_from_fh_and_cb ($$$) {
     }
   }; # $self->{rw}
 
-  return $self;
-} # new_from_fh_and_cb
+  return Promise->resolve;
+} # start
 
 sub id ($) { return $_[0]->{id} }
 

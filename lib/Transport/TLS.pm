@@ -155,6 +155,7 @@ sub push_shutdown ($) {
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
   push @{$self->{wq}}, [sub {
     Net::SSLeay::shutdown ($self->{tls});
+    $self->{shutdown_after_tls} = 1;
     $self->{write_closed} = 1;
     AE::postpone { $self->{cb}->($self, 'writeeof', {}) };
     $ok->();
@@ -263,6 +264,11 @@ sub _tls ($) {
       $data->{tls_cert_chain} = [map { bless [$_], __PACKAGE__ . '::Certificate' } Net::SSLeay::get_peer_cert_chain ($self->{tls})];
       (delete $self->{starttls_done})->[0]->($data);
     }
+  }
+
+  if (delete $self->{shutdown_after_tls}) {
+    $self->{transport}->push_shutdown
+        unless $self->{transport}->write_to_be_closed;
   }
   $self->_close if $self->{read_closed} and $self->{write_closed};
 } # _tls

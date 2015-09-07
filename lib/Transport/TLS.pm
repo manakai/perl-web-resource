@@ -16,11 +16,24 @@ sub id ($) {
   return $_[0]->{transport}->id;
 } # id
 
-sub start ($$) {
-  weaken (my $self = $_[0]);
+## OpenSSL constants
+#sub SSL_ST_CONNECT () { 0x1000 }
+#sub SSL_ST_ACCEPT () { 0x2000 }
+#sub SSL_ST_MASK () { 0x0FFF }
+#sub SSL_CB_LOOP () { 0x01 }
+#sub SSL_CB_EXIT () { 0x02 }
+sub SSL_CB_READ () { 0x04 }
+#sub SSL_CB_WRITE () { 0x08 }
+sub SSL_CB_ALERT () { 0x4000 }
+use constant ERROR_SYSCALL => Net::SSLeay::ERROR_SYSCALL ();
+use constant ERROR_WANT_READ => Net::SSLeay::ERROR_WANT_READ ();
+
+sub start ($$;%) {
+  weaken (my $self = shift);
   croak "Bad state" if $self->{starttls};
-  $self->{cb} = $_[1];
+  $self->{cb} = shift;
   $self->{wq} = [];
+  my %args = @_;
 
   my $p = Promise->new (sub { $self->{starttls_done} = [$_[0], $_[1]] });
   $self->{transport}->start (sub {
@@ -55,8 +68,38 @@ sub start ($$) {
       AE::postpone { (delete $self->{cb})->($self, 'close', $data) };
     }
   })->then (sub {
-    $self->{tls_ctx} = AnyEvent::TLS->new;
-    $self->{tls}     = my $tls = $self->{tls_ctx}->_get_session ('connect', $self, $self->{peername}); #XXX
+    $self->{tls_ctx} = AnyEvent::TLS->new (%{$args{tls} || {}});
+    my $tls = $self->{tls} = Net::SSLeay::new ($self->{tls_ctx}->ctx);
+    $self->{starttls_data} = {};
+    if ($args{server}) {
+      Net::SSLeay::set_accept_state ($tls);
+      Net::SSLeay::CTX_set_tlsext_servername_callback ($self->{tls_ctx}->ctx, sub {
+        $self->{starttls_data}->{sni_host_name} = Net::SSLeay::get_servername ($_[0]);
+        # XXX hook to choose a certificate
+        Net::SSLeay::set_SSL_CTX ($tls, $self->{tls_ctx}->ctx);
+      });
+    } else {
+      Net::SSLeay::set_connect_state ($tls);
+      Net::SSLeay::set_tlsext_host_name ($tls, $args{sni_host_name})
+          if defined $args{sni_host_name};
+    }
+    # XXX session ticket
+    # XXX ALPN
+    # XXX cert verification
+    # XXX client cert
+
+    ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_info_callback.html>
+    Net::SSLeay::set_info_callback ($tls, sub {
+      my ($tls, $where, $ret) = @_;
+      if ($where & SSL_CB_ALERT and $where & SSL_CB_READ) {
+        ## <https://www.openssl.org/docs/manmaster/ssl/SSL_alert_type_string.html>
+        my $level = Net::SSLeay::alert_type_string ($ret); # W F U
+        my $type = Net::SSLeay::alert_desc_string_long ($ret);
+        if ($level eq 'W' and not $type eq 'close notify') {
+          AE::postpone { $self->{cb}->($self, 'alert', {message => $type}) };
+        }
+      }
+    });
 
     # MODE_ENABLE_PARTIAL_WRITE | MODE_ACCEPT_MOVING_WRITE_BUFFER
     Net::SSLeay::CTX_set_mode ($tls, 1 | 2);
@@ -67,7 +110,11 @@ sub start ($$) {
 
     $self->_tls;
   })->catch (sub {
-    (delete $self->{starttls_done})->[1]->($_[0]);
+    if (defined $self->{starttls_done}) {
+      (delete $self->{starttls_done})->[1]->($_[0]);
+    } else {
+      warn $_[0];
+    }
   });
 
   $self->{starttls} = 1;
@@ -116,9 +163,6 @@ sub push_shutdown ($) {
   $self->_tls;
   return $p;
 } # push_shutdown
-
-use constant ERROR_SYSCALL => Net::SSLeay::ERROR_SYSCALL ();
-use constant ERROR_WANT_READ => Net::SSLeay::ERROR_WANT_READ ();
 
 sub _tls ($) {
   my ($self) = @_;
@@ -210,14 +254,21 @@ sub _tls ($) {
 
   if (defined $self->{starttls_done}) {
     if (Net::SSLeay::state ($self->{tls}) == Net::SSLeay::ST_OK ()) {
-      (delete $self->{starttls_done})->[0]->();
+      my $data = delete $self->{starttls_data};
+      $data->{tls_protocol} = Net::SSLeay::version ($self->{tls});
+      #XXX session_id
+      $data->{tls_session_resumed} = Net::SSLeay::session_reused ($self->{tls});
+      $data->{tls_cipher} = Net::SSLeay::get_cipher ($self->{tls});
+      $data->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($self->{tls});
+      $data->{tls_cert_chain} = [map { bless [$_], __PACKAGE__ . '::Certificate' } Net::SSLeay::get_peer_cert_chain ($self->{tls})];
+      (delete $self->{starttls_done})->[0]->($data);
     }
   }
   $self->_close if $self->{read_closed} and $self->{write_closed};
 } # _tls
 
-sub abort ($) {
-  my $self = $_[0];
+sub abort ($;%) {
+  my ($self, %args) = @_;
   return unless defined $self->{wq};
   if (defined $self->{tls}) {
     Net::SSLeay::set_quiet_shutdown ($self->{tls}, 1);
@@ -228,10 +279,11 @@ sub abort ($) {
   $self->{write_closed} = 1;
   $self->{read_closed} = 1;
   $self->{write_shutdown} = 1;
+  my $reason = $args{message} // 'Aborted';
   AE::postpone {
-    $self->{cb}->($self, 'writeeof', {failed => 1, message => 'Aborted'})
+    $self->{cb}->($self, 'writeeof', {failed => 1, message => $reason})
         unless $wc;
-    $self->{cb}->($self, 'readeof', {failed => 1, message => 'Aborted'})
+    $self->{cb}->($self, 'readeof', {failed => 1, message => $reason})
         unless $rc;
   };
   $self->_close;
@@ -259,16 +311,55 @@ sub _close ($$) {
 } # _close
 
 sub DESTROY ($) {
-  $_[0]->abort;
+  $_[0]->abort (message => "Aborted by DESTROY of $_[0]");
 
   local $@;
   eval { die };
-  warn "Possible memory leak detected (Transport::TLS)\n"
+  warn "Memory leak detected (Transport::TLS)\n"
       if $@ =~ /during global destruction/;
 
 } # DESTROY
+
+package Transport::TLS::Certificate;
+
+sub debug_info ($) {
+  my $cert = $_[0]->[0];
+  my @r;
+  my $ver = Net::SSLeay::X509_get_version $cert;
+  push @r, "version=$ver";
+  my $in = Net::SSLeay::X509_get_issuer_name $cert;
+  push @r, 'I=' . Net::SSLeay::X509_NAME_print_ex ($in, Net::SSLeay::XN_FLAG_RFC2253 (), 0);
+  my $sn = Net::SSLeay::X509_get_subject_name $cert;
+  push @r, 'S=' . Net::SSLeay::X509_NAME_print_ex ($sn, Net::SSLeay::XN_FLAG_RFC2253 (), 0);
+  my @san = Net::SSLeay::X509_get_subjectAltNames $cert;
+  while (@san) {
+    my $type = (shift @san);
+    $type = {
+      2 => 'DNS',
+      7 => 'IP', # XXX decode value
+    }->{$type} // $type;
+    push @r, 'SAN.'.$type . '=' . (shift @san);
+  }
+  push @r, '#=' . Net::SSLeay::P_ASN1_INTEGER_get_hex Net::SSLeay::X509_get_serialNumber $cert;
+  {
+    my $time = Net::SSLeay::X509_get_notBefore $cert;
+    push @r, 'notbefore=' . Net::SSLeay::P_ASN1_TIME_get_isotime $time;
+  }
+  {
+    my $time = Net::SSLeay::X509_get_notAfter $cert;
+    push @r, 'notafter=' . Net::SSLeay::P_ASN1_TIME_get_isotime $time;
+  }
+  my @type = Net::SSLeay::P_X509_get_netscape_cert_type $cert;
+  if (@type) {
+    push @r, 'netscapecerttype=' . join ',', @type;
+  }
+  return join ' ', @r;
+} # debug_info
 
 1;
 
 ## <http://cpansearch.perl.org/src/MLEHMANN/AnyEvent-7.11/COPYING>
 ## > This module is licensed under the same terms as perl itself.
+
+
+# XXX destroy before establishment

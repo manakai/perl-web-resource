@@ -13,7 +13,7 @@ sub new_from_fh ($$) {
   return $self;
 } # new_from_fh
 
-sub start ($$) {
+sub start ($$;%) {
   my $self = $_[0];
   croak "Bad state" if defined $self->{wq};
   $self->{cb} = $_[1];
@@ -57,7 +57,7 @@ sub start ($$) {
     }
   }; # $self->{rw}
 
-  return Promise->resolve;
+  return Promise->resolve ({});
 } # start
 
 sub id ($) { return $_[0]->{id} }
@@ -155,8 +155,8 @@ sub push_shutdown ($) {
   return $p;
 } # push_shutdown
 
-sub abort ($) {
-  my $self = $_[0];
+sub abort ($;%) {
+  my ($self, %args) = @_;
   return unless defined $self->{wq};
   shutdown $self->{fh}, 2 if defined $self->{fh};
   my $wc = $self->{write_closed};
@@ -164,10 +164,11 @@ sub abort ($) {
   $self->{write_closed} = 1;
   $self->{read_closed} = 1;
   $self->{write_shutdown} = 1;
+  my $reason = $args{message} // 'Aborted';
   AE::postpone {
-    $self->{cb}->($self, 'writeeof', {failed => 1, message => 'Aborted'})
+    $self->{cb}->($self, 'writeeof', {failed => 1, message => $reason})
         unless $wc;
-    $self->{cb}->($self, 'readeof', {failed => 1, message => 'Aborted'})
+    $self->{cb}->($self, 'readeof', {failed => 1, message => $reason})
         unless $rc;
   };
   $self->_close;
@@ -192,11 +193,11 @@ sub _close ($$) {
 } # _close
 
 sub DESTROY ($) {
-  $_[0]->abort;
+  $_[0]->abort (message => "Aborted by DESTROY of $_[0]");
 
   local $@;
   eval { die };
-  warn "Possible memory leak detected (Transport::TCP)\n"
+  warn "Memory leak detected (Transport::TCP)\n"
       if $@ =~ /during global destruction/;
 
 } # DESTROY

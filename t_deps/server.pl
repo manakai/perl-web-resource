@@ -279,6 +279,29 @@ sub run_commands ($$$$) {
         $_[0]->on_starttls (undef);
         run_commands ($context, $_[0], $states, $then);
       });
+
+sub SSL_CB_READ () { 0x04 }
+sub SSL_CB_ALERT () { 0x4000 }
+
+      require AnyEvent::TLS;
+      my $orig = \&AnyEvent::TLS::_get_session;
+      *AnyEvent::TLS::_get_session = sub ($$;$$) {
+        my ($self, $mode, $ref, $cn) = @_;
+        my $session = $orig->(@_);
+
+        Net::SSLeay::set_info_callback ($session, sub {
+          my ($tls, $where, $ret) = @_;
+          if ($where & SSL_CB_ALERT and $where & SSL_CB_READ) {
+            ## <https://www.openssl.org/docs/manmaster/ssl/SSL_alert_type_string.html>
+            my $level = Net::SSLeay::alert_type_string ($ret); # W F U
+            my $type = Net::SSLeay::alert_desc_string_long ($ret);
+            warn "[$states->{id}] TLS alert: [$level] $type\n" if $DUMP;
+          }
+        });
+
+        return $session;
+      } unless $_TLS::InfoCallbackRegistered++;
+
       local $CurrentID = $states->{id};
       $hdl->starttls ('accept', {
         ca_path => $cert_path->child ('ca-cert.pem'),
@@ -287,7 +310,7 @@ sub run_commands ($$$$) {
         #cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK',
         cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA',
         prepare => sub {
-          my $ctx = $_[0]->{ctx};
+          my $ctx = $_[0]->ctx;
           Net::SSLeay::CTX_set_tlsext_servername_callback ($ctx, sub {
             my $h = Net::SSLeay::get_servername ($_[0]);
             warn "[$states->{id}] TLS SNI name: |$h|\n" if $DUMP;

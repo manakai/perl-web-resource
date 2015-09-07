@@ -28,6 +28,70 @@ sub SSL_CB_ALERT () { 0x4000 }
 use constant ERROR_SYSCALL => Net::SSLeay::ERROR_SYSCALL ();
 use constant ERROR_WANT_READ => Net::SSLeay::ERROR_WANT_READ ();
 
+sub match_cn($$$) {
+   my ($name, $cn, $type) = @_;
+
+   # remove leading and trailing garbage
+   for ($name, $cn) {
+      s/[\x00-\x1f]+$//;
+      s/^[\x00-\x1f]+//;
+    }
+
+   my $pattern;
+
+   ### IMPORTANT!
+   # we accept only a single wildcard and only for a single part of the FQDN
+   # e.g *.example.org does match www.example.org but not bla.www.example.org
+   # The RFCs are in this regard unspecific but we don't want to have to
+   # deal with certificates like *.com, *.co.uk or even *
+   # see also http://nils.toedtmann.net/pub/subjectAltName.txt
+   if ($type == 2 and $name =~m{^([^.]*)\*(.+)} ) {
+      $pattern = qr{^\Q$1\E[^.]*\Q$2\E$}i;
+   } elsif ($type == 1 and $name =~m{^\*(\..+)$} ) {
+      $pattern = qr{^[^.]*\Q$1\E$}i;
+   } else {
+      $pattern = qr{^\Q$name\E$}i;
+   }
+
+   $cn =~ $pattern
+}
+
+# taken verbatim from IO::Socket::SSL, then changed to take advantage of
+# AnyEvent utilities.
+sub verify_hostname($$) {
+   my ($cert, $cn) = @_;
+   my $scheme = [0, 2, 1]; # rfc2818
+
+   my $cert_cn = Net::SSLeay::X509_NAME_get_text_by_NID
+       (Net::SSLeay::X509_get_subject_name ($cert),
+        Net::SSLeay::NID_commonName ());
+   my @cert_alt = Net::SSLeay::X509_get_subjectAltNames ($cert);
+
+   # rfc2460 - convert to network byte order
+   require AnyEvent::Socket;
+   my $ip = AnyEvent::Socket::parse_address ($cn);
+
+   my $alt_dns_count;
+
+   while (my ($type, $name) = splice @cert_alt, 0, 2) {
+      if ($type == Net::SSLeay::GEN_IPADD ()) {
+         # $name is already packed format (inet_xton)
+         return 1 if $ip eq $name;
+      } elsif ($type == Net::SSLeay::GEN_DNS ()) {
+         $alt_dns_count++;
+
+         return 1 if match_cn $name, $cn, $scheme->[1];
+      }
+   }
+
+   if ($scheme->[2] == 2
+       || ($scheme->[2] == 1 && !$alt_dns_count)) {
+      return 1 if match_cn $cert_cn, $cn, $scheme->[0];
+   }
+
+   0
+}
+
 sub start ($$;%) {
   weaken (my $self = shift);
   croak "Bad state" if $self->{starttls};
@@ -68,7 +132,20 @@ sub start ($$;%) {
       AE::postpone { (delete $self->{cb})->($self, 'close', $data) };
     }
   })->then (sub {
-    $self->{tls_ctx} = AnyEvent::TLS->new (%{$args{tls} || {}});
+    my $tls_args = {%{$args{tls} || {}}};
+    my $vmode;
+    if ($args{tls}->{insecure} and not $args{tls}->{verify}) {
+      $vmode = Net::SSLeay::VERIFY_NONE ();
+    } else {
+      $tls_args->{verify} //= 1;
+      $vmode = Net::SSLeay::VERIFY_PEER ();
+      $vmode |= Net::SSLeay::VERIFY_FAIL_IF_NO_PEER_CERT ()
+          if $args{tls}->{veriy_require_client_cert};
+      $vmode |= Net::SSLeay::VERIFY_CLIENT_ONCE ()
+          if $args{tls}->{verify_client_once};
+    }
+
+    $self->{tls_ctx} = AnyEvent::TLS->new (%$tls_args);
     my $tls = $self->{tls} = Net::SSLeay::new ($self->{tls_ctx}->ctx);
     $self->{starttls_data} = {};
     if ($args{server}) {
@@ -82,11 +159,24 @@ sub start ($$;%) {
       Net::SSLeay::set_connect_state ($tls);
       Net::SSLeay::set_tlsext_host_name ($tls, $args{sni_host_name})
           if defined $args{sni_host_name};
+
+      ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_verify.html>
+      Net::SSLeay::set_verify $tls, $vmode, sub {
+        my ($preverify_ok, $x509_store_ctx) = @_;
+        my $depth = Net::SSLeay::X509_STORE_CTX_get_error_depth ($x509_store_ctx);
+        if ($depth == 0) {
+          my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
+          if (defined $args{si_host_name}) {
+            return 0 unless verify_hostname $cert, $args{si_host_name};
+          }
+
+          # XXX hook for client cert
+        }
+        return $preverify_ok;
+      };
     }
     # XXX session ticket
     # XXX ALPN
-    # XXX cert verification
-    # XXX client cert
 
     ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_info_callback.html>
     Net::SSLeay::set_info_callback ($tls, sub {

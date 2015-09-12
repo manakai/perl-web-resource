@@ -186,3 +186,172 @@ Content-Length: 3
 Foo: bar
 #body
 abc(close)
+
+#name
+truncated headers
+#tls
+#method GET
+#url /
+#data
+starttls
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+"Foo: bar"CRLF
+close
+#status 200
+#reason OK
+#headers escaped
+Content-Length: 3
+Foo: bar
+#body
+(close)
+
+#name
+TLS + response before request
+#tls
+#method GET
+#url /
+#data
+starttls
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+"Foo: bar"CRLF
+CRLF
+"abc"
+close
+#status 200
+#reason OK
+#headers escaped
+Content-Length: 3
+Foo: bar
+#body
+abc(close)
+
+#name
+TLS HTTP/1.1 -> HTTP/1.1
+#tls
+#method GET
+#url /
+#data escaped
+starttls
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+TLS HTTP/1.1 -> garbage -> HTTP/1.1
+#tls
+#method GET
+#url /
+#data escaped
+starttls
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+"abcdefgh"
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+TLS redundant space between responses
+#tls
+#method GET
+#url /
+#data escaped
+starttls
+receive "GET"
+"HTTP/1.1 202 hoge"CRLF
+"Content-Length: 3"CRLF
+"x-test-retry: 1"CRLF
+CRLF
+"anc"
+"\u0009"
+receive "GET"
+"HTTP/1.1 203 fuga"CRLF
+"Content-Length: 2"CRLF
+CRLF
+"ab"
+close
+#test-type second
+#status 203
+#reason fuga
+#headers
+Content-Length: 2
+#body escaped
+ab(close)
+
+#name
+TLS renegotiation (no client auth)
+#tls
+#method GET
+#url /
+#data
+starttls
+receive "GET"
+tlsreneg
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+tlsreneg
+CRLF
+tlsreneg
+"abc"
+tlsreneg
+close
+#status 200
+#reason OK
+#headers escaped
+Content-Length: 3
+#body
+abc(close)
+
+#name
+TLS renegotiation (no client auth)
+#tls
+#method GET
+#url /
+#data
+starttls
+tlsreneg
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+CRLF
+"abc"
+close
+#status 200
+#reason OK
+#headers escaped
+Content-Length: 3
+#body
+abc(close)

@@ -26,6 +26,22 @@ my $Commands = [split /\x0D?\x0A/, $input];
 my $DUMP = $ENV{DUMP};
 my $_dump_tls = {};
 our $CurrentID;
+my $HandshakeDone = sub { };
+
+#sub SSL_ST_CONNECT () { 0x1000 }
+#sub SSL_ST_ACCEPT () { 0x2000 }
+sub SSL_CB_READ () { 0x04 }
+sub SSL_CB_ALERT () { 0x4000 }
+#sub SSL_CB_HANDSHAKE_START () { 0x10 }
+sub SSL_CB_HANDSHAKE_DONE () { 0x20 }
+
+my $cipher_suite_name = {};
+$cipher_suite_name->{0x00, 0xFF} = 'empty reneg info scsv';
+
+my $root_path = path (__FILE__)->parent->parent->absolute;
+my $cert_path = $root_path->child ('local/cert');
+my $cert2_path = $root_path->child ('local/cert3');
+my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
 
 sub pe_b ($) {
   my $s = $_[0];
@@ -266,9 +282,6 @@ sub run_commands ($$$$) {
       close $hdl->{fh};
       $hdl->on_drain (sub { eval { shutdown $_[0]->{fh}, 1; 1 } or warn $@ }); # let $hdl report an error
     } elsif ($command =~ /^starttls$/) {
-      my $root_path = path (__FILE__)->parent->parent->absolute;
-      my $cert_path = $root_path->child ('local/cert');
-      my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
       unless ($cert_path->child ($cn . '-key-pkcs1.pem')->is_file) {
         system $root_path->child ('perl'), $root_path->child ('t_deps/bin/generate-certs-for-tests.pl'), $cert_path, $cn;
         sleep 2;
@@ -280,9 +293,6 @@ sub run_commands ($$$$) {
         run_commands ($context, $_[0], $states, $then);
       });
 
-sub SSL_CB_READ () { 0x04 }
-sub SSL_CB_ALERT () { 0x4000 }
-
       require AnyEvent::TLS;
       my $orig = \&AnyEvent::TLS::_get_session;
       *AnyEvent::TLS::_get_session = sub ($$;$$) {
@@ -291,6 +301,19 @@ sub SSL_CB_ALERT () { 0x4000 }
 
         Net::SSLeay::set_info_callback ($session, sub {
           my ($tls, $where, $ret) = @_;
+
+          #if ($where & SSL_ST_CONNECT) {
+          #}
+          #if ($where & SSL_ST_ACCEPT) {
+          #}
+
+          #if ($where & SSL_CB_HANDSHAKE_START) {
+          #}
+          if ($where & SSL_CB_HANDSHAKE_DONE) {
+            warn "[$states->{id}] TLS handshake done\n" if $DUMP;
+            $HandshakeDone->();
+          }
+
           if ($where & SSL_CB_ALERT and $where & SSL_CB_READ) {
             ## <https://www.openssl.org/docs/manmaster/ssl/SSL_alert_type_string.html>
             my $level = Net::SSLeay::alert_type_string ($ret); # W F U
@@ -304,7 +327,7 @@ sub SSL_CB_ALERT () { 0x4000 }
 
       local $CurrentID = $states->{id};
       $hdl->starttls ('accept', {
-        ca_path => $cert_path->child ('ca-cert.pem'),
+        ca_file => $cert_path->child ('ca-cert.pem'),
         cert_file => $cert_path->child ($cn . '-cert.pem'),
         key_file => $cert_path->child ($cn . '-key-pkcs1.pem'),
         #cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK',
@@ -318,6 +341,47 @@ sub SSL_CB_ALERT () { 0x4000 }
           # XXX ALPN
         },
       });
+      unshift @{$states->{commands}}, 'waitstarttls';
+      return;
+    } elsif ($command =~ /^tlsreneg(| cert\??| nocert)$/) {
+      die "TLS not available" unless defined $hdl->{tls};
+
+      my $req = $1;
+      if ($req) {
+        Net::SSLeay::set_verify_result ($hdl->{tls}, 0);
+        my $vmode = 0;
+        if ($req eq ' cert' or ' cert?') {
+          $vmode |= Net::SSLeay::VERIFY_PEER ();
+          $vmode |= Net::SSLeay::VERIFY_FAIL_IF_NO_PEER_CERT ()
+              if $req eq ' cert';
+        }
+        Net::SSLeay::set_verify ($hdl->{tls}, $vmode, sub {
+          my ($preverify_ok, $x509_store_ctx) = @_;
+          my $depth = Net::SSLeay::X509_STORE_CTX_get_error_depth ($x509_store_ctx);
+          if ($depth == 0) {
+            #my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
+            #return 1;
+          }
+          return $preverify_ok;
+        });
+      }
+
+      my $list = Net::SSLeay::load_client_CA_file
+          ($cert_path->child ('ca-cert.pem'));
+      Net::SSLeay::set_client_CA_list ($hdl->{tls}, $list);
+
+      $states->{starttls_waiting} = 1;
+      $HandshakeDone = sub {
+        $HandshakeDone = sub { };
+        delete $states->{starttls_waiting};
+        run_commands ($context, $hdl, $states, $then);
+      };
+
+      # XXX set_session
+      Net::SSLeay::renegotiate ($hdl->{tls});
+      Net::SSLeay::do_handshake ($hdl->{tls});
+      Net::SSLeay::set_state ($hdl->{tls}, Net::SSLeay::ST_ACCEPT ());
+
       unshift @{$states->{commands}}, 'waitstarttls';
       return;
     } elsif ($command =~ /^waitstarttls$/) {
@@ -428,7 +492,12 @@ sub dump_tls ($;%) {
                 while (@c) {
                   my $c1 = ord shift @c;
                   my $c2 = ord shift @c;
-                  push @v, sprintf '%02X,%02X', $c1, $c2;
+                  my $name = $cipher_suite_name->{$c1, $c2};
+                  if (defined $name) {
+                    push @v, sprintf '%02X%02X [%s]', $c1, $c2, $name;
+                  } else {
+                    push @v, sprintf '%02X%02X', $c1, $c2;
+                  }
                 }
                 join ' ', @v;
               };
@@ -591,6 +660,10 @@ my $server = tcp_server $host, $port, sub {
          if ($fatal) {
            warn "[$id] @{[time]} @{[scalar gmtime]} $msg (fatal)\n" if $DUMP;
            syswrite STDOUT, "[server done]\n";
+           if (defined $hdl->{tls}) {
+             Net::SSLeay::set_info_callback ($hdl->{tls}, undef);
+             Net::SSLeay::set_verify ($hdl->{tls}, 0, undef);
+           }
            $hdl->destroy;
            $cv->end;
          } else {
@@ -602,6 +675,10 @@ my $server = tcp_server $host, $port, sub {
          $hdl->on_drain (sub {
            warn "[$id] @{[time]} @{[scalar gmtime]} drain\n" if $DUMP;
            syswrite STDOUT, "[server done]\n";
+           if (defined $hdl->{tls}) {
+             Net::SSLeay::set_info_callback ($hdl->{tls}, undef);
+             Net::SSLeay::set_verify ($hdl->{tls}, 0, undef);
+           }
            $hdl->destroy;
            $cv->end;
            $_[0]->on_drain (undef);

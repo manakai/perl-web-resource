@@ -140,7 +140,7 @@ sub start ($$;%) {
       $tls_args->{verify} //= 1;
       $vmode = Net::SSLeay::VERIFY_PEER ();
       $vmode |= Net::SSLeay::VERIFY_FAIL_IF_NO_PEER_CERT ()
-          if $args{tls}->{veriy_require_client_cert};
+          if $args{tls}->{verify_require_client_cert};
       $vmode |= Net::SSLeay::VERIFY_CLIENT_ONCE ()
           if $args{tls}->{verify_client_once};
     }
@@ -174,6 +174,11 @@ sub start ($$;%) {
         }
         return $preverify_ok;
       };
+
+      # XXX
+      #Net::SSLeay::CTX_set_client_cert_callback ($self->{tls_ctx}->ctx, sub {
+      #});
+
     }
     # XXX session ticket
     # XXX ALPN
@@ -399,7 +404,11 @@ sub _close ($$) {
     }
   }
   delete $self->{wq};
-  Net::SSLeay::free (delete $self->{tls}) if defined $self->{tls};
+  if (defined $self->{tls}) {
+    Net::SSLeay::set_info_callback ($self->{tls}, undef);
+    Net::SSLeay::set_verify ($self->{tls}, 0, undef);
+    Net::SSLeay::free (delete $self->{tls});
+  }
   delete $self->{_rbio};
   delete $self->{_wbio};
   delete $self->{tls_ctx};

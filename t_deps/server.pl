@@ -377,7 +377,10 @@ sub run_commands ($$$$) {
         run_commands ($context, $hdl, $states, $then);
       };
 
-      # XXX set_session
+      ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_session_id_context.html>
+      my $sidctx = 'XXX';
+      Net::SSLeay::set_session_id_context ($hdl->{tls}, $sidctx, length $sidctx);
+
       Net::SSLeay::renegotiate ($hdl->{tls});
       Net::SSLeay::do_handshake ($hdl->{tls});
       Net::SSLeay::set_state ($hdl->{tls}, Net::SSLeay::ST_ACCEPT ());

@@ -152,7 +152,7 @@ sub start ($$;%) {
       Net::SSLeay::set_accept_state ($tls);
       Net::SSLeay::CTX_set_tlsext_servername_callback ($self->{tls_ctx}->ctx, sub {
         $self->{starttls_data}->{sni_host_name} = Net::SSLeay::get_servername ($_[0]);
-        # XXX hook to choose a certificate
+        # XXX hook for the application to choose a certificate
         Net::SSLeay::set_SSL_CTX ($tls, $self->{tls_ctx}->ctx);
       });
     } else {
@@ -170,15 +170,16 @@ sub start ($$;%) {
             return 0 unless verify_hostname $cert, $args{si_host_name};
           }
 
-          # XXX hook for client cert
+          # XXX hook to verify the client cert
         }
         return $preverify_ok;
       };
 
-      # XXX
+      ## XXX As Net::SSLeay does not export OpenSSL's
+      ## |SSL_CTX_set_client_cert_cb| function, it's not possible to
+      ## hook when a client certificate is requested.
       #Net::SSLeay::CTX_set_client_cert_callback ($self->{tls_ctx}->ctx, sub {
       #});
-
     }
     # XXX session ticket
     # XXX ALPN
@@ -466,5 +467,5 @@ sub debug_info ($) {
 ## <http://cpansearch.perl.org/src/MLEHMANN/AnyEvent-7.11/COPYING>
 ## > This module is licensed under the same terms as perl itself.
 
-
-# XXX destroy before establishment
+# XXX if destroy is called before establishment
+# XXX Web compatibility of service identity check

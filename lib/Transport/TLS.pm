@@ -9,12 +9,15 @@ use Net::SSLeay;
 use AnyEvent::TLS;
 
 sub new_from_transport ($$) {
-  return bless {transport => $_[1]}, $_[0];
+  return bless {transport => $_[1], id => $_[1]->id}, $_[0];
 } # new_from_transport
 
 sub id ($) {
-  return $_[0]->{transport}->id;
+  return $_[0]->{id};
 } # id
+
+sub type ($) { return 'TLS' }
+sub layered_type ($) { return $_[0]->type . '/' . $_[0]->{transport}->layered_type }
 
 ## OpenSSL constants
 #sub SSL_ST_CONNECT () { 0x1000 }
@@ -108,7 +111,7 @@ sub start ($$;%) {
     } elsif ($type eq 'readeof') {
       unless ($self->{read_closed}) {
         my $data = $_[2];
-        $data->{failed} = 1;
+        #$data->{failed} = 1;
         $data->{message} //= 'Underlying transport closed before TLS closure';
         AE::postpone { $self->{cb}->($self, 'readeof', $data) };
         $self->{read_closed} = 1;
@@ -119,7 +122,7 @@ sub start ($$;%) {
     } elsif ($type eq 'writeeof') {
       unless ($self->{write_closed}) {
         my $data = $_[2];
-        $data->{failed} = 1;
+        #$data->{failed} = 1;
         $data->{message} //= 'Underlying transport closed before TLS closure';
         AE::postpone { $self->{cb}->($self, 'writeeof', $data) };
         $self->{write_closed} = 1;
@@ -129,6 +132,8 @@ sub start ($$;%) {
       }
     } elsif ($type eq 'close') {
       my $data = $_[2];
+      (delete $self->{starttls_done})->[1]->("Connection closed by a TLS error")
+          if defined $self->{starttls_done};
       AE::postpone { (delete $self->{cb})->($self, 'close', $data) };
     }
   })->then (sub {
@@ -345,8 +350,10 @@ sub _tls ($) {
     }
   }
 
-  while (length (my $read = Net::SSLeay::BIO_read ($self->{_wbio}))) {
-    $self->{transport}->push_write (\$read);
+  unless ($self->{transport}->write_to_be_closed) {
+    while (length (my $read = Net::SSLeay::BIO_read ($self->{_wbio}))) {
+      $self->{transport}->push_write (\$read);
+    }
   }
 
   if (defined $self->{starttls_done}) {

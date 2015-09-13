@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 use Path::Tiny;
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Time::HiRes qw(time);
 use Socket;
@@ -11,6 +12,7 @@ use AnyEvent::Socket;
 use AnyEvent::Handle;
 use Digest::SHA qw(sha1);
 use MIME::Base64 qw(encode_base64);
+use Test::Certificates;
 
 my $host = shift;
 my $port = shift // die "Usage: $0 listen-host listen-port\n";
@@ -37,11 +39,6 @@ sub SSL_CB_HANDSHAKE_DONE () { 0x20 }
 
 my $cipher_suite_name = {};
 $cipher_suite_name->{0x00, 0xFF} = 'empty reneg info scsv';
-
-my $root_path = path (__FILE__)->parent->parent->absolute;
-my $cert_path = $root_path->child ('local/cert');
-my $cert2_path = $root_path->child ('local/cert3');
-my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
 
 sub pe_b ($) {
   my $s = $_[0];
@@ -282,10 +279,7 @@ sub run_commands ($$$$) {
       close $hdl->{fh};
       $hdl->on_drain (sub { eval { shutdown $_[0]->{fh}, 1; 1 } or warn $@ }); # let $hdl report an error
     } elsif ($command =~ /^starttls$/) {
-      unless ($cert_path->child ($cn . '-key-pkcs1.pem')->is_file) {
-        system $root_path->child ('perl'), $root_path->child ('t_deps/bin/generate-certs-for-tests.pl'), $cert_path, $cn;
-        sleep 2;
-      }
+      Test::Certificates->wait_create_cert;
       $states->{starttls_waiting} = 1;
       $hdl->on_starttls (sub {
         delete $states->{starttls_waiting};
@@ -293,6 +287,7 @@ sub run_commands ($$$$) {
         run_commands ($context, $_[0], $states, $then);
       });
 
+      no warnings 'redefine';
       require AnyEvent::TLS;
       my $orig = \&AnyEvent::TLS::_get_session;
       *AnyEvent::TLS::_get_session = sub ($$;$$) {
@@ -323,20 +318,20 @@ sub run_commands ($$$$) {
         });
 
         return $session;
-      } unless $_TLS::InfoCallbackRegistered++;
+      };
 
       local $CurrentID = $states->{id};
       $hdl->starttls ('accept', {
-        ca_file => $cert_path->child ('ca-cert.pem'),
-        cert_file => $cert_path->child ($cn . '-cert.pem'),
-        key_file => $cert_path->child ($cn . '-key-pkcs1.pem'),
+        ca_file => Test::Certificates->ca_path ('cert.pem'),
+        cert_file => Test::Certificates->cert_path ('cert.pem'),
+        key_file => Test::Certificates->cert_path ('key-pkcs1.pem'),
         #cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK',
         cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA',
         prepare => sub {
           my $ctx = $_[0]->ctx;
           Net::SSLeay::CTX_set_tlsext_servername_callback ($ctx, sub {
             my $h = Net::SSLeay::get_servername ($_[0]);
-            warn "[$states->{id}] TLS SNI name: |$h|\n" if $DUMP;
+            warn "[$states->{id}] TLS SNI name: |$h|\n" if $DUMP and defined $h;
           });
           # XXX ALPN
         },
@@ -367,7 +362,7 @@ sub run_commands ($$$$) {
       }
 
       my $list = Net::SSLeay::load_client_CA_file
-          ($cert_path->child ('ca-cert.pem'));
+          (Test::Certificates->ca_path ('cert.pem'));
       Net::SSLeay::set_client_CA_list ($hdl->{tls}, $list);
 
       $states->{starttls_waiting} = 1;

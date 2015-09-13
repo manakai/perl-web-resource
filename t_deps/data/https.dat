@@ -8,6 +8,7 @@ starttls
 receive "GET"
 "abc"
 close
+#version 0.9
 #status 200
 #reason OK
 #headers escaped
@@ -27,6 +28,7 @@ receive "GET"
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -48,6 +50,7 @@ receive "GET"
 CRLF
 "abc"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -70,6 +73,7 @@ receive "GET"
 CRLF
 "abcd"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -92,6 +96,7 @@ receive "GET"
 CRLF
 "ab"
 close
+#version 1.0
 #status 200
 #reason OK
 #headers escaped
@@ -188,7 +193,26 @@ Foo: bar
 abc(close)
 
 #name
-truncated headers
+TLS truncated headers
+#tls
+#method GET
+#url /
+#data
+starttls
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Foo: bar"CRLF
+close
+#status 200
+#reason OK
+#headers escaped
+Foo: bar
+#body
+(close)
+#incomplete
+
+#name
+TLS truncated headers
 #tls
 #method GET
 #url /
@@ -199,11 +223,8 @@ receive "GET"
 "Content-Length: 3"CRLF
 "Foo: bar"CRLF
 close
-#status 200
-#reason OK
+#status 0
 #headers escaped
-Content-Length: 3
-Foo: bar
 #body
 (close)
 
@@ -355,3 +376,19 @@ close
 Content-Length: 3
 #body
 abc(close)
+
+#name
+https client, http server
+#tls
+#method GET
+#url /
+#data
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+CRLF
+"abc"
+close
+#status 0
+#headers escaped
+#body
+(close)

@@ -9,6 +9,7 @@ use Encode qw(decode);
 use Errno qw(ECONNRESET);
 use AnyEvent;
 use Transport::TCP;
+use Transport::TLS;
 use AnyEvent::Socket;
 use Promise;
 
@@ -381,7 +382,10 @@ sub _process_rbuf ($$;%) {
   }
   if ($self->{state} eq 'response chunk data') {
     if ($self->{unread_length} > 0) {
-      if ($self->{unread_length} >= (my $len = length $$ref)) {
+      my $len = length $$ref;
+      if ($len <= 0) {
+        #
+      } elsif ($self->{unread_length} >= $len) {
         $self->_ev ('data', $$ref);
         $$ref = '';
         $self->{unread_length} -= $len;
@@ -392,11 +396,12 @@ sub _process_rbuf ($$;%) {
       }
     }
     if ($self->{unread_length} <= 0) {
-      delete $self->{unread_length};
       if ($$ref =~ s/^\x0D?\x0A//) {
+        delete $self->{unread_length};
         $self->{state} = 'before response chunk';
         redo CHUNK;
       } elsif ($$ref =~ /^(?:\x0D[^\x0A]|[^\x0D\x0A])/) {
+        delete $self->{unread_length};
         $self->{response}->{incomplete} = 1;
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
@@ -778,7 +783,8 @@ sub _next ($) {
        $self->{request_state} eq 'sending body')) {
     $self->{state} = 'sending';
   } else {
-    if (defined $self->{request_state} and
+    if (defined $self->{request} and
+        defined $self->{request_state} and
         $self->{request_state} eq 'sent') {
       $self->_ev ('complete', $self->{exit});
     }
@@ -800,76 +806,121 @@ sub _next ($) {
   }
 } # _next
 
-sub connect ($) {
-  my $self = $_[0];
+sub connect ($;%) {
+  my ($self, %args) = @_;
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     tcp_connect $self->{host}, $self->{port}, sub {
       my $fh = shift or return $ng->($!);
-      my $onclosed;
-      my $closed = Promise->new (sub { $onclosed = $_[0] });
-      $self->{transport} = Transport::TCP->new_from_fh ($fh);
-      $self->{transport}->start (sub {
-        my ($transport, $type) = @_;
-        if ($type eq 'readdata') {
-          ${$self->{rbuf}} .= ${$_[2]};
-          $self->_process_rbuf ($self->{rbuf});
-        } elsif ($type eq 'readeof') {
-          my $data = $_[2];
-          if ($DEBUG) {
-            my $id = $self->{transport}->id;
-            if (defined $data->{message}) {
-              warn "$id: R: EOF ($data->{message})\n";
-            } else {
-              warn "$id: R: EOF\n";
-            }
-          }
+      $ok->(Transport::TCP->new_from_fh ($fh));
+    };
+  })->then (sub {
+    my $tcp = $_[0];
+    if ($args{tls}) {
+      my $tls = Transport::TLS->new_from_transport ($tcp);
+      $self->{transport} = $tls;
+    } else {
+      $self->{transport} = $tcp;
+    }
+    $self->{state} = 'initial';
 
-          if ($data->{failed}) {
-            if (defined $data->{errno} and $data->{errno} == ECONNRESET) {
-              $self->{no_new_request} = 1;
-              $self->{request_state} = 'sent';
-              $self->{exit} = {failed => 1, reset => 1};
-              $self->_next;
-            } else {
-              $self->_process_rbuf ($self->{rbuf}, eof => 1);
-              $self->_process_rbuf_eof
-                  ($self->{rbuf}, abort => $data->{failed}, errno => $data->{errno});
-            }
-            $transport->abort;
+    my $onclosed;
+    my $closed = Promise->new (sub { $onclosed = $_[0] });
+    $self->{closed} = $closed;
+
+    if ($DEBUG) {
+      my $id = $self->{transport}->id;
+      warn "$id: Connect (@{[$self->{transport}->layered_type]})... @{[scalar gmtime]}\n";
+      if ($self->{transport}->type eq 'TLS' and defined $self->{host}) {
+        warn "$id: S: SNI: $self->{host}\n";
+        warn "$id: Expected DNS-ID: $self->{host}\n";
+      }
+    }
+
+    my $p = $self->{transport}->start (sub {
+      my ($transport, $type) = @_;
+      if ($type eq 'readdata') {
+        ${$self->{rbuf}} .= ${$_[2]};
+        $self->_process_rbuf ($self->{rbuf});
+      } elsif ($type eq 'readeof') {
+        my $data = $_[2];
+        if ($DEBUG) {
+          my $id = $self->{transport}->id;
+          if (defined $data->{message}) {
+            warn "$id: R: EOF ($data->{message})\n";
+          } else {
+            warn "$id: R: EOF\n";
+          }
+        }
+
+        if ($data->{failed}) {
+          if (defined $data->{errno} and $data->{errno} == ECONNRESET) {
+            $self->{no_new_request} = 1;
+            $self->{request_state} = 'sent';
+            $self->{exit} = {failed => 1, reset => 1};
+            $self->_next;
           } else {
             $self->_process_rbuf ($self->{rbuf}, eof => 1);
-            $self->_process_rbuf_eof ($self->{rbuf});
-            unless ($self->{state} eq 'tunnel sending') {
-              $transport->push_shutdown unless $transport->write_to_be_closed;
-            }
+            $self->_process_rbuf_eof
+                ($self->{rbuf}, abort => $data->{failed}, errno => $data->{errno});
           }
-        } elsif ($type eq 'writeeof') {
-          my $data = $_[2];
-          if ($DEBUG) {
-            my $id = $self->{transport}->id;
-            if (defined $data->{message}) {
-              warn "$id: S: EOF ($data->{message})\n";
-            } else {
-              warn "$id: S: EOF\n";
-            }
+          $transport->abort;
+        } else {
+          $self->_process_rbuf ($self->{rbuf}, eof => 1);
+          $self->_process_rbuf_eof ($self->{rbuf});
+          unless ($self->{state} eq 'tunnel sending') {
+            $transport->push_shutdown unless $transport->write_to_be_closed;
           }
-
-          if ($self->{state} eq 'tunnel sending') {
-            $self->_ev ('complete', {});
-          }
-        } elsif ($type eq 'close') {
-          if ($DEBUG) {
-            my $id = $self->{transport}->id;
-            warn "$id: Closed\n";
-          }
-          $onclosed->();
         }
-      }); # $self->{transport}
-      $self->{state} = 'initial';
-      $self->{closed} = $closed;
-      $ok->();
-    };
+      } elsif ($type eq 'writeeof') {
+        my $data = $_[2];
+        if ($DEBUG) {
+          my $id = $self->{transport}->id;
+          if (defined $data->{message}) {
+            warn "$id: S: EOF ($data->{message})\n";
+          } else {
+            warn "$id: S: EOF\n";
+          }
+        }
+
+        if ($self->{state} eq 'tunnel sending') {
+          $self->_ev ('complete', {});
+        }
+      } elsif ($type eq 'close') {
+        if ($DEBUG) {
+          my $id = $self->{transport}->id;
+          warn "$id: Connection closed @{[scalar gmtime]}\n";
+        }
+        $onclosed->();
+      }
+    },
+      tls => $args{tls},
+
+      # XXX IPaddr support
+      sni_host_name => $self->{host},
+      si_host_name => $self->{host},
+    )->then (sub {
+      my $data = $_[0];
+      if ($DEBUG) {
+        my $id = $self->{transport}->id;
+        warn "$id: Connection established @{[scalar gmtime]}\n";
+        if ($self->{transport}->type eq 'TLS') {
+          my $ver = $data->{tls_protocol} == 0x0301 ? '1.0' :
+                    $data->{tls_protocol} == 0x0302 ? '1.1' :
+                    $data->{tls_protocol} == 0x0303 ? '1.2' :
+                    $data->{tls_protocol} == 0x0304 ? '1.3' :
+                    sprintf '0x%04X', $data->{tls_protocol};
+          warn "$id: + TLS version: $ver\n";
+          warn "$id: + Cipher suite: $data->{tls_cipher} ($data->{tls_cipher_usekeysize})\n";
+          warn "$id: + Resumed session\n" if $data->{tls_session_resumed};
+          my $i = 0;
+          for (@{$_[0]->{tls_cert_chain}}) {
+            warn "$id: + #$i: @{[$_->debug_info]}\n";
+            $i++;
+          }
+        }
+      }
+    });
   });
 } # connect
 

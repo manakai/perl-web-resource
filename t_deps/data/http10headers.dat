@@ -832,3 +832,67 @@ close
 #status 0
 #body
 (close)
+
+#name
+truncated header (no empty line)
+#method GET
+#url /
+#data
+"HTTP/1.1 200 OK"CRLF
+"Foo: bar"CRLF
+close
+#status 200
+#reason OK
+#headers
+Foo: bar
+#body
+(close)
+#incomplete
+
+#name
+truncated header (EOF before header CRLF)
+#method GET
+#url /
+#data
+"HTTP/1.1 200 OK"CRLF
+"Foo: bar"
+close
+#status 200
+#reason OK
+#headers
+Foo: bar
+#body
+(close)
+#incomplete
+
+#name
+truncated headers
+#method GET
+#url /
+#data
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Foo: bar"CRLF
+close
+#status 200
+#reason OK
+#headers escaped
+Foo: bar
+#body
+(close)
+#incomplete
+
+#name
+truncated headers
+#method GET
+#url /
+#data
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+"Foo: bar"CRLF
+close
+#status 0
+#headers escaped
+#body
+(close)

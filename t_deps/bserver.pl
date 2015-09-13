@@ -8,6 +8,7 @@ use AnyEvent::Util qw(run_cmd);
 use Encode;
 use JSON::PS;
 use Test::HTCT::Parser;
+use Test::Certificates;
 
 my $host = '0';
 my $port = $ENV{SERVER_PORT} || 4355;
@@ -101,17 +102,12 @@ for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.d
   };
 }
 
-my $cert_path = $root_path->child ('local/cert');
-my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
-unless ($cert_path->child ($cn . '-key-pkcs1.pem')->is_file) {
-  system $root_path->child ('perl'), $root_path->child ('t_deps/bin/generate-certs-for-tests.pl'), $cert_path, $cn;
-  sleep 2;
-}
+Test::Certificates->wait_create_cert;
 my $httpd = AnyEvent::HTTPD->new (host => $host, port => $port);
 my $tlshttpd = AnyEvent::HTTPD->new (host => $host, port => $tlsport, ssl => {
-  ca_path => $cert_path->child ('ca-cert.pem'),
-  cert_file => $cert_path->child ($cn . '-cert.pem'),
-  key_file => $cert_path->child ($cn . '-key-pkcs1.pem'),
+  ca_path => Test::Certificates->ca_path ('ca-cert.pem'),
+  cert_file => Test::Certificates->cert_path ('cert.pem'),
+  key_file => Test::Certificates->cert_path ('key-pkcs1.pem'),
 });
 my $cv = AE::cv;
 

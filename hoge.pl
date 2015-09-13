@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 use AnyEvent;
+BEGIN { $ENV{WEBUA_DEBUG} //= 2 }
 use HTTP;
 use Data::Dumper;
 
@@ -14,6 +15,12 @@ my $method = 'GET';
 my $ws = 0;
 my $ws_protos = [];
 my $headers = [];
+my $tls = undef;
+
+$hostname = 'localhost';
+$port = 443;
+$target = q</>;
+#$tls = {};
 
 push @$headers, [Host => $host];
 
@@ -43,8 +50,8 @@ $http->onevent (sub {
   }
 });
 
-$http->connect->then (sub {
-  return $http->send_request ({
+$http->connect (tls => $tls)->then (sub {
+  return $http->send_request_headers ({
     method => $method,
     target => $target,
     headers => $headers,

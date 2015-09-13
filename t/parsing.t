@@ -1,6 +1,7 @@
 use strict;
 use warnings;
 use Path::Tiny;
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
@@ -10,6 +11,7 @@ use JSON::PS;
 use HTTP;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
+use Test::Certificates;
 
 sub _a ($) {
   return encode 'utf-8', $_[0];
@@ -148,7 +150,11 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           return $req;
         }; # $get_req
 
-        $http->connect->then (sub {
+        my $tls;
+        $tls = {
+          ca_file => Test::Certificates->ca_path ('cert.pem'),
+        } if $test->{tls};
+        $http->connect (tls => $tls)->then (sub {
           if ($test_type eq 'ws') {
             my $req = $get_req->(
               method => _a 'GET',
@@ -328,6 +334,18 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             }
           } $c;
           return $http->close;
+        }, sub {
+          test {
+            ok 1, 'is error';
+            ok 1, 'response version';
+            ok 1, 'status';
+            ok 1, 'reason';
+            ok 1, 'headers';
+            ok 1, 'body';
+            ok 1, 'incomplete';
+            ok 1, 'r_events';
+            ok 1, 's_events';
+          } $c;
         })->then (sub {
           $server->{stop}->();
         })->catch (sub {
@@ -343,4 +361,5 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
   };
 } # $path
 
+Test::Certificates->wait_create_cert;
 run_tests;

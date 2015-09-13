@@ -4,6 +4,12 @@ use AnyEvent;
 BEGIN { $ENV{WEBUA_DEBUG} //= 2 }
 use HTTP;
 use Data::Dumper;
+use Transport::TCP;
+use Transport::TLS;
+use Transport::H1CONNECT;
+use Path::Tiny;
+use lib path (__FILE__)->parent->child ('t_deps/lib')->stringify;
+use Test::Certificates;
 
 my $hostname = 'wiki.suikawiki.org';
 my $port = 80;
@@ -17,10 +23,19 @@ my $ws_protos = [];
 my $headers = [];
 my $tls = undef;
 
-$hostname = 'localhost';
+#$hostname = 'localhost';
 $port = 443;
 $target = q</>;
-#$tls = {};
+$tls = {
+  sni_host_name => 'localhost', si_host_name => 'hoge.proxy.test',
+  ca_file => Test::Certificates->ca_path ('cert.pem'),
+};
+
+my $connect_host_name = $hostname;
+my $connect_port = $port;
+#$connect_host_name = undef;
+$hostname = 'localhost';
+$port=5244;
 
 push @$headers, [Host => $host];
 
@@ -38,8 +53,21 @@ if (0) {
   };
 }
 
-$http = HTTP->new_from_host_and_port
-    ($hostname, $port);
+my $t_tcp = Transport::TCP->new (host_name => $hostname, port => $port);
+
+my $transport = $t_tcp;
+
+if (defined $connect_host_name) {
+  my $p_http = HTTP->new (transport => $transport);
+  my $t_connect = Transport::H1CONNECT->new
+      (http => $p_http, host_name => $connect_host_name, port => $connect_port);
+  $transport = $t_connect;
+}
+
+my $t_tls = Transport::TLS->new (transport => $transport, %{$tls || {}});
+$transport = $t_tls if $tls;
+
+$http = HTTP->new (transport => $transport);
 
 my $cv = AE::cv;
 
@@ -50,7 +78,7 @@ $http->onevent (sub {
   }
 });
 
-$http->connect (tls => $tls)->then (sub {
+$http->connect->then (sub {
   return $http->send_request_headers ({
     method => $method,
     target => $target,
@@ -62,11 +90,12 @@ $http->connect (tls => $tls)->then (sub {
 })->then (sub {
   $cv->send;
 }, sub {
-  $cv->croak ($_[0]);
+  $cv->croak (Dumper $_[0]);
 });
 
 warn "wait...";
 $cv->recv;
 undef $http;
+undef $transport;
 
 warn "done!";

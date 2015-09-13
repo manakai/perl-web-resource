@@ -8,9 +8,13 @@ use Promise;
 use Net::SSLeay;
 use AnyEvent::TLS;
 
-sub new_from_transport ($$) {
-  return bless {transport => $_[1], id => $_[1]->id}, $_[0];
-} # new_from_transport
+sub new ($%) {
+  my $self = bless {}, shift;
+  $self->{args} = {@_};
+  $self->{transport} = delete $self->{args}->{transport};
+  $self->{id} = $self->{transport}->id . 'S';
+  return $self;
+} # new
 
 sub id ($) {
   return $_[0]->{id};
@@ -96,11 +100,10 @@ sub verify_hostname($$) {
 }
 
 sub start ($$;%) {
-  weaken (my $self = shift);
-  croak "Bad state" if $self->{starttls};
-  $self->{cb} = shift;
-  $self->{wq} = [];
-  my %args = @_;
+  weaken (my $self = $_[0]);
+  croak "Bad state" if not defined $self->{args};
+  $self->{cb} = $_[1];
+  my $args = delete $self->{args};
 
   my $p = Promise->new (sub { $self->{starttls_done} = [$_[0], $_[1]] });
   $self->{transport}->start (sub {
@@ -137,33 +140,32 @@ sub start ($$;%) {
       AE::postpone { (delete $self->{cb})->($self, 'close', $data) };
     }
   })->then (sub {
-    my $tls_args = {%{$args{tls} || {}}};
     my $vmode;
-    if ($args{tls}->{insecure} and not $args{tls}->{verify}) {
+    if ($args->{insecure} and not $args->{verify}) {
       $vmode = Net::SSLeay::VERIFY_NONE ();
     } else {
-      $tls_args->{verify} //= 1;
+      $args->{verify} //= 1;
       $vmode = Net::SSLeay::VERIFY_PEER ();
       $vmode |= Net::SSLeay::VERIFY_FAIL_IF_NO_PEER_CERT ()
-          if $args{tls}->{verify_require_client_cert};
+          if $args->{verify_require_client_cert};
       $vmode |= Net::SSLeay::VERIFY_CLIENT_ONCE ()
-          if $args{tls}->{verify_client_once};
+          if $args->{verify_client_once};
     }
 
-    $self->{tls_ctx} = AnyEvent::TLS->new (%$tls_args);
+    $self->{tls_ctx} = AnyEvent::TLS->new (%$args);
     my $tls = $self->{tls} = Net::SSLeay::new ($self->{tls_ctx}->ctx);
     $self->{starttls_data} = {};
-    if ($args{server}) {
+    if ($args->{server}) {
       Net::SSLeay::set_accept_state ($tls);
       Net::SSLeay::CTX_set_tlsext_servername_callback ($self->{tls_ctx}->ctx, sub {
         $self->{starttls_data}->{sni_host_name} = Net::SSLeay::get_servername ($_[0]);
         # XXX hook for the application to choose a certificate
         Net::SSLeay::set_SSL_CTX ($tls, $self->{tls_ctx}->ctx);
       });
-    } else {
+    } else { # client
       Net::SSLeay::set_connect_state ($tls);
-      Net::SSLeay::set_tlsext_host_name ($tls, $args{sni_host_name})
-          if defined $args{sni_host_name};
+      Net::SSLeay::set_tlsext_host_name ($tls, $args->{sni_host_name})
+          if defined $args->{sni_host_name};
 
       ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_verify.html>
       Net::SSLeay::set_verify $tls, $vmode, sub {
@@ -171,8 +173,8 @@ sub start ($$;%) {
         my $depth = Net::SSLeay::X509_STORE_CTX_get_error_depth ($x509_store_ctx);
         if ($depth == 0) {
           my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
-          if (defined $args{si_host_name}) {
-            return 0 unless verify_hostname $cert, $args{si_host_name};
+          if (defined $args->{si_host_name}) {
+            return 0 unless verify_hostname $cert, $args->{si_host_name};
           }
 
           # XXX hook to verify the client cert
@@ -209,6 +211,7 @@ sub start ($$;%) {
 
     Net::SSLeay::set_bio ($tls, $self->{_rbio}, $self->{_wbio});
 
+    $self->{wq} = [];
     $self->_tls;
   })->catch (sub {
     if (defined $self->{starttls_done}) {
@@ -218,7 +221,6 @@ sub start ($$;%) {
     }
   });
 
-  $self->{starttls} = 1;
   return $p;
 } # start
 
@@ -289,13 +291,17 @@ sub _tls ($) {
           my $rc = $self->{read_closed};
           $self->{read_closed} = 1;
           $self->{write_closed} = 1;
-          AE::postpone {
-            $self->{cb}->($self, 'writeeof', $data);
-            $self->{cb}->($self, 'readeof',
-                          {failed => 1, message => 'Closed by write error'})
-                unless $rc;
-          };
-          $self->_close;
+          if (defined $self->{starttls_done}) {
+            (delete $self->{starttls_done})->[1]->({exit => $data});
+          } else {
+            AE::postpone {
+              $self->{cb}->($self, 'writeeof', $data);
+              $self->{cb}->($self, 'readeof',
+                            {failed => 1, message => 'Closed by write error'})
+                  unless $rc;
+            };
+          }
+          $self->abort (message => 'TLS error');
           return;
         }
 
@@ -339,13 +345,17 @@ sub _tls ($) {
       my $wc = $self->{write_closed};
       $self->{read_closed} = 1;
       $self->{write_closed} = 1;
-      AE::postpone {
-        $self->{cb}->($self, 'readeof', $data);
-        $self->{cb}->($self, 'writeeof',
-                      {failed => 1, message => 'Closed by read error'})
-            unless $wc;
-      };
-      $self->_close;
+      if (defined $self->{starttls_done}) {
+        (delete $self->{starttls_done})->[1]->({exit => $data});
+      } else {
+        AE::postpone {
+          $self->{cb}->($self, 'readeof', $data);
+          $self->{cb}->($self, 'writeeof',
+                        {failed => 1, message => 'Closed by read error'})
+              unless $wc;
+        };
+      }
+      $self->abort (message => 'TLS error');
       return;
     }
   }
@@ -378,7 +388,7 @@ sub _tls ($) {
 
 sub abort ($;%) {
   my ($self, %args) = @_;
-  return unless defined $self->{wq};
+  delete $self->{args};
   if (defined $self->{tls}) {
     Net::SSLeay::set_quiet_shutdown ($self->{tls}, 1);
     Net::SSLeay::shutdown ($self->{tls});
@@ -394,7 +404,11 @@ sub abort ($;%) {
         unless $wc;
     $self->{cb}->($self, 'readeof', {failed => 1, message => $reason})
         unless $rc;
-  };
+  } unless $wc and $rc;
+  if (defined $self->{transport}) {
+    $self->{transport}->abort (%args);
+    delete $self->{transport};
+  }
   $self->_close;
 } # abort
 
@@ -405,7 +419,7 @@ sub _close ($$) {
         unless $self->{transport}->write_to_be_closed;
     delete $self->{transport};
   }
-  while (@{$self->{wq}}) {
+  while (@{$self->{wq} // []}) {
     my $q = shift @{$self->{wq}};
     if (@$q == 2) { # promise
       $q->[1]->();
@@ -428,7 +442,7 @@ sub DESTROY ($) {
 
   local $@;
   eval { die };
-  warn "Memory leak detected (Transport::TLS)\n"
+  warn "Reference to Transport::TLS is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 
 } # DESTROY

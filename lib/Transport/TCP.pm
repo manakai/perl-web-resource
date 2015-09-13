@@ -5,59 +5,78 @@ use Carp qw(croak);
 use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE);
 use AnyEvent::Util qw(WSAEWOULDBLOCK);
+use AnyEvent::Socket qw(tcp_connect);
 use Promise;
 
-sub new_from_fh ($$) {
-  my $self = bless {fh => $_[1]}, $_[0];
+sub new ($%) {
+  my $self = bless {}, shift;
   $self->{id} = int rand 100000;
+  $self->{args} = {@_};
   return $self;
-} # new_from_fh
+} # new
 
-sub start ($$;%) {
+sub start ($$) {
   my $self = $_[0];
-  croak "Bad state" if defined $self->{wq};
+  croak "Bad state" if not defined $self->{args};
   $self->{cb} = $_[1];
+  my $args = delete $self->{args};
+  # XXX host vs ipaddr
+  croak "Bad |host_name|" unless defined $args->{host_name};
+  croak "utf8-flagged |host_name|" if utf8::is_utf8 $args->{host_name};
+  my $host = $args->{host_name};
+  croak "Bad |port|" unless defined $args->{port};
+  croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
+  $host .= ':' . $args->{port};
 
-  my $fh = $self->{fh};
-  AnyEvent::Util::fh_nonblocking $fh, 1;
-  setsockopt $fh, SOL_SOCKET, SO_OOBINLINE, 0;
-  setsockopt $fh, IPPROTO_TCP, TCP_NODELAY, 1;
-  setsockopt $fh, SOL_SOCKET, SO_KEEPALIVE, 1;
-  # XXX KA options
+  # XXX server
 
-  $self->{wq} = [];
-  $self->_start_write;
+  return Promise->new (sub {
+    my ($ok, $ng) = @_;
+    tcp_connect $args->{host_name}, $args->{port}, sub {
+      my $fh = shift or return $ng->($!);
+      $ok->($fh);
+    };
+  })->then (sub {
+    my $fh = $self->{fh} = $_[0];
+    AnyEvent::Util::fh_nonblocking $fh, 1;
+    setsockopt $fh, SOL_SOCKET, SO_OOBINLINE, 0;
+    setsockopt $fh, IPPROTO_TCP, TCP_NODELAY, 1;
+    setsockopt $fh, SOL_SOCKET, SO_KEEPALIVE, 1;
+    # XXX KA options
 
-  $self->{rw} = AE::io $self->{fh}, 0, sub {
-    my $buffer = '';
-    my $l = sysread $self->{fh}, $buffer, 128*1024, 0;
-    if (defined $l) {
-      if ($l > 0) {
-        AE::postpone { $self->{cb}->($self, 'readdata', \$buffer) };
-      } else {
-        delete $self->{rw};
+    $self->{wq} = [];
+    $self->_start_write;
+
+    $self->{rw} = AE::io $self->{fh}, 0, sub {
+      my $buffer = '';
+      my $l = sysread $self->{fh}, $buffer, 128*1024, 0;
+      if (defined $l) {
+        if ($l > 0) {
+          AE::postpone { $self->{cb}->($self, 'readdata', \$buffer) };
+        } else {
+          delete $self->{rw};
+          $self->{read_closed} = 1;
+          AE::postpone { $self->{cb}->($self, 'readeof', {}) };
+          $self->_close if $self->{write_closed};
+        }
+      } elsif ($! != EAGAIN && $! != EINTR && $! != EWOULDBLOCK && $! != WSAEWOULDBLOCK) {
+        my $wc = $self->{write_closed};
         $self->{read_closed} = 1;
-        AE::postpone { $self->{cb}->($self, 'readeof', {}) };
-        $self->_close if $self->{write_closed};
+        $self->{write_closed} = 1;
+        delete $self->{rw};
+        AE::postpone {
+          $self->{cb}->($self, 'readeof', {failed => 1,
+                                           errno => 0+$!,
+                                           message => "$!"});
+          $self->{cb}->($self, 'writeeof', {failed => 1,
+                                            message => 'Closed by read error'})
+              unless $wc;
+        };
+        $self->_close;
       }
-    } elsif ($! != EAGAIN && $! != EINTR && $! != EWOULDBLOCK && $! != WSAEWOULDBLOCK) {
-      my $wc = $self->{write_closed};
-      $self->{read_closed} = 1;
-      $self->{write_closed} = 1;
-      delete $self->{rw};
-      AE::postpone {
-        $self->{cb}->($self, 'readeof', {failed => 1,
-                                         errno => 0+$!,
-                                         message => "$!"});
-        $self->{cb}->($self, 'writeeof', {failed => 1,
-                                          message => 'Closed by read error'})
-            unless $wc;
-      };
-      $self->_close;
-    }
-  }; # $self->{rw}
+    }; # $self->{rw}
 
-  return Promise->resolve ({});
+  });
 } # start
 
 sub id ($) { return $_[0]->{id} }
@@ -159,7 +178,7 @@ sub push_shutdown ($) {
 
 sub abort ($;%) {
   my ($self, %args) = @_;
-  return unless defined $self->{wq};
+  delete $self->{args};
   shutdown $self->{fh}, 2 if defined $self->{fh};
   my $wc = $self->{write_closed};
   my $rc = $self->{read_closed};
@@ -172,13 +191,13 @@ sub abort ($;%) {
         unless $wc;
     $self->{cb}->($self, 'readeof', {failed => 1, message => $reason})
         unless $rc;
-  };
+  } if defined $self->{fh} and not ($wc and $rc);
   $self->_close;
 } # abort
 
 sub _close ($$) {
   my $self = $_[0];
-  while (@{$self->{wq}}) {
+  while (@{$self->{wq} // []}) {
     my $q = shift @{$self->{wq}};
     if (@$q == 2) { # promise
       $q->[1]->();
@@ -188,9 +207,10 @@ sub _close ($$) {
   delete $self->{ww};
   delete $self->{wq};
   if (defined delete $self->{fh}) {
-    AE::postpone { (delete $self->{cb})->($self, 'close') }
+    AE::postpone { (delete $self->{cb})->($self, 'close') };
+    $self->{cb_to_be_deleted} = 1;
   } else {
-    delete $self->{cb};
+    delete $self->{cb} unless $self->{cb_to_be_deleted};
   }
 } # _close
 
@@ -199,7 +219,7 @@ sub DESTROY ($) {
 
   local $@;
   eval { die };
-  warn "Memory leak detected (Transport::TCP)\n"
+  warn "Reference to Transport::TCP is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 
 } # DESTROY

@@ -147,6 +147,26 @@ close
 (close)
 
 #name
+TLS + HTTP/1.1 + Connection: close, no Content-Length
+#tls
+#method GET
+#url /
+#data
+starttls
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Connection: close"CRLF
+CRLF
+"ab"
+close
+#status 200
+#reason OK
+#headers
+Connection: close
+#body
+ab(close)
+
+#name
 urgent data
 #tls
 #method GET

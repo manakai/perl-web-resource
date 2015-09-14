@@ -8,6 +8,7 @@ use Test::X1;
 use Test::HTCT::Parser;
 use Encode;
 use JSON::PS;
+use Transport::TCP;
 use HTTP;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
@@ -71,7 +72,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
       my $c = shift;
       server_as_cv ($test->{data}->[0])->cb (sub {
         my $server = $_[0]->recv;
-        my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+        my $transport = Transport::TCP->new
+            (host_name => $server->{host}, port => $server->{port});
+        my $http = HTTP->new (transport => $transport);
         my $test_type = $test->{'test-type'}->[1]->[0] // '';
         
         my $req_results = {};

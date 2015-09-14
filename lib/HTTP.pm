@@ -62,11 +62,12 @@ sub _process_rbuf ($$;%) {
       $self->{response_received} = 1;
     } elsif (8 <= length $$ref) {
       $self->{response_received} = 1;
-      if ($self->{request}->{method} eq 'PUT') {
+      if ($self->{request}->{method} eq 'PUT' or
+          $self->{request}->{method} eq 'CONNECT') {
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
         $self->{exit} = {failed => 1,
-                         message => "HTTP/0.9 response to PUT request"};
+                         message => "HTTP/0.9 response to non-GET request"};
         $self->_next;
         return;
       } else {
@@ -713,9 +714,10 @@ sub _process_rbuf_eof ($$;%) {
   my ($self, $ref, %args) = @_;
   if ($self->{state} eq 'before response') {
     if (length $$ref) {
-      if ($self->{request}->{method} eq 'PUT') {
+      if ($self->{request}->{method} eq 'PUT' or
+          $self->{request}->{method} eq 'CONNECT') {
         $self->{exit} = {failed => 1,
-                         message => "HTTP/0.9 response to PUT request"};
+                         message => "HTTP/0.9 response to non-GET request"};
       } else {
         $self->_ev ('headers', $self->{response});
         $self->_ev ('datastart', {});

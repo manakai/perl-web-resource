@@ -75,7 +75,6 @@ sub start ($$) {
         $self->_close;
       }
     }; # $self->{rw}
-
   });
 } # start
 

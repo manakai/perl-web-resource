@@ -88,8 +88,10 @@ $http->connect->then (sub {
   warn "request done; close";
   return $http->close;
 })->then (sub {
+warn "closed";
   $cv->send;
 }, sub {
+warn "close aborted";
   $cv->croak (Dumper $_[0]);
 });
 

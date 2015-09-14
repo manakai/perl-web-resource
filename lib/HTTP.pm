@@ -909,6 +909,7 @@ sub connect ($) {
     if ($DEBUG) {
       my $id = $self->{transport}->id;
       warn "$id: Connection established @{[scalar gmtime]}\n";
+      #XXX
       if ($self->{transport}->type eq 'TLS') {
         my $ver = $data->{tls_protocol} == 0x0301 ? '1.0' :
                   $data->{tls_protocol} == 0x0302 ? '1.1' :
@@ -937,6 +938,7 @@ sub connect ($) {
       warn "$id: Connection failed ($msg) @{[scalar gmtime]}\n";
     }
     $self->{transport}->abort;
+    $onclosed->();
     die $error;
   });
 } # connect

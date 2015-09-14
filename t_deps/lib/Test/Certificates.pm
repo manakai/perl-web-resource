@@ -15,6 +15,10 @@ sub cert_path ($$) {
   return $cert_path->child ($cn . '-' . $_[1]);
 } # cert_path
 
+sub cert_name ($) {
+  return $cn;
+} # cert_name
+
 sub wait_create_cert ($) {
   if ($_[0]->ca_path ('cert.pem')->stat->mtime + 60*60*24 < time) {
     system "rm \Q$cert_path\E/*.pem";

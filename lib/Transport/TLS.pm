@@ -116,7 +116,9 @@ sub start ($$;%) {
         my $data = $_[2];
         #$data->{failed} = 1;
         $data->{message} //= 'Underlying transport closed before TLS closure';
-        AE::postpone { $self->{cb}->($self, 'readeof', $data) };
+        if ($self->{started}) {
+          AE::postpone { $self->{cb}->($self, 'readeof', $data) };
+        }
         $self->{read_closed} = 1;
         $self->_close if $self->{write_closed};
       } else {
@@ -127,7 +129,9 @@ sub start ($$;%) {
         my $data = $_[2];
         #$data->{failed} = 1;
         $data->{message} //= 'Underlying transport closed before TLS closure';
-        AE::postpone { $self->{cb}->($self, 'writeeof', $data) };
+        if ($self->{started}) {
+          AE::postpone { $self->{cb}->($self, 'writeeof', $data) };
+        }
         $self->{write_closed} = 1;
         $self->_close if $self->{read_closed};
       } else {
@@ -137,9 +141,13 @@ sub start ($$;%) {
       my $data = $_[2];
       if (defined $self->{starttls_done}) {
         (delete $self->{starttls_done})->[1]->("Connection closed by a TLS error");
-      } else {
-        AE::postpone { (delete $self->{cb})->($self, 'close', $data) };
       }
+      if ($self->{started}) {
+        AE::postpone { (delete $self->{cb})->($self, 'close', $data) };
+      } else {
+        delete $self->{cb};
+      }
+      delete $self->{transport};
     }
   })->then (sub {
     my $vmode;
@@ -381,6 +389,7 @@ sub _tls ($) {
       $data->{tls_cipher} = Net::SSLeay::get_cipher ($self->{tls});
       $data->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($self->{tls});
       $data->{tls_cert_chain} = [map { bless [$_], __PACKAGE__ . '::Certificate' } Net::SSLeay::get_peer_cert_chain ($self->{tls})];
+      $self->{started} = 1;
       (delete $self->{starttls_done})->[0]->($data);
     }
   }
@@ -410,7 +419,6 @@ sub _close ($$) {
   if (defined $self->{transport}) {
     $self->{transport}->push_shutdown
         unless $self->{transport}->write_to_be_closed;
-    delete $self->{transport};
   }
   while (@{$self->{wq} // []}) {
     my $q = shift @{$self->{wq}};

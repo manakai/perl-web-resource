@@ -1,10 +1,15 @@
 use strict;
 use warnings;
 use Path::Tiny;
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
 use Test::HTCT::Parser;
+use Test::Certificates;
+use Transport::TCP;
+use Transport::H1CONNECT;
+use Transport::TLS;
 use HTTP;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
@@ -40,7 +45,8 @@ sub server_as_cv ($) {
 
 test {
   my $c = shift;
-  my $http = HTTP->new_from_host_and_port ('localhost', rand);
+  my $tcp = Transport::TCP->new (host_name => 'localhost', port => rand);
+  my $http = HTTP->new (transport => $tcp);
   my $p = $http->send_request_headers ({method => 'GET', target => '/'});
   isa_ok $p, 'Promise';
   $p->then (sub {
@@ -64,7 +70,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'});
     })->then (sub {
@@ -96,7 +104,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     $http->connect->then (sub {
       my $p1 = $http->send_request_headers ({method => 'GET', target => '/'});
       my $p = $http->send_request_headers ({method => 'GET', target => '/'});
@@ -128,7 +138,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     $http->connect->then (sub {
       my @p;
       for my $subtest (
@@ -166,7 +178,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -198,7 +212,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -234,7 +250,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -270,7 +288,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -316,7 +336,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -356,7 +378,9 @@ sleep 1
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -402,7 +426,9 @@ sleep 1
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -448,7 +474,9 @@ sleep 1
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error = 0;
     my @p;
     $http->onevent (sub {
@@ -511,7 +539,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -559,7 +589,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -601,7 +633,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -643,7 +677,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -685,7 +721,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -734,7 +772,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -783,7 +823,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -823,7 +865,9 @@ CRLF
 "abc"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -864,7 +908,9 @@ CRLF
 CRLF
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -910,7 +956,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     my $pong = 0;
     $http->onevent (sub {
@@ -956,7 +1004,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -998,7 +1048,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1040,7 +1092,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1089,7 +1143,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1138,7 +1194,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1187,7 +1245,9 @@ ws-send-header opcode=9 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $ping = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1231,7 +1291,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error = 0;
     $http->connect->then (sub {
       return $http->send_ping;
@@ -1265,7 +1327,9 @@ CRLF
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     my $received = '';
     my @ev;
@@ -1311,7 +1375,9 @@ CRLF
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     my $received = '';
     my @ev;
@@ -1365,7 +1431,9 @@ CRLF
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $sent = 0;
     my $received = '';
     my @ev;
@@ -1411,7 +1479,9 @@ CRLF
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $error = 0;
     my $x;
     my $p = Promise->new (sub { $x = $_[0] });
@@ -1456,7 +1526,9 @@ sleep 1
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     my $received = '';
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1492,7 +1564,9 @@ CRLF
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'headers') {
@@ -1529,7 +1603,9 @@ CRLF
 "OK"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1562,7 +1638,9 @@ CRLF
 "NG"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1602,7 +1680,9 @@ CRLF
 "NG"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1643,7 +1723,9 @@ CRLF
 "NG"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1682,7 +1764,9 @@ receive "hoge"
 CRLF
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
     });
@@ -1715,7 +1799,9 @@ CRLF
 "NG"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $http = HTTP->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1744,5 +1830,118 @@ CRLF
     });
   });
 } n => 1, name => 'with request body - utf8';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+starttls
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+CRLF
+"abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $tcp = Transport::TCP->new
+        (host_name => $server->{host}, port => $server->{port});
+    my $proxy = HTTP->new (transport => $tcp);
+    my $connect = Transport::H1CONNECT->new
+        (http => $proxy, host_name => 'hoge.test', port => undef);
+    my $tls = Transport::TLS->new
+        (transport => $connect,
+         sni_host_name => 'hoge.test',
+         si_host_name => Test::Certificates->cert_name,
+         ca_file => Test::Certificates->ca_path ('cert.pem'));
+    my $http = HTTP->new (transport => $tls);
+    my $d = '';
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'data') {
+        $d .= $data;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request_headers ({method => 'GET',
+                                           target => '/test'});
+    })->then (sub {
+      test {
+        is $d, 'abc';
+      } $c;
+      return $http->close;
+    })->catch (sub {
+      my $error = $_[0];
+      test {
+        is $error // '(undef)', undef;
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'CONNECT https';
+
+test {
+  my $c = shift;
+  {
+    my $tcp = Transport::TCP->new (host_name => 'hoge.test', port => int rand);
+    my $proxy = HTTP->new (transport => $tcp);
+    my $connect = Transport::H1CONNECT->new
+        (http => $proxy, host_name => 'hoge.test', port => undef);
+    my $tls = Transport::TLS->new
+        (transport => $connect,
+         sni_host_name => 'hoge.test',
+         si_host_name => Test::Certificates->cert_name,
+         ca_file => Test::Certificates->ca_path ('cert.pem'));
+    my $http = HTTP->new (transport => $tls);
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'data') {
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request_headers ({method => 'GET',
+                                           target => '/test'});
+    })->then (sub { test { ok 0 } $c }, sub {
+      test {
+        ok 1;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  }
+} n => 1, name => 'CONNECT https bad TCP host';
+
+test {
+  my $c = shift;
+  {
+    my $tcp = Transport::TCP->new (host_name => 'hoge.test', port => int rand);
+    my $proxy = HTTP->new (transport => $tcp);
+    my $connect = Transport::H1CONNECT->new
+        (http => $proxy, host_name => 'hoge.test', port => undef);
+    my $http = HTTP->new (transport => $connect);
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'data') {
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request_headers ({method => 'GET',
+                                           target => '/test'});
+    })->then (sub { test { ok 0 } $c }, sub {
+      test {
+        ok 1;
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  }
+} n => 1, name => 'CONNECT http bad TCP host';
 
 run_tests;

@@ -81,6 +81,7 @@ sub start ($$) {
   })->catch (sub {
     $ng->($_[0]);
     delete $self->{cb} unless $self->{started};
+    delete $self->{http};
   });
   return $p;
 } # start

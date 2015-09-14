@@ -34,17 +34,17 @@ sub start ($$) {
   # XXX headers
   $self->{http}->onevent (sub {
     my $type = $_[2];
-    if ($type eq 'data') {
+    if ($type eq 'data' and $self->{started}) {
       my $data = $_[3];
       AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
-    } elsif ($type eq 'dataend') {
+    } elsif ($type eq 'dataend' and $self->{started}) {
       unless ($self->{read_closed}) {
         $self->{read_closed} = 1;
         AE::postpone { $self->{cb}->($self, 'readeof', {}) };
       }
     } elsif ($type eq 'headers') {
       my $res = $_[3];
-      if ($res->{status} == 200 and $res->{version} ne '0.9') {
+      if ($res->{status} == 200) {
         $ok->({response => $res});
         $self->{started} = 1;
       } else {
@@ -62,18 +62,25 @@ sub start ($$) {
             $self->{write_closed} = 1;
             AE::postpone { $self->{cb}->($self, 'writeeof', $exit) };
           }
+        } else {
+          $ng->({exit => $exit});
         }
-        $ng->({exit => $exit});
       }
-      AE::postpone { (delete $self->{cb})->($self, 'close', {}) };
-      delete $self->{http};
+      $self->{http}->close->then (sub {
+        if ($self->{started}) {
+          AE::postpone { (delete $self->{cb})->($self, 'close', {}) };
+        } else {
+          delete $self->{cb};
+        }
+        delete $self->{http};
+      });
     }
   });
   $self->{http}->connect->then (sub {
     return $self->{http}->send_request_headers ($req);
   })->catch (sub {
     $ng->($_[0]);
-    delete $self->{cb};
+    delete $self->{cb} unless $self->{started};
   });
   return $p;
 } # start
@@ -116,23 +123,10 @@ sub push_shutdown ($) {
 sub abort ($;%) {
   my ($self, %args) = @_;
   delete $self->{args};
-  my $wc = $self->{write_closed};
-  my $rc = $self->{read_closed};
-  $self->{write_closed} = 1;
-  $self->{read_closed} = 1;
   $self->{write_shutdown} = 1;
-  my $reason = $args{message} // 'Aborted';
-  AE::postpone {
-    $self->{cb}->($self, 'writeeof', {failed => 1, message => $reason})
-        unless $wc;
-    $self->{cb}->($self, 'readeof', {failed => 1, message => $reason})
-        unless $rc;
-  } unless $wc and $rc;
   if (defined $self->{http}) {
     $self->{http}->abort (%args);
-    delete $self->{http};
   }
-  return undef;
 } # abort
 
 sub DESTROY ($) {

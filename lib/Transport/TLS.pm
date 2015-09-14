@@ -135,9 +135,11 @@ sub start ($$;%) {
       }
     } elsif ($type eq 'close') {
       my $data = $_[2];
-      (delete $self->{starttls_done})->[1]->("Connection closed by a TLS error")
-          if defined $self->{starttls_done};
-      AE::postpone { (delete $self->{cb})->($self, 'close', $data) };
+      if (defined $self->{starttls_done}) {
+        (delete $self->{starttls_done})->[1]->("Connection closed by a TLS error");
+      } else {
+        AE::postpone { (delete $self->{cb})->($self, 'close', $data) };
+      }
     }
   })->then (sub {
     my $vmode;
@@ -217,11 +219,14 @@ sub start ($$;%) {
     if (defined $self->{starttls_done}) {
       (delete $self->{starttls_done})->[1]->($_[0]);
     } else {
-      warn $_[0];
+      #warn $_[0];
     }
   });
 
-  return $p;
+  return $p->catch (sub {
+    delete $self->{cb};
+    die $_[0];
+  });
 } # start
 
 sub read_closed ($) { return $_[0]->{read_closed} }
@@ -288,12 +293,12 @@ sub _tls ($) {
                 ($data->{openssl_error});
           }
 
-          my $rc = $self->{read_closed};
-          $self->{read_closed} = 1;
-          $self->{write_closed} = 1;
           if (defined $self->{starttls_done}) {
             (delete $self->{starttls_done})->[1]->({exit => $data});
           } else {
+            my $rc = $self->{read_closed};
+            $self->{read_closed} = 1;
+            $self->{write_closed} = 1;
             AE::postpone {
               $self->{cb}->($self, 'writeeof', $data);
               $self->{cb}->($self, 'readeof',
@@ -321,10 +326,11 @@ sub _tls ($) {
     } else { # EOF
       if (defined $self->{starttls_done}) {
         (delete $self->{starttls_done})->[1]->("TLS handshake failed");
-      }
-      unless ($self->{read_closed}) {
-        $self->{read_closed} = 1;
-        AE::postpone { $self->{cb}->($self, 'readeof', {}) };
+      } else {
+        unless ($self->{read_closed}) {
+          $self->{read_closed} = 1;
+          AE::postpone { $self->{cb}->($self, 'readeof', {}) };
+        }
       }
       last;
     }
@@ -342,12 +348,12 @@ sub _tls ($) {
             ($data->{openssl_error});
       }
 
-      my $wc = $self->{write_closed};
-      $self->{read_closed} = 1;
-      $self->{write_closed} = 1;
       if (defined $self->{starttls_done}) {
         (delete $self->{starttls_done})->[1]->({exit => $data});
       } else {
+        my $wc = $self->{write_closed};
+        $self->{read_closed} = 1;
+        $self->{write_closed} = 1;
         AE::postpone {
           $self->{cb}->($self, 'readeof', $data);
           $self->{cb}->($self, 'writeeof',
@@ -393,23 +399,10 @@ sub abort ($;%) {
     Net::SSLeay::set_quiet_shutdown ($self->{tls}, 1);
     Net::SSLeay::shutdown ($self->{tls});
   }
-  my $wc = $self->{write_closed};
-  my $rc = $self->{read_closed};
-  $self->{write_closed} = 1;
-  $self->{read_closed} = 1;
   $self->{write_shutdown} = 1;
-  my $reason = $args{message} // 'Aborted';
-  AE::postpone {
-    $self->{cb}->($self, 'writeeof', {failed => 1, message => $reason})
-        unless $wc;
-    $self->{cb}->($self, 'readeof', {failed => 1, message => $reason})
-        unless $rc;
-  } unless $wc and $rc;
   if (defined $self->{transport}) {
     $self->{transport}->abort (%args);
-    delete $self->{transport};
   }
-  $self->_close;
 } # abort
 
 sub _close ($$) {

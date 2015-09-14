@@ -5,6 +5,7 @@ BEGIN { $ENV{WEBUA_DEBUG} //= 2 }
 use HTTP;
 use Data::Dumper;
 use Transport::TCP;
+use Transport::UNIXDomainSocket;
 use Transport::TLS;
 use Transport::H1CONNECT;
 use Path::Tiny;
@@ -30,12 +31,15 @@ $tls = {
   sni_host_name => 'localhost', si_host_name => 'hoge.proxy.test',
   ca_file => Test::Certificates->ca_path ('cert.pem'),
 };
+$tls = undef;
+
+my $unix;
 
 my $connect_host_name = $hostname;
 my $connect_port = $port;
-#$connect_host_name = undef;
-$hostname = 'localhost';
-$port=5244;
+$connect_host_name = undef;
+#$hostname = 'localhost';
+#$port=5244;
 
 push @$headers, [Host => $host];
 
@@ -54,8 +58,10 @@ if (0) {
 }
 
 my $t_tcp = Transport::TCP->new (host_name => $hostname, port => $port);
+my $t_unix = Transport::UNIXDomainSocket->new (file_name => $unix);
 
 my $transport = $t_tcp;
+$transport = $t_unix if defined $unix;
 
 if (defined $connect_host_name) {
   my $p_http = HTTP->new (transport => $transport);

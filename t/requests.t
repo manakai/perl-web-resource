@@ -10,26 +10,26 @@ use Test::Certificates;
 use Transport::TCP;
 use Transport::H1CONNECT;
 use Transport::TLS;
+use Transport::UNIXDomainSocket;
 use HTTP;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
 
 my $server_pids = {};
 END { kill 'KILL', $_ for keys %$server_pids }
-sub server_as_cv ($) {
-  my $code = $_[0];
+sub _server_as_cv ($$$) {
+  my ($host, $port, $code) = @_;
   my $cv = AE::cv;
   my $started;
   my $pid;
   my $data = '';
-  my $port = int (rand 10000) + 1024;
   run_cmd
-      ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), '127.0.0.1', $port],
+      ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), $host, $port],
       '<' => \$code,
       '>' => sub {
         $data .= $_[0] if defined $_[0];
         return if $started;
-        if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
+        if ($data =~ /^\[server (\S+) (\S+)\]/m) {
           $cv->send ({pid => $pid, host => $1, port => $2,
                       stop => sub {
                         kill 'TERM', $pid;
@@ -41,7 +41,18 @@ sub server_as_cv ($) {
       '$$' => \$pid;
   $server_pids->{$pid} = 1;
   return $cv;
+} # _server_as_cv
+
+sub server_as_cv ($) {
+  return _server_as_cv ('127.0.0.1', int (rand 10000) + 1024, $_[0]);
 } # server_as_cv
+
+my $test_path = path (__FILE__)->parent->parent->child ('local/test')->absolute;
+$test_path->mkpath;
+
+sub unix_server_as_cv ($) {
+  return _server_as_cv ('unix/', $test_path->child (int (rand 10000) + 1024), $_[0]);
+} # unix_server_as_cv
 
 test {
   my $c = shift;
@@ -1943,5 +1954,39 @@ test {
     });
   }
 } n => 1, name => 'CONNECT http bad TCP host';
+
+test {
+  my $c = shift;
+  unix_server_as_cv (q{
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+CRLF
+"xyz"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $unix = Transport::UNIXDomainSocket->new
+        (file_name => $server->{port});
+    my $http = HTTP->new (transport => $unix);
+    my $d = '';
+    $http->onevent (sub {
+      my ($http, $req, $type, $data) = @_;
+      if ($type eq 'data') {
+        $d .= $data;
+      }
+    });
+    $http->connect->then (sub {
+      return $http->send_request_headers ({method => 'GET', target => '/'});
+    })->then (sub {
+      test {
+        is $d, 'xyz';
+      } $c;
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'UNIX domain socket';
 
 run_tests;

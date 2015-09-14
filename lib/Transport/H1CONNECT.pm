@@ -7,9 +7,14 @@ use Promise;
 
 sub new ($%) {
   my $self = bless {}, shift;
-  $self->{args} = {@_};
+  my $args = $self->{args} = {@_};
   $self->{http} = delete $self->{args}->{http};
   $self->{id} = $self->{http}->id . 'C';
+  croak "Bad |host_name|" unless defined $args->{host_name};
+  croak "utf8-flagged |host_name|" if utf8::is_utf8 $args->{host_name};
+  if (defined $args->{port}) {
+    croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
+  }
   return $self;
 } # new
 
@@ -18,11 +23,8 @@ sub start ($$) {
   croak "Bad state" if not defined $self->{args};
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
-  croak "Bad |host_name|" unless defined $args->{host_name};
-  croak "utf8-flagged |host_name|" if utf8::is_utf8 $args->{host_name};
   my $host = $args->{host_name};
   if (defined $args->{port}) {
-    croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
     $host .= ':' . $args->{port};
   }
 

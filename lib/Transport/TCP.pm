@@ -11,7 +11,12 @@ use Promise;
 sub new ($%) {
   my $self = bless {}, shift;
   $self->{id} = int rand 100000;
-  $self->{args} = {@_};
+  my $args = $self->{args} = {@_};
+  # XXX host vs ipaddr
+  croak "Bad |host_name|" unless defined $args->{host_name};
+  croak "utf8-flagged |host_name|" if utf8::is_utf8 $args->{host_name};
+  croak "Bad |port|" unless defined $args->{port};
+  croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
   return $self;
 } # new
 
@@ -20,13 +25,6 @@ sub start ($$) {
   croak "Bad state" if not defined $self->{args};
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
-  # XXX host vs ipaddr
-  croak "Bad |host_name|" unless defined $args->{host_name};
-  croak "utf8-flagged |host_name|" if utf8::is_utf8 $args->{host_name};
-  my $host = $args->{host_name};
-  croak "Bad |port|" unless defined $args->{port};
-  croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
-  $host .= ':' . $args->{port};
 
   # XXX server
 
@@ -39,6 +37,8 @@ sub start ($$) {
   })->then (sub {
     my $fh = $self->{fh} = $_[0];
     AnyEvent::Util::fh_nonblocking $fh, 1;
+
+    ## Applied to TCP only (not applied to Unix domain socket)
     setsockopt $fh, SOL_SOCKET, SO_OOBINLINE, 0;
     setsockopt $fh, IPPROTO_TCP, TCP_NODELAY, 1;
     setsockopt $fh, SOL_SOCKET, SO_KEEPALIVE, 1;
@@ -218,7 +218,7 @@ sub DESTROY ($) {
 
   local $@;
   eval { die };
-  warn "Reference to Transport::TCP is not discarded before global destruction\n"
+  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 
 } # DESTROY

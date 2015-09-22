@@ -84,6 +84,8 @@ sub run_commands ($$$$) {
       $hdl->push_write ("\x0D");
     } elsif ($command =~ /^0x([0-9A-Fa-f]{2})$/) {
       $hdl->push_write (pack 'C', hex $1);
+    } elsif ($command =~ /^([0-9]+)$/) {
+      $hdl->push_write (pack 'C', $1);
     } elsif ($command =~ /^client$/) {
       $hdl->push_write ($states->{client_host} . ':' . $states->{client_port});
     } elsif ($command =~ /^ws-accept$/) {

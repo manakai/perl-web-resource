@@ -11,6 +11,8 @@ use Transport::H1CONNECT;
 use Path::Tiny;
 use lib path (__FILE__)->parent->child ('t_deps/lib')->stringify;
 use Test::Certificates;
+use Transport::SOCKS4;
+use Transport::SOCKS5;
 
 my $hostname = 'wiki.suikawiki.org';
 my $port = 80;
@@ -25,7 +27,7 @@ my $headers = [];
 my $tls = undef;
 
 #$hostname = 'localhost';
-$port = 443;
+#$port = 443;
 $target = q</>;
 $tls = {
   sni_host_name => 'localhost', si_host_name => 'hoge.proxy.test',
@@ -57,11 +59,46 @@ if (0) {
   };
 }
 
+my $s4_addr = '127.0.0.1';
+my $s4_port = 80;
+#$s4_addr = undef;
+if (defined $s4_addr) {
+  $hostname = 'localhost';
+  $port = 1234;
+}
+
+my $s5_hostname = $hostname;
+my $s5_addr;
+my $s5_port = $port;
+$s5_addr = undef;
+$s5_hostname = undef;
+if (defined $s5_addr or defined $s5_hostname) {
+  $hostname = 'localhost';
+  $port = 1234;
+}
+
 my $t_tcp = Transport::TCP->new (host_name => $hostname, port => $port);
 my $t_unix = Transport::UNIXDomainSocket->new (file_name => $unix);
 
 my $transport = $t_tcp;
 $transport = $t_unix if defined $unix;
+
+if (defined $s4_addr) {
+  my $t_s4 = Transport::SOCKS4->new
+      (transport => $transport,
+       packed_address => (defined $s4_addr ? (pack 'CCCC', split /\./, $s4_addr) : undef),
+       port => $s4_port);
+  $transport = $t_s4;
+}
+
+if (defined $s5_addr or defined $s5_hostname) {
+  my $t_s5 = Transport::SOCKS5->new
+      (transport => $transport,
+       packed_address => (defined $s5_addr ? (pack 'C4', split /\./, $s5_addr) : undef),
+       hostname => $s5_hostname,
+       port => $s5_port);
+  $transport = $t_s5;
+}
 
 if (defined $connect_host_name) {
   my $p_http = HTTP->new (transport => $transport);
@@ -72,6 +109,8 @@ if (defined $connect_host_name) {
 
 my $t_tls = Transport::TLS->new (transport => $transport, %{$tls || {}});
 $transport = $t_tls if $tls;
+
+warn $transport->layered_type;
 
 $http = HTTP->new (transport => $transport);
 

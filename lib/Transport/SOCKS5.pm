@@ -2,6 +2,7 @@ package Transport::SOCKS5;
 use strict;
 use warnings;
 use Carp qw(croak);
+use AnyEvent;
 use Promise;
 
 sub new ($%) {
@@ -39,6 +40,13 @@ sub start ($$;%) {
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
 
+  my $timer;
+  my $ontimer = sub {
+    $self->{transport}->abort (message => 'SOCKS5 timeout');
+    undef $timer;
+  };
+  $timer = AE::timer 30, 0, $ontimer;
+
   my ($ok0, $ng0) = @_;
   my $p0 = Promise->new (sub { ($ok0, $ng0) = @_ });
 
@@ -49,6 +57,7 @@ sub start ($$;%) {
   my $process_data = sub {
     if (length $data >= 2 or $_[0]) {
       if (substr ($data, 0, 2) eq "\x05\x00") {
+        $timer = AE::timer 30, 0, $ontimer;
         $ok0->();
       } else {
         $self->{transport}->abort (message => "SOCKS5 negotiation failed");
@@ -67,6 +76,7 @@ sub start ($$;%) {
             AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
           }
           $self->{started} = 1;
+          undef $timer;
           $ok->();
         } else {
           $self->{transport}->abort

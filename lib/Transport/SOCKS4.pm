@@ -2,6 +2,7 @@ package Transport::SOCKS4;
 use strict;
 use warnings;
 use Carp qw(croak);
+use AnyEvent;
 use Promise;
 
 sub new ($%) {
@@ -33,6 +34,13 @@ sub start ($$;%) {
   my ($ok, $ng) = @_;
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
 
+  my $timer;
+  my $ontimer = sub {
+    $self->{transport}->abort (message => 'SOCKS4 timeout');
+    undef $timer;
+  };
+  $timer = AE::timer 30, 0, $ontimer;
+
   my $data = '';
   my $process_data = sub {
     if (length $data >= 8 or $_[0]) {
@@ -42,6 +50,7 @@ sub start ($$;%) {
           AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
         }
         $self->{started} = 1;
+        undef $timer;
         $ok->();
       } else {
         $self->{transport}->abort

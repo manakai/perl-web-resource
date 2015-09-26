@@ -4,3 +4,4 @@ AnyEvent::Socket
 Digest::SHA
 Errno
 MIME::Base64
+Net::SSLeay

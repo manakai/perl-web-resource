@@ -4,7 +4,7 @@ use warnings;
 use Path::Tiny;
 
 my $root_path = path (__FILE__)->parent->parent->parent->parent->absolute;
-my $cert_path = $root_path->child ('local/cert17');
+my $cert_path = $root_path->child ('local/cert18');
 my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
 $cert_path->mkpath;
 
@@ -30,7 +30,8 @@ sub wait_create_cert ($) {
   }
   unless ($_[0]->cert_path ('key.pem')->is_file) {
     system $root_path->child ('perl'), $gen_path, $cert_path, $cn;
-    sleep 10;
+    warn "Wait 30s...\n";
+    sleep 30;
   }
 } # wait_create_cert
 

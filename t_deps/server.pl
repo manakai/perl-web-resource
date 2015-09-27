@@ -30,6 +30,269 @@ my $_dump_tls = {};
 our $CurrentID;
 my $HandshakeDone = sub { };
 
+my $H2DEF = json_bytes2perl path (__FILE__)->parent->child ('http-frames.json')->slurp;
+my $HPACK_HUFFMAN = {};
+for (0..$#{$H2DEF->{hpack}->{huffman}}) {
+  my $d = $H2DEF->{hpack}->{huffman}->[$_];
+  $HPACK_HUFFMAN->{$d->{bits}} = $_;
+}
+my $HPACK_HUFFMAN_PATTERN = '(?:' . (join '|', keys %$HPACK_HUFFMAN) . ')';
+
+my $ReceivedDumper = sub {
+  warn "[$_[0]->{id}] @{[time]} @{[scalar gmtime]} on_read L=@{[length $_[1]]}\n";
+  warn hex_dump ($_[1]), "\n";
+}; # $ReceivedDumper
+my $H2ReceivedDumper = do {
+  my $received = '';
+  my $payload_length = 0;
+  my $frame_flags = 0;
+  my $frame_type = -1;
+  sub {
+    my $states = $_[0];
+    my $id = $states->{id};
+    $received .= $_[1];
+    {
+    if (not $payload_length and $received =~ s/^(...)(.)(.)(....)//s) {
+      my $length = unpack 'N', "\x00$1";
+      my $type = unpack 'C', $2;
+      $frame_flags = unpack 'C', $3;
+      my $flags = unpack 'b8', $3;
+      my $stream_id = unpack 'N', $4;
+      my $R = $stream_id & 2**32;
+      $stream_id = $stream_id & (2**32-1);
+      warn "[$id] H2 frame header ".(join ' ',
+            {
+              0 => 'DATA', 1 => 'HEADERS', 2 => 'PRIORITY',
+              3 => 'RST_STREAM', 4 => 'SETTINGS', 5 => 'PUSH_PROMISE',
+              6 => 'PING', 7 => 'GOAWAY', 8 => 'WINDOW_UPDATE',
+              9 => 'CONTINUATION',
+            }->{$type} // (),
+            "($type)",
+            (substr ($flags, 0, 1) ? 'END_STREAM/ACK' : ()),
+            (substr ($flags, 1, 1) ? 'f1' : ()),
+            (substr ($flags, 2, 1) ? 'END_HEADERS' : ()),
+            (substr ($flags, 3, 1) ? 'PADDED' : ()),
+            (substr ($flags, 4, 1) ? 'f4' : ()),
+            (substr ($flags, 5, 1) ? 'PRIORITY' : ()),
+            (substr ($flags, 6, 1) ? 'f6' : ()),
+            (substr ($flags, 7, 1) ? 'f7' : ()),
+            ($R ? 'R' : ()),
+            "stream=$stream_id",
+            "L=$length",
+          )."\n";
+      $frame_type = $type;
+      $payload_length = $length;
+    } elsif (not $payload_length) {
+      return;
+    }
+    if ($payload_length <= length $received) {
+      my $data = substr $received, 0, $payload_length;
+      if ($frame_type == 1) { # HEADERS
+        $states->{hpack_table} ||= [@{$H2DEF->{hpack}->{static}}];
+        my $pad_length = unpack 'C', substr $data, 0, 1;
+        my $e = 0;
+        my $stream_dep = 0;
+        my $weight = 0;
+        my $o = 1;
+        if ($frame_flags & 0x20) {
+          $stream_dep = unpack 'N', "\x00".substr $data, $o, 3;
+          $e = $stream_dep & 2**23;
+          $stream_dep &= 2**23-1;
+          $o += 3;
+          $weight = unpack 'C', substr $data, $o, 1;
+          $o += 1;
+          warn "[$id] H2   ".(join ' ',
+            'stream dependency=' . $stream_dep,
+            ($e ? 'E' : ()),
+            'weight=' . $weight,
+          )."\n";
+        }
+        substr ($data, 0, $o) = '';
+        my $pad = $pad_length > 0 ? substr $data, -$pad_length : '';
+        substr ($data, -$pad_length) = '' if $pad_length > 0;
+        my $int = sub {
+          my $result = $_[1];
+          if ($result == 2**$_[0]-1) {
+            my $m = 0;
+            {
+              my $b = unpack 'C', substr $data, 0, 1;
+              $result += ($b & 0b01111111) * 2**$m;
+              $m += 7;
+              substr ($data, 0, 1) = '';
+              redo if $b & 128;
+            }
+          }
+          # error if overflow
+          return $result;
+        }; # $int
+        my $str = sub {
+          my $v = unpack 'C', substr $data, 0, 1;
+          my $h = $v & 128;
+          my $length = $v & 127;
+          substr ($data, 0, 1) = '';
+          $length = $int->(7, $length);
+          my $s = substr $data, 0, $length;
+          substr ($data, 0, $length) = '';
+          if ($h) {
+            my $bytes = '';
+            my $desc = '';
+            $s = join '', map { unpack 'B8', $_ } split //, $s;
+            while (length $s) {
+              if ($s =~ s/^($HPACK_HUFFMAN_PATTERN)//o) {
+                $bytes .= pack 'C', $HPACK_HUFFMAN->{$1};
+                $desc .= sprintf "%s (%02X) ", $1, $HPACK_HUFFMAN->{$1};
+              } else {
+                $desc .= sprintf "%s (pad)", $s;
+                last; # or error
+              }
+            }
+            #return "h`$bytes` ($desc)";
+            return "h`$bytes`";
+          } else {
+            return "`$s`";
+          }
+        }; # $str
+        while (length $data) {
+          my $type = unpack 'B8', substr $data, 0, 1;
+          if ($type =~ /^1/) { # indexed
+            my $index = 0b01111111 & unpack 'C', substr $data, 0, 1;
+            substr ($data, 0, 1) = '';
+            $index = $int->(7, $index);
+            my $tr = $states->{hpack_table}->[$index];
+            warn "[$id] H2    $tr->[0]: $tr->[1] (#$index)\n";
+          } elsif ($type =~ /^01/) { # indexed literal
+            my $index = 0b00111111 & unpack 'C', substr $data, 0, 1;
+            substr ($data, 0, 1) = '';
+            if ($index == 0) {
+              my $n = $str->();
+              my $v = $str->();
+              warn "[$id] H2    $n=$v (indexing)\n";
+              unshift @{$states->{hpack_dtable}}, [$n, $v];
+            } else {
+              $index = $int->(6, $index);
+              my $tr = $states->{hpack_table}->[$index];
+              my $v = $str->();
+              warn "[$id] H2    $tr->[0] (#$index): $v (indexing)\n";
+              unshift @{$states->{hpack_dtable}}, [$tr->[0], $v];
+            }
+            $states->{hpack_table} = [@{$H2DEF->{hpack}->{static}}, @{$states->{hpack_dtable}}];
+          } elsif ($type =~ /^001/) { # dynamic table update
+            my $size = 0b00011111 & unpack 'C', substr $data, 0, 1;
+            substr ($data, 0, 1) = '';
+            $size = $int->(5, $size);
+            # XXX...
+            warn "[$id] H2    dynamic table update size=$size\n";
+          } elsif ($type =~ /^000/) { # not indexed
+            my $never = $type =~ /^...1/ ? ' (never indexed)' : '';
+            my $index = 0b00001111 & unpack 'C', substr $data, 0, 1;
+            substr ($data, 0, 1) = '';
+            if ($index == 0) {
+              my $n = $str->();
+              my $v = $str->();
+              warn "[$id] H2    $n: $v$never\n";
+            } else {
+              $index = $int->(4, $index);
+              my $tr = $states->{hpack_table}->[$index];
+              my $v = $str->();
+              warn "[$id] H2    $tr->[0] (#$index): $v$never\n";
+            }
+          }
+        }
+        warn "[$id] H2  Pad (L=$pad_length) ", hex_dump ($pad), "\n" if length $pad;
+      } elsif ($frame_type == 8 and 4 == length $data) { # WINDOW_SIZE
+        my $v = unpack 'N', $data;
+        warn "[$id] H2 ".(join ' ',
+          '  Window Size Increment=' . ($v & (2**32-1)),
+          ($v & 2**32 ? 'R' : ()),
+        )."\n";
+      } elsif ($frame_type == 4) { # SETTINGS
+        while ($data =~ s/^(..)(....)//s) {
+          my $n = unpack 'n', $1;
+          my $v = unpack 'N', $2;
+          $n = {
+            1 => 'HEADER_TABLE_SIZE (1)',
+            2 => 'ENABLE_PUSH (2)',
+            3 => 'MAX_CONCURRENT_STREAMS (3)',
+            4 => 'INITIAL_WINDOW_SIZE (4)',
+            5 => 'MAX_FRAME_SIZE (5)',
+            6 => 'MAX_HEADER_LIST_SIZE (6)',
+            16 => 'RENEG_PERMITTED (0x10)',
+          }->{$n} // $n;
+          warn "[$id] H2   $n=$v\n";
+        }
+        if (length $data) {
+          warn hex_dump ($data), "\n";
+        }
+      } elsif ($frame_type == 2 and 5 == length $data) { # PRIORIRY
+        my $v = unpack 'N', substr $data, 0, 4;
+        my $w = unpack 'C', substr $data, 4, 1;
+        warn "[$id] H2   ".(join ' ',
+          ($v & 2**32 ? 'E' : ()),
+          'stream dependency=' . ($v & (2**32-1)),
+          'weight=' . $w,
+        )."\n";
+      } elsif ($frame_type == 3 and 4 == length $data) { # RST_STREAM
+        my $v = unpack 'N', $data;
+        my $et = {
+0 => 'NO_ERROR (0x0)',
+1 => 'PROTOCOL_ERROR (0x1)',
+2 => 'INTERNAL_ERROR (0x2)',
+3 => 'FLOW_CONTROL_ERROR (0x3)',
+4 => 'SETTINGS_TIMEOUT (0x4)',
+5 => 'STREAM_CLOSED (0x5)',
+6 => 'FRAME_SIZE_ERROR (0x6)',
+7 => 'REFUSED_STREAM (0x7)',
+8 => 'CANCEL (0x8)',
+9 => 'COMPRESSION_ERROR (0x9)',
+10 => 'CONNECT_ERROR (0xa)',
+11 => 'ENHANCE_YOUR_CALM (0xb)',
+12 => 'INADEQUATE_SECURITY (0xc)',
+13 => 'HTTP_1_1_REQUIRED (0xd)',
+        }->{$v};
+        warn "[$id] H2   ".(join ' ',
+          'error code=' . ($et // $v),
+        )."\n";
+      } elsif ($frame_type >= 7) { # GOAWAY
+        my $stream_id = unpack 'N', substr $data, 0, 4;
+        my $r = $stream_id & 2**32;
+        $stream_id = $stream_id & (2**32-1);
+        my $error = unpack 'N', substr $data, 4, 4;
+        my $debug = substr $data, 8;
+        my $et = {
+0 => 'NO_ERROR (0x0)',
+1 => 'PROTOCOL_ERROR (0x1)',
+2 => 'INTERNAL_ERROR (0x2)',
+3 => 'FLOW_CONTROL_ERROR (0x3)',
+4 => 'SETTINGS_TIMEOUT (0x4)',
+5 => 'STREAM_CLOSED (0x5)',
+6 => 'FRAME_SIZE_ERROR (0x6)',
+7 => 'REFUSED_STREAM (0x7)',
+8 => 'CANCEL (0x8)',
+9 => 'COMPRESSION_ERROR (0x9)',
+10 => 'CONNECT_ERROR (0xa)',
+11 => 'ENHANCE_YOUR_CALM (0xb)',
+12 => 'INADEQUATE_SECURITY (0xc)',
+13 => 'HTTP_1_1_REQUIRED (0xd)',
+        }->{$error} // $error;
+        warn "[$id] H2   ".(join ' ',
+          ($r ? 'R' : ()),
+          "last stream ID=$stream_id",
+          "error code=$et",
+        )."\n";
+        warn hex_dump ($debug), "\n" if length $debug;
+      } else {
+        warn "[$id] H2 frame payload\n";
+        warn hex_dump ($data), "\n";
+        warn "[$id] (end of frame)\n";
+      }
+      substr ($received, 0, $payload_length) = '';
+      $payload_length = 0;
+    }
+    redo;
+    }
+  }; # $H2ReceivedDumper
+};
+
 #sub SSL_ST_CONNECT () { 0x1000 }
 #sub SSL_ST_ACCEPT () { 0x2000 }
 sub SSL_CB_READ () { 0x04 }
@@ -156,6 +419,10 @@ sub run_commands ($$$$) {
       if (length $states->{received} >= 24) {
         if ($states->{received} =~ s{^\QPRI * HTTP/2.0\E\x0D\x0A\x0D\x0ASM\x0D\x0A\x0D\x0A}{}) {
           warn "[$states->{id}] HTTP/2 preface received\n";
+          if ($DUMP) {
+            $states->{dumper} = $H2ReceivedDumper;
+            $states->{dumper}->($states, $states->{received});
+          }
         } else {
           warn "[$states->{id}] HTTP/2 preface not found\n";
         }
@@ -295,28 +562,6 @@ sub run_commands ($$$$) {
         my $stream_id = unpack 'N', $4;
         my $R = $stream_id & 2**32;
         $stream_id = $stream_id & (2**32-1);
-        if ($DUMP) {
-          warn "[$states->{id}] H2 frame header ".(join ' ',
-            {
-              0 => 'DATA', 1 => 'HEADERS', 2 => 'PRIORITY',
-              3 => 'RST_STREAM', 4 => 'SETTINGS', 5 => 'PUSH_PROMISE',
-              6 => 'PING', 7 => 'GOAWAY', 8 => 'WINDOW_UPDATE',
-              9 => 'CONTINUATION',
-            }->{$type} // (),
-            "($type)",
-            (substr ($flags, 0, 1) ? 'END_STREAM/ACK' : ()),
-            (substr ($flags, 1, 1) ? 'f1' : ()),
-            (substr ($flags, 2, 1) ? 'END_HEADERS' : ()),
-            (substr ($flags, 3, 1) ? 'PADDED' : ()),
-            (substr ($flags, 4, 1) ? 'f4' : ()),
-            (substr ($flags, 5, 1) ? 'PRIORITY' : ()),
-            (substr ($flags, 6, 1) ? 'f6' : ()),
-            (substr ($flags, 7, 1) ? 'f7' : ()),
-            ($R ? 'R' : ()),
-            "stream=$stream_id",
-            "L=$length",
-          )."\n";
-        }
         $states->{h2_payload_length} = $length;
         next;
       }
@@ -326,18 +571,29 @@ sub run_commands ($$$$) {
     } elsif ($command =~ /^h2-receive-payload$/) {
       if ($states->{h2_payload_length} <= length $states->{received}) {
         next if $states->{h2_payload_length} <= 0;
-        if ($DUMP) {
-          my $data = substr $states->{received}, 0, $states->{h2_payload_length};
-          warn "[$states->{id}] H2 frame payload\n";
-          warn hex_dump ($data), "\n";
-          warn "[$states->{id}] (end of frame)\n";
-        }
         substr ($states->{received}, 0, $states->{h2_payload_length}) = '';
         next;
       }
       unshift @{$states->{commands}}, $command;
       $then->();
       return;
+    } elsif ($command =~ /^h2-send-frame((?:\s+\w+=\S*)+)$/) {
+      my $args = $1;
+      my $fields = {length => 0, type => 0, flags => 0, stream => 0};
+      while ($args =~ s/^\s+(\w+)=(\S*)//) {
+        $fields->{$1} = $2;
+      }
+      $fields->{flags} |= 1 if $fields->{ACK} or $fields->{END_STREAM};
+      $fields->{flags} |= 4 if $fields->{END_HEADERS};
+      $fields->{flags} |= 8 if $fields->{PADDED};
+      $fields->{flags} |= 0x20 if $fields->{PRIORITY};
+      my $frame = join '',
+          (substr pack ('N', $fields->{length}), 1),
+          (pack 'C', $fields->{type}),
+          (pack 'C', $fields->{flags}),
+          (pack 'N', $fields->{stream});
+      $hdl->push_write ($frame);
+
     } elsif ($command =~ /^close$/) {
       $hdl->push_shutdown;
     } elsif ($command =~ /^close read$/) {
@@ -809,10 +1065,7 @@ my $server = tcp_server $host, $port, sub {
        },
        on_read => sub {
          $states->{received} .= $_[0]->{rbuf};
-         if ($DUMP) {
-           warn "[$id] @{[time]} @{[scalar gmtime]}\n";
-           warn hex_dump ($_[0]->{rbuf}), "\n";
-         }
+         ($states->{dumper} // $ReceivedDumper)->($states, $_[0]->{rbuf}) if $DUMP;
          $_[0]->{rbuf} = '';
          run_commands 'read', $_[0], $states, sub { };
        });

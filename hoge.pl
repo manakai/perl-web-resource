@@ -17,7 +17,7 @@ use Transport::SOCKS5;
 my $hostname = 'wiki.suikawiki.org';
 my $port = 80;
 $hostname = 'serverpl2';
-$port = 5414;
+$port = 5418;
 my $host = "$hostname:$port";
 my $target = q</n/HomePage>;
 my $method = 'GET';

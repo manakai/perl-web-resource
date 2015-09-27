@@ -4,9 +4,12 @@ use warnings;
 use Path::Tiny;
 
 my $root_path = path (__FILE__)->parent->parent->parent->parent->absolute;
-my $cert_path = $root_path->child ('local/cert');
+my $cert_path = $root_path->child ('local/cert17');
 my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
 $cert_path->mkpath;
+
+#my $gen_path = $root_path->child ('t_deps/bin/generate-certs-for-tests.pl');
+my $gen_path = $root_path->child ('t_deps/bin/generate-certs-for-tests-ec.pl');
 
 sub ca_path ($$) {
   return $cert_path->child ('ca-' . $_[1]);
@@ -25,8 +28,8 @@ sub wait_create_cert ($) {
       $_[0]->ca_path ('cert.pem')->stat->mtime + 60*60*24 < time) {
     system "rm \Q$cert_path\E/*.pem";
   }
-  unless ($_[0]->cert_path ('key-pkcs1.pem')->is_file) {
-    system $root_path->child ('perl'), $root_path->child ('t_deps/bin/generate-certs-for-tests.pl'), $cert_path, $cn;
+  unless ($_[0]->cert_path ('key.pem')->is_file) {
+    system $root_path->child ('perl'), $gen_path, $cert_path, $cn;
     sleep 10;
   }
 } # wait_create_cert

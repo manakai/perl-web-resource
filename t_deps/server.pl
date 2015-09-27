@@ -33,6 +33,7 @@ my $HandshakeDone = sub { };
 #sub SSL_ST_CONNECT () { 0x1000 }
 #sub SSL_ST_ACCEPT () { 0x2000 }
 sub SSL_CB_READ () { 0x04 }
+sub SSL_CB_WRITE () { 0x08 }
 sub SSL_CB_ALERT () { 0x4000 }
 #sub SSL_CB_HANDSHAKE_START () { 0x10 }
 sub SSL_CB_HANDSHAKE_DONE () { 0x20 }
@@ -151,6 +152,20 @@ sub run_commands ($$$$) {
         $then->();
         return;
       }
+    } elsif ($command =~ /^receive preface$/) {
+      if (length $states->{received} >= 24) {
+        if ($states->{received} =~ s{^\QPRI * HTTP/2.0\E\x0D\x0A\x0D\x0ASM\x0D\x0A\x0D\x0A}{}) {
+          warn "[$states->{id}] HTTP/2 preface received\n";
+        } else {
+          warn "[$states->{id}] HTTP/2 preface not found\n";
+        }
+      } else {
+        unshift @{$states->{commands}}, $command;
+        $then->();
+        return;
+      }
+    } elsif ($command =~ /^preface$/) {
+      $hdl->push_write ("PRI * HTTP/2.0\x0D\x0A\x0D\x0ASM\x0D\x0A\x0D\x0A");
     } elsif ($command =~ /^sleep ([0-9.]+)$/) {
       sleep $1;
     } elsif ($command =~ /^urgent "([^"]*)"$/) {
@@ -272,6 +287,57 @@ sub run_commands ($$$$) {
         $hdl->push_write ($mask);
         $states->{ws_send_mask} = $mask;
       }
+    } elsif ($command =~ /^h2-receive-header$/) {
+      if ($states->{received} =~ s/^(...)(.)(.)(....)//s) {
+        my $length = unpack 'N', "\x00$1";
+        my $type = unpack 'C', $2;
+        my $flags = unpack 'b8', $3;
+        my $stream_id = unpack 'N', $4;
+        my $R = $stream_id & 2**32;
+        $stream_id = $stream_id & (2**32-1);
+        if ($DUMP) {
+          warn "[$states->{id}] H2 frame header ".(join ' ',
+            {
+              0 => 'DATA', 1 => 'HEADERS', 2 => 'PRIORITY',
+              3 => 'RST_STREAM', 4 => 'SETTINGS', 5 => 'PUSH_PROMISE',
+              6 => 'PING', 7 => 'GOAWAY', 8 => 'WINDOW_UPDATE',
+              9 => 'CONTINUATION',
+            }->{$type} // (),
+            "($type)",
+            (substr ($flags, 0, 1) ? 'END_STREAM/ACK' : ()),
+            (substr ($flags, 1, 1) ? 'f1' : ()),
+            (substr ($flags, 2, 1) ? 'END_HEADERS' : ()),
+            (substr ($flags, 3, 1) ? 'PADDED' : ()),
+            (substr ($flags, 4, 1) ? 'f4' : ()),
+            (substr ($flags, 5, 1) ? 'PRIORITY' : ()),
+            (substr ($flags, 6, 1) ? 'f6' : ()),
+            (substr ($flags, 7, 1) ? 'f7' : ()),
+            ($R ? 'R' : ()),
+            "stream=$stream_id",
+            "L=$length",
+          )."\n";
+        }
+        $states->{h2_payload_length} = $length;
+        next;
+      }
+      unshift @{$states->{commands}}, $command;
+      $then->();
+      return;
+    } elsif ($command =~ /^h2-receive-payload$/) {
+      if ($states->{h2_payload_length} <= length $states->{received}) {
+        next if $states->{h2_payload_length} <= 0;
+        if ($DUMP) {
+          my $data = substr $states->{received}, 0, $states->{h2_payload_length};
+          warn "[$states->{id}] H2 frame payload\n";
+          warn hex_dump ($data), "\n";
+          warn "[$states->{id}] (end of frame)\n";
+        }
+        substr ($states->{received}, 0, $states->{h2_payload_length}) = '';
+        next;
+      }
+      unshift @{$states->{commands}}, $command;
+      $then->();
+      return;
     } elsif ($command =~ /^close$/) {
       $hdl->push_shutdown;
     } elsif ($command =~ /^close read$/) {
@@ -280,7 +346,12 @@ sub run_commands ($$$$) {
       setsockopt $hdl->{fh}, SOL_SOCKET, SO_LINGER, pack "II", 1, 0;
       close $hdl->{fh};
       $hdl->on_drain (sub { eval { shutdown $_[0]->{fh}, 1; 1 } or warn $@ }); # let $hdl report an error
-    } elsif ($command =~ /^starttls$/) {
+    } elsif ($command =~ /^starttls((?:\s+\w+=\S*)*)$/) {
+      my $x = $1;
+      my $args = {};
+      while ($x =~ s/^\s+(\w+)=(\S*)//) {
+        $args->{$1} = $2;
+      }
       Test::Certificates->wait_create_cert;
       $states->{starttls_waiting} = 1;
       $hdl->on_starttls (sub {
@@ -307,7 +378,15 @@ sub run_commands ($$$$) {
           #if ($where & SSL_CB_HANDSHAKE_START) {
           #}
           if ($where & SSL_CB_HANDSHAKE_DONE) {
-            warn "[$states->{id}] TLS handshake done\n" if $DUMP;
+            if ($DUMP) {
+              warn "[$states->{id}] TLS handshake done\n";
+              warn "  version=", Net::SSLeay::version ($tls), "\n";
+              #XXX session_id
+              warn "  resumed\n" if Net::SSLeay::session_reused ($tls);
+              warn "  cipher=", Net::SSLeay::get_cipher ($tls), "\n";
+              warn "  cipher size=", Net::SSLeay::get_cipher_bits ($tls), "\n";
+              #$data->{tls_cert_chain} = [map { bless [$_], __PACKAGE__ . '::Certificate' } Net::SSLeay::get_peer_cert_chain ($self->{tls})];
+            }
             $HandshakeDone->();
           }
 
@@ -317,6 +396,13 @@ sub run_commands ($$$$) {
             my $type = Net::SSLeay::alert_desc_string_long ($ret);
             warn "[$states->{id}] TLS alert: [$level] $type\n" if $DUMP;
           }
+
+          if ($where & SSL_CB_ALERT and $where & SSL_CB_WRITE) {
+            ## <https://www.openssl.org/docs/manmaster/ssl/SSL_alert_type_string.html>
+            my $level = Net::SSLeay::alert_type_string ($ret); # W F U
+            my $type = Net::SSLeay::alert_desc_string_long ($ret);
+            warn "[$states->{id}] Sent TLS alert: [$level] $type\n" if $DUMP;
+          }
         });
 
         return $session;
@@ -324,18 +410,55 @@ sub run_commands ($$$$) {
 
       local $CurrentID = $states->{id};
       $hdl->starttls ('accept', {
+        method => 'TLSv1_2',
         ca_file => Test::Certificates->ca_path ('cert.pem'),
         cert_file => Test::Certificates->cert_path ('cert.pem'),
-        key_file => Test::Certificates->cert_path ('key-pkcs1.pem'),
-        #cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK',
-        cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA',
+        key_file => Test::Certificates->cert_path ('key.pem'),
+#        cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK',
+        cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK', # modern
+        #cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA',
+        #dh => 'skip4096',
+        dh => 'schmorp4096',
         prepare => sub {
           my $ctx = $_[0]->ctx;
           Net::SSLeay::CTX_set_tlsext_servername_callback ($ctx, sub {
             my $h = Net::SSLeay::get_servername ($_[0]);
             warn "[$states->{id}] TLS SNI name: |$h|\n" if $DUMP and defined $h;
+            
+            Net::SSLeay::set_SSL_CTX ($_[0], $ctx);
           });
-          # XXX ALPN
+          if (exists &Net::SSLeay::P_alpn_selected) {
+            Net::SSLeay::CTX_set_alpn_select_cb ($ctx, sub {
+              my ($ssl, $arrayref, $data) = @_;
+              warn "[$states->{id}] TLS ALPN: Client: |@{[join '| |', @$arrayref]}|\n";
+              warn "[$states->{id}] TLS ALPN: Server: @{[defined $args->{alpn} ? qq{|$args->{alpn}|} : qq{(none)}]}\n";
+              return $args->{alpn};
+            }, undef);
+          } else {
+            warn "[$states->{id}] TLS ALPN can't be used on this system\n";
+          }
+
+          ## From IO::Socket::SSL
+          my $can_ecdh = defined &Net::SSLeay::CTX_set_tmp_ecdh &&
+              # There is a regression with elliptic curves on 1.0.1d with 64bit
+              # http://rt.openssl.org/Ticket/Display.html?id=2975
+              ( Net::SSLeay::OPENSSL_VERSION_NUMBER() != 0x1000104f
+                    || length(pack("P",0)) == 4 );
+          if ($can_ecdh) {
+            my $curve = 'prime256v1';
+            if ( $curve !~ /^\d+$/ ) {
+              # name of curve, find NID
+              $curve = Net::SSLeay::OBJ_txt2nid($curve)
+                  or die "cannot find NID for curve name '$curve'";
+            }
+            my $ecdh = Net::SSLeay::EC_KEY_new_by_curve_name($curve)
+                or die "cannot create curve for NID $curve";
+            Net::SSLeay::CTX_set_tmp_ecdh ($ctx, $ecdh)
+                  or die "failed to set ECDH curve context";
+            Net::SSLeay::EC_KEY_free ($ecdh);
+          } else {
+            warn "[$states->{id}] ECDH can't be used on this system\n";
+          }
         },
       });
       unshift @{$states->{commands}}, 'waitstarttls';

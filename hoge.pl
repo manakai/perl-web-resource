@@ -16,8 +16,8 @@ use Transport::SOCKS5;
 
 my $hostname = 'wiki.suikawiki.org';
 my $port = 80;
-#$hostname = 'localhost';
-#$port = 4359;
+$hostname = 'serverpl2';
+$port = 5414;
 my $host = "$hostname:$port";
 my $target = q</n/HomePage>;
 my $method = 'GET';
@@ -30,10 +30,14 @@ my $tls = undef;
 #$port = 443;
 $target = q</>;
 $tls = {
-  sni_host_name => 'localhost', si_host_name => 'hoge.proxy.test',
+  sni_host_name => $ENV{SERVER_HOST_NAME} || 'localhost',
+  si_host_name => $ENV{SERVER_HOST_NAME} || $hostname,
   ca_file => Test::Certificates->ca_path ('cert.pem'),
+
+  #cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK', # modern
+
 };
-$tls = undef;
+#$tls = undef;
 
 my $unix;
 
@@ -61,7 +65,7 @@ if (0) {
 
 my $s4_addr = '127.0.0.1';
 my $s4_port = 80;
-#$s4_addr = undef;
+$s4_addr = undef;
 if (defined $s4_addr) {
   $hostname = 'localhost';
   $port = 1234;

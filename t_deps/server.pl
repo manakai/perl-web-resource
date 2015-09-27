@@ -39,6 +39,7 @@ for (0..$#{$H2DEF->{hpack}->{huffman}}) {
 my $HPACK_HUFFMAN_PATTERN = '(?:' . (join '|', keys %$HPACK_HUFFMAN) . ')';
 
 my $ReceivedDumper = sub {
+  return unless $DUMP;
   warn "[$_[0]->{id}] @{[time]} @{[scalar gmtime]} on_read L=@{[length $_[1]]}\n";
   warn hex_dump ($_[1]), "\n";
 }; # $ReceivedDumper
@@ -79,9 +80,12 @@ my $H2ReceivedDumper = do {
             ($R ? 'R' : ()),
             "stream=$stream_id",
             "L=$length",
-          )."\n";
+          )."\n" if $DUMP;
       $frame_type = $type;
       $payload_length = $length;
+      if ($type == 1) { # HEADERS
+        push @{$states->{h2_streams} ||= []}, $stream_id;
+      }
     } elsif (not $payload_length) {
       return;
     }
@@ -105,7 +109,7 @@ my $H2ReceivedDumper = do {
             'stream dependency=' . $stream_dep,
             ($e ? 'E' : ()),
             'weight=' . $weight,
-          )."\n";
+          )."\n" if $DUMP;
         }
         substr ($data, 0, $o) = '';
         my $pad = $pad_length > 0 ? substr $data, -$pad_length : '';
@@ -159,20 +163,20 @@ my $H2ReceivedDumper = do {
             substr ($data, 0, 1) = '';
             $index = $int->(7, $index);
             my $tr = $states->{hpack_table}->[$index];
-            warn "[$id] H2    $tr->[0]: $tr->[1] (#$index)\n";
+            warn "[$id] H2    $tr->[0]: $tr->[1] (#$index)\n" if $DUMP;
           } elsif ($type =~ /^01/) { # indexed literal
             my $index = 0b00111111 & unpack 'C', substr $data, 0, 1;
             substr ($data, 0, 1) = '';
             if ($index == 0) {
               my $n = $str->();
               my $v = $str->();
-              warn "[$id] H2    $n=$v (indexing)\n";
+              warn "[$id] H2    $n=$v (indexing)\n" if $DUMP;
               unshift @{$states->{hpack_dtable}}, [$n, $v];
             } else {
               $index = $int->(6, $index);
               my $tr = $states->{hpack_table}->[$index];
               my $v = $str->();
-              warn "[$id] H2    $tr->[0] (#$index): $v (indexing)\n";
+              warn "[$id] H2    $tr->[0] (#$index): $v (indexing)\n" if $DUMP;
               unshift @{$states->{hpack_dtable}}, [$tr->[0], $v];
             }
             $states->{hpack_table} = [@{$H2DEF->{hpack}->{static}}, @{$states->{hpack_dtable}}];
@@ -181,7 +185,7 @@ my $H2ReceivedDumper = do {
             substr ($data, 0, 1) = '';
             $size = $int->(5, $size);
             # XXX...
-            warn "[$id] H2    dynamic table update size=$size\n";
+            warn "[$id] H2    dynamic table update size=$size\n" if $DUMP;
           } elsif ($type =~ /^000/) { # not indexed
             my $never = $type =~ /^...1/ ? ' (never indexed)' : '';
             my $index = 0b00001111 & unpack 'C', substr $data, 0, 1;
@@ -189,22 +193,22 @@ my $H2ReceivedDumper = do {
             if ($index == 0) {
               my $n = $str->();
               my $v = $str->();
-              warn "[$id] H2    $n: $v$never\n";
+              warn "[$id] H2    $n: $v$never\n" if $DUMP;
             } else {
               $index = $int->(4, $index);
               my $tr = $states->{hpack_table}->[$index];
               my $v = $str->();
-              warn "[$id] H2    $tr->[0] (#$index): $v$never\n";
+              warn "[$id] H2    $tr->[0] (#$index): $v$never\n" if $DUMP;
             }
           }
         }
-        warn "[$id] H2  Pad (L=$pad_length) ", hex_dump ($pad), "\n" if length $pad;
+        warn "[$id] H2  Pad (L=$pad_length) ", hex_dump ($pad), "\n" if $DUMP and length $pad;
       } elsif ($frame_type == 8 and 4 == length $data) { # WINDOW_SIZE
         my $v = unpack 'N', $data;
         warn "[$id] H2 ".(join ' ',
           '  Window Size Increment=' . ($v & (2**32-1)),
           ($v & 2**32 ? 'R' : ()),
-        )."\n";
+        )."\n" if $DUMP;
       } elsif ($frame_type == 4) { # SETTINGS
         while ($data =~ s/^(..)(....)//s) {
           my $n = unpack 'n', $1;
@@ -218,10 +222,10 @@ my $H2ReceivedDumper = do {
             6 => 'MAX_HEADER_LIST_SIZE (6)',
             16 => 'RENEG_PERMITTED (0x10)',
           }->{$n} // $n;
-          warn "[$id] H2   $n=$v\n";
+          warn "[$id] H2   $n=$v\n" if $DUMP;
         }
         if (length $data) {
-          warn hex_dump ($data), "\n";
+          warn hex_dump ($data), "\n" if $DUMP;
         }
       } elsif ($frame_type == 2 and 5 == length $data) { # PRIORIRY
         my $v = unpack 'N', substr $data, 0, 4;
@@ -230,7 +234,7 @@ my $H2ReceivedDumper = do {
           ($v & 2**32 ? 'E' : ()),
           'stream dependency=' . ($v & (2**32-1)),
           'weight=' . $w,
-        )."\n";
+        )."\n" if $DUMP;
       } elsif ($frame_type == 3 and 4 == length $data) { # RST_STREAM
         my $v = unpack 'N', $data;
         my $et = {
@@ -251,7 +255,7 @@ my $H2ReceivedDumper = do {
         }->{$v};
         warn "[$id] H2   ".(join ' ',
           'error code=' . ($et // $v),
-        )."\n";
+        )."\n" if $DUMP;
       } elsif ($frame_type >= 7) { # GOAWAY
         my $stream_id = unpack 'N', substr $data, 0, 4;
         my $r = $stream_id & 2**32;
@@ -278,12 +282,14 @@ my $H2ReceivedDumper = do {
           ($r ? 'R' : ()),
           "last stream ID=$stream_id",
           "error code=$et",
-        )."\n";
-        warn hex_dump ($debug), "\n" if length $debug;
+        )."\n" if $DUMP;
+        warn hex_dump ($debug), "\n" if $DUMP and length $debug;
       } else {
-        warn "[$id] H2 frame payload\n";
-        warn hex_dump ($data), "\n";
-        warn "[$id] (end of frame)\n";
+        if ($DUMP) {
+          warn "[$id] H2 frame payload\n";
+          warn hex_dump ($data), "\n";
+          warn "[$id] (end of frame)\n";
+        }
       }
       substr ($received, 0, $payload_length) = '';
       $payload_length = 0;
@@ -577,6 +583,13 @@ sub run_commands ($$$$) {
       unshift @{$states->{commands}}, $command;
       $then->();
       return;
+    } elsif ($command =~ /^h2-receive-headers$/) {
+      if (@{$states->{h2_streams} or []}) {
+        next;
+      }
+      unshift @{$states->{commands}}, $command;
+      $then->();
+      return;
     } elsif ($command =~ /^h2-send-frame((?:\s+\w+=\S*)+)$/) {
       my $args = $1;
       my $fields = {length => 0, type => 0, flags => 0, stream => 0};
@@ -587,12 +600,47 @@ sub run_commands ($$$$) {
       $fields->{flags} |= 4 if $fields->{END_HEADERS};
       $fields->{flags} |= 8 if $fields->{PADDED};
       $fields->{flags} |= 0x20 if $fields->{PRIORITY};
+      my $payload;
+      if (defined $states->{h2_payload}) {
+        $payload = join '', @{delete $states->{h2_payload}};
+        $fields->{length} = length $payload;
+      }
+      if ($fields->{stream} eq 'shift') {
+        $fields->{stream} = shift @{$states->{h2_streams} || []};
+      } elsif ($fields->{stream} eq 'last') {
+        $fields->{stream} = $states->{h2_last_sent_stream};
+      }
+      $states->{h2_last_sent_stream} = $fields->{stream};
       my $frame = join '',
           (substr pack ('N', $fields->{length}), 1),
           (pack 'C', $fields->{type}),
           (pack 'C', $fields->{flags}),
           (pack 'N', $fields->{stream});
       $hdl->push_write ($frame);
+      if (defined $payload) {
+        $hdl->push_write ($payload);
+      }
+    } elsif ($command =~ /^push-h2-header "([^"]+)" "([^"]*)"$/) {
+      my $n = $1;
+      my $v = $2;
+      my $int = sub {
+        if ($_[2] < 2**$_[1]-1) {
+          return pack 'C', $_[0] | $_[2];
+        } else {
+          my $d = '';
+          my $v = $_[2] - 2**$_[1] + 1;
+          while ($v >= 128) {
+            $d .= pack 'C', 128 | ($v % 128);
+            $v = int ($v / 128);
+          }
+          return pack ('C', $_[0] | 2**$_[1]-1) . $d;
+        }
+      }; # $int
+      my $str = sub {
+        return $int->(0b0_0000000, 7, length $_[0]) . $_[0];
+      }; # $str
+      my $data = (pack 'C', 0b0000_0000) . $str->($n) . $str->($v);
+      push @{$states->{h2_payload} ||= []}, $data;
 
     } elsif ($command =~ /^close$/) {
       $hdl->push_shutdown;
@@ -1065,7 +1113,7 @@ my $server = tcp_server $host, $port, sub {
        },
        on_read => sub {
          $states->{received} .= $_[0]->{rbuf};
-         ($states->{dumper} // $ReceivedDumper)->($states, $_[0]->{rbuf}) if $DUMP;
+         ($states->{dumper} // $ReceivedDumper)->($states, $_[0]->{rbuf});
          $_[0]->{rbuf} = '';
          run_commands 'read', $_[0], $states, sub { };
        });

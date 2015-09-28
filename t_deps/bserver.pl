@@ -14,7 +14,7 @@ use Test::Certificates;
 my $host = '0';
 my $port = $ENV{SERVER_PORT} || 4355;
 my $tlsport = $ENV{SERVER_TLS_PORT} || 14355;
-my $test_port = int (rand 10000) + 1024;
+my $test_port = $ENV{TEST_PORT} || int (rand 10000) + 1024;
 
 my $root_path = path (__FILE__)->parent->parent->absolute;
 
@@ -108,7 +108,33 @@ my $httpd = AnyEvent::HTTPD->new (host => $host, port => $port);
 my $tlshttpd = AnyEvent::HTTPD->new (host => $host, port => $tlsport, ssl => {
   ca_path => Test::Certificates->ca_path ('ca-cert.pem'),
   cert_file => Test::Certificates->cert_path ('cert.pem'),
-  key_file => Test::Certificates->cert_path ('key-pkcs1.pem'),
+  key_file => Test::Certificates->cert_path ('key.pem'),
+
+        prepare => sub {
+          my $ctx = $_[0]->ctx;
+          ## From IO::Socket::SSL
+          my $can_ecdh = defined &Net::SSLeay::CTX_set_tmp_ecdh &&
+              # There is a regression with elliptic curves on 1.0.1d with 64bit
+              # http://rt.openssl.org/Ticket/Display.html?id=2975
+              ( Net::SSLeay::OPENSSL_VERSION_NUMBER() != 0x1000104f
+                    || length(pack("P",0)) == 4 );
+          if ($can_ecdh) {
+            my $curve = 'prime256v1';
+            if ( $curve !~ /^\d+$/ ) {
+              # name of curve, find NID
+              $curve = Net::SSLeay::OBJ_txt2nid($curve)
+                  or die "cannot find NID for curve name '$curve'";
+            }
+            my $ecdh = Net::SSLeay::EC_KEY_new_by_curve_name($curve)
+                or die "cannot create curve for NID $curve";
+            Net::SSLeay::CTX_set_tmp_ecdh ($ctx, $ecdh)
+                  or die "failed to set ECDH curve context";
+            Net::SSLeay::EC_KEY_free ($ecdh);
+          } else {
+            warn "[] ECDH can't be used on this system\n";
+          }
+        },
+
 });
 my $cv = AE::cv;
 

@@ -4,7 +4,7 @@ use warnings;
 use Path::Tiny;
 
 my $root_path = path (__FILE__)->parent->parent->parent->parent->absolute;
-my $cert_path = $root_path->child ('local/cert18');
+my $cert_path = $root_path->child ('local/cert2');
 my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
 $cert_path->mkpath;
 

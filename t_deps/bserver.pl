@@ -189,10 +189,12 @@ my $httpdcb = sub {
     }
   } elsif ($path =~ m{^/resultdata/([0-9]+)$}) {
     my $test_name = $1;
-    $req->respond ([200, 'OK', {
-      'Content-Type' => 'application/json; charset=utf-8',
-      'Access-Control-Allow-Origin' => '*',
-    }, perl2json_bytes $test_result_data->{$test_name}]);
+    timer 1, sub {
+      $req->respond ([200, 'OK', {
+        'Content-Type' => 'application/json; charset=utf-8',
+        'Access-Control-Allow-Origin' => '*',
+      }, perl2json_bytes $test_result_data->{$test_name}]);
+    };
   } elsif ($path eq '/runner') {
     my $tests_json = perl2json_chars ($httpd->port == $port ? \@test : \@tlstest);
     $req->respond ([200, 'OK', {
@@ -252,9 +254,15 @@ my $httpdcb = sub {
                   }
                 }).filter (function (_) { return _.length }).join ("\\u000A");
                 setResult (cell, aHeaders == eHeaders, aHeaders, eHeaders);
-                var cell = tr.appendChild (document.createElement ('td'));
-                var expected = test.body[0].replace (/\\(boundary\\)/g, '');
-                setResult (cell, x.responseText + '(close)' == expected, x.responseText + '(close)', expected);
+
+        var cell = tr.appendChild (document.createElement ('td'));
+        if (test["body-length"]) {
+          var expected = parseInt (test["body-length"][0]);
+          setResult (cell, x.responseText.length === expected, x.responseText.length, expected);
+        } else {
+          var expected = test.body[0].replace (/\\(boundary\\)/g, '');
+          setResult (cell, x.responseText + '(close)' == expected, x.responseText + '(close)', expected);
+        }
       } // compareResponse
 
       function runTest (test, testNumber, _then) {

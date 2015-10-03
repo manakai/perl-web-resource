@@ -256,6 +256,9 @@ my $H2ReceivedDumper = do {
         warn "[$id] H2   ".(join ' ',
           'error code=' . ($et // $v),
         )."\n" if $DUMP;
+        my $info = {type => 'RST_STREAM',
+                    error => $v};
+        syswrite STDOUT, "[data ".(perl2json_bytes $info)."]\n";
       } elsif ($frame_type >= 7) { # GOAWAY
         my $stream_id = unpack 'N', substr $data, 0, 4;
         my $r = $stream_id & 2**32;
@@ -284,6 +287,11 @@ my $H2ReceivedDumper = do {
           "error code=$et",
         )."\n" if $DUMP;
         warn hex_dump ($debug), "\n" if $DUMP and length $debug;
+        my $info = {type => 'GOAWAY',
+                    error => $error,
+                    #debug => $debug,
+                   };
+        syswrite STDOUT, "[data ".(perl2json_bytes $info)."]\n";
       } else {
         if ($DUMP) {
           warn "[$id] H2 frame payload\n";
@@ -592,7 +600,8 @@ sub run_commands ($$$$) {
       return;
     } elsif ($command =~ /^h2-send-frame((?:\s+\w+=\S*)+)$/) {
       my $args = $1;
-      my $fields = {length => 0, type => 0, flags => 0, stream => 0};
+      my $fields = {length => 0, type => 0, flags => 0, stream => 0,
+                    dependency => 0, weight => 0};
       while ($args =~ s/^\s+(\w+)=(\S*)//) {
         $fields->{$1} = $2;
       }
@@ -600,23 +609,30 @@ sub run_commands ($$$$) {
       $fields->{flags} |= 4 if $fields->{END_HEADERS};
       $fields->{flags} |= 8 if $fields->{PADDED};
       $fields->{flags} |= 0x20 if $fields->{PRIORITY};
+      $fields->{length} += 5 if $fields->{PRIORITY};
       my $payload;
       if (defined $states->{h2_payload}) {
         $payload = join '', @{delete $states->{h2_payload}};
-        $fields->{length} = length $payload;
+        $fields->{length} += length $payload;
       }
       if ($fields->{stream} eq 'shift') {
         $fields->{stream} = shift @{$states->{h2_streams} || []};
       } elsif ($fields->{stream} eq 'last') {
         $fields->{stream} = $states->{h2_last_sent_stream};
       }
-      $states->{h2_last_sent_stream} = $fields->{stream};
+      $states->{h2_last_sent_stream} = $fields->{stream}
+          unless $fields->{stream_nosave};
       my $frame = join '',
           (substr pack ('N', $fields->{length}), 1),
           (pack 'C', $fields->{type}),
           (pack 'C', $fields->{flags}),
           (pack 'N', $fields->{stream});
       $hdl->push_write ($frame);
+      if ($fields->{PRIORITY}) {
+        $hdl->push_write (pack 'NC',
+          ($fields->{exclusive} ? 0x80 : 0x00) | $fields->{dependency},
+          $fields->{weight});
+      }
       if (defined $payload) {
         $hdl->push_write ($payload);
       }

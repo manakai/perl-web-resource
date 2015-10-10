@@ -18,6 +18,8 @@ unless ($ca_key_path->is_file) {
 
   my $ca_subj = $ca_name;
   x "openssl req -new -x509 -nodes -days 1 -key \Q$ca_key_path\E -out \Q$ca_cert_path\E -subj \Q$ca_subj\E -sha256 -set_serial @{[time]}";
+
+  sleep 1;
 }
 
 for my $prefix (@ARGV) {

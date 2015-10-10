@@ -1,5 +1,5 @@
 #name
-WINDOW_UPDATE
+RST_STREAM new stream
 #tls
 #method GET
 #url /
@@ -10,7 +10,7 @@ h2-send-frame type=4 ACK=1
 h2-receive-headers
 push-h2-header ":status" "200"
 h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
-h2-send-frame type=8 stream=last length=4
+h2-send-frame type=3 stream=12163 stream_nosave=1 length=4
 0x00
 0x00
 0x00
@@ -22,36 +22,11 @@ h2-send-frame type=0 stream=last END_STREAM=1 length=6
 #headers
 #body
 abcdef(close)
-
-#name
-WINDOW_UPDATE=0 (stream)
-#tls
-#method GET
-#url /
-#data
-starttls alpn=h2
-receive preface
-h2-send-frame type=4 ACK=1
-h2-receive-headers
-push-h2-header ":status" "200"
-h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
-h2-send-frame type=8 stream=last length=4
-0x00
-0x00
-0x00
-0x00
-h2-send-frame type=0 stream=last END_STREAM=1 length=6
-"abcdef"
-#status 0
-#body
-(close)
 #result-data
-[
-  {"type": "RST_STREAM", "error": 1}
-]
+[]
 
 #name
-WINDOW_UPDATE=0 (connection)
+RST_STREAM new stream
 #tls
 #method GET
 #url /
@@ -62,92 +37,11 @@ h2-send-frame type=4 ACK=1
 h2-receive-headers
 push-h2-header ":status" "200"
 h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
-h2-send-frame type=8 stream=0 length=4
+h2-send-frame type=3 stream=12164 stream_nosave=1 length=4
 0x00
 0x00
 0x00
-0x00
-h2-send-frame type=0 stream=last END_STREAM=1 length=6
-"abcdef"
-#status 0
-#body
-(close)
-#result-data
-[
-  {"type": "GOAWAY", "error": 1}
-]
-
-#name
-WINDOW_UPDATE=2^31-1 (stream)
-#tls
-#method GET
-#url /
-#data
-starttls alpn=h2
-receive preface
-h2-send-frame type=4 ACK=1
-h2-receive-headers
-push-h2-header ":status" "200"
-h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
-h2-send-frame type=8 stream=last length=4
-0x7F
-0xFF
-0xFF
-0xFF
-h2-send-frame type=0 stream=last END_STREAM=1 length=6
-"abcdef"
-#status 0
-#body
-(close)
-#result-data
-[
-  {"type": "RST_STREAM", "error": 3}
-]
-
-#name
-WINDOW_UPDATE=2^31-1 (connection)
-#tls
-#method GET
-#url /
-#data
-starttls alpn=h2
-receive preface
-h2-send-frame type=4 ACK=1
-h2-receive-headers
-push-h2-header ":status" "200"
-h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
-h2-send-frame type=8 stream=0 length=4
-0x7F
-0xFF
-0xFF
-0xFF
-h2-send-frame type=0 stream=last END_STREAM=1 length=6
-"abcdef"
-#status 0
-#body
-(close)
-#result-data
-[
-  {"type": "GOAWAY", "error": 3}
-]
-
-#name
-WINDOW_UPDATE new stream
-#tls
-#method GET
-#url /
-#data
-starttls alpn=h2
-receive preface
-h2-send-frame type=4 ACK=1
-h2-receive-headers
-push-h2-header ":status" "200"
-h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
-h2-send-frame type=8 stream=4001 stream_nosave=1 length=4
-0x00
-0xFF
-0xFF
-0xFF
+0x01
 h2-send-frame type=0 stream=last END_STREAM=1 length=6
 "abcdef"
 #status 200
@@ -156,12 +50,10 @@ h2-send-frame type=0 stream=last END_STREAM=1 length=6
 #body
 abcdef(close)
 #result-data
-[
-  {"type": "RST_STREAM", "error": 1}
-]
+[]
 
 #name
-WINDOW_UPDATE new stream
+RST_STREAM after HEADERS
 #tls
 #method GET
 #url /
@@ -172,25 +64,95 @@ h2-send-frame type=4 ACK=1
 h2-receive-headers
 push-h2-header ":status" "200"
 h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
-h2-send-frame type=8 stream=4002 stream_nosave=1 length=4
+h2-send-frame type=3 stream=last length=4
 0x00
-0xFF
-0xFF
-0xFF
+0x00
+0x00
+0x01
 h2-send-frame type=0 stream=last END_STREAM=1 length=6
 "abcdef"
+#status 0
+#body
+(close)
+#result-data
+[]
+
+#name
+RST_STREAM before HEADERS
+#tls
+#method GET
+#url /
+#data
+starttls alpn=h2
+receive preface
+h2-send-frame type=4 ACK=1
+h2-receive-headers
+push-h2-header ":status" "200"
+h2-send-frame type=3 stream=shift length=4
+0x00
+0x00
+0x00
+0x01
+#status 0
+#body
+(close)
+#result-data
+[]
+
+#name
+RST_STREAM before HEADERS
+#tls
+#method GET
+#url /
+#data
+starttls alpn=h2
+receive preface
+h2-send-frame type=4 ACK=1
+h2-receive-headers
+push-h2-header ":status" "200"
+h2-send-frame type=3 stream=shift length=4
+0x00
+0x00
+0x00
+0x01
+h2-send-frame type=1 stream=last END_STREAM=0 END_HEADERS=1
+h2-send-frame type=0 stream=last END_STREAM=1 length=6
+"abcdef"
+#status 0
+#body
+(close)
+#result-data
+[{"type":"GOAWAY","error":1}]
+
+#name
+RST_STREAM after END_STREAM
+#tls
+#method GET
+#url /
+#data
+starttls alpn=h2
+receive preface
+h2-send-frame type=4 ACK=1
+h2-receive-headers
+push-h2-header ":status" "200"
+h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
+h2-send-frame type=0 stream=last END_STREAM=1 length=6
+"abcdef"
+h2-send-frame type=3 stream=last length=4
+0x00
+0x00
+0x00
+0x01
 #status 200
 #reason OK
 #headers
 #body
 abcdef(close)
 #result-data
-[
-  {"type": "RST_STREAM", "error": 1}
-]
+[]
 
 #name
-WINDOW_UPDATE stream zero
+RST_STREAM after HEADERS
 #tls
 #method GET
 #url /
@@ -201,23 +163,19 @@ h2-send-frame type=4 ACK=1
 h2-receive-headers
 push-h2-header ":status" "200"
 h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
-h2-send-frame type=8 stream=last stream_nosave=1 length=4
+h2-send-frame type=3 stream=last length=4
 0x00
 0x00
 0x00
-0x00
-h2-send-frame type=0 stream=last END_STREAM=1 length=6
-"abcdef"
+0x01
 #status 0
 #body
 (close)
 #result-data
-[
-  {"type": "RST_STREAM", "error": 1}
-]
+[]
 
 #name
-WINDOW_UPDATE connection zero
+RST_STREAM after HEADERS
 #tls
 #method GET
 #url /
@@ -228,17 +186,15 @@ h2-send-frame type=4 ACK=1
 h2-receive-headers
 push-h2-header ":status" "200"
 h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
-h2-send-frame type=8 stream=0 length=4
+h2-send-frame type=3 stream=last length=4
 0x00
 0x00
 0x00
-0x00
+0x01
 h2-send-frame type=0 stream=last END_STREAM=1 length=6
 "abcdef"
 #status 0
 #body
 (close)
 #result-data
-[
-  {"type": "RST_STREAM", "error": 1}
-]
+[]

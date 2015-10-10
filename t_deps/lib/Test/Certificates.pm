@@ -24,8 +24,9 @@ sub cert_name ($) {
 } # cert_name
 
 sub wait_create_cert ($) {
-  if ($_[0]->ca_path ('cert.pem')->is_file and
-      $_[0]->ca_path ('cert.pem')->stat->mtime + 60*60*24 < time) {
+  if ($ENV{RECREATE_CERTS} or
+      ($_[0]->ca_path ('cert.pem')->is_file and
+       $_[0]->ca_path ('cert.pem')->stat->mtime + 60*60*24 < time)) {
     system "rm \Q$cert_path\E/*.pem";
   }
   unless ($_[0]->cert_path ('key.pem')->is_file) {

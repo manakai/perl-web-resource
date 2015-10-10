@@ -639,17 +639,20 @@ sub run_commands ($$$$) {
     } elsif ($command =~ /^push-h2-header "([^"]+)" "([^"]*)"$/) {
       my $n = $1;
       my $v = $2;
+      $n =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
+      $v =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
       my $int = sub {
         if ($_[2] < 2**$_[1]-1) {
           return pack 'C', $_[0] | $_[2];
         } else {
-          my $d = '';
-          my $v = $_[2] - 2**$_[1] + 1;
+          my $d = pack 'C', $_[0] | (2**$_[1] - 1);
+          my $v = $_[2] - (2**$_[1] - 1);
           while ($v >= 128) {
             $d .= pack 'C', 128 | ($v % 128);
             $v = int ($v / 128);
           }
-          return pack ('C', $_[0] | 2**$_[1]-1) . $d;
+          $d .= pack 'C', $v;
+          return $d;
         }
       }; # $int
       my $str = sub {
@@ -657,7 +660,51 @@ sub run_commands ($$$$) {
       }; # $str
       my $data = (pack 'C', 0b0000_0000) . $str->($n) . $str->($v);
       push @{$states->{h2_payload} ||= []}, $data;
+    } elsif ($command =~ /^push-hpack-dynamic-size ([0-9]+)$/) {
+      my $n = $1;
+      my $int = sub {
+        if ($_[2] < 2**$_[1]-1) {
+          return pack 'C', $_[0] | $_[2];
+        } else {
+          my $d = pack 'C', $_[0] | (2**$_[1] - 1);
+          my $v = $_[2] - (2**$_[1] - 1);
+          while ($v >= 128) {
+            $d .= pack 'C', 128 | ($v % 128);
+            $v = int ($v / 128);
+          }
+          $d .= pack 'C', $v;
+          return $d;
+        }
+      }; # $int
+      my $data = $int->(0b001_00000, 5, $n);
+      push @{$states->{h2_payload} ||= []}, $data;
 
+    } elsif ($command =~ /^h2-send-data-frames((?:\s+\w+=\S*)+)$/) {
+      my $args = $1;
+      my $fields = {length => 0, type => 0, flags => 0, stream => 0,
+                    dependency => 0, weight => 0};
+      while ($args =~ s/^\s+(\w+)=(\S*)//) {
+        $fields->{$1} = $2;
+      }
+      if ($fields->{stream} eq 'last') {
+        $fields->{stream} = $states->{h2_last_sent_stream};
+      }
+      $states->{h2_last_sent_stream} = $fields->{stream}
+          if not $fields->{stream_nosave} and $fields->{stream};
+      my $max = 2**14;
+      while ($fields->{length}) {
+        my $length = $fields->{length} < $max ? $fields->{length} : $max;
+        $fields->{length} -= $length;
+        my $last = $fields->{length} <= 0;
+        $fields->{flags} |= 1 if $last and $fields->{END_STREAM};
+        my $frame = join '',
+            (substr pack ('N', $length), 1),
+            (pack 'C', $fields->{type}),
+            (pack 'C', $fields->{flags}),
+            (pack 'N', $fields->{stream});
+        $hdl->push_write ($frame);
+        $hdl->push_write ('x' x $length);
+      }
     } elsif ($command =~ /^close$/) {
       $hdl->push_shutdown;
     } elsif ($command =~ /^close read$/) {

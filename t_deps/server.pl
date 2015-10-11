@@ -349,9 +349,9 @@ sub run_commands ($$$$) {
       unless ($n eq 0+$n) {
         warn "|$n| (= @{[0+$n]}) might be overflowed";
       }
-      while ($n > 2**30) {
-        $hdl->push_write ($v x (2**30));
-        $n -= 2**30;
+      while ($n > 2**28) {
+        $hdl->push_write ($v x (2**28));
+        $n -= 2**28;
       }
       $hdl->push_write ($v x $n);
     } elsif ($command =~ /^CRLF$/) {
@@ -611,17 +611,29 @@ sub run_commands ($$$$) {
       $fields->{flags} |= 0x20 if $fields->{PRIORITY};
       $fields->{length} += 5 if $fields->{PRIORITY};
       my $payload;
+      my $showinfo = 0;
       if (defined $states->{h2_payload}) {
         $payload = join '', @{delete $states->{h2_payload}};
         $fields->{length} += length $payload;
+        $showinfo = 1;
+      }
+      if (defined $states->{fill} and
+          ($fields->{type} == 1 or $fields->{type} == 9)) {
+        $payload .= "\x3E" x $states->{fill};
+        $fields->{length} += $states->{fill};
+        $showinfo = 1;
       }
       if ($fields->{stream} eq 'shift') {
         $fields->{stream} = shift @{$states->{h2_streams} || []};
+        $showinfo = 1;
       } elsif ($fields->{stream} eq 'last') {
         $fields->{stream} = $states->{h2_last_sent_stream};
+        $showinfo = 1;
       }
       $states->{h2_last_sent_stream} = $fields->{stream}
           unless $fields->{stream_nosave};
+      warn "Send H2 header stream=$fields->{stream} length=$fields->{length}\n"
+          if $DUMP and $showinfo;
       my $frame = join '',
           (substr pack ('N', $fields->{length}), 1),
           (pack 'C', $fields->{type}),
@@ -678,6 +690,20 @@ sub run_commands ($$$$) {
       }; # $int
       my $data = $int->(0b001_00000, 5, $n);
       push @{$states->{h2_payload} ||= []}, $data;
+    } elsif ($command =~ /^h2-send-continue-frames ([0-9]+)$/) {
+      my $payload_length = $1;
+      while ($payload_length > 0) {
+        my $length = 2**14-1;
+        $length = $payload_length if $payload_length < $length;
+        $payload_length -= $length;
+        my $stream = $states->{h2_last_sent_stream};
+        my $frame = join '',
+            (substr pack ('N', $length), 1),
+            (pack 'C', 9), # type
+            (pack 'C', 0), # flags
+            (pack 'N', $stream);
+        $hdl->push_write ($frame . ('>' x $length));
+      }
 
     } elsif ($command =~ /^h2-send-data-frames((?:\s+\w+=\S*)+)$/) {
       my $args = $1;
@@ -887,6 +913,8 @@ sub run_commands ($$$$) {
       AE::log error => qq{[$states->{id}] captured = |$states->{captured}|};
     } elsif ($command =~ /^show\s+"([^"]*)"$/) {
       warn "[$states->{id}] @{[time]} @{[scalar gmtime]} $1\n";
+    } elsif ($command =~ /^data\s+"([^"]*)"$/) {
+      syswrite STDOUT, "[data ".(perl2json_bytes $1)."]\n";
     } elsif ($command =~ /\S/) {
       die "Unknown command: |$command|";
     }

@@ -48,6 +48,28 @@ ab: c
 abcdef(close)
 
 #name
+bad flag
+#tls
+#method GET
+#url /
+#data
+starttls alpn=h2
+receive preface
+h2-send-frame type=4 ACK=1
+h2-receive-headers
+push-h2-header ":status" "200"
+push-h2-header "hoge" "d"
+h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
+h2-send-frame type=0 stream=last END_STREAM=1 PRIORITY=1 length=6
+"abcdef"
+#status 200
+#reason OK
+#headers
+hoge: d
+#body
+abcdef(close)
+
+#name
 bad frame payload length (SETTINGS)
 #tls
 #method GET
@@ -309,6 +331,30 @@ h2-send-frame type=0 stream=last END_STREAM=1 length=7 PADDED=1
 a(close)
 
 #name
+unknown frame streamed
+#tls
+#method GET
+#url /
+#data
+starttls alpn=h2
+receive preface
+h2-send-frame type=4 ACK=1
+h2-receive-headers
+push-h2-header ":status" "200"
+h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
+h2-send-frame type=19 stream=last length=3
+"abc"
+h2-send-frame type=0 stream=last END_STREAM=1 length=1
+"a"
+#status 200
+#reason OK
+#headers
+#body-length
+1
+#result-data
+[]
+
+#name
 unknown frame payload length = 2**14+1 (> SETTINGS_MAX_FRAME_SIZE) (stream)
 #tls
 #method GET
@@ -320,7 +366,7 @@ h2-send-frame type=4 ACK=1
 h2-receive-headers
 push-h2-header ":status" "200"
 h2-send-frame type=1 stream=shift END_STREAM=0 END_HEADERS=1
-h2-send-frame type=19 stream=last END_STREAM=1 length=16385
+h2-send-frame type=19 stream=last length=16385
 "a" x 16385
 h2-send-frame type=0 stream=last END_STREAM=1 length=1
 "a"

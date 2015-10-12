@@ -631,7 +631,7 @@ sub run_commands ($$$$) {
         $showinfo = 1;
       }
       $states->{h2_last_sent_stream} = $fields->{stream}
-          unless $fields->{stream_nosave};
+          if not $fields->{stream_nosave} and $fields->{stream};
       warn "Send H2 header stream=$fields->{stream} length=$fields->{length}\n"
           if $DUMP and $showinfo;
       my $frame = join '',

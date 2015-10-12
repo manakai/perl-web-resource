@@ -103,9 +103,10 @@ h2-send-frame type=7 length=8
 0x00
 h2-send-frame type=0 stream=last END_STREAM=1 length=4
 "abcd"
-#status 0
+#status 200
+#reason OK
 #body
-(close)
+abcd(close)
 #result-data
 [{"type":"GOAWAY","error":0}]
 
@@ -187,7 +188,7 @@ close
 #body
 (close)
 #result-data
-["timeout"]
+["timeout", {"type":"GOAWAY","error":0}]
 
 #name
 GOAWAY (PROTOCOL_ERROR) before END_STREAM (> stream)
@@ -217,7 +218,7 @@ close
 #body
 (close)
 #result-data
-["timeout"]
+["timeout", {"type":"GOAWAY", "error": 0}]
 
 #name
 GOAWAY (PROTOCOL_ERROR) before END_STREAM (< stream)

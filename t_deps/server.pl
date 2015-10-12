@@ -83,7 +83,7 @@ my $H2ReceivedDumper = do {
           )."\n" if $DUMP;
       $frame_type = $type;
       $payload_length = $length;
-      if ($type == 1) { # HEADERS
+      if ($type == 1 or $type == 5) { # HEADERS, PUSH_PROMISE
         push @{$states->{h2_streams} ||= []}, $stream_id;
       }
     } elsif (not $payload_length) {
@@ -601,7 +601,7 @@ sub run_commands ($$$$) {
     } elsif ($command =~ /^h2-send-frame((?:\s+\w+=\S*)+)$/) {
       my $args = $1;
       my $fields = {length => 0, type => 0, flags => 0, stream => 0,
-                    dependency => 0, weight => 0};
+                    dependency => 0, weight => 0, promised => 0};
       while ($args =~ s/^\s+(\w+)=(\S*)//) {
         $fields->{$1} = $2;
       }
@@ -610,11 +610,17 @@ sub run_commands ($$$$) {
       $fields->{flags} |= 8 if $fields->{PADDED};
       $fields->{flags} |= 0x20 if $fields->{PRIORITY};
       $fields->{length} += 5 if $fields->{PRIORITY};
-      my $payload;
+      my $payload = '';
       my $showinfo = 0;
+      if ($fields->{type} == 5) { # PUSH_PROMISE
+        $payload .= pack 'N', $fields->{promised};
+        $fields->{length} += 4;
+        $showinfo = 1;
+      }
       if (defined $states->{h2_payload}) {
-        $payload = join '', @{delete $states->{h2_payload}};
-        $fields->{length} += length $payload;
+        my $x = join '', @{delete $states->{h2_payload}};
+        $payload .= $x;
+        $fields->{length} += length $x;
         $showinfo = 1;
       }
       if (defined $states->{fill} and
@@ -632,8 +638,10 @@ sub run_commands ($$$$) {
       }
       $states->{h2_last_sent_stream} = $fields->{stream}
           if not $fields->{stream_nosave} and $fields->{stream};
-      warn "Send H2 header stream=$fields->{stream} length=$fields->{length}\n"
-          if $DUMP and $showinfo;
+      if ($DUMP and $showinfo) {
+        warn "Send H2 header type=$fields->{type} stream=$fields->{stream} length=$fields->{length}\n";
+        warn hex_dump ($payload) . "\n" if length $payload;
+      }
       my $frame = join '',
           (substr pack ('N', $fields->{length}), 1),
           (pack 'C', $fields->{type}),
@@ -648,11 +656,16 @@ sub run_commands ($$$$) {
       if (defined $payload) {
         $hdl->push_write ($payload);
       }
-    } elsif ($command =~ /^push-h2-header "([^"]+)" "([^"]*)"$/) {
+    } elsif ($command =~ /^push-h2-header "([^"]+)" ("[^"]*"|authority)$/) {
       my $n = $1;
       my $v = $2;
       $n =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
-      $v =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
+      if ($v eq 'authority') {
+        $v = ($ENV{SERVER_HOST_NAME} // 'hoge.test') . ':' . $port;
+      } else {
+        $v = substr $v, 1, -2 + length $v;
+        $v =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
+      }
       my $int = sub {
         if ($_[2] < 2**$_[1]-1) {
           return pack 'C', $_[0] | $_[2];

@@ -22,6 +22,9 @@ sub id ($) {
 
 sub type ($) { return 'TLS' }
 sub layered_type ($) { return $_[0]->type . '/' . $_[0]->{transport}->layered_type }
+sub request_mode ($) { 'default' }
+
+sub has_alert ($) { return $_[0]->{has_alert} }
 
 ## OpenSSL constants
 #sub SSL_ST_CONNECT () { 0x1000 }
@@ -209,6 +212,7 @@ sub start ($$;%) {
         my $level = Net::SSLeay::alert_type_string ($ret); # W F U
         my $type = Net::SSLeay::alert_desc_string_long ($ret);
         if ($level eq 'W' and not $type eq 'close notify') {
+          $self->{has_alert} = 1;
           AE::postpone { $self->{cb}->($self, 'alert', {message => $type}) };
         }
       }

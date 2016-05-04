@@ -46,6 +46,8 @@ sub layered_type ($) {
   return $_[0]->type . '/' . $_[0]->{transport}->layered_type;
 } # layered_type
 
+sub transport ($) { $_[0]->{transport} }
+
 sub _e4d ($) {
   return $_[0] unless $_[0] =~ /[^\x20-\x5B\x5D-\x7E]/;
   my $x = $_[0];

@@ -84,6 +84,7 @@ sub start ($$) {
 sub id ($) { return $_[0]->{id} }
 sub type ($) { return 'TCP' }
 sub layered_type ($) { return $_[0]->type }
+sub request_mode ($) { 'default' }
 
 sub read_closed ($) { return $_[0]->{read_closed} }
 sub write_closed ($) { return $_[0]->{write_closed} }

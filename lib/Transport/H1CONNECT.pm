@@ -91,6 +91,7 @@ sub start ($$) {
 sub id ($) { return $_[0]->{id} }
 sub type ($) { return 'H1CONNECT' }
 sub layered_type ($) { return $_[0]->type . '/' . $_[0]->{http}->layered_type }
+sub request_mode ($) { 'default' }
 
 sub read_closed ($) { return $_[0]->{read_closed} }
 sub write_closed ($) { return $_[0]->{write_closed} }

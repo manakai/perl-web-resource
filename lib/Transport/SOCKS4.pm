@@ -24,6 +24,7 @@ sub id ($) {
 
 sub type ($) { return 'SOCKS4' }
 sub layered_type ($) { return $_[0]->type . '/' . $_[0]->{transport}->layered_type }
+sub request_mode ($) { 'default' }
 
 sub start ($$;%) {
   my $self = $_[0];

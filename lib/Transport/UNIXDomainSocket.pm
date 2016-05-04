@@ -14,5 +14,6 @@ sub new ($%) {
 } # new
 
 sub type ($) { return 'UNIX' }
+sub request_mode ($) { 'default' }
 
 1;

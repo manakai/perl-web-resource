@@ -1,113 +1,143 @@
 package HTTPConnectionClient;
 use strict;
 use warnings;
-use Promise;
-use Transport::TCP;
-use HTTP;
+use HTTPClientBareConnection;
+use Resolver;
 use Web::Encoding qw(encode_web_utf8);
-use Web::URL::Canonicalize qw(url_to_canon_url parse_url);
+use Web::URL::Canonicalize qw(url_to_canon_url parse_url serialize_parsed_url
+                              get_default_port);
 
-sub new_from_addr_and_port ($$$) {
-  return bless {addr => $_[1], port => $_[2]}, $_[0];
-} # new_from_addr_and_port
-
-sub connect ($) {
-  my $self = $_[0];
-  return $self->{connect_promise} ||= do {
-    my $transport = Transport::TCP->new
-        (addr => $self->{addr}, port => $self->{port});
-    $self->{http} = HTTP->new (transport => $transport);
-    $self->{http}->connect;
+sub new_from_url ($$) {
+  my $url = $_[1];
+  my $parsed_url = parse_url url_to_canon_url $url, 'about:blank';
+  my $origin = serialize_parsed_url {
+    invalid => $parsed_url->{invalid},
+    scheme => $parsed_url->{scheme},
+    host => $parsed_url->{host},
+    port => $parsed_url->{port},
   };
-} # connect
+  return bless {
+    origin => $origin,
+    queue => Promise->resolve,
+  }, $_[0];
+} # new_from_url
 
-sub send_request ($$$$;$) {
-  my ($self, $method, $url_input, $headers, $cb) = @_;
-  return $self->connect->then (sub {
-    my $url_string = url_to_canon_url $url_input, 'about:blank';
-    my $url_record = parse_url $url_string;
-    return {failed => 1, message => "Bad input URL"}
-        unless defined $url_record->{host};
-    my $target;
-    if ($self->{http}->transport->request_mode eq 'HTTP proxy') {
-      delete $url_record->{fragment};
-      $target = serialize_parsed_url $url_record;
-    } else {
-      $target = $url_record->{path} . (defined $url_record->{query} ? '?' . $url_record->{query} : '');
+sub _connect ($$) {
+  my ($self, $url_record) = @_;
+
+  if (defined $self->{client} and $self->{client}->is_active) {
+    return Promise->resolve ($self->{client});
+  }
+
+  my ($addr, $port);
+  return Resolver->resolve_name ($url_record->{host})->then (sub {
+    $addr = $_[0];
+    return {failed => 1, message => "Can't resolve |$url_record->{host}|"}
+        unless defined $addr;
+
+    $port = $url_record->{port};
+    $port = get_default_port $url_record->{scheme} if not defined $port;
+    return {failed => 1, message => "No port specified"}
+        unless defined $port;
+
+    return $self->{client}->abort if defined $self->{client};
+  })->then (sub {
+    return $self->{client} = HTTPClientBareConnection->new_from_addr_and_port
+        (encode_web_utf8 ($addr), 0+$port);
+  });
+} # _connect
+
+sub request ($$%) {
+  my ($self, $url, %args) = @_;
+
+  my $method = encode_web_utf8 (defined $args{method} ? $args{method} : 'GET');
+
+  my $headers = $args{headers} || {};
+  my $header_list = [];
+  my $has_header = {};
+  for my $name (keys %$headers) {
+    if (defined $headers->{$name}) {
+      if (ref $headers->{$name} eq 'ARRAY') {
+        push @$header_list, map {
+          [(encode_web_utf8 $name), (encode_web_utf8 $_)]
+        } @{$headers->{$name}};
+      } else {
+        push @$header_list,
+            [(encode_web_utf8 $name), (encode_web_utf8 $headers->{$name})];
+      }
     }
-    my $host = $url_record->{host} . (defined $url_record->{port} ? ':' . $url_record->{port} : '');
-    $headers = [['Host', encode_web_utf8 $host],
-                ['Connection', 'keep-alive'],
-                map { [(encode_web_utf8 $_->[0]),
-                       (encode_web_utf8 $_->[1])] } @$headers];
+    my $name_lc = $name;
+    $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+    $has_header->{$name_lc} = 1;
+  }
 
-    my $response;
-    my $result;
-    $self->{http}->onevent (sub {
-      my $http = $_[0];
-      my $type = $_[2];
-      if ($type eq 'data') {
-        if (defined $cb and not defined $result) {
-          my $v = $_[3]; # buffer copy!
-          Promise->resolve->then (sub { return $cb->($http, $response, $v) });
-        }
-      } elsif ($type eq 'dataend') {
-        if (defined $cb and not defined $result) {
-          Promise->resolve->then (sub { return $cb->($http, $response, undef) });
-        }
-      } elsif ($type eq 'complete') {
-        my $exit = $_[3];
-        if ($exit->{failed}) {
-          $response = undef;
-          $result ||= $exit;
-        }
-      } elsif ($type eq 'headers') {
-        my $transport = $_[0]->transport;
-        my $res = $_[3];
-        if ($transport->request_mode ne 'HTTP proxy' and
-            $res->{status} == 407) {
-          $response = undef;
-          $result ||= {failed => 1, message => 'Status 407 from non-proxy'};
-        } else {
-          $response = $res;
-          if ($transport->type eq 'TLS' and
-              not $transport->has_alert) {
-            # XXX HSTS, PKP
-          }
-        }
-        if (defined $cb and not defined $result) {
-          Promise->resolve->then (sub { return $cb->($http, $response, '') });
-        }
+  push @$header_list, ['Accept', '*/*'] unless $has_header->{'accept'};
+  push @$header_list, ['Accept-Language', 'en'] unless $has_header->{'accept-language'};
+  push @$header_list, ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36'] unless $has_header->{'user-agent'};
+  # XXX Content-Length
+
+  # XXX Cookie
+  # XXX Authorization
+
+  if ($args{superreload} or
+      defined $has_header->{cookie} or
+      defined $has_header->{authorization}) {
+    push @$header_list, ['Pragma', 'no-cache'], ['Cache-Control', 'no-cache'];
+  }
+
+  # Accept-Encoding DNT Upgrade-Insecure-Requests
+
+  my $url_record = parse_url url_to_canon_url $url, 'about:blank';
+  my $url_origin = serialize_parsed_url {
+    invalid => $url_record->{invalid},
+    scheme => $url_record->{scheme},
+    host => $url_record->{host},
+    port => $url_record->{port},
+  };
+
+  if (not defined $self->{origin} or
+      not defined $url_origin or
+      not $self->{origin} eq $url_origin) {
+    return Promise->reject
+        ("Bad origin |$url_origin| (|$self->{origin}| expected)");
+  }
+
+  my $return_ok;
+  my $return_promise = Promise->new (sub { $return_ok = $_[0] });
+  $self->{queue} = $self->{queue}->then (sub {
+    my $then = sub {
+      return $_[0]->request ($method, $url_record, $header_list, sub {
+#        warn Dumper [$_[1], $_[2]];
+      });
+    };
+    my $return = $self->_connect ($url_record)->then ($then)->then (sub {
+      my $result = $_[0];
+      if ($result->{failed} and $result->{can_retry}) {
+        return $self->_connect ($url_record)->then ($then);
+      } else {
+        return $result;
       }
     });
-    return $self->{http}->send_request_headers
-        ({method => encode_web_utf8 ($method),
-          target => encode_web_utf8 ($target),
-          headers => $headers})->then (sub {
-      return $result || $response;
-    });
-  }, sub {
-    return {failed => 1, message => $_[0]};
+    $return_ok->($return);
+    return $return->catch (sub { });
   });
-} # send_request
+  return $return_promise;
+} # request
 
 sub close ($) {
   my $self = $_[0];
-  return Promise->resolve unless defined $self->{http};
-  return $self->{http}->close->then (sub {
-    delete $self->{http};
-    delete $self->{connect_promise};
-    return undef;
+  return Promise->resolve unless defined $self->{client};
+  return $self->{queue}->then (sub {
+    return $self->{client}->close->then (sub {
+      delete $self->{client};
+      $self->{queue} = Promise->resolve;
+      return undef;
+    });
   });
 } # close
 
-sub abort ($;%) {
-  return unless defined $_[0]->{http};
-  return shift->{http}->abort (@_);
-} # abort
-
 sub DESTROY ($) {
-  $_[0]->abort (message => "Aborted by DESTROY of $_[0]");
+  $_[0]->close (message => "Aborted by DESTROY of $_[0]");
 
   local $@;
   eval { die };

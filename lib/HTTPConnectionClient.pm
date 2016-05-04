@@ -104,6 +104,7 @@ sub request ($$%) {
 
   my $return_ok;
   my $return_promise = Promise->new (sub { $return_ok = $_[0] });
+  $self->{queue} ||= Promise->resolve;
   $self->{queue} = $self->{queue}->then (sub {
     my $then = sub {
       return $_[0]->request ($method, $url_record, $header_list, sub {
@@ -126,13 +127,11 @@ sub request ($$%) {
 
 sub close ($) {
   my $self = $_[0];
-  return Promise->resolve unless defined $self->{client};
-  return $self->{queue}->then (sub {
-    return $self->{client}->close->then (sub {
-      delete $self->{client};
-      $self->{queue} = Promise->resolve;
-      return undef;
-    });
+  my $queue = delete $self->{queue};
+  return Promise->resolve unless defined $queue;
+  return $queue->then (sub {
+    my $client = delete $self->{client};
+    return $client->close if defined $client;
   });
 } # close
 

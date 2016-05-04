@@ -43,7 +43,7 @@ sub server_as_cv ($) {
         }
         return if $started;
         if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
-          $cv->send ({pid => $pid, host => $1, port => $2,
+          $cv->send ({pid => $pid, addr => $1, port => $2,
                       resultdata => $resultdata,
                       close_server_ref => \$close_server,
                       after_server_close_cv => $after_server_close_cv,
@@ -73,7 +73,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
       server_as_cv ($test->{data}->[0])->cb (sub {
         my $server = $_[0]->recv;
         my $transport = Transport::TCP->new
-            (host_name => $server->{host}, port => $server->{port});
+            (addr => $server->{addr}, port => $server->{port});
         my $http = HTTP->new (transport => $transport);
         my $test_type = $test->{'test-type'}->[1]->[0] // '';
         
@@ -183,7 +183,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               }
               unless ($http->is_active) {
                 return $http->close->then (sub {
-                  $http = HTTP->new_from_host_and_port ($server->{host}, $server->{port});
+                  $transport = Transport::TCP->new
+                      (addr => $server->{addr}, port => $server->{port});
+                  $http = HTTP->new (transport => $transport);
                   $http->onevent ($onev);
                   return $http->connect;
                 })->then (sub {

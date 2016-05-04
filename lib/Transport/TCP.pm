@@ -8,13 +8,16 @@ use AnyEvent::Util qw(WSAEWOULDBLOCK);
 use AnyEvent::Socket qw(tcp_connect);
 use Promise;
 
+## Note that this class is also used as the base of the
+## |Transport::UNIXDomainSocket| class.
+
 sub new ($%) {
   my $self = bless {}, shift;
   $self->{id} = int rand 100000;
   my $args = $self->{args} = {@_};
   # XXX host vs ipaddr
-  croak "Bad |host_name|" unless defined $args->{host_name};
-  croak "utf8-flagged |host_name|" if utf8::is_utf8 $args->{host_name};
+  croak "Bad |addr|" unless defined $args->{addr};
+  croak "utf8-flagged |addr|" if utf8::is_utf8 $args->{addr};
   croak "Bad |port|" unless defined $args->{port};
   croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
   return $self;
@@ -30,7 +33,7 @@ sub start ($$) {
 
   return Promise->new (sub {
     my ($ok, $ng) = @_;
-    tcp_connect $args->{host_name}, $args->{port}, sub {
+    tcp_connect $args->{addr}, $args->{port}, sub {
       my $fh = shift or return $ng->($!);
       $ok->($fh);
     };

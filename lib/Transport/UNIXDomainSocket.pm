@@ -8,8 +8,7 @@ sub new ($%) {
   my $self = bless {}, shift;
   $self->{id} = int rand 100000;
   my $args = $self->{args} = {@_};
-  # XXX host vs ipaddr
-  $args->{host_name} = 'unix/';
+  $args->{addr} = 'unix/';
   $args->{port} = delete $args->{file_name};
   return $self;
 } # new

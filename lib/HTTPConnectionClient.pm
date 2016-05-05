@@ -2,25 +2,30 @@ package HTTPConnectionClient;
 use strict;
 use warnings;
 use HTTPClientBareConnection;
-use Resolver;
 use Web::Encoding qw(encode_web_utf8);
-use Web::URL::Canonicalize qw(url_to_canon_url parse_url serialize_parsed_url
-                              get_default_port);
+use Web::URL::Canonicalize qw(url_to_canon_url parse_url serialize_parsed_url);
 
 sub new_from_url ($$) {
   my $url = $_[1];
   my $parsed_url = parse_url url_to_canon_url $url, 'about:blank';
-  my $origin = serialize_parsed_url {
+  my $origin = defined $parsed_url->{host} ? serialize_parsed_url {
     invalid => $parsed_url->{invalid},
     scheme => $parsed_url->{scheme},
     host => $parsed_url->{host},
     port => $parsed_url->{port},
-  };
+  } : undef;
   return bless {
     origin => $origin,
     queue => Promise->resolve,
   }, $_[0];
 } # new_from_url
+
+sub proxies ($;$) {
+  if (@_ > 1) {
+    $_[0]->{proxies} = $_[1];
+  }
+  return $_[0]->{proxies};
+} # proxies
 
 sub _connect ($$) {
   my ($self, $url_record) = @_;
@@ -29,23 +34,12 @@ sub _connect ($$) {
     return Promise->resolve ($self->{client});
   }
 
-  my ($addr, $port);
-  return Resolver->resolve_name ($url_record->{host})->then (sub {
-    $addr = $_[0];
-    return bless {failed => 1, message => "Can't resolve |$url_record->{host}|"}, 'HTTPConnectionClient::Response'
-        unless defined $addr;
-
-    $port = $url_record->{port};
-    $port = get_default_port $url_record->{scheme} if not defined $port;
-    return bless {failed => 1, message => "No port specified"}, 'HTTPConnectionClient::Response'
-        unless defined $port;
-
-    return Promise->resolve->then (sub {
-      return $self->{client}->abort if defined $self->{client};
-    })->then (sub {
-      return $self->{client} = HTTPClientBareConnection->new_from_addr_and_port
-          (encode_web_utf8 ($addr), 0+$port);
-    });
+  return Promise->resolve->then (sub {
+    return $self->{client}->abort if defined $self->{client};
+  })->then (sub {
+    $self->{client} = HTTPClientBareConnection->new_from_url_record ($url_record);
+    $self->{client}->proxies ($self->proxies);
+    return $self->{client};
   });
 } # _connect
 
@@ -87,15 +81,15 @@ sub request ($$%) {
     push @$header_list, ['Pragma', 'no-cache'], ['Cache-Control', 'no-cache'];
   }
 
-  # Accept-Encoding DNT Upgrade-Insecure-Requests
+  # XXX Accept-Encoding
 
   my $url_record = parse_url url_to_canon_url $url, 'about:blank';
-  my $url_origin = serialize_parsed_url {
+  my $url_origin = defined $url_record->{host} ? serialize_parsed_url {
     invalid => $url_record->{invalid},
     scheme => $url_record->{scheme},
     host => $url_record->{host},
     port => $url_record->{port},
-  };
+  } : undef;
 
   if (not defined $self->{origin} or
       not defined $url_origin or

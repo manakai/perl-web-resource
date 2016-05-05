@@ -303,4 +303,130 @@ test {
   });
 } n => 11, name => 'methods';
 
+test {
+  my $c = shift;
+  my $url1 = qq{http://hoge.example.com/};
+  my $url2 = qq{http://fuga.example.com/};
+  my $client = HTTPConnectionClient->new_from_url ($url1);
+  return $client->request ($url2)->then (sub {
+    test { ok 0 } $c;
+  }, sub {
+    my $error = $_[0];
+    test {
+      is $error, 'Bad origin |http://fuga.example.com| (|http://hoge.example.com| expected)';
+    } $c;
+  })->then (sub{
+    return $client->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'origin mismatch';
+
+test {
+  my $c = shift;
+  my $url1 = q{mailto:foo@bar};
+  my $url2 = q{http://fuga.example.com/};
+  my $client = HTTPConnectionClient->new_from_url ($url1);
+  return $client->request ($url2)->then (sub {
+    test { ok 0 } $c;
+  }, sub {
+    my $error = $_[0];
+    test {
+      is $error, 'Bad origin |http://fuga.example.com| (|| expected)';
+    } $c;
+  })->then (sub{
+    return $client->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'origin mismatch';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET http://hoge.example.net/foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://hoge.example.net/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'http', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'http proxy';
+
+test {
+  my $c = shift;
+  my $url = qq{http://hoge.example.net/foo};
+  my $client = HTTPConnectionClient->new_from_url ($url);
+  $client->proxies ([{protocol => 'http', host => 'hoge.fuga.test'}]);
+  return $client->request ($url)->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error;
+      is $res->network_error_message, "Can't resolve proxy host |hoge.fuga.test|";
+    } $c;
+  })->then (sub{
+    return $client->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'http proxy bad';
+
+test {
+  my $c = shift;
+  my $url = qq{http://hoge.example.net/foo};
+  my $client = HTTPConnectionClient->new_from_url ($url);
+  $client->proxies ([]);
+  return $client->request ($url)->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error;
+      is $res->network_error_message, "No proxy available";
+    } $c;
+  })->then (sub{
+    return $client->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'no applicable proxy';
+
+test {
+  my $c = shift;
+  my $url = qq{http://hoge.example.net/foo};
+  my $client = HTTPConnectionClient->new_from_url ($url);
+  $client->proxies ([{protocol => 'UnknownProtocol'}]);
+  return $client->request ($url)->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error;
+      is $res->network_error_message, "No proxy available";
+    } $c;
+  })->then (sub{
+    return $client->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'no applicable proxy';
+
 run_tests;

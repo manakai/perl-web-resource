@@ -975,6 +975,7 @@ sub send_request_headers ($$;%) {
     $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
     if ($n eq 'content-length') {
       $self->{request_body_length} = $_->[1]; # XXX
+      # XXX throw if multiple length?
     }
   }
   # XXX transfer-encoding

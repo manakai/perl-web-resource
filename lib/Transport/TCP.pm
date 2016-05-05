@@ -84,7 +84,17 @@ sub start ($$) {
 sub id ($) { return $_[0]->{id} }
 sub type ($) { return 'TCP' }
 sub layered_type ($) { return $_[0]->type }
-sub request_mode ($) { 'default' }
+
+sub request_mode ($;$) {
+  if (@_ > 1) {
+    if ($_[1] eq 'HTTP proxy') {
+      $_[0]->{request_mode} = 'HTTP proxy';
+    } else {
+      delete $_[0]->{request_mode};
+    }
+  }
+  return $_[0]->{request_mode} || 'default';
+}
 
 sub read_closed ($) { return $_[0]->{read_closed} }
 sub write_closed ($) { return $_[0]->{write_closed} }

@@ -2,22 +2,64 @@ package HTTPClientBareConnection;
 use strict;
 use warnings;
 use Promise;
+use Resolver;
 use Transport::TCP;
 use HTTP;
 use Web::Encoding qw(encode_web_utf8);
-use Web::URL::Canonicalize qw(serialize_parsed_url);
+use Web::URL::Canonicalize qw(serialize_parsed_url get_default_port);
 
-sub new_from_addr_and_port ($$$) {
-  return bless {addr => $_[1], port => $_[2]}, $_[0];
-} # new_from_addr_and_port
+sub new_from_url_record ($$) {
+  return bless {url_record => $_[1]}, $_[0];
+} # new_from_url_record
+
+sub proxies ($;$) {
+  if (@_ > 1) {
+    $_[0]->{proxies} = $_[1];
+  }
+  return $_[0]->{proxies};
+} # proxies
 
 sub connect ($) {
   my $self = $_[0];
+  my $url_record = $self->{url_record};
   return $self->{connect_promise} ||= do {
-    my $transport = Transport::TCP->new
-        (addr => $self->{addr}, port => $self->{port});
-    $self->{http} = HTTP->new (transport => $transport);
-    $self->{http}->connect;
+    my $proxies = $self->proxies;
+    $proxies = [{protocol => 'tcp'}] unless defined $proxies;
+    my $get_transport;
+    for my $proxy (@$proxies) {
+      if ($proxy->{protocol} eq 'tcp') {
+        $get_transport = Resolver->resolve_name ($url_record->{host})->then (sub {
+          my $addr = $_[0];
+          die "Can't resolve host |$url_record->{host}|\n" unless defined $addr;
+
+          my $port = $url_record->{port};
+          $port = get_default_port $url_record->{scheme} if not defined $port;
+          die "No port specified\n" unless defined $port;
+
+          return Transport::TCP->new (addr => $addr, port => 0+$port);
+        });
+        last;
+      } elsif ($proxy->{protocol} eq 'http') {
+        $get_transport = Resolver->resolve_name ($proxy->{host})->then (sub {
+          die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
+          my $transport = Transport::TCP->new
+              (addr => $_[0], port => 0+($proxy->{port} || 80));
+          $transport->request_mode ('HTTP proxy');
+          return $transport;
+        });
+        last;
+      } else {
+        warn "Proxy protocol |$proxy->{protocol}| not supported";
+      }
+    }
+    if (defined $get_transport) {
+      $get_transport->then (sub {
+        $self->{http} = HTTP->new (transport => $_[0]);
+        return $self->{http}->connect;
+      });
+    } else {
+      Promise->reject ("No proxy available");
+    }
   };
 } # connect
 
@@ -82,7 +124,9 @@ sub request ($$$$;$) {
       return $result || $response;
     });
   }, sub {
-    return {failed => 1, message => $_[0]};
+    my $err = ''.$_[0];
+    $err =~ s/\n$//;
+    return {failed => 1, message => $err};
   });
 } # request
 

@@ -1,0 +1,306 @@
+use strict;
+use warnings;
+use Path::Tiny;
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
+use Test::More;
+use Test::X1;
+use Promise;
+use AnyEvent::Util qw(run_cmd);
+use HTTPConnectionClient;
+
+my $server_pids = {};
+END { kill 'KILL', $_ for keys %$server_pids }
+sub _server_as_cv ($$$$) {
+  my ($host, $addr, $port, $code) = @_;
+  my $cv = AE::cv;
+  my $started;
+  my $pid;
+  my $data = '';
+  run_cmd
+      ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), $addr, $port],
+      '<' => \$code,
+      '>' => sub {
+        $data .= $_[0] if defined $_[0];
+        return if $started;
+        if ($data =~ /^\[server (\S+) (\S+)\]/m) {
+          $cv->send ({pid => $pid, host => $host, addr => $1, port => $2,
+                      stop => sub {
+                        kill 'TERM', $pid;
+                        delete $server_pids->{$pid};
+                      }});
+          $started = 1;
+        }
+      },
+      '$$' => \$pid;
+  $server_pids->{$pid} = 1;
+  return $cv;
+} # _server_as_cv
+
+sub server_as_cv ($) {
+  return _server_as_cv ('localhost', '127.0.0.1', int (rand 10000) + 1024, $_[0]);
+} # server_as_cv
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $p = $client->request ($url);
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+    return $p->then (sub {
+      my $res = $_[0];
+      test {
+        isa_ok $res, 'HTTPConnectionClient::Response';
+        ok $res->is_network_error;
+        is $res->network_error_message, 'Connection closed without response';
+        is $res->body_bytes, undef;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'connection closed';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 200 OK"CRLF
+    "Content-Length: 4"CRLF
+    CRLF
+    "hoge"
+    receive "GET"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return Promise->all ([
+      $client->request ($url),
+      $client->request ($url),
+    ])->then (sub {
+      my ($res1, $res2) = @{$_[0]};
+      test {
+        ok ! $res1->is_network_error;
+        is $res1->network_error_message, undef;
+        is $res1->body_bytes, 'hoge';
+
+        ok ! $res2->is_network_error;
+        is $res2->network_error_message, undef;
+        is $res2->body_bytes, 'hoge';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => 'connection closed';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 200 OK"CRLF
+    "Content-Length: 4"CRLF
+    CRLF
+    "hoge"
+    receive "GET"
+    "HTTP/1.1 200 OK"CRLF
+    "Content-Length: 4"CRLF
+    CRLF
+    "fuga"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return Promise->all ([
+      $client->request ($url),
+      $client->request ($url),
+    ])->then (sub {
+      my ($res1, $res2) = @{$_[0]};
+      test {
+        ok ! $res1->is_network_error;
+        is $res1->network_error_message, undef;
+        is $res1->body_bytes, 'hoge';
+
+        ok ! $res2->is_network_error;
+        is $res2->network_error_message, undef;
+        is $res2->body_bytes, 'fuga';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => 'connection persisted';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 200 OK"CRLF
+    "Content-Length: 4"CRLF
+    CRLF
+    "hoge"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return Promise->all ([
+      $client->request ($url),
+      $client->request ($url),
+    ])->then (sub {
+      my ($res1, $res2) = @{$_[0]};
+      test {
+        ok ! $res1->is_network_error;
+        is $res1->network_error_message, undef;
+        is $res1->body_bytes, 'hoge';
+
+        ok ! $res2->is_network_error;
+        is $res2->network_error_message, undef;
+        is $res2->body_bytes, 'hoge';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => 'connection not persisted';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 201 OK ?"CRLF
+    "Content-Length: 4"CRLF
+    "X-Hoge: 4"CRLF
+    "X-Hoge: 5"CRLF
+    CRLF
+    "hoge"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return Promise->all ([
+      $client->request ($url),
+    ])->then (sub {
+      my ($res1) = @{$_[0]};
+      test {
+        ok ! $res1->is_network_error;
+        is $res1->network_error_message, undef;
+        is $res1->status, 201;
+        is $res1->code, 201;
+        ok $res1->is_success;
+        ok ! $res1->is_error;
+        is $res1->status_line, '201 OK ?';
+        is $res1->header ('Hoge'), undef;
+        is $res1->header ('X-Hoge'), '4';
+        is $res1->header ('Content-length'), '4';
+        is $res1->body_bytes, 'hoge';
+        is $res1->content, 'hoge';
+        is $res1->as_string, qq{HTTP/1.1 201 OK ?\x0D\x0AContent-Length: 4\x0D\x0AX-Hoge: 4\x0D\x0AX-Hoge: 5\x0D\x0A\x0D\x0Ahoge};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 13, name => 'methods';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 404 OK ?"CRLF
+    "Content-Length: 4"CRLF
+    "X-Hoge: 4"CRLF
+    "X-Hoge: 5"CRLF
+    CRLF
+    "hoge"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return Promise->all ([
+      $client->request ($url),
+    ])->then (sub {
+      my ($res1) = @{$_[0]};
+      test {
+        ok ! $res1->is_network_error;
+        is $res1->network_error_message, undef;
+        is $res1->status, 404;
+        is $res1->code, 404;
+        ok ! $res1->is_success;
+        ok $res1->is_error;
+        is $res1->status_line, '404 OK ?';
+        is $res1->header ('Hoge'), undef;
+        is $res1->header ('X-Hoge'), '4';
+        is $res1->header ('Content-length'), '4';
+        is $res1->body_bytes, 'hoge';
+        is $res1->content, 'hoge';
+        is $res1->as_string, qq{HTTP/1.1 404 OK ?\x0D\x0AContent-Length: 4\x0D\x0AX-Hoge: 4\x0D\x0AX-Hoge: 5\x0D\x0A\x0D\x0Ahoge};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 13, name => 'methods';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return Promise->all ([
+      $client->request ($url),
+    ])->then (sub {
+      my ($res1) = @{$_[0]};
+      test {
+        ok $res1->is_network_error;
+        is $res1->network_error_message, 'Connection closed without response';
+        is $res1->status, 0;
+        is $res1->code, 0;
+        ok ! $res1->is_success;
+        ok $res1->is_error;
+        is $res1->status_line, '0 ';
+        is $res1->header ('Hoge'), undef;
+        is $res1->body_bytes, undef;
+        is $res1->content, '';
+        is $res1->as_string, qq{HTTP/1.1 0 \x0D\x0A\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 11, name => 'methods';
+
+run_tests;

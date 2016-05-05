@@ -32,18 +32,20 @@ sub _connect ($$) {
   my ($addr, $port);
   return Resolver->resolve_name ($url_record->{host})->then (sub {
     $addr = $_[0];
-    return {failed => 1, message => "Can't resolve |$url_record->{host}|"}
+    return bless {failed => 1, message => "Can't resolve |$url_record->{host}|"}, 'HTTPConnectionClient::Response'
         unless defined $addr;
 
     $port = $url_record->{port};
     $port = get_default_port $url_record->{scheme} if not defined $port;
-    return {failed => 1, message => "No port specified"}
+    return bless {failed => 1, message => "No port specified"}, 'HTTPConnectionClient::Response'
         unless defined $port;
 
-    return $self->{client}->abort if defined $self->{client};
-  })->then (sub {
-    return $self->{client} = HTTPClientBareConnection->new_from_addr_and_port
-        (encode_web_utf8 ($addr), 0+$port);
+    return Promise->resolve->then (sub {
+      return $self->{client}->abort if defined $self->{client};
+    })->then (sub {
+      return $self->{client} = HTTPClientBareConnection->new_from_addr_and_port
+          (encode_web_utf8 ($addr), 0+$port);
+    });
   });
 } # _connect
 
@@ -106,17 +108,23 @@ sub request ($$%) {
   my $return_promise = Promise->new (sub { $return_ok = $_[0] });
   $self->{queue} ||= Promise->resolve;
   $self->{queue} = $self->{queue}->then (sub {
+    my $body = [];
     my $then = sub {
       return $_[0]->request ($method, $url_record, $header_list, sub {
-#        warn Dumper [$_[1], $_[2]];
+        push @$body, \($_[2]) if defined $_[2];
       });
     };
     my $return = $self->_connect ($url_record)->then ($then)->then (sub {
       my $result = $_[0];
       if ($result->{failed} and $result->{can_retry}) {
-        return $self->_connect ($url_record)->then ($then);
+        $body = [];
+        return $self->_connect ($url_record)->then ($then)->then (sub {
+          $_[0]->{body} = $body unless $_[0]->{failed};
+          return bless $_[0], 'HTTPConnectionClient::Response';
+        });
       } else {
-        return $result;
+        $result->{body} = $body unless $result->{failed};
+        return bless $result, 'HTTPConnectionClient::Response';
       }
     });
     $return_ok->($return);
@@ -144,5 +152,71 @@ sub DESTROY ($) {
       if $@ =~ /during global destruction/;
 
 } # DESTROY
+
+package HTTPConnectionClient::Response;
+
+sub is_network_error ($) {
+  return $_[0]->{failed};
+} # is_network_error
+
+sub network_error_message ($) {
+  return $_[0]->{message};
+} # network_error_message
+
+sub status ($) {
+  return $_[0]->{status} || 0;
+} # status
+
+## HTTP::Response compatibility
+*code = \&status;
+
+## HTTP::Response compatibility
+sub is_success ($) {
+  return 0 if $_[0]->{failed};
+  return (200 <= $_[0]->{status} and $_[0]->{status} <= 299);
+} # is_success
+
+## HTTP::Response compatibility
+sub is_error ($) {
+  return 1 if $_[0]->{failed};
+  return (400 <= $_[0]->{status} and $_[0]->{status} <= 599);
+} # is_error
+
+## HTTP::Response compatibility
+sub status_line ($) {
+  return $_[0]->status . ' ' . (defined $_[0]->{reason} ? $_[0]->{reason} : '');
+} # status_line
+
+## HTTP::Response compatibility
+sub header ($$) {
+  my $name = $_[1];
+  $name =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+  for (@{$_[0]->{headers}}) {
+    if ($_->[2] eq $name) {
+      return $_->[1];
+    }
+  }
+  return undef;
+} # header
+
+sub body_bytes ($) {
+  return undef unless defined $_[0]->{body};
+  return join '', map { $$_ } @{$_[0]->{body}};
+} # body_bytes
+
+## HTTP::Response compatibility
+sub content ($) {
+  return '' if not defined $_[0]->{body};
+  return $_[0]->body_bytes;
+} # content
+
+## HTTP::Response compatibility
+sub as_string ($) {
+  my $self = $_[0];
+  return 'HTTP/1.1 ' . $self->status_line . "\x0D\x0A" .
+      (join '', map { "$_->[0]: $_->[1]\x0D\x0A" } @{$_[0]->{headers}}) .
+      "\x0D\x0A" .
+      $_[0]->content;
+} # as_string
 
 1;

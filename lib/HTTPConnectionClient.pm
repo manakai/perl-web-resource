@@ -27,6 +27,13 @@ sub proxies ($;$) {
   return $_[0]->{proxies};
 } # proxies
 
+sub tls_options ($;$) {
+  if (@_ > 1) {
+    $_[0]->{tls_options} = $_[1];
+  }
+  return $_[0]->{tls_options};
+} # tls_options
+
 sub _connect ($$) {
   my ($self, $url_record) = @_;
 
@@ -39,6 +46,7 @@ sub _connect ($$) {
   })->then (sub {
     $self->{client} = HTTPClientBareConnection->new_from_url_record ($url_record);
     $self->{client}->proxies ($self->proxies);
+    $self->{client}->tls_options ($self->tls_options);
     return $self->{client};
   });
 } # _connect

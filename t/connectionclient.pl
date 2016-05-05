@@ -5,6 +5,7 @@ use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
+use Test::Certificates;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
 use HTTPConnectionClient;
@@ -428,5 +429,62 @@ test {
     undef $c;
   });
 } n => 2, name => 'no applicable proxy';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    starttls
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{https://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'https';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    starttls
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{https://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'error:14090086:SSL routines:SSL3_GET_SERVER_CERTIFICATE:certificate verify failed';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'https unknown CA';
 
 run_tests;

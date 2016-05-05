@@ -4,6 +4,7 @@ use warnings;
 use Promise;
 use Resolver;
 use Transport::TCP;
+use Transport::TLS;
 use HTTP;
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Canonicalize qw(serialize_parsed_url get_default_port);
@@ -19,12 +20,19 @@ sub proxies ($;$) {
   return $_[0]->{proxies};
 } # proxies
 
+sub tls_options ($;$) {
+  if (@_ > 1) {
+    $_[0]->{tls_options} = $_[1];
+  }
+  return $_[0]->{tls_options} || {};
+} # tls_options
+
 sub connect ($) {
   my $self = $_[0];
-  my $url_record = $self->{url_record};
   return $self->{connect_promise} ||= do {
     my $proxies = $self->proxies;
     $proxies = [{protocol => 'tcp'}] unless defined $proxies;
+    my $url_record = $self->{url_record};
     my $get_transport;
     for my $proxy (@$proxies) {
       if ($proxy->{protocol} eq 'tcp') {
@@ -53,6 +61,13 @@ sub connect ($) {
       }
     }
     if (defined $get_transport) {
+      if (defined $url_record->{scheme} and
+          $url_record->{scheme} eq 'https') {
+        $get_transport = $get_transport->then (sub {
+          return Transport::TLS->new (%{$self->{tls_options}},
+                                      transport => $_[0]);
+        });
+      }
       $get_transport->then (sub {
         $self->{http} = HTTP->new (transport => $_[0]);
         return $self->{http}->connect;
@@ -124,9 +139,13 @@ sub request ($$$$;$) {
       return $result || $response;
     });
   }, sub {
-    my $err = ''.$_[0];
-    $err =~ s/\n$//;
-    return {failed => 1, message => $err};
+    if (ref $_[0] eq 'HASH' and defined $_[0]->{exit}) {
+      return $_[0]->{exit};
+    } else {
+      my $err = ''.$_[0];
+      $err =~ s/\n$//;
+      return {failed => 1, message => $err};
+    }
   });
 } # request
 

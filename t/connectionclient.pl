@@ -42,6 +42,13 @@ sub server_as_cv ($) {
   return _server_as_cv ('localhost', '127.0.0.1', int (rand 10000) + 1024, $_[0]);
 } # server_as_cv
 
+my $test_path = path (__FILE__)->parent->parent->child ('local/test')->absolute;
+$test_path->mkpath;
+
+sub unix_server_as_cv ($) {
+  return _server_as_cv ('localhost', 'unix/', $test_path->child (int (rand 10000) + 1024), $_[0]);
+} # unix_server_as_cv
+
 test {
   my $c = shift;
   server_as_cv (q{
@@ -486,5 +493,156 @@ test {
     });
   });
 } n => 2, name => 'https unknown CA';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    90
+
+    0x00
+    0x00
+
+    0x00
+    0x00
+    0x00
+    0x00
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'socks4 proxy';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    90
+
+    0x00
+    0x00
+
+    0x00
+    0x00
+    0x00
+    0x00
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://badhost.test/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, "Can't resolve host |badhost.test|";
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'socks4 proxy not resolvable';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    5
+    0x00
+
+    5
+    0x00
+    0x00
+
+    0x01
+    0x00
+    0x00
+    0x00
+    0x00
+
+    0x00
+    0x00
+
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://hoge.test/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'socks5', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'socks5 proxy';
+
+test {
+  my $c = shift;
+  unix_server_as_cv (q{
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://hoge.test/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'unix', path => $server->{port}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'unix socket proxy';
 
 run_tests;

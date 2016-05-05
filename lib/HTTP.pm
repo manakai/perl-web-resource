@@ -932,10 +932,13 @@ sub connect ($) {
     my $error = $_[0];
     if ($DEBUG) {
       my $id = $self->{transport}->id;
-      my $msg = defined $error && ref $error eq 'HASH' &&
-                defined $error->{exit} && ref $error->{exit} eq 'HASH' &&
-                defined $error->{exit}->{message}
-                    ? $error->{exit}->{message}
+      my $msg = (defined $error && ref $error eq 'HASH' &&
+                 defined $error->{exit} && ref $error->{exit} eq 'HASH' &&
+                 defined $error->{exit}->{message})
+                    ? $error->{exit}->{message} :
+                (defined $error && ref $error eq 'HASH' && $error->{failed} &&
+                 defined $error->{message})
+                    ? $error->{message}
                     : $error;
       warn "$id: Connection failed ($msg) @{[scalar gmtime]}\n";
     }

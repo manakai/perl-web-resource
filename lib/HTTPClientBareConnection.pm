@@ -34,6 +34,7 @@ sub connect ($) {
     $proxies = [{protocol => 'tcp'}] unless defined $proxies;
     my $url_record = $self->{url_record};
     my $get_transport;
+    # XXX wait for WS
     for my $proxy (@$proxies) {
       if ($proxy->{protocol} eq 'tcp') {
         $get_transport = Resolver->resolve_name ($url_record->{host})->then (sub {
@@ -55,6 +56,57 @@ sub connect ($) {
           $transport->request_mode ('HTTP proxy');
           return $transport;
         });
+        last;
+        # XXX https
+      } elsif ($proxy->{protocol} eq 'socks4') {
+        $get_transport = Promise->all ([
+          Resolver->resolve_name ($url_record->{host}, packed => 1),
+          Resolver->resolve_name ($proxy->{host}),
+        ])->then (sub {
+          my $packed_addr = $_[0]->[0];
+          die "Can't resolve host |$url_record->{host}|\n"
+              unless defined $packed_addr;
+          die "Can't resolve host |$url_record->{host}| into an IPv4 address\n"
+              unless length $packed_addr == 4;
+          my $proxy_addr = $_[0]->[1];
+          die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $proxy_addr;
+
+          my $port = $url_record->{port};
+          $port = get_default_port $url_record->{scheme} if not defined $port;
+          die "No port specified\n" unless defined $port;
+
+          my $tcp = Transport::TCP->new (addr => $proxy_addr,
+                                         port => 0+($proxy->{port} || 1080));
+          require Transport::SOCKS4;
+          return Transport::SOCKS4->new (transport => $tcp,
+                                         packed_addr => $packed_addr,
+                                         port => 0+$port);
+        });
+        last;
+      } elsif ($proxy->{protocol} eq 'socks5') {
+        $get_transport = Resolver->resolve_name ($proxy->{host})->then (sub {
+          die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
+
+          my $port = $url_record->{port};
+          $port = get_default_port $url_record->{scheme} if not defined $port;
+          die "No port specified\n" unless defined $port;
+
+          my $tcp = Transport::TCP->new
+              (addr => $_[0], port => 0+($proxy->{port} || 1080));
+
+          require Transport::SOCKS5;
+          return Transport::SOCKS5->new
+              (transport => $tcp,
+               host => encode_web_utf8 ($url_record->{host}),
+               #XXX packed_addr => ...,
+               port => 0+$port);
+        });
+        last;
+      } elsif ($proxy->{protocol} eq 'unix') {
+        require Transport::UNIXDomainSocket;
+        my $transport = Transport::UNIXDomainSocket->new
+            (path => $proxy->{path});
+        $get_transport = Promise->resolve ($transport);
         last;
       } else {
         warn "Proxy protocol |$proxy->{protocol}| not supported";
@@ -141,6 +193,8 @@ sub request ($$$$;$) {
   }, sub {
     if (ref $_[0] eq 'HASH' and defined $_[0]->{exit}) {
       return $_[0]->{exit};
+    } elsif (ref $_[0] eq 'HASH' and $_[0]->{failed}) {
+      return $_[0];
     } else {
       my $err = ''.$_[0];
       $err =~ s/\n$//;

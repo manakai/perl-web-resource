@@ -1966,7 +1966,7 @@ CRLF
   })->cb (sub {
     my $server = $_[0]->recv;
     my $unix = Transport::UNIXDomainSocket->new
-        (file_name => $server->{port});
+        (path => $server->{port});
     my $http = HTTP->new (transport => $unix);
     my $d = '';
     $http->onevent (sub {

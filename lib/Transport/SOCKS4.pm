@@ -10,8 +10,8 @@ sub new ($%) {
   my $args = $self->{args} = {@_};
   my $port = $args->{port} // '';
   croak "Bad |port|" unless $port =~ /\A[0-9]+\z/ and $port <= 0xFFFF;
-  my $addr = $args->{packed_address} // '';
-  croak "Bad |packed_address|"
+  my $addr = $args->{packed_addr} // '';
+  croak "Bad |packed_addr|"
       unless 4 == length $addr and not utf8::is_utf8 $addr;
   $self->{transport} = delete $self->{args}->{transport};
   $self->{id} = $self->{transport}->id . 'S4';
@@ -55,7 +55,7 @@ sub start ($$;%) {
         $ok->();
       } else {
         $self->{transport}->abort
-            (message => "SOCKS4 server does not return a valid reply");
+            (message => sprintf "SOCKS4 server does not return a valid reply (result code %d)", ord substr $data, 1, 1);
       }
     }
   }; # $process_data
@@ -82,16 +82,18 @@ sub start ($$;%) {
       $ng->($_[2] || $last_error);
       delete $self->{transport};
       delete $self->{cb};
+      undef $self;
     }
   })->then (sub {
     my $port = $args->{port};
-    my $addr = $args->{packed_address};
+    my $addr = $args->{packed_addr};
     $self->{transport}->push_write
         (\("\x04\x01".(pack 'n', $port).$addr."\x00"));
     return $self->{transport}->push_promise;
   })->catch (sub {
     $ng->($_[0]);
     delete $self->{cb};
+    undef $self;
   });
 
   return $p;
@@ -99,7 +101,10 @@ sub start ($$;%) {
 
 sub read_closed ($) { return $_[0]->{transport}->read_closed }
 sub write_closed ($) { return $_[0]->{transport}->write_closed }
-sub write_to_be_closed ($) { return $_[0]->{transport}->write_to_be_closed }
+sub write_to_be_closed ($) {
+  return 1 unless defined $_[0]->{transport};
+  return $_[0]->{transport}->write_to_be_closed;
+} # write_to_be_closed
 
 sub push_write ($$;$$) {
   croak "Bad state" unless $_[0]->{started};

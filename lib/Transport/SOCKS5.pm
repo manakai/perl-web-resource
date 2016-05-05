@@ -10,17 +10,17 @@ sub new ($%) {
   my $args = $self->{args} = {@_};
   my $port = $args->{port} // '';
   croak "Bad |port|" unless $port =~ /\A[0-9]+\z/ and $port <= 0xFFFF;
-  my $host = $args->{hostname};
-  croak "Bad |hostname|" if defined $host and
+  my $host = $args->{host};
+  croak "Bad |host|" if defined $host and
       (utf8::is_utf8 $host or length $host > 255);
-  my $addr = $args->{packed_address};
-  croak "Bad |packed_address|"
+  my $addr = $args->{packed_addr};
+  croak "Bad |packed_addr|"
       if defined $addr and
          not ((4 == length $addr or 16 == length $addr) and
               not utf8::is_utf8 $addr);
-  croak "Neither of |hostname| or |packed_address| is specifed"
+  croak "Neither of |host| or |packed_addr| is specifed"
       unless defined $host or defined $addr;
-  croak "Both |hostname| and |packed_address| is specified"
+  croak "Both |host| and |packed_addr| is specified"
       if defined $host and defined $addr;
   $self->{transport} = delete $self->{args}->{transport};
   $self->{id} = $self->{transport}->id . 'S5';
@@ -62,7 +62,7 @@ sub start ($$;%) {
         $ok0->();
       } else {
         $self->{transport}->abort (message => "SOCKS5 negotiation failed");
-        $ng0->();
+        $ng0->("SOCKS5 negotiation failed");
         return;
       }
     }
@@ -111,17 +111,23 @@ sub start ($$;%) {
     } elsif ($type eq 'writeeof') {
       #
     } elsif ($type eq 'close') {
-      $ng->($_[2] || $last_error);
+      my $error = $_[2] || $last_error;
+      unless ($error->{failed}) {
+        $error = {failed => 1,
+                  message => 'SOCKS5 connection closed before handshake has completed'};
+      }
+      $ng->($error);
       delete $self->{transport};
       delete $self->{cb};
+      undef $self;
     }
   })->then (sub {
     $self->{transport}->push_write (\"\x05\x01\x00");
     return $p0;
   })->then (sub {
     my $port = $args->{port};
-    my $host = $args->{hostname};
-    my $addr = $args->{packed_address};
+    my $host = $args->{host};
+    my $addr = $args->{packed_addr};
     if (defined $host) {
       $self->{transport}->push_write
           (\("\x05\x01\x00\x03".(pack 'C', length $host).$host.(pack 'n', $port)));
@@ -136,6 +142,7 @@ sub start ($$;%) {
   })->catch (sub {
     $ng->($_[0]);
     delete $self->{cb};
+    undef $self;
   });
 
   return $p;
@@ -143,7 +150,10 @@ sub start ($$;%) {
 
 sub read_closed ($) { return $_[0]->{transport}->read_closed }
 sub write_closed ($) { return $_[0]->{transport}->write_closed }
-sub write_to_be_closed ($) { return $_[0]->{transport}->write_to_be_closed }
+sub write_to_be_closed ($) {
+  return 1 unless defined $_[0]->{transport};
+  return $_[0]->{transport}->write_to_be_closed;
+} # write_to_be_closed
 
 sub push_write ($$;$$) {
   croak "Bad state" unless $_[0]->{started};

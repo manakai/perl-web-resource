@@ -1,6 +1,7 @@
 package Transport::UNIXDomainSocket;
 use strict;
 use warnings;
+use Carp qw(croak);
 use Transport::TCP;
 push our @ISA, qw(Transport::TCP);
 
@@ -9,7 +10,8 @@ sub new ($%) {
   $self->{id} = int rand 100000;
   my $args = $self->{args} = {@_};
   $args->{addr} = 'unix/';
-  $args->{port} = delete $args->{file_name};
+  $args->{port} = delete $args->{path};
+  croak "No |file_name| specified" unless defined $args->{port};
   return $self;
 } # new
 

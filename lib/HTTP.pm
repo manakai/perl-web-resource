@@ -943,7 +943,11 @@ sub connect ($) {
                     ? $error->{exit}->{message} :
                 (defined $error && ref $error eq 'HASH' && $error->{failed} &&
                  defined $error->{message})
-                    ? $error->{message}
+                    ? $error->{message} :
+                (defined $error && ref $error eq 'HASH' &&
+                 defined $error->{response} &&
+                 defined $error->{response}->{status})
+                    ? $error->{response}->{status}
                     : $error;
       warn "$id: Connection failed ($msg) @{[scalar gmtime]}\n";
     }

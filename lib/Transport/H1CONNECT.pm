@@ -10,8 +10,8 @@ sub new ($%) {
   my $args = $self->{args} = {@_};
   $self->{http} = delete $self->{args}->{http};
   $self->{id} = $self->{http}->id . 'C';
-  croak "Bad |host_name|" unless defined $args->{host_name};
-  croak "utf8-flagged |host_name|" if utf8::is_utf8 $args->{host_name};
+  croak "Bad |host|" unless defined $args->{host};
+  croak "utf8-flagged |host|" if utf8::is_utf8 $args->{host};
   if (defined $args->{port}) {
     croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
   }
@@ -23,7 +23,7 @@ sub start ($$) {
   croak "Bad state" if not defined $self->{args};
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
-  my $host = $args->{host_name};
+  my $host = $args->{host};
   if (defined $args->{port}) {
     $host .= ':' . $args->{port};
   }
@@ -32,7 +32,10 @@ sub start ($$) {
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
 
   my $req = {method => 'CONNECT',
-             target => $host};
+             target => $host,
+             headers => [[Host => $host], ['Proxy-Connection' => 'keep-alive']]};
+  push @{$req->{headers}}, ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36']; # XXX
+
   # XXX headers
   $self->{http}->onevent (sub {
     my $type = $_[2];

@@ -67,8 +67,18 @@ sub connect ($) {
             $transport = Transport::TLS->new (%{$proxy->{tls_options} or {}},
                                               transport => $transport);
           }
-          #XXX https
-          $transport->request_mode ('HTTP proxy');
+          if ($url_record->{scheme} eq 'https') {
+            # XXX HTTP version
+            my $http = HTTP->new (transport => $transport);
+            require Transport::H1CONNECT;
+            $transport = Transport::H1CONNECT->new
+                (http => $http,
+                 host => (encode_web_utf8 $url_record->{host}),
+                 port => (defined $url_record->{port} ? 0+$url_record->{port} : undef));
+            # XXX auth
+          } else {
+            $transport->request_mode ('HTTP proxy');
+          }
           return $transport;
         });
         last;

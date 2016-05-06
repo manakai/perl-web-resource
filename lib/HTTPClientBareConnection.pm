@@ -56,16 +56,22 @@ sub connect ($) {
           return Transport::TCP->new (addr => $addr, port => 0+$port);
         });
         last;
-      } elsif ($proxy->{protocol} eq 'http') {
+      } elsif ($proxy->{protocol} eq 'http' or
+               $proxy->{protocol} eq 'https') {
         $get_transport = Resolver->resolve_name ($proxy->{host})->then (sub {
           die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
           my $transport = Transport::TCP->new
-              (addr => $_[0], port => 0+($proxy->{port} || 80));
+              (addr => $_[0],
+               port => 0+($proxy->{port} || ($proxy->{protocol} eq 'https' ? 443 : 80)));
+          if ($proxy->{protocol} eq 'https') {
+            $transport = Transport::TLS->new (%{$proxy->{tls_options} or {}},
+                                              transport => $transport);
+          }
+          #XXX https
           $transport->request_mode ('HTTP proxy');
           return $transport;
         });
         last;
-        # XXX https
       } elsif ($proxy->{protocol} eq 'socks4') {
         $get_transport = Promise->all ([
           Resolver->resolve_name ($url_record->{host}, packed => 1),

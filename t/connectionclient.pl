@@ -511,6 +511,37 @@ test {
   my $c = shift;
   server_as_cv (q{
     starttls
+    receive "GET http://hoge.example.net/foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://hoge.example.net/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'https', host => $server->{host},
+                        port => $server->{port},
+                        tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'https proxy';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    starttls
     receive "GET /foo"
     "HTTP/1.1 203 Hoe"CRLF
     "Content-Length: 6"CRLF

@@ -22,7 +22,17 @@ sub id ($) {
 
 sub type ($) { return 'TLS' }
 sub layered_type ($) { return $_[0]->type . '/' . $_[0]->{transport}->layered_type }
-sub request_mode ($) { 'default' }
+
+sub request_mode ($;$) {
+  if (@_ > 1) {
+    if ($_[1] eq 'HTTP proxy') {
+      $_[0]->{request_mode} = 'HTTP proxy';
+    } else {
+      delete $_[0]->{request_mode};
+    }
+  }
+  return $_[0]->{request_mode} || 'default';
+} # request_mode
 
 sub has_alert ($) { return $_[0]->{has_alert} }
 

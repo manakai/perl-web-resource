@@ -34,6 +34,15 @@ sub tls_options ($;$) {
   return $_[0]->{tls_options};
 } # tls_options
 
+our $LastResortTimeout;
+$LastResortTimeout = 60*10 unless defined $LastResortTimeout;
+sub last_resort_timeout ($;$) {
+  if (@_ > 1) {
+    $_[0]->{last_resort_timeout} = $_[1];
+  }
+  return defined $_[0]->{last_resort_timeout} ? $_[0]->{last_resort_timeout} : $LastResortTimeout;
+} # last_resort_timeout
+
 sub _connect ($$) {
   my ($self, $url_record) = @_;
 
@@ -47,6 +56,7 @@ sub _connect ($$) {
     $self->{client} = HTTPClientBareConnection->new_from_url_record ($url_record);
     $self->{client}->proxies ($self->proxies);
     $self->{client}->tls_options ($self->tls_options);
+    $self->{client}->last_resort_timeout ($self->last_resort_timeout);
     return $self->{client};
   });
 } # _connect
@@ -211,6 +221,10 @@ sub content ($) {
   return '' if not defined $_[0]->{body};
   return $_[0]->body_bytes;
 } # content
+
+sub incomplete ($) {
+  return $_[0]->{incomplete};
+} # incomplete
 
 ## HTTP::Response compatibility
 sub as_string ($) {

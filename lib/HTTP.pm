@@ -726,13 +726,14 @@ sub _process_rbuf_eof ($$;%) {
         $self->_ev ('data', $$ref);
         $self->_ev ('dataend', {});
         $self->{exit} = {};
+        $self->{response}->{incomplete} = 1 if $args{abort};
       }
       $$ref = '';
-    } else {
+    } else { # empty
       $self->{exit} = {failed => 1,
                        message => "Connection closed without response",
                        errno => $args{errno},
-                       can_retry => ! $self->{response_received}};
+                       can_retry => !$args{abort} && !$self->{response_received}};
     }
   } elsif ($self->{state} eq 'response body') {
     if (defined $self->{unread_length} and $self->{unread_length} > 0) {
@@ -746,12 +747,14 @@ sub _process_rbuf_eof ($$;%) {
       } else {
         $self->{exit} = {};
       }
-    } elsif ($args{abort} and
-             defined $self->{unread_length} and $self->{unread_length} == 0) {
-      $self->{request_state} = 'sent';
-      $self->_ev ('dataend', {});
-      $self->{exit} = {};
     } else {
+      if ($args{abort}) {
+        if (defined $self->{unread_length}) { #$self->{unread_length} == 0
+          $self->{request_state} = 'sent';
+        } else {
+          $self->{response}->{incomplete} = 1;
+        }
+      }
       $self->_ev ('dataend', {});
       $self->{exit} = {};
     }

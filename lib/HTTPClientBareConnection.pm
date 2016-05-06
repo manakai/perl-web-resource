@@ -1,6 +1,7 @@
 package HTTPClientBareConnection;
 use strict;
 use warnings;
+use AnyEvent;
 use Promise;
 use Resolver;
 use Transport::TCP;
@@ -26,6 +27,13 @@ sub tls_options ($;$) {
   }
   return $_[0]->{tls_options} || {};
 } # tls_options
+
+sub last_resort_timeout ($;$) {
+  if (@_ > 1) {
+    $_[0]->{last_resort_timeout} = $_[1];
+  }
+  return $_[0]->{last_resort_timeout} || 0;
+} # last_resort_timeout
 
 sub connect ($) {
   my $self = $_[0];
@@ -146,6 +154,15 @@ sub request ($$$$;$) {
     $headers = [['Host', encode_web_utf8 $host], ['Connection', 'keep-alive'],
                 @$headers];
 
+    my $timeout = $self->last_resort_timeout;
+    my $timer;
+    if ($timeout > 0) {
+      $timer = AE::timer $timeout, 0, sub {
+        $self->{http}->abort (message => "Last-resort timeout ($timeout)");
+        undef $timer;
+      };
+    }
+
     my $response;
     my $result;
     $self->{http}->onevent (sub {
@@ -166,6 +183,7 @@ sub request ($$$$;$) {
           $response = undef;
           $result ||= $exit;
         }
+        undef $timer;
       } elsif ($type eq 'headers') {
         my $transport = $_[0]->transport;
         my $res = $_[3];

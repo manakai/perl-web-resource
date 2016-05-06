@@ -732,7 +732,7 @@ sub _process_rbuf_eof ($$;%) {
       $self->{exit} = {failed => 1,
                        message => "Connection closed without response",
                        errno => $args{errno},
-                       can_retry => $self->{response_received}};
+                       can_retry => ! $self->{response_received}};
     }
   } elsif ($self->{state} eq 'response body') {
     if (defined $self->{unread_length} and $self->{unread_length} > 0) {
@@ -829,6 +829,7 @@ sub _next ($) {
       $self->{state} = 'stopped';
     } else {
       $self->{state} = 'waiting';
+      $self->{response_received} = 0;
     }
   }
 } # _next
@@ -840,6 +841,7 @@ sub connect ($) {
   $self->{transport} = $args->{transport};
   $self->{id} = $self->{transport}->id;
   $self->{state} = 'initial';
+  $self->{response_received} = 1;
 
   my $onclosed;
   my $closed = Promise->new (sub { $onclosed = $_[0] });

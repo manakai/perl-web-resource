@@ -113,7 +113,77 @@ test {
       undef $c;
     });
   });
-} n => 6, name => 'connection closed';
+} n => 6, name => 'connection closed (can_retry true)';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 200 OK"CRLF
+    "Content-Length: 4"CRLF
+    CRLF
+    "hoge"
+    receive "GET"
+    "H"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return Promise->all ([
+      $client->request ($url),
+      $client->request ($url),
+    ])->then (sub {
+      my ($res1, $res2) = @{$_[0]};
+      test {
+        ok ! $res1->is_network_error;
+        is $res1->network_error_message, undef;
+        is $res1->body_bytes, 'hoge';
+
+        ok ! $res2->is_network_error;
+        is $res2->network_error_message, undef;
+        is $res2->body_bytes, 'H';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => 'connection closed (can_retry false)';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return Promise->all ([
+      $client->request ($url),
+      $client->request ($url),
+    ])->then (sub {
+      my ($res1, $res2) = @{$_[0]};
+      test {
+        ok $res1->is_network_error;
+        is $res1->network_error_message, 'Connection closed without response';
+        is $res1->body_bytes, undef;
+
+        ok $res2->is_network_error;
+        is $res2->network_error_message, 'Connection closed without response';
+        is $res2->body_bytes, undef;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => 'connection closed (1st response, can_retry false)';
 
 test {
   my $c = shift;

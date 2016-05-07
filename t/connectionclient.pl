@@ -497,7 +497,8 @@ test {
     my $res = $_[0];
     test {
       ok $res->is_network_error;
-      is $res->network_error_message, "No proxy available";
+      is $res->network_error_message,
+          "Proxy protocol |UnknownProtocol| not supported";
     } $c;
   })->then (sub{
     return $client->close;
@@ -1102,5 +1103,64 @@ test {
     });
   });
 } n => 2, name => 'bad url scheme - socks4 proxy';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET http://hoge.example.net/foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://hoge.example.net/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'http', host => 'unknown.host.test'},
+                       {protocol => 'http', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'proxy fallback';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'http', host => 'unknown.host.test'},
+                       {protocol => 'tcp'}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'proxy fallback';
 
 run_tests;

@@ -39,13 +39,13 @@ sub connect ($) {
   my $self = $_[0];
   return $self->{connect_promise} ||= do {
     my $proxies = $self->proxies;
-    $proxies = [{protocol => 'tcp'}] unless defined $proxies;
+    $proxies = defined $proxies ? [@$proxies] : [{protocol => 'tcp'}];
     my $url_record = $self->{url_record};
-    my $get_transport;
     # XXX wait for WS
-    for my $proxy (@$proxies) {
+    my $proxy_to_transport = sub {
+      my $proxy = $_[0];
       if ($proxy->{protocol} eq 'tcp') {
-        $get_transport = Resolver->resolve_name ($url_record->{host})->then (sub {
+        return Resolver->resolve_name ($url_record->{host})->then (sub {
           my $addr = $_[0];
           die "Can't resolve host |$url_record->{host}|\n" unless defined $addr;
 
@@ -55,10 +55,9 @@ sub connect ($) {
 
           return Transport::TCP->new (addr => $addr, port => 0+$port);
         });
-        last;
       } elsif ($proxy->{protocol} eq 'http' or
                $proxy->{protocol} eq 'https') {
-        $get_transport = Resolver->resolve_name ($proxy->{host})->then (sub {
+        return Resolver->resolve_name ($proxy->{host})->then (sub {
           die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
           my $transport = Transport::TCP->new
               (addr => $_[0],
@@ -81,9 +80,8 @@ sub connect ($) {
           }
           return $transport;
         });
-        last;
       } elsif ($proxy->{protocol} eq 'socks4') {
-        $get_transport = Promise->all ([
+        return Promise->all ([
           Resolver->resolve_name ($url_record->{host}, packed => 1),
           Resolver->resolve_name ($proxy->{host}),
         ])->then (sub {
@@ -106,9 +104,8 @@ sub connect ($) {
                                          packed_addr => $packed_addr,
                                          port => 0+$port);
         });
-        last;
       } elsif ($proxy->{protocol} eq 'socks5') {
-        $get_transport = Resolver->resolve_name ($proxy->{host})->then (sub {
+        return Resolver->resolve_name ($proxy->{host})->then (sub {
           die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
 
           my $port = $url_record->{port};
@@ -125,38 +122,53 @@ sub connect ($) {
                #XXX packed_addr => ...,
                port => 0+$port);
         });
-        last;
       } elsif ($proxy->{protocol} eq 'unix') {
         require Transport::UNIXDomainSocket;
         my $transport = Transport::UNIXDomainSocket->new
             (path => $proxy->{path});
-        $get_transport = Promise->resolve ($transport);
-        last;
+        return Promise->resolve ($transport);
       } else {
-        warn "Proxy protocol |$proxy->{protocol}| not supported";
+        return Promise->reject
+            ("Proxy protocol |$proxy->{protocol}| not supported\n");
       }
-    }
-    if (defined $get_transport) {
+    }; # $proxy_to_transport
+
+    my $get; $get = sub {
+      if (@$proxies) {
+        my $proxy = shift @$proxies;
+        return $proxy_to_transport->($proxy)->catch (sub {
+          if (@$proxies) {
+            return $get->();
+          } else {
+            die $_[0];
+          }
+        });
+      } else {
+        return Promise->reject ("No proxy available\n");
+      }
+    }; # $get
+    $get->()->then (sub {
+      my $transport = $_[0];
+      undef $get;
       if (defined $url_record->{scheme} and
           $url_record->{scheme} eq 'https') {
-        $get_transport = $get_transport->then (sub {
-          return Transport::TLS->new (%{$self->{tls_options}},
-                                      transport => $_[0]);
-        });
+        return Transport::TLS->new (%{$self->{tls_options}},
+                                    transport => $_[0]);
       }
-      $get_transport->then (sub {
-        # XXX switch to FTP if ...
-        if (not $_[0]->request_mode eq 'HTTP proxy' and
-            not $url_record->{scheme} eq 'http' and
-            not $url_record->{scheme} eq 'https') {
-          die "Bad URL scheme |$url_record->{scheme}|\n";
-        }
-        $self->{http} = HTTP->new (transport => $_[0]);
-        return $self->{http}->connect;
-      });
-    } else {
-      Promise->reject ("No proxy available");
-    }
+      return $transport;
+    }, sub {
+      undef $get;
+      die $_[0];
+    })->then (sub {
+      # XXX switch to FTP if ...
+      if (not $_[0]->request_mode eq 'HTTP proxy' and
+          not $url_record->{scheme} eq 'http' and
+          not $url_record->{scheme} eq 'https') {
+        die "Bad URL scheme |$url_record->{scheme}|\n";
+      }
+      $self->{http} = HTTP->new (transport => $_[0]);
+      return $self->{http}->connect;
+    });
   };
 } # connect
 

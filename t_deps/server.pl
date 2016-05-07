@@ -366,6 +366,8 @@ sub run_commands ($$$$) {
       $hdl->push_write (pack 'C', $1);
     } elsif ($command =~ /^client$/) {
       $hdl->push_write ($states->{client_host} . ':' . $states->{client_port});
+    } elsif ($command =~ /^write\s+(sni_host)$/) {
+      $hdl->push_write ($states->{$1} // '(null)');
     } elsif ($command =~ /^ws-accept$/) {
       $states->{captured} =~ /^Sec-WebSocket-Key:\s*(\S+)\s*$/im;
       my $key = $1 // '';
@@ -758,7 +760,7 @@ sub run_commands ($$$$) {
       while ($x =~ s/^\s+(\w+)=(\S*)//) {
         $args->{$1} = $2;
       }
-      Test::Certificates->wait_create_cert;
+      Test::Certificates->wait_create_cert (host => $args->{host});
       $states->{starttls_waiting} = 1;
       $hdl->on_starttls (sub {
         delete $states->{starttls_waiting};
@@ -818,8 +820,8 @@ sub run_commands ($$$$) {
       $hdl->starttls ('accept', {
         method => 'TLSv1_2',
         ca_file => Test::Certificates->ca_path ('cert.pem'),
-        cert_file => Test::Certificates->cert_path ('cert.pem'),
-        key_file => Test::Certificates->cert_path ('key.pem'),
+        cert_file => Test::Certificates->cert_path ('cert.pem', host => $args->{host}),
+        key_file => Test::Certificates->cert_path ('key.pem', host => $args->{host}),
 #        cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK',
         cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK', # modern
         #cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA',
@@ -830,7 +832,8 @@ sub run_commands ($$$$) {
           Net::SSLeay::CTX_set_tlsext_servername_callback ($ctx, sub {
             my $h = Net::SSLeay::get_servername ($_[0]);
             warn "[$states->{id}] TLS SNI name: |$h|\n" if $DUMP and defined $h;
-            
+            $states->{sni_host} = $h;
+
             Net::SSLeay::set_SSL_CTX ($_[0], $ctx);
           });
           if (exists &Net::SSLeay::P_alpn_selected) {

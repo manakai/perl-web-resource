@@ -94,7 +94,7 @@ sub request_mode ($;$) {
     }
   }
   return $_[0]->{request_mode} || 'default';
-}
+} # request_mode
 
 sub read_closed ($) { return $_[0]->{read_closed} }
 sub write_closed ($) { return $_[0]->{write_closed} }

@@ -15,22 +15,24 @@ sub ca_path ($$) {
   return $cert_path->child ('ca-' . $_[1]);
 } # ca_path
 
-sub cert_path ($$) {
-  return $cert_path->child ($cn . '-' . $_[1]);
+sub cert_path ($$;%) {
+  my (undef, undef, %args) = @_;
+  return $cert_path->child (($args{host} || $cn) . '-' . $_[1]);
 } # cert_path
 
 sub cert_name ($) {
   return $cn;
 } # cert_name
 
-sub wait_create_cert ($) {
+sub wait_create_cert ($;%) {
+  my (undef, %args) = @_;
   if ($ENV{RECREATE_CERTS} or
       ($_[0]->ca_path ('cert.pem')->is_file and
        $_[0]->ca_path ('cert.pem')->stat->mtime + 60*60*24 < time)) {
     system "rm \Q$cert_path\E/*.pem";
   }
-  unless ($_[0]->cert_path ('key.pem')->is_file) {
-    system $root_path->child ('perl'), $gen_path, $cert_path, $cn;
+  unless ($_[0]->cert_path ('key.pem', host => $args{host})->is_file) {
+    system $root_path->child ('perl'), $gen_path, $cert_path, $args{host} || $cn;
     warn "Wait 30s...\n";
     sleep 30;
   }

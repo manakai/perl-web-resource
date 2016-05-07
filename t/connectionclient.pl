@@ -18,6 +18,7 @@ sub _server_as_cv ($$$$) {
   my $started;
   my $pid;
   my $data = '';
+  local $ENV{SERVER_HOST_NAME} = $host;
   run_cmd
       ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), $addr, $port],
       '<' => \$code,
@@ -542,6 +543,37 @@ test {
 test {
   my $c = shift;
   server_as_cv (q{
+    starttls host=hoge.example.net
+    receive "GET http://hoge.example.net/foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://hoge.example.net/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'https', host => $server->{host},
+                        port => $server->{port},
+                        tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'error:14090086:SSL routines:SSL3_GET_SERVER_CERTIFICATE:certificate verify failed';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'https proxy bad service identity';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
     starttls
     receive "GET /foo"
     "HTTP/1.1 203 Hoe"CRLF
@@ -574,6 +606,65 @@ test {
     starttls
     receive "GET /foo"
     "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    "abcdef"
+    write sni_host
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{https://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef' . $server->{host};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'https SNI';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    starttls host=another.host.test
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{https://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'error:14090086:SSL routines:SSL3_GET_SERVER_CERTIFICATE:certificate verify failed';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'https bad service identity';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    starttls
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
     "Content-Length: 6"CRLF
     CRLF
     "abcdef"
@@ -595,7 +686,6 @@ test {
     });
   });
 } n => 2, name => 'https unknown CA';
-
 
 test {
   my $c = shift;

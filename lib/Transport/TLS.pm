@@ -1,7 +1,7 @@
 package Transport::TLS;
 use strict;
 use warnings;
-use Carp qw(croak);
+use Carp qw(croak carp);
 use Scalar::Util qw(weaken);
 use AnyEvent;
 use Promise;
@@ -11,6 +11,8 @@ use AnyEvent::TLS;
 sub new ($%) {
   my $self = bless {}, shift;
   $self->{args} = {@_};
+  carp "|si_host| is not defined" unless defined $self->{args}->{si_host};
+  carp "|sni_host| is not defined" unless defined $self->{args}->{sni_host};
   $self->{transport} = delete $self->{args}->{transport};
   $self->{id} = $self->{transport}->id . 'S';
   return $self;
@@ -187,8 +189,9 @@ sub start ($$;%) {
       });
     } else { # client
       Net::SSLeay::set_connect_state ($tls);
-      Net::SSLeay::set_tlsext_host_name ($tls, $args->{sni_host_name})
-          if defined $args->{sni_host_name};
+      # XXX If ipaddr
+      Net::SSLeay::set_tlsext_host_name ($tls, $args->{sni_host})
+          if defined $args->{sni_host};
 
       ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_verify.html>
       Net::SSLeay::set_verify $tls, $vmode, sub {
@@ -196,8 +199,9 @@ sub start ($$;%) {
         my $depth = Net::SSLeay::X509_STORE_CTX_get_error_depth ($x509_store_ctx);
         if ($depth == 0) {
           my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
-          if (defined $args->{si_host_name}) {
-            return 0 unless verify_hostname $cert, $args->{si_host_name};
+          if (defined $args->{si_host}) {
+            # XXX If ipaddr
+            return 0 unless verify_hostname $cert, $args->{si_host};
           }
 
           # XXX hook to verify the client cert

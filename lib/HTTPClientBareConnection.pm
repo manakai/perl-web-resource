@@ -63,8 +63,11 @@ sub connect ($) {
               (addr => $_[0],
                port => 0+($proxy->{port} || ($proxy->{protocol} eq 'https' ? 443 : 80)));
           if ($proxy->{protocol} eq 'https') {
-            $transport = Transport::TLS->new (%{$proxy->{tls_options} or {}},
-                                              transport => $transport);
+            $transport = Transport::TLS->new
+                (%{$proxy->{tls_options} or {}},
+                 si_host => $proxy->{host},
+                 sni_host => $proxy->{host},
+                 transport => $transport);
           }
           if ($url_record->{scheme} eq 'https') {
             # XXX HTTP version
@@ -152,8 +155,11 @@ sub connect ($) {
       undef $get;
       if (defined $url_record->{scheme} and
           $url_record->{scheme} eq 'https') {
-        return Transport::TLS->new (%{$self->{tls_options}},
-                                    transport => $_[0]);
+        return Transport::TLS->new
+            (%{$self->{tls_options}},
+             si_host => $url_record->{host},
+             sni_host => $url_record->{host},
+             transport => $_[0]);
       }
       return $transport;
     }, sub {

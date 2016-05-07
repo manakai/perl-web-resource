@@ -949,4 +949,158 @@ test {
   });
 } n => 6, name => 'timeout can retry';
 
+test {
+  my $c = shift;
+  my $url = q{ftp://127.0.0.1/foo};
+  my $client = HTTPConnectionClient->new_from_url ($url);
+  return $client->request ($url)->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error;
+      is $res->network_error_message, "Bad URL scheme |ftp|";
+    } $c;
+  })->then (sub{
+    return $client->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'bad url scheme';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET ftp://hoge.example.net/foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{ftp://hoge.example.net/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'http', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'bad url scheme http proxy - ftp';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET hoge://hoge.example.net/foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{hoge://hoge.example.net/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'http', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'bad url scheme http proxy - unknown scheme';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    90
+
+    0x00
+    0x00
+
+    0x00
+    0x00
+    0x00
+    0x00
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{ftp://$server->{host}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'Bad URL scheme |ftp|';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'bad url scheme - socks4 proxy';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    90
+
+    0x00
+    0x00
+
+    0x00
+    0x00
+    0x00
+    0x00
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{gopher://$server->{host}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->proxies ([{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'Bad URL scheme |gopher|';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'bad url scheme - socks4 proxy';
+
 run_tests;

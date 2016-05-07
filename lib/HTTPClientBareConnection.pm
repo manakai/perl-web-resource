@@ -145,6 +145,12 @@ sub connect ($) {
         });
       }
       $get_transport->then (sub {
+        # XXX switch to FTP if ...
+        if (not $_[0]->request_mode eq 'HTTP proxy' and
+            not $url_record->{scheme} eq 'http' and
+            not $url_record->{scheme} eq 'https') {
+          die "Bad URL scheme |$url_record->{scheme}|\n";
+        }
         $self->{http} = HTTP->new (transport => $_[0]);
         return $self->{http}->connect;
       });

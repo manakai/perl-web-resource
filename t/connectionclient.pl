@@ -1163,4 +1163,65 @@ test {
   });
 } n => 2, name => 'proxy fallback';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    "abcdef"
+    sleep 2
+    "xyzaaa"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->max_size (6);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+        ok $res->incomplete;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'max_size';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 6"CRLF
+    CRLF
+    "abcdef"
+    sleep 2
+    "xyzaaa"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    $client->max_size (6);
+    return $client->request ($url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, 'abcdef';
+        ok ! $res->incomplete;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'max_size';
+
 run_tests;

@@ -34,6 +34,13 @@ sub tls_options ($;$) {
   return $_[0]->{tls_options};
 } # tls_options
 
+sub max_size ($;$) {
+  if (@_ > 1) {
+    $_[0]->{max_size} = $_[1];
+  }
+  return defined $_[0]->{max_size} ? $_[0]->{max_size} : -1;
+} # max_size
+
 our $LastResortTimeout;
 $LastResortTimeout = 60*10 unless defined $LastResortTimeout;
 sub last_resort_timeout ($;$) {
@@ -121,15 +128,26 @@ sub request ($$%) {
   $self->{queue} ||= Promise->resolve;
   $self->{queue} = $self->{queue}->then (sub {
     my $body = [];
+    my $body_length = 0;
+    my $max = $self->max_size;
     my $then = sub {
       return $_[0]->request ($method, $url_record, $header_list, sub {
-        push @$body, \($_[2]) if defined $_[2];
+        if (defined $_[2]) {
+          push @$body, \($_[2]);
+          if ($max >= 0) {
+            $body_length += length $_[2];
+            if ($body_length >= $max) {
+              $_[0]->abort (message => "Response body is larger than max_size ($max)");
+            }
+          }
+        }
       });
     };
     my $return = $self->_connect ($url_record)->then ($then)->then (sub {
       my $result = $_[0];
       if ($result->{failed} and $result->{can_retry}) {
         $body = [];
+        $body_length = 0;
         return $self->_connect ($url_record)->then ($then)->then (sub {
           $_[0]->{body} = $body unless $_[0]->{failed};
           return bless $_[0], 'HTTPConnectionClient::Response';

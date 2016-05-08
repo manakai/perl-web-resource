@@ -31,11 +31,31 @@ sub wait_create_cert ($;%) {
        $_[0]->ca_path ('cert.pem')->stat->mtime + 60*60*24 < time)) {
     system "rm \Q$cert_path\E/*.pem";
   }
-  unless ($_[0]->cert_path ('key.pem', host => $args{host})->is_file) {
-    system $root_path->child ('perl'), $gen_path, $cert_path, $args{host} || $cn;
-    warn "Wait 30s...\n";
-    sleep 30;
+  my $cert_pem_path = $_[0]->cert_path ('cert.pem', host => $args{host});
+  system $root_path->child ('perl'), $gen_path, $cert_path, $args{host} || $cn
+      unless $cert_pem_path->is_file;
+
+  require Net::SSLeay;
+  require Web::DateTime::Parser;
+
+  my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
+  my $rv = Net::SSLeay::BIO_write ($bio, $cert_pem_path->slurp);
+  my $x509 = Net::SSLeay::PEM_read_bio_X509 ($bio);
+  Net::SSLeay::BIO_free ($bio);
+  die "Failed to parse |$cert_pem_path|" unless $x509;
+
+  my $parser = Web::DateTime::Parser->new;
+  my $dt = $parser->parse_global_date_and_time_string
+      (Net::SSLeay::P_ASN1_TIME_get_isotime
+           (Net::SSLeay::X509_get_notBefore ($x509)));
+  my $tt = $dt->to_unix_number;
+
+  my $delta = $tt - time;
+  if ($delta > 0) {
+    warn "Wait $delta seconds...\n";
+    sleep $delta;
   }
+  Net::SSLeay::X509_free($x509);
 } # wait_create_cert
 
 1;

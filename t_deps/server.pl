@@ -760,7 +760,11 @@ sub run_commands ($$$$) {
       while ($x =~ s/^\s+(\w+)=(\S*)//) {
         $args->{$1} = $2;
       }
-      Test::Certificates->wait_create_cert (host => $args->{host});
+      $args->{cn} = ($ENV{SERVER_HOST_NAME} // 'hoge.test')
+          if defined $args->{cn} and $args->{cn} eq '##HOST##';
+      Test::Certificates->wait_create_cert
+          (host => $args->{host}, no_san => $args->{no_san},
+           cn => $args->{cn}, cn2 => $args->{cn2});
       $states->{starttls_waiting} = 1;
       $hdl->on_starttls (sub {
         delete $states->{starttls_waiting};
@@ -817,11 +821,13 @@ sub run_commands ($$$$) {
       };
 
       local $CurrentID = $states->{id};
+      my $server_cert_path = Test::Certificates->cert_path ('cert.pem', host => $args->{host}, no_san => $args->{no_san}, cn => $args->{cn}, cn2 => $args->{cn2});
+      warn "[$states->{id}] TLS server certificate: |$server_cert_path|\n" if $DUMP;
       $hdl->starttls ('accept', {
         method => 'TLSv1_2',
         ca_file => Test::Certificates->ca_path ('cert.pem'),
-        cert_file => Test::Certificates->cert_path ('cert.pem', host => $args->{host}),
-        key_file => Test::Certificates->cert_path ('key.pem', host => $args->{host}),
+        cert_file => $server_cert_path,
+        key_file => Test::Certificates->cert_path ('key.pem', host => $args->{host}, no_san => $args->{no_san}, cn => $args->{cn}, cn2 => $args->{cn2}),
 #        cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK',
         cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!3DES:!MD5:!PSK', # modern
         #cipher_list => 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-AES256-GCM-SHA384:DHE-RSA-AES128-GCM-SHA256:DHE-DSS-AES128-GCM-SHA256:kEDH+AESGCM:ECDHE-RSA-AES128-SHA256:ECDHE-ECDSA-AES128-SHA256:ECDHE-RSA-AES128-SHA:ECDHE-ECDSA-AES128-SHA:ECDHE-RSA-AES256-SHA384:ECDHE-ECDSA-AES256-SHA384:ECDHE-RSA-AES256-SHA:ECDHE-ECDSA-AES256-SHA:DHE-RSA-AES128-SHA256:DHE-RSA-AES128-SHA:DHE-DSS-AES128-SHA256:DHE-RSA-AES256-SHA256:DHE-DSS-AES256-SHA:DHE-RSA-AES256-SHA:ECDHE-RSA-DES-CBC3-SHA:ECDHE-ECDSA-DES-CBC3-SHA:AES128-GCM-SHA256:AES256-GCM-SHA384:AES128-SHA256:AES256-SHA256:AES128-SHA:AES256-SHA:AES:DES-CBC3-SHA:HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!aECDH:!EDH-DSS-DES-CBC3-SHA:!EDH-RSA-DES-CBC3-SHA:!KRB5-DES-CBC3-SHA',

@@ -4,7 +4,7 @@ use warnings;
 use Path::Tiny;
 
 my $root_path = path (__FILE__)->parent->parent->parent->parent->absolute;
-my $cert_path = $root_path->child ('local/cert2');
+my $cert_path = $root_path->child ('local/cert');
 my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
 $cert_path->mkpath;
 
@@ -15,9 +15,18 @@ sub ca_path ($$) {
   return $cert_path->child ('ca-' . $_[1]);
 } # ca_path
 
+sub escape ($) {
+  my $s = $_[0];
+  $s =~ s/([^0-9a-z])/sprintf '_%02X', ord $1/ge;
+  return $s;
+} # escape
+
 sub cert_path ($$;%) {
   my (undef, undef, %args) = @_;
-  return $cert_path->child (($args{host} || $cn) . '-' . $_[1]);
+  return $cert_path->child (escape ($args{host} || $cn) . '-' . ($args{no_san} ? 'nosan-' : '')
+      . (defined $args{cn} ? 'cn-' . (escape $args{cn}) . '-' : '')
+      . (defined $args{cn2} ? 'cn2-' . (escape $args{cn2}) . '-' : '')
+      . $_[1]);
 } # cert_path
 
 sub cert_name ($) {
@@ -31,9 +40,13 @@ sub wait_create_cert ($;%) {
        $_[0]->ca_path ('cert.pem')->stat->mtime + 60*60*24 < time)) {
     system "rm \Q$cert_path\E/*.pem";
   }
-  my $cert_pem_path = $_[0]->cert_path ('cert.pem', host => $args{host});
-  system $root_path->child ('perl'), $gen_path, $cert_path, $args{host} || $cn
-      unless $cert_pem_path->is_file;
+  my $cert_pem_path = $_[0]->cert_path ('cert.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
+  unless ($cert_pem_path->is_file) {
+    local $ENV{CERT_NO_SAN} = !!$args{no_san};
+    local $ENV{CERT_CN} = $args{cn} // '';
+    local $ENV{CERT_CN2} = $args{cn2} // '';
+    system $root_path->child ('perl'), $gen_path, $cert_path, $args{host} || $cn;
+  }
 
   require Net::SSLeay;
   require Web::DateTime::Parser;

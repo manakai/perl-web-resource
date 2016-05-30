@@ -127,8 +127,8 @@ sub parse_response_byte_string ($$) {
   return $result;
 } # parse_response_byte_string
 
-sub check_cert_id_with_response ($$$) {
-  my (undef, $res, $cert_id) = @_;
+sub check_cert_id_with_response ($$$$) {
+  my (undef, $res, $cert_id, $now) = @_;
 
   my $r = $res->{responses}->{$cert_id};
   if (not defined $r) {
@@ -148,7 +148,7 @@ sub check_cert_id_with_response ($$$) {
   if (defined $r->{this_update}) {
     my $min = $parser->parse_pkix_generalized_time_string ($r->{this_update});
     if (defined $min) {
-      if ($min->to_unix_number <= time) {
+      if ($min->to_unix_number <= $now) {
         #
       } else {
         return "Stapled OCSP response not in effect until |$r->{this_update}|";
@@ -163,7 +163,7 @@ sub check_cert_id_with_response ($$$) {
   if (defined $r->{next_update}) {
     my $max = $parser->parse_pkix_generalized_time_string ($r->{next_update});
     if (defined $max) {
-      if (time < $max->to_unix_number) {
+      if ($now < $max->to_unix_number) {
         #
       } else {
         return "Stale stapled OCSP response |$r->{next_update}|";

@@ -9,11 +9,15 @@ use Net::SSLeay;
 use AnyEvent::TLS;
 use Web::Transport::OCSP;
 
+## Note that |now| option does not affect any OpenSSL's internal
+## verification process for, e.g., X.509 certificates.
+
 sub new ($%) {
   my $self = bless {}, shift;
   $self->{args} = {@_};
   carp "|si_host| is not defined" unless defined $self->{args}->{si_host};
   carp "|sni_host| is not defined" unless defined $self->{args}->{sni_host};
+  $self->{args}->{now} ||= time;
   $self->{transport} = delete $self->{args}->{transport};
   $self->{id} = $self->{transport}->id . 'S';
   return $self;
@@ -249,7 +253,8 @@ sub start ($$;%) {
 
         my $res = Web::Transport::OCSP->parse_response_byte_string
             (Net::SSLeay::i2d_OCSP_RESPONSE ($response));
-        my $error = Web::Transport::OCSP->check_cert_id_with_response ($res, $certid);
+        my $error = Web::Transport::OCSP->check_cert_id_with_response
+            ($res, $certid, $args->{now});
         if (not defined $error) {
           $self->{starttls_data}->{stapling_result} = {response => $res};
           return 1;

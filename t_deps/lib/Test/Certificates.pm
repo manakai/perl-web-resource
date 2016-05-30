@@ -3,6 +3,8 @@ use strict;
 use warnings;
 use Path::Tiny;
 use File::Temp;
+use Web::DateTime::Parser;
+use Web::Transport::OCSP;
 
 my $root_path = path (__FILE__)->parent->parent->parent->parent->absolute;
 my $cert_path = $root_path->child ('local/cert');
@@ -178,12 +180,29 @@ sub ocsp_response ($$;%) {
        '-rsigner' => $class->ca_path ('cert.pem'),
        '-issuer' => $class->ca_path ('cert.pem'),
        '-cert' => $cert_path,
-       ($args{no_next} ? () : ('-ndays' => 100)),
+       ($args{no_next} ? () : ('-ndays' => 1)),
        #'-text', # DEBUG
        '-respout' => $res_path) == 0
       or die $?;
 
-  return $res_path->slurp; # DER encoded
+  my $der = $res_path->slurp; # DER encoded
+
+  my $parsed = Web::Transport::OCSP->parse_response_byte_string ($der);
+  my $dtp = Web::DateTime::Parser->new;
+  my $max = time;
+  for (values %{$parsed->{responses} or {}}) {
+    next unless defined $_->{update};
+    my $dt = $dtp->parse_pkix_generalized_time_string ($_->{this_update});
+    my $t = $dt->to_unix_number;
+    $max = $t if $t > $max;
+  }
+  my $delta = $max - time;
+  if ($delta > 0) {
+    warn "Wait for $delta seconds for OCSP response...\n";
+    sleep $delta;
+  }
+
+  return $der;
 } # ocsp_response
 
 1;

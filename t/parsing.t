@@ -78,12 +78,18 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
         my $transport = Transport::TCP->new
             (addr => $server->{addr}, port => $server->{port});
 
+        my $time = time + 60;
+        if (defined $test->{time}) {
+          $time += $test->{time}->[1]->[0];
+        }
+
         if ($test->{tls}) {
           $transport = Transport::TLS->new (
             transport => $transport,
             ca_file => Test::Certificates->ca_path ('cert.pem'),
             sni_host => $server->{host},
             si_host => $server->{host},
+            now => $time,
           );
         }
 

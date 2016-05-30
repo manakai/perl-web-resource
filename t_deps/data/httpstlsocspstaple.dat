@@ -133,3 +133,20 @@ close
 #status 0
 #body
 (close)
+
+#name
+Stapled but expired
+#time +100000000
+#tls
+#method GET
+#url /
+#data
+starttls stapling=good
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+"abc"
+close
+#status 0
+#body
+(close)

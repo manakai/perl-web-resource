@@ -381,6 +381,7 @@ sub push_shutdown ($) {
 sub _tls ($) {
   my ($self) = @_;
 
+  Net::SSLeay::ERR_clear_error ();
   while (@{$self->{wq}}) {
     my $w = shift @{$self->{wq}};
     if (@$w == 3) { # data

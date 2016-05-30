@@ -50,10 +50,23 @@ sub parse_response_byte_string ($$) {
   ## BasicOCSPResponse members
   if (@{$seq->[1]} and $seq->[1]->[0]->[0] eq 'SEQUENCE') { # tbsResponseData
     ## ResponseData members
+    $result->{response_version} = 1; # default
+    if (@{$seq->[1]->[0]->[1]} and
+        $seq->[1]->[0]->[1]->[0]->[0] eq 'contextual' and
+        $seq->[1]->[0]->[1]->[0]->[1] == 0) {
+      my $version = shift @{$seq->[1]->[0]->[1]};
+      if (defined $version) {
+        my $v = Web::Transport::ASN1::decode_der ($version->[2]);
+        $result->{response_version} = $v->[1];
+      } else {
+        delete $result->{response_version};
+      }
+    }
     my ($responder_id, $produced_at, $reses) = @{$seq->[1]->[0]->[1]};
     if (defined $produced_at and $produced_at->[0] eq 'GeneralizedTime') {
       $result->{produced} = $produced_at->[1];
     }
+
     if (defined $reses and $reses->[0] eq 'SEQUENCE') {
       $seq = $reses->[1];
     } else {
@@ -162,5 +175,28 @@ sub check_cert_id_with_response ($$$) {
 
   return undef;
 } # check_cert_id_with_response
+
+sub x509_has_must_staple ($$) {
+  my $x509 = $_[1];
+  my $tlsext_oid = Net::SSLeay::OBJ_txt2obj ('1.3.6.1.5.5.7.1.24', 1);
+  my $index = 0;
+  {
+    my $ext = Net::SSLeay::X509_get_ext ($x509, $index);
+    last unless $ext;
+
+    my $oid = Net::SSLeay::X509_EXTENSION_get_object ($ext);
+    if (Net::SSLeay::OBJ_cmp ($oid, $tlsext_oid) == 0) {
+      my $d = Net::SSLeay::X509_EXTENSION_get_data ($ext);
+      my $data = Net::SSLeay::P_ASN1_STRING_get ($d);
+      if ($data eq "\x30\x03\x02\x01\x05") {
+        return 1;
+      }
+    }
+    
+    $index++;
+    redo;
+  }
+  return 0;
+} # x509_has_must_staple
 
 1;

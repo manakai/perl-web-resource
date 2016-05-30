@@ -480,16 +480,27 @@ sub _tls ($) {
 
   if (defined $self->{starttls_done}) {
     if (Net::SSLeay::state ($self->{tls}) == Net::SSLeay::ST_OK ()) {
-      my $data = delete $self->{starttls_data};
+      my $data = $self->{starttls_data};
       $data->{tls_protocol} = Net::SSLeay::version ($self->{tls});
       #XXX session_id
       $data->{tls_session_resumed} = Net::SSLeay::session_reused ($self->{tls});
       $data->{tls_cipher} = Net::SSLeay::get_cipher ($self->{tls});
       $data->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($self->{tls});
+      my @cert = Net::SSLeay::get_peer_cert_chain ($self->{tls});
       $data->{tls_cert_chain} = [map {
         bless [Net::SSLeay::PEM_get_string_X509 ($_)], __PACKAGE__ . '::Certificate'
-      } Net::SSLeay::get_peer_cert_chain ($self->{tls})];
+      } @cert];
 
+      ## Check must-staple flag
+      if (not defined $data->{stapling_result}) {
+        if (Web::Transport::OCSP->x509_has_must_staple ($cert[0])) {
+          (delete $self->{starttls_done})->[1]->("There is no stapled OCSP response, which is required by the certificate");
+          $self->abort (message => 'TLS error');
+          return;
+        }
+      }
+
+      delete $self->{starttls_data};
       $self->{started} = 1;
       (delete $self->{starttls_done})->[0]->($data);
     }
@@ -585,6 +596,9 @@ sub debug_info ($) {
   my @type = Net::SSLeay::P_X509_get_netscape_cert_type $cert;
   if (@type) {
     push @r, 'netscapecerttype=' . join ',', @type;
+  }
+  if (Web::Transport::OCSP->x509_has_must_staple ($cert)) {
+    push @r, 'must-staple';
   }
 
   Net::SSLeay::BIO_free ($bio);

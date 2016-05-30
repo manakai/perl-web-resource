@@ -19,11 +19,13 @@ sub escape ($) {
   return $s;
 } # escape
 
-sub cert_path ($$;%) {
-  my (undef, undef, %args) = @_;
-  return $cert_path->child (escape ($args{host} || $cn) . '-' . ($args{no_san} ? 'nosan-' : '')
-      . (defined $args{cn} ? 'cn-' . (escape $args{cn}) . '-' : '')
-      . (defined $args{cn2} ? 'cn2-' . (escape $args{cn2}) . '-' : '')
+sub cert_path ($$;$) {
+  my (undef, undef, $cert_args) = @_;
+  return $cert_path->child (escape ($cert_args->{host} || $cn) . '-'
+      . ($cert_args->{no_san} ? 'nosan-' : '')
+      . ($cert_args->{must_staple} ? 'muststaple-' : '')
+      . (defined $cert_args->{cn} ? 'cn-' . (escape $cert_args->{cn}) . '-' : '')
+      . (defined $cert_args->{cn2} ? 'cn2-' . (escape $cert_args->{cn2}) . '-' : '')
       . $_[1]);
 } # cert_path
 
@@ -35,8 +37,8 @@ sub x ($) {
   system ($_[0]) == 0 or die $?;
 } # x
 
-sub generate_certs ($;%) {
-  my ($class, %args) = @_;
+sub generate_certs ($$) {
+  my ($class, $cert_args) = @_;
 
   my $ca_name = "/CN=ca.test";
   my $ca_key_path = $class->ca_path ('key.pem');
@@ -54,7 +56,7 @@ sub generate_certs ($;%) {
     sleep 1;
   }
 
-  my $subject_name = $args{host} || $cn;
+  my $subject_name = $cert_args->{host} || $cn;
   my $subject_type = 'DNS';
   if ($subject_name =~ s/^IPv4://) {
     $subject_type = 'IP';
@@ -62,49 +64,51 @@ sub generate_certs ($;%) {
     $subject_type = 'email';
   }
 
-  my $server_key_path = $_[0]->cert_path ('key.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
+  my $server_key_path = $_[0]->cert_path ('key.pem', $cert_args);
   x "openssl ecparam -name $ecname -out \Q$server_key_path\E -genkey";
 
-  my $server_req_path = $_[0]->cert_path ('req.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
-  my $config_path = $_[0]->cert_path ('openssl.cnf', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
-  $config_path->spew (
-    #path ("/etc/ssl/openssl.cnf")->slurp .
-    ($args{no_san} ? q{} : qq{[san]\nsubjectAltName=$subject_type:$subject_name})
-  );
+  my $server_req_path = $_[0]->cert_path ('req.pem', $cert_args);
+  my $config_path = $_[0]->cert_path ('openssl.cnf', $cert_args);
+  my @conf = q{[exts]};
+  push @conf, qq{subjectAltName=$subject_type:$subject_name} unless $cert_args->{no_san};
+  if ($cert_args->{must_staple}) {
+    push @conf,
+        q{1.3.6.1.5.5.7.1.24 = DER:3003020105};
+        #q{tlsfeature = status_request};
+  }
+  $config_path->spew (join "\n", @conf);
   #my $server_subj = '/';
   #my $server_subj = '/subjectAltName=DNS.1='.$subject_name;
-  my $server_subj = '/CN='.(defined $args{cn} ? $args{cn} : $subject_name);
-  $server_subj .= '/CN=' . $args{cn2} if defined $args{cn2};
+  my $server_subj = '/CN='.(defined $cert_args->{cn} ? $cert_args->{cn} : $subject_name);
+  $server_subj .= '/CN=' . $cert_args->{cn2} if defined $cert_args->{cn2};
   if (0) {
     x "openssl req -newkey rsa:2048 -days 1 -nodes -keyout \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E";# -config \Q$config_path\E $no_san ? '' : -reqexts san";
   } else {
-    x "openssl req -days 1 -new -nodes -key \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E";# -config \Q$config_path\E $args{no_san} ? '' : -reqexts san";
+    x "openssl req -days 1 -new -nodes -key \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E";# -config \Q$config_path\E $cert_args->{no_san} ? '' : -reqexts san";
   }
 
   if (0) {
-    my $server_key1_path = $_[0]->cert_path ('key-pkcs1.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
+    my $server_key1_path = $_[0]->cert_path ('key-pkcs1.pem', $cert_args);
     x "openssl rsa -in \Q$server_key_path\E -out \Q$server_key1_path\E";
   }
 
-  my $server_cert_path = $_[0]->cert_path ('cert.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
-  x "openssl x509 -req -in \Q$server_req_path\E -days 1 -CA \Q$ca_cert_path\E -CAkey \Q$ca_key_path\E -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E".($args{no_san} ? '' : " -extensions san");
+  my $server_cert_path = $_[0]->cert_path ('cert.pem', $cert_args);
+  x "openssl x509 -req -in \Q$server_req_path\E -days 1 -CA \Q$ca_cert_path\E -CAkey \Q$ca_key_path\E -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E -extensions exts";
 
-  my $server_p12_path = $_[0]->cert_path ('keys.p12', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
+  my $server_p12_path = $_[0]->cert_path ('keys.p12', $cert_args);
   x "openssl pkcs12 -export -passout pass: -in \Q$server_cert_path\E -inkey \Q$server_key_path\E -out \Q$server_p12_path\E";
 } # generate_certs
 
-sub wait_create_cert ($;%) {
-  my ($class, %args) = @_;
+sub wait_create_cert ($$) {
+  my ($class, $cert_args) = @_;
   if ($ENV{RECREATE_CERTS} or
       ($_[0]->ca_path ('cert.pem')->is_file and
        $_[0]->ca_path ('cert.pem')->stat->mtime + 60*60*24 < time)) {
     system "rm \Q$cert_path\E/*.pem";
   }
-  my $cert_pem_path = $_[0]->cert_path ('cert.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
+  my $cert_pem_path = $_[0]->cert_path ('cert.pem', $cert_args);
   unless ($cert_pem_path->is_file) {
-    $class->generate_certs (host => $args{host},
-                            no_san => $args{no_san},
-                            cn => $args{cn}, cn2 => $args{cn2});
+    $class->generate_certs ($cert_args);
   }
 
   require Net::SSLeay;
@@ -130,10 +134,10 @@ sub wait_create_cert ($;%) {
   Net::SSLeay::X509_free($x509);
 } # wait_create_cert
 
-sub ocsp_response ($%) {
-  my ($class, %args) = @_;
+sub ocsp_response ($$;%) {
+  my ($class, $cert_args, %args) = @_;
 
-  my $cert_path = $class->cert_path ('cert.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
+  my $cert_path = $class->cert_path ('cert.pem', $cert_args);
 
   my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
   my $rv = Net::SSLeay::BIO_write ($bio, $cert_path->slurp);

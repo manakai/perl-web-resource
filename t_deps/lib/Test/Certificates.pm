@@ -9,9 +9,6 @@ my $cert_path = $root_path->child ('local/cert');
 my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
 $cert_path->mkpath;
 
-#my $gen_path = $root_path->child ('t_deps/bin/generate-certs-for-tests.pl');
-my $gen_path = $root_path->child ('t_deps/bin/generate-certs-for-tests-ec.pl');
-
 sub ca_path ($$) {
   return $cert_path->child ('ca-' . $_[1]);
 } # ca_path
@@ -34,8 +31,72 @@ sub cert_name ($) {
   return $cn;
 } # cert_name
 
+sub x ($) {
+  system ($_[0]) == 0 or die $?;
+} # x
+
+sub generate_certs ($$;%) {
+  my ($class, $subject_name, %args) = @_;
+
+  my $ca_name = '/CN=ca.test';
+  my $ca_key_path = $cert_path->child ('ca-key.pem');
+  my $ca_cert_path = $cert_path->child ('ca-cert.pem');
+  my $ecname = 'prime256v1';
+  unless ($ca_key_path->is_file) {
+    my $ca_subj = $ca_name;
+    if (0) {
+      x "openssl genrsa -out \Q$ca_key_path\E 2048";
+      x "openssl req -new -x509 -nodes -days 1 -key \Q$ca_key_path\E -out \Q$ca_cert_path\E -subj \Q$ca_subj\E -sha256 -set_serial @{[time]}";
+    } else {
+      x "openssl ecparam -name $ecname -out \Q$ca_key_path\E -genkey";
+      x "openssl req -new -x509 -nodes -days 1 -key \Q$ca_key_path\E -out \Q$ca_cert_path\E -subj \Q$ca_subj\E -set_serial @{[time]}";
+    }
+    sleep 1;
+  }
+
+  my $prefix = escape $subject_name;
+  $prefix .= '-nosan' if $args{no_san};
+  $prefix .= '-cn-' . escape $args{cn} if defined $args{cn};
+  $prefix .= '-cn2-' . escape $args{cn2} if defined $args{cn2};
+  my $subject_type = 'DNS';
+  if ($subject_name =~ s/^IPv4://) {
+    $subject_type = 'IP';
+  } elsif ($subject_name =~ s/^mailto://) {
+    $subject_type = 'email';
+  }
+  my $server_key_path = $cert_path->child ($prefix.'-key.pem');
+  x "openssl ecparam -name $ecname -out \Q$server_key_path\E -genkey";
+
+  my $server_req_path = $cert_path->child ($prefix.'-req.pem');
+  my $config_path = $cert_path->child ($prefix.'-openssl.cnf');
+  $config_path->spew (
+    #path ("/etc/ssl/openssl.cnf")->slurp .
+    ($args{no_san} ? q{} : qq{[san]\nsubjectAltName=$subject_type:$subject_name})
+  );
+  #my $server_subj = '/';
+  #my $server_subj = '/subjectAltName=DNS.1='.$subject_name;
+  my $server_subj = '/CN='.(defined $args{cn} ? $args{cn} : $subject_name);
+  $server_subj .= '/CN=' . $args{cn2} if defined $args{cn2};
+  if (0) {
+    x "openssl req -newkey rsa:2048 -days 1 -nodes -keyout \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E";# -config \Q$config_path\E $no_san ? '' : -reqexts san";
+  } else {
+    x "openssl req -days 1 -new -nodes -key \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E";# -config \Q$config_path\E $args{no_san} ? '' : -reqexts san";
+  }
+
+  if (0) {
+    my $server_key1_path = $cert_path->child ($prefix.'-key-pkcs1.pem');
+    x "openssl rsa -in \Q$server_key_path\E -out \Q$server_key1_path\E";
+  }
+
+  my $server_cert_path = $cert_path->child ($prefix.'-cert.pem');
+  x "openssl x509 -req -in \Q$server_req_path\E -days 1 -CA \Q$ca_cert_path\E -CAkey \Q$ca_key_path\E -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E".($args{no_san} ? '' : " -extensions san");
+
+  my $server_p12_path = $cert_path->child ($prefix.'-keys.p12');
+  x "openssl pkcs12 -export -passout pass: -in \Q$server_cert_path\E -inkey \Q$server_key_path\E -out \Q$server_p12_path\E";
+} # generate_certs
+
 sub wait_create_cert ($;%) {
-  my (undef, %args) = @_;
+  my ($class, %args) = @_;
   if ($ENV{RECREATE_CERTS} or
       ($_[0]->ca_path ('cert.pem')->is_file and
        $_[0]->ca_path ('cert.pem')->stat->mtime + 60*60*24 < time)) {
@@ -43,10 +104,9 @@ sub wait_create_cert ($;%) {
   }
   my $cert_pem_path = $_[0]->cert_path ('cert.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
   unless ($cert_pem_path->is_file) {
-    local $ENV{CERT_NO_SAN} = !!$args{no_san};
-    local $ENV{CERT_CN} = $args{cn} // '';
-    local $ENV{CERT_CN2} = $args{cn2} // '';
-    system $root_path->child ('perl'), $gen_path, $cert_path, $args{host} || $cn;
+    $class->generate_certs ($args{host} || $cn,
+                            no_san => $args{no_san},
+                            cn => $args{cn}, cn2 => $args{cn2});
   }
 
   require Net::SSLeay;

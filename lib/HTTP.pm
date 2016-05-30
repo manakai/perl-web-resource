@@ -837,6 +837,66 @@ sub _next ($) {
   }
 } # _next
 
+sub debug_handshake_done ($$$) {
+  my ($self, $ok, $info) = @_;
+  no warnings 'uninitialized';
+
+  my $id = $self->{transport}->id;
+  warn "$id: Connection established @{[scalar gmtime]}\n" if $ok;
+
+  if ($self->{transport}->type eq 'TLS') {
+    my $data = $info->{transport_data};
+    if (defined $data->{tls_protocol}) {
+      my $ver = $data->{tls_protocol} == 0x0301 ? '1.0' :
+                $data->{tls_protocol} == 0x0302 ? '1.1' :
+                $data->{tls_protocol} == 0x0303 ? '1.2' :
+                $data->{tls_protocol} == 0x0304 ? '1.3' :
+                sprintf '0x%04X', $data->{tls_protocol};
+      warn "$id: + TLS version: $ver\n";
+    }
+    if (defined $data->{tls_cipher}) {
+      warn "$id: + Cipher suite: $data->{tls_cipher} ($data->{tls_cipher_usekeysize})\n";
+    }
+    warn "$id: + Resumed session\n" if $data->{tls_session_resumed};
+    my $i = 0;
+    for (@{$data->{tls_cert_chain} or []}) {
+      warn "$id: + #$i: @{[$_->debug_info]}\n";
+      $i++;
+    }
+    if (defined (my $result = $data->{stapling_result})) {
+      if ($result->{failed}) {
+        warn "$id: + OCSP stapling: NG - $result->{message}\n";
+      } else {
+        warn "$id: + OCSP stapling: OK\n";
+      }
+      if (defined (my $res = $result->{response})) {
+        warn "$id: +   Status=$res->{response_status} Produced=$res->{produced}\n";
+        for my $r (values %{$res->{responses} or {}}) {
+          warn "$id: +   - Status=$r->{cert_status} Revocation=$r->{revocation_time} ThisUpdate=$r->{this_update} NextUpdate=$r->{next_update}\n";
+        }
+      }
+    } elsif (defined $data->{tls_protocol}) {
+      warn "$id: + OCSP stapling: N/A\n";
+    }
+  } # TLS
+
+  if (not $ok) {
+    my $msg = (defined $info && ref $info eq 'HASH' &&
+               defined $info->{exit} && ref $info->{exit} eq 'HASH' &&
+               defined $info->{exit}->{message})
+                  ? $info->{exit}->{message} :
+              (defined $info && ref $info eq 'HASH' && $info->{failed} &&
+               defined $info->{message})
+                  ? $info->{message} :
+              (defined $info && ref $info eq 'HASH' &&
+               defined $info->{response} &&
+               defined $info->{response}->{status})
+                  ? $info->{response}->{status}
+                  : $info;
+    warn "$id: Connection failed ($msg) @{[scalar gmtime]}\n";
+  }
+} # debug_handshake_done
+
 sub connect ($) {
   my ($self) = @_;
   croak "Bad state" if not defined $self->{args};
@@ -912,45 +972,10 @@ sub connect ($) {
       $onclosed->();
     }
   })->then (sub {
-    my $data = $_[0];
-    if ($DEBUG) {
-      my $id = $self->{transport}->id;
-      warn "$id: Connection established @{[scalar gmtime]}\n";
-      #XXX
-      if ($self->{transport}->type eq 'TLS') {
-        my $ver = $data->{tls_protocol} == 0x0301 ? '1.0' :
-                  $data->{tls_protocol} == 0x0302 ? '1.1' :
-                  $data->{tls_protocol} == 0x0303 ? '1.2' :
-                  $data->{tls_protocol} == 0x0304 ? '1.3' :
-                  sprintf '0x%04X', $data->{tls_protocol};
-        warn "$id: + TLS version: $ver\n";
-        warn "$id: + Cipher suite: $data->{tls_cipher} ($data->{tls_cipher_usekeysize})\n";
-        warn "$id: + Resumed session\n" if $data->{tls_session_resumed};
-        my $i = 0;
-        for (@{$_[0]->{tls_cert_chain}}) {
-          warn "$id: + #$i: @{[$_->debug_info]}\n";
-          $i++;
-        }
-      }
-    }
+    debug_handshake_done $self, 1, {transport_data => $_[0]} if $DEBUG;
   }, sub {
     my $error = $_[0];
-    if ($DEBUG) {
-      my $id = $self->{transport}->id;
-      my $msg = (defined $error && ref $error eq 'HASH' &&
-                 defined $error->{exit} && ref $error->{exit} eq 'HASH' &&
-                 defined $error->{exit}->{message})
-                    ? $error->{exit}->{message} :
-                (defined $error && ref $error eq 'HASH' && $error->{failed} &&
-                 defined $error->{message})
-                    ? $error->{message} :
-                (defined $error && ref $error eq 'HASH' &&
-                 defined $error->{response} &&
-                 defined $error->{response}->{status})
-                    ? $error->{response}->{status}
-                    : $error;
-      warn "$id: Connection failed ($msg) @{[scalar gmtime]}\n";
-    }
+    debug_handshake_done $self, 0, $error if $DEBUG;
     $self->{transport}->abort;
     $onclosed->();
     die $error;
@@ -1040,7 +1065,7 @@ sub send_request_headers ($$;%) {
   $self->{request_state} = 'sending headers';
   $self->{transport}->push_write (\$header);
   if ($self->{request_body_length} <= 0) {
-    $self->{transport}->push_promise->then (sub {
+    $self->{transport}->push_promise->then (sub { # XXX can fail
       $self->{request_state} = 'sent';
       $self->_ev ('requestsent');
       $self->_next if $self->{state} eq 'sending';

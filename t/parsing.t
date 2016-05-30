@@ -9,6 +9,7 @@ use Test::HTCT::Parser;
 use Encode;
 use JSON::PS;
 use Transport::TCP;
+use Transport::TLS;
 use HTTP;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
@@ -27,9 +28,11 @@ sub server_as_cv ($) {
   my $pid;
   my $data = '';
   my $port = int (rand 10000) + 1024;
+  my $host = (int rand 10) . '.parsing.test';
   my $resultdata = [];
   my $after_server_close_cv;
   my $close_server = 0;
+  local $ENV{SERVER_HOST_NAME} = $host;
   $after_server_close_cv = run_cmd
       ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), '127.0.0.1', $port],
       '<' => \$code,
@@ -43,7 +46,7 @@ sub server_as_cv ($) {
         }
         return if $started;
         if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
-          $cv->send ({pid => $pid, addr => $1, port => $2,
+          $cv->send ({pid => $pid, addr => $1, port => $2, host => $host,
                       resultdata => $resultdata,
                       close_server_ref => \$close_server,
                       after_server_close_cv => $after_server_close_cv,
@@ -74,6 +77,16 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
         my $server = $_[0]->recv;
         my $transport = Transport::TCP->new
             (addr => $server->{addr}, port => $server->{port});
+
+        if ($test->{tls}) {
+          $transport = Transport::TLS->new (
+            transport => $transport,
+            ca_file => Test::Certificates->ca_path ('cert.pem'),
+            sni_host => $server->{host},
+            si_host => $server->{host},
+          );
+        }
+
         my $http = HTTP->new (transport => $transport);
         my $test_type = $test->{'test-type'}->[1]->[0] // '';
         
@@ -153,11 +166,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           return $req;
         }; # $get_req
 
-        my $tls;
-        $tls = {
-          ca_file => Test::Certificates->ca_path ('cert.pem'),
-        } if $test->{tls};
-        $http->connect (tls => $tls)->then (sub {
+        $http->connect ()->then (sub {
           if ($test_type eq 'ws') {
             my $req = $get_req->(
               method => _a 'GET',
@@ -339,17 +348,18 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             }
           } $c;
           return $http->close;
-        }, sub {
+        }, sub { # connect failed
           test {
-            ok 1, 'is error';
-            ok 1, 'response version';
-            ok 1, 'status';
-            ok 1, 'reason';
-            ok 1, 'headers';
-            ok 1, 'body';
-            ok 1, 'incomplete';
-            ok 1, 'r_events';
-            ok 1, 's_events';
+            my $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
+            is !!1, !!$is_error, 'is error';
+            ok 1, 'response version (skipped)';
+            is 0, $test->{status}->[1]->[0], 'status';
+            ok 1, 'reason (skipped)';
+            ok 1, 'headers (skipped)';
+            is '(close)', $test->{body}->[0], 'body';
+            ok 1, 'incomplete (skipped)';
+            ok 1, 'r_events (skipped)';
+            ok 1, 's_events (skipped)';
           } $c;
         })->then (sub {
           $server->{stop}->();

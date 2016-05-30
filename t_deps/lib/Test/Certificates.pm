@@ -2,6 +2,7 @@ package Test::Certificates;
 use strict;
 use warnings;
 use Path::Tiny;
+use File::Temp;
 
 my $root_path = path (__FILE__)->parent->parent->parent->parent->absolute;
 my $cert_path = $root_path->child ('local/cert');
@@ -70,5 +71,57 @@ sub wait_create_cert ($;%) {
   }
   Net::SSLeay::X509_free($x509);
 } # wait_create_cert
+
+sub ocsp_response ($%) {
+  my ($class, %args) = @_;
+
+  my $cert_path = $class->cert_path ('cert.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
+
+  my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
+  my $rv = Net::SSLeay::BIO_write ($bio, $cert_path->slurp);
+  my $x509 = Net::SSLeay::PEM_read_bio_X509 ($bio);
+  Net::SSLeay::BIO_free ($bio);
+  die "Failed to parse |$cert_path|" unless $x509;
+  my $sn = Net::SSLeay::X509_get_subject_name ($x509);
+  my $subj = Net::SSLeay::X509_NAME_print_ex ($sn, Net::SSLeay::XN_FLAG_RFC2253 (), 0);
+  my $sno = Net::SSLeay::P_ASN1_INTEGER_get_hex (Net::SSLeay::X509_get_serialNumber ($x509));
+  Net::SSLeay::X509_free($x509);
+
+  my $index_file = File::Temp->new;
+  my $index_path = path ($index_file->filename);
+
+  my $status = 'V';
+  my $rdate = '';
+  my $xdate = '';
+  if ($args{revoked}) {
+    $status = 'R';
+    $rdate = '160101000000Z';
+  }
+  if ($args{expired}) {
+    $xdate = '150101000000Z';
+    $status = 'E';
+  }
+
+  my $index = [];
+  push @$index, join "\t", $status, $xdate, $rdate, $sno, 'unknown', $subj;
+  $index_path->spew ((join "\n", @$index) . "\n");
+
+  my $res_file = File::Temp->new;
+  my $res_path = path ($res_file->filename);
+  
+  (system 'openssl', 'ocsp',
+       '-index' => $index_path,
+       '-CA' => $class->ca_path ('cert.pem'),
+       '-rkey' => $class->ca_path ('key.pem'),
+       '-rsigner' => $class->ca_path ('cert.pem'),
+       '-issuer' => $class->ca_path ('cert.pem'),
+       '-cert' => $cert_path,
+       ($args{no_next} ? () : ('-ndays' => 100)),
+       #'-text', # DEBUG
+       '-respout' => $res_path) == 0
+      or die $?;
+
+  return $res_path->slurp; # DER encoded
+} # ocsp_response
 
 1;

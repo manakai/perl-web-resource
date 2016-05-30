@@ -7,6 +7,7 @@ use AnyEvent;
 use Promise;
 use Net::SSLeay;
 use AnyEvent::TLS;
+use Web::Transport::OCSP;
 
 sub new ($%) {
   my $self = bless {}, shift;
@@ -187,6 +188,7 @@ sub start ($$;%) {
         # XXX hook for the application to choose a certificate
         Net::SSLeay::set_SSL_CTX ($tls, $self->{tls_ctx}->ctx);
       });
+      $self->{starttls_data}->{stapling_result} = {}; # not applicable
     } else { # client
       Net::SSLeay::set_connect_state ($tls);
       # XXX If ipaddr
@@ -207,6 +209,55 @@ sub start ($$;%) {
           # XXX hook to verify the client cert
         }
         return $preverify_ok;
+      };
+
+      $self->{starttls_data}->{stapling_result} = undef;
+      Net::SSLeay::set_tlsext_status_type
+          $tls, Net::SSLeay::TLSEXT_STATUSTYPE_ocsp ();
+      Net::SSLeay::CTX_set_tlsext_status_cb $self->{tls_ctx}->ctx, sub {
+        my ($tls, $response) = @_;
+        unless ($response) {
+          $self->{starttls_data}->{stapling_result} = undef;
+          return 1;
+        }
+
+        my $status = Net::SSLeay::OCSP_response_status ($response);
+        if ($status != Net::SSLeay::OCSP_RESPONSE_STATUS_SUCCESSFUL ()) {
+          $self->{starttls_data}->{stapling_result}
+              = {failed => 1,
+                 message => "OCSP response failed ($status)",
+                 response => {response_status => $status}};
+          return 1;
+        }
+
+        unless (eval { Net::SSLeay::OCSP_response_verify ($tls, $response) }) {
+          $self->{starttls_data}->{stapling_result}
+              = {failed => 1,
+                 message => "OCSP response verification failed"};
+          return 1;
+        }
+
+        my $cert = Net::SSLeay::get_peer_certificate ($tls);
+        my $certid = eval { Net::SSLeay::OCSP_cert2ids ($tls, $cert) };
+        unless ($certid) {
+          $self->{starttls_data}->{stapling_result}
+              = {failed => 1,
+                 message => "Can't get certid from certificate: $@"};
+          return 1;
+        }
+        $certid = substr $certid, 2; # remove SEQUENCE header
+
+        my $res = Web::Transport::OCSP->parse_response_byte_string
+            (Net::SSLeay::i2d_OCSP_RESPONSE ($response));
+        my $error = Web::Transport::OCSP->check_cert_id_with_response ($res, $certid);
+        if (not defined $error) {
+          $self->{starttls_data}->{stapling_result} = {response => $res};
+          return 1;
+        } else {
+          $self->{starttls_data}->{stapling_result}
+              = {failed => 1, message => $error, response => $res};
+          return 0;
+        }
       };
 
       ## XXX As Net::SSLeay does not export OpenSSL's
@@ -251,7 +302,35 @@ sub start ($$;%) {
 
   return $p->catch (sub {
     delete $self->{cb};
-    die $_[0];
+
+    my $data = $self->{starttls_data};
+    if (defined $data and not defined $data->{tls_protocol} and $self->{tls}) {
+      $data->{tls_protocol} = Net::SSLeay::version ($self->{tls});
+      #XXX session_id
+      $data->{tls_session_resumed} = Net::SSLeay::session_reused ($self->{tls});
+      $data->{tls_cipher} = Net::SSLeay::get_cipher ($self->{tls});
+      $data->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($self->{tls});
+      $data->{tls_cert_chain} = [map {
+        bless [Net::SSLeay::PEM_get_string_X509 ($_)], __PACKAGE__ . '::Certificate'
+      } Net::SSLeay::get_peer_cert_chain ($self->{tls})];
+    }
+
+    if (defined $data and defined $data->{stapling_result} and
+        $data->{stapling_result}->{failed}) {
+      die {failed => 1, message => $data->{stapling_result}->{message},
+           transport_data => $data};
+    } else {
+      my $n = $self->{tls} && Net::SSLeay::get_verify_result ($self->{tls});
+      if ($n) {
+        my $s = Net::SSLeay::X509_verify_cert_error_string ($n);
+        die {failed => 1, message => "Certificate verification error $n - $s",
+             transport_data => $data};
+      } elsif (ref $_[0] eq 'HASH') {
+        die {%{$_[0]}, transport_data => $data};
+      } else {
+        die {failed => 1, message => $_[0], transport_data => $data};
+      }
+    }
   });
 } # start
 
@@ -406,7 +485,10 @@ sub _tls ($) {
       $data->{tls_session_resumed} = Net::SSLeay::session_reused ($self->{tls});
       $data->{tls_cipher} = Net::SSLeay::get_cipher ($self->{tls});
       $data->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($self->{tls});
-      $data->{tls_cert_chain} = [map { bless [$_], __PACKAGE__ . '::Certificate' } Net::SSLeay::get_peer_cert_chain ($self->{tls})];
+      $data->{tls_cert_chain} = [map {
+        bless [Net::SSLeay::PEM_get_string_X509 ($_)], __PACKAGE__ . '::Certificate'
+      } Net::SSLeay::get_peer_cert_chain ($self->{tls})];
+
       $self->{started} = 1;
       (delete $self->{starttls_done})->[0]->($data);
     }
@@ -469,7 +551,11 @@ sub DESTROY ($) {
 package Transport::TLS::Certificate;
 
 sub debug_info ($) {
-  my $cert = $_[0]->[0];
+  my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
+  Net::SSLeay::BIO_write ($bio, $_[0]->[0]);
+  my $cert = Net::SSLeay::PEM_read_bio_X509 ($bio);
+  return 'Bad certificate' unless $cert;
+
   my @r;
   my $ver = Net::SSLeay::X509_get_version $cert;
   push @r, "version=$ver";
@@ -499,6 +585,10 @@ sub debug_info ($) {
   if (@type) {
     push @r, 'netscapecerttype=' . join ',', @type;
   }
+
+  Net::SSLeay::BIO_free ($bio);
+  Net::SSLeay::X509_free ($cert);
+
   return join ' ', @r;
 } # debug_info
 

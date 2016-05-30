@@ -13,6 +13,7 @@ use AnyEvent::Handle;
 use Digest::SHA qw(sha1);
 use MIME::Base64 qw(encode_base64);
 use Test::Certificates;
+use Test::OpenSSL;
 
 my $host = shift;
 my $port = shift // die "Usage: $0 listen-host listen-port\n";
@@ -874,6 +875,28 @@ sub run_commands ($$$$) {
           } else {
             warn "[$states->{id}] ECDH can't be used on this system\n";
           }
+
+          Net::SSLeay::CTX_set_tlsext_status_cb ($ctx, sub {
+            my ($tls, $response) = @_;
+
+            return 1 unless $args->{stapling}; # no OCSP stapling
+
+            my $res;
+            if ($args->{stapling} eq 'broken') {
+              $res = join '', map { pack 'C', rand 256 } 1..1 + int rand 1024;
+            } else {
+              $res = Test::Certificates->ocsp_response
+                  (host => $args->{host}, no_san => $args->{no_san},
+                   cn => $args->{cn}, cn2 => $args->{cn2},
+                   revoked => $args->{stapling} eq 'revoked',
+                   expired => $args->{stapling} eq 'expired',
+                   no_next => $args->{stapling_no_next});
+            }
+            Test::OpenSSL::p_SSL_set_tlsext_status_ocsp_resp_data
+                ($tls, $res, length $res);
+
+            return 0; # SSL_TLSEXT_ERR_OK
+          });
         },
       });
       unshift @{$states->{commands}}, 'waitstarttls';
@@ -1096,6 +1119,7 @@ sub dump_tls ($;%) {
                       10 => 'supported_groups',
                       11 => 'ec_point_formats',
                       13 => 'signature_algorithms',
+                      15 => 'heartbeat',
                       16 => 'ALPN',
                       18 => 'signed_certificate_timestamp',
                       21 => 'padding',

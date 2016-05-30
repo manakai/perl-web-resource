@@ -10,7 +10,7 @@ my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
 $cert_path->mkpath;
 
 sub ca_path ($$) {
-  return $cert_path->child ('ca-' . $_[1]);
+  return $cert_path->child ("ca-" . $_[1]);
 } # ca_path
 
 sub escape ($) {
@@ -35,12 +35,12 @@ sub x ($) {
   system ($_[0]) == 0 or die $?;
 } # x
 
-sub generate_certs ($$;%) {
-  my ($class, $subject_name, %args) = @_;
+sub generate_certs ($;%) {
+  my ($class, %args) = @_;
 
-  my $ca_name = '/CN=ca.test';
-  my $ca_key_path = $cert_path->child ('ca-key.pem');
-  my $ca_cert_path = $cert_path->child ('ca-cert.pem');
+  my $ca_name = "/CN=ca.test";
+  my $ca_key_path = $class->ca_path ('key.pem');
+  my $ca_cert_path = $class->ca_path ('cert.pem');
   my $ecname = 'prime256v1';
   unless ($ca_key_path->is_file) {
     my $ca_subj = $ca_name;
@@ -54,21 +54,19 @@ sub generate_certs ($$;%) {
     sleep 1;
   }
 
-  my $prefix = escape $subject_name;
-  $prefix .= '-nosan' if $args{no_san};
-  $prefix .= '-cn-' . escape $args{cn} if defined $args{cn};
-  $prefix .= '-cn2-' . escape $args{cn2} if defined $args{cn2};
+  my $subject_name = $args{host} || $cn;
   my $subject_type = 'DNS';
   if ($subject_name =~ s/^IPv4://) {
     $subject_type = 'IP';
   } elsif ($subject_name =~ s/^mailto://) {
     $subject_type = 'email';
   }
-  my $server_key_path = $cert_path->child ($prefix.'-key.pem');
+
+  my $server_key_path = $_[0]->cert_path ('key.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
   x "openssl ecparam -name $ecname -out \Q$server_key_path\E -genkey";
 
-  my $server_req_path = $cert_path->child ($prefix.'-req.pem');
-  my $config_path = $cert_path->child ($prefix.'-openssl.cnf');
+  my $server_req_path = $_[0]->cert_path ('req.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
+  my $config_path = $_[0]->cert_path ('openssl.cnf', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
   $config_path->spew (
     #path ("/etc/ssl/openssl.cnf")->slurp .
     ($args{no_san} ? q{} : qq{[san]\nsubjectAltName=$subject_type:$subject_name})
@@ -84,14 +82,14 @@ sub generate_certs ($$;%) {
   }
 
   if (0) {
-    my $server_key1_path = $cert_path->child ($prefix.'-key-pkcs1.pem');
+    my $server_key1_path = $_[0]->cert_path ('key-pkcs1.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
     x "openssl rsa -in \Q$server_key_path\E -out \Q$server_key1_path\E";
   }
 
-  my $server_cert_path = $cert_path->child ($prefix.'-cert.pem');
+  my $server_cert_path = $_[0]->cert_path ('cert.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
   x "openssl x509 -req -in \Q$server_req_path\E -days 1 -CA \Q$ca_cert_path\E -CAkey \Q$ca_key_path\E -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E".($args{no_san} ? '' : " -extensions san");
 
-  my $server_p12_path = $cert_path->child ($prefix.'-keys.p12');
+  my $server_p12_path = $_[0]->cert_path ('keys.p12', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
   x "openssl pkcs12 -export -passout pass: -in \Q$server_cert_path\E -inkey \Q$server_key_path\E -out \Q$server_p12_path\E";
 } # generate_certs
 
@@ -104,7 +102,7 @@ sub wait_create_cert ($;%) {
   }
   my $cert_pem_path = $_[0]->cert_path ('cert.pem', host => $args{host}, no_san => $args{no_san}, cn => $args{cn}, cn2 => $args{cn2});
   unless ($cert_pem_path->is_file) {
-    $class->generate_certs ($args{host} || $cn,
+    $class->generate_certs (host => $args{host},
                             no_san => $args{no_san},
                             cn => $args{cn}, cn2 => $args{cn2});
   }

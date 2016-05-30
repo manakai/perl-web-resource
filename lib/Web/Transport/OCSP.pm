@@ -94,8 +94,8 @@ sub parse_response_byte_string ($$) {
       if ($_->[0] eq 'contextual' and $_->[1] == 0) {
         if (not defined $r->{next_update}) {
           my $v = Web::Transport::ASN1::decode_der ($_->[2]);
-          if (defined $v and $v->[0] eq 'GeneralizedTime') {
-            $r->{next_update} = $v;
+          if (defined $v and @$v and $v->[0]->[0] eq 'GeneralizedTime') {
+            $r->{next_update} = $v->[0]->[1];
           } else {
             last;
           }

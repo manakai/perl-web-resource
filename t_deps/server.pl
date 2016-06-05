@@ -747,6 +747,8 @@ sub run_commands ($$$$) {
         $hdl->push_write ($frame);
         $hdl->push_write ('x' x $length);
       }
+    } elsif ($command =~ /^sendcaptured$/) {
+      $hdl->push_write ($states->{captured});
     } elsif ($command =~ /^close$/) {
       $hdl->push_shutdown;
     } elsif ($command =~ /^close read$/) {

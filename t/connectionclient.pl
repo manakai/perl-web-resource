@@ -1314,4 +1314,220 @@ test {
   });
 } n => 3, name => 'max_size';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, headers => {
+      'X-hoge' => 124,
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{\x0AHost: \Q$server->{host}\E};
+        like $headers, qr{\x0AUser-Agent: .};
+        like $headers, qr{\x0AAccept: \*/\*\x0D\x0A};
+        like $headers, qr{\x0AAccept-Language: .};
+        like $headers, qr{\x0AX-hoge: 124\x0D\x0A};
+        unlike $headers, qr{\x0AContent-Type: }i;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => 'request options';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, headers => {
+      'X-hoge' => [124, "abc def", 0, ''],
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{\x0AX-hoge: 124\x0D\x0A};
+        like $headers, qr{\x0AX-hoge: abc def\x0D\x0A};
+        like $headers, qr{\x0AX-hoge: 0\x0D\x0A};
+        like $headers, qr{\x0AX-hoge: \x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'request options';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, headers => {
+      'X-hoge' => undef,
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        unlike $headers, qr{\x0AX-hoge: };
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request options';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, headers => {
+      'X-hoge' => [undef],
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{\x0AX-hoge: \x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request options';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, headers => {
+      'X-hoge' => ["\xFE\x80\x9F\xAB", "\x{5400}\x{100}\xFE"],
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{\x0AX-hoge: \xC3\xBE\xC2\x80\xC2\x9F\xC2\xAB\x0D\x0A};
+        like $headers, qr{\x0AX-hoge: \xE5\x90\x80\xC4\x80\xC3\xBE\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'request options';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, superreload => 1)->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{\x0ACache-Control: no-cache\x0D\x0A};
+        like $headers, qr{\x0APragma: no-cache\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'request options';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "DELETE", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, method => 'DELETE')->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{DELETE /foo HTTP};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request options';
+
 run_tests;

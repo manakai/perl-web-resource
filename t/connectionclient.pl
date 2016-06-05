@@ -1530,4 +1530,127 @@ test {
   });
 } n => 1, name => 'request options';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, params => {
+      foo => undef,
+      bar => ['abc', '123'],
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{GET /foo\?bar=abc&bar=123};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request options - params';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, params => {
+      foo => undef,
+      bar => [undef, 0, ''],
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{GET /foo\?bar=0&bar=};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request options - params';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, params => {
+      "\x{5000}" => "\x{4000}",
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{GET /foo\?%E5%80%80=%E4%80%80};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request options - params';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, params => {
+      "\x80" => "\xFE",
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{GET /foo\?%C2%80=%C3%BE};
+        unlike $headers, qr{Content-Type}i;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'request options - params';
+
 run_tests;

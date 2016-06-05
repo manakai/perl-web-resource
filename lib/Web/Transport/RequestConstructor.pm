@@ -5,11 +5,45 @@ our $VERSION = '1.0';
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Canonicalize qw(url_to_canon_url parse_url serialize_parsed_url);
 
+sub percent_encode_c ($) {
+  my $s = encode_web_utf8 $_[0];
+  $s =~ s/([^0-9A-Za-z._~-])/sprintf '%%%02X', ord $1/ge;
+  return $s;
+} # percent_encode_c
+
+sub serialize_form_urlencoded ($) {
+  my $params = shift || {};
+  return join '&', map {
+    my $n = percent_encode_c $_;
+    my $vs = $params->{$_};
+    if (defined $vs and ref $vs eq 'ARRAY') {
+      (map { $n . '=' . percent_encode_c $_ } grep { defined $_ } @$vs);
+    } elsif (defined $vs) {
+      ($n . '=' . percent_encode_c $vs);
+    } else {
+      ();
+    }
+  } sort { $a cmp $b } keys %$params;
+} # serialize_form_urlencoded
+
+my $QueryMethods = { # XXX
+  GET => 1, HEAD => 1, DELETE => 1,
+};
+
 sub create ($$$) {
   my (undef, $url, $args) = @_;
 
   my $method = encode_web_utf8
       (defined $args->{method} ? $args->{method} : 'GET');
+
+  if (defined $args->{params}) {
+    if ($QueryMethods) {
+      # XXX if $url has query or fragment
+      $url .= '?' . serialize_form_urlencoded $args->{params};
+    } else {
+      $args->{body} = serialize_form_urlencoded $args->{params};
+    }
+  }
 
   my $headers = $args->{headers} || {};
   my $header_list = [];
@@ -52,3 +86,14 @@ sub create ($$$) {
 } # create
 
 1;
+
+=head1 LICENSE
+
+Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
+
+Copyright 2014-2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

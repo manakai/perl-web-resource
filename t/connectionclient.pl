@@ -1653,4 +1653,153 @@ test {
   });
 } n => 2, name => 'request options - params';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "POST", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, params => {
+      "\x80" => "\xFE",
+    }, method => 'POST')->then (sub {
+      return $client->request ($url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{\x0AContent-Type: application/x-www-form-urlencoded\x0D\x0A};
+        like $request, qr{\x0AContent-Length: 13\x0D\x0A};
+        like $request, qr{\x0D\x0A\x0D\x0A%C2%80=%C3%BE};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'request options - params as body';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "POST", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, params => {
+      "\x80" => "\xFE",
+    }, body => "\xFE\x84", method => 'POST')->then (sub {
+      return $client->request ($url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        unlike $request, qr{\x0AContent-Type:};
+        like $request, qr{\x0AContent-Length: 2\x0D\x0A};
+        like $request, qr{\x0D\x0A\x0D\x0A\xFE\x84$};
+        like $request, qr{/foo\?%C2%80=%C3%BE};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'request options - params and body';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "POST", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, body => "\xFE\x84", method => 'POST')->then (sub {
+      return $client->request ($url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        unlike $request, qr{\x0AContent-Type:};
+        like $request, qr{\x0AContent-Length: 2\x0D\x0A};
+        like $request, qr{\x0D\x0A\x0D\x0A\xFE\x84$};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'request options - body';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, body => "\xFE\x84", method => 'GET')->then (sub {
+      return $client->request ($url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        unlike $request, qr{\x0AContent-Type:};
+        like $request, qr{\x0AContent-Length: 2\x0D\x0A};
+        like $request, qr{\x0D\x0A\x0D\x0A\xFE\x84$};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'request options - body';
+
 run_tests;

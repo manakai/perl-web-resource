@@ -207,8 +207,8 @@ sub connect ($) {
   };
 } # connect
 
-sub request ($$$$;$) {
-  my ($self, $method, $url_record, $headers, $cb) = @_;
+sub request ($$$$$$) {
+  my ($self, $method, $url_record, $headers, $body_ref, $cb) = @_;
   return $self->connect->then (sub {
     return {failed => 1, message => "Bad input URL"}
         unless defined $url_record->{host};
@@ -238,12 +238,12 @@ sub request ($$$$;$) {
       my $http = $_[0];
       my $type = $_[2];
       if ($type eq 'data') {
-        if (defined $cb and not defined $result) {
+        if (not defined $result) {
           my $v = $_[3]; # buffer copy!
           Promise->resolve->then (sub { return $cb->($http, $response, $v) });
         }
       } elsif ($type eq 'dataend') {
-        if (defined $cb and not defined $result) {
+        if (not defined $result) {
           Promise->resolve->then (sub { return $cb->($http, $response, undef) });
         }
       } elsif ($type eq 'complete') {
@@ -267,16 +267,20 @@ sub request ($$$$;$) {
             # XXX HSTS, PKP
           }
         }
-        if (defined $cb and not defined $result) {
+        if (not defined $result) {
           Promise->resolve->then (sub { return $cb->($http, $response, '') });
         }
       }
     });
-    return $self->{http}->send_request_headers
+    my $p = $self->{http}->send_request_headers
         ({method => $method, target => encode_web_utf8 ($target),
           headers => $headers})->then (sub {
       return $result || $response;
     });
+    if (defined $body_ref) {
+      $self->{http}->send_data ($body_ref);
+    }
+    return $p;
   }, sub {
     if (ref $_[0] eq 'HASH' and defined $_[0]->{exit}) {
       return $_[0]->{exit};
@@ -287,6 +291,7 @@ sub request ($$$$;$) {
       $err =~ s/\n$//;
       return {failed => 1, message => $err};
     }
+#XXX warn if DEBUG
   });
 } # request
 

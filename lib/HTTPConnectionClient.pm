@@ -83,7 +83,7 @@ sub _connect ($$) {
 sub request ($$%) {
   my ($self, $url, %args) = @_;
 
-  my ($method, $url_record, $header_list)
+  my ($method, $url_record, $header_list, $body_ref)
       = Web::Transport::RequestConstructor->create ($url, \%args);
 
   my $url_origin = defined $url_record->{host} ? serialize_parsed_url {
@@ -108,7 +108,7 @@ sub request ($$%) {
     my $body_length = 0;
     my $max = $self->max_size;
     my $then = sub {
-      return $_[0]->request ($method, $url_record, $header_list, sub {
+      return $_[0]->request ($method, $url_record, $header_list, $body_ref, sub {
         if (defined $_[2]) {
           push @$body, \($_[2]);
           if ($max >= 0) {

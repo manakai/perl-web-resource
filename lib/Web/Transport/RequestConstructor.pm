@@ -2,6 +2,7 @@ package Web::Transport::RequestConstructor;
 use strict;
 use warnings;
 our $VERSION = '1.0';
+use Carp;
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Canonicalize qw(url_to_canon_url parse_url serialize_parsed_url);
 
@@ -36,15 +37,6 @@ sub create ($$$) {
   my $method = encode_web_utf8
       (defined $args->{method} ? $args->{method} : 'GET');
 
-  if (defined $args->{params}) {
-    if ($QueryMethods) {
-      # XXX if $url has query or fragment
-      $url .= '?' . serialize_form_urlencoded $args->{params};
-    } else {
-      $args->{body} = serialize_form_urlencoded $args->{params};
-    }
-  }
-
   my $headers = $args->{headers} || {};
   my $header_list = [];
   my $has_header = {};
@@ -64,10 +56,26 @@ sub create ($$$) {
     $has_header->{$name_lc} = 1;
   }
 
+  if (defined $args->{params}) {
+    if ($QueryMethods->{$method} or defined $args->{body}) {
+      # XXX if $url has query or fragment
+      $url .= '?' . serialize_form_urlencoded $args->{params};
+    } else {
+      unless ($has_header->{'content-type'}) {
+        push @$header_list, ['Content-Type', 'application/x-www-form-urlencoded'];
+      }
+      $args->{body} = serialize_form_urlencoded $args->{params};
+    }
+  }
+
   push @$header_list, ['Accept', '*/*'] unless $has_header->{'accept'};
   push @$header_list, ['Accept-Language', 'en'] unless $has_header->{'accept-language'};
   push @$header_list, ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36'] unless $has_header->{'user-agent'};
-  # XXX Content-Length
+
+  if (defined $args->{body}) {
+    push @$header_list, ['Content-Length', length ($args->{body})];
+  }
+  # XXX or, method requires payload
 
   # XXX Cookie
   # XXX Authorization
@@ -82,7 +90,7 @@ sub create ($$$) {
 
   my $url_record = parse_url url_to_canon_url $url, 'about:blank';
 
-  return ($method, $url_record, $header_list);
+  return ($method, $url_record, $header_list, defined $args->{body} ? \($args->{body}) : undef);
 } # create
 
 1;

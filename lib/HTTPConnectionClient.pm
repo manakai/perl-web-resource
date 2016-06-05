@@ -1,6 +1,8 @@
 package HTTPConnectionClient;
 use strict;
 use warnings;
+require utf8;
+use Carp;
 use HTTPClientBareConnection;
 use Web::URL::Canonicalize qw(url_to_canon_url parse_url serialize_parsed_url);
 use Web::Transport::RequestConstructor;
@@ -85,6 +87,9 @@ sub request ($$%) {
 
   my ($method, $url_record, $header_list, $body_ref)
       = Web::Transport::RequestConstructor->create ($url, \%args);
+  if (defined $body_ref and utf8::is_utf8 ($$body_ref)) {
+    croak "|body| is utf8-flagged";
+  }
 
   my $url_origin = defined $url_record->{host} ? serialize_parsed_url {
     invalid => $url_record->{invalid},

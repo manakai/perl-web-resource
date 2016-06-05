@@ -78,15 +78,35 @@ sub create ($$$) {
   # XXX or, method requires payload
 
   # XXX Cookie
-  # XXX Authorization
+  # XXX basic auth
+  # XXX OAuth1
+
+  if (defined $args->{bearer}) {
+    push @$header_list, ['Authorization' => 'Bearer ' . encode_web_utf8 $args->{bearer}];
+    $has_header->{authorization} = 1;
+  }
+
+  if ($args->{basic_auth}) {
+    require MIME::Base64;
+    my $auth = MIME::Base64::encode_base64
+        (encode_web_utf8 ((defined $args->{basic_auth}->[0] ? $args->{basic_auth}->[0] : '') . ':' .
+                          (defined $args->{basic_auth}->[1] ? $args->{basic_auth}->[1] : '')), '');
+    push @$header_list, ['Authorization', 'Basic ' . $auth];
+    $has_header->{authorization} = 1;
+  }
 
   if ($args->{superreload} or
       defined $has_header->{cookie} or
-      defined $has_header->{authorization}) {
+      defined $has_header->{authorization} or
+      defined $has_header->{'x-wsse'}) {
     push @$header_list, ['Pragma', 'no-cache'], ['Cache-Control', 'no-cache'];
   }
 
   # XXX Accept-Encoding
+
+  for (@$header_list) {
+    $_->[1] =~ tr/\x0D\x0A/\x20\x20/;
+  }
 
   my $url_record = parse_url url_to_canon_url $url, 'about:blank';
 

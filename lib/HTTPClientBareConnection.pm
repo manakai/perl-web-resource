@@ -281,7 +281,7 @@ sub request ($$$$$$) {
       $self->{http}->send_data ($body_ref);
     }
     return $p;
-  }, sub {
+  })->catch (sub {
     if (ref $_[0] eq 'HASH' and defined $_[0]->{exit}) {
       return $_[0]->{exit};
     } elsif (ref $_[0] eq 'HASH' and $_[0]->{failed}) {

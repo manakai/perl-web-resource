@@ -1396,6 +1396,36 @@ test {
     my $url = qq{http://$server->{host}:$server->{port}/foo};
     my $client = HTTPConnectionClient->new_from_url ($url);
     return $client->request ($url, headers => {
+      'X-hoge' => "ab\x0A\x0Dxy",
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{\x0AX-hoge: ab  xy\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request options';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, headers => {
       'X-hoge' => undef,
     })->then (sub {
       my $res = $_[0];
@@ -1501,6 +1531,38 @@ test {
     });
   });
 } n => 2, name => 'request options';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, headers => {
+      'X-WSSE' => 'hoge faug',
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{\x0AX-WSSE: hoge faug\x0D\x0A};
+        like $headers, qr{\x0ACache-Control: no-cache\x0D\x0A};
+        like $headers, qr{\x0APragma: no-cache\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'request options';
 
 test {
   my $c = shift;
@@ -1801,5 +1863,91 @@ test {
     });
   });
 } n => 3, name => 'request options - body';
+
+test {
+  my $c = shift;
+  my $url = qq{http://jogejoge.test/foo};
+  my $client = HTTPConnectionClient->new_from_url ($url);
+  eval {
+    $client->request ($url, body => "\x{4543}");
+  };
+  like $@, qr{^\|body\| is utf8-flagged};
+  return $client->close->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'request options - body';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, bearer => "Fo+a/b==\x0D")->then (sub {
+      return $client->request ($url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{\x0AAuthorization: Bearer Fo\+a/b== \x0D\x0A};
+        like $request, qr{\x0ACache-Control: no-cache\x0D\x0A};
+        like $request, qr{\x0APragma: no-cache\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'request options - bearer';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = qq{http://$server->{host}:$server->{port}/foo};
+    my $client = HTTPConnectionClient->new_from_url ($url);
+    return $client->request ($url, basic_auth => ["t36 46343 :4yt324432gesageasee\xFE\x80", "geaga\x{400}gewaaa r:e:: e56363y43yg43434 cd 4"])->then (sub {
+      return $client->request ($url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{\x0AAuthorization: Basic dDM2IDQ2MzQzIDo0eXQzMjQ0MzJnZXNhZ2Vhc2Vlw77CgDpnZWFnYdCAZ2V3YWFhIHI6ZTo6IGU1NjM2M3k0M3lnNDM0MzQgY2QgNA==\x0D\x0A};
+        like $request, qr{\x0ACache-Control: no-cache\x0D\x0A};
+        like $request, qr{\x0APragma: no-cache\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'request options - basic';
 
 run_tests;

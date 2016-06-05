@@ -20,7 +20,8 @@ sub _env ($$) {
       ($url->{scheme} eq 'http' or $url->{scheme} eq 'https')) {
     return {protocol => $url->{scheme},
             host => $url->{host}, port => $url->{port},
-            username => $url->{user}, password => $url->{password}};
+            username => defined $url->{user} ? $url->{user} : '',
+            password => $url->{password}};
   }
 
   if (defined $url->{scheme} and

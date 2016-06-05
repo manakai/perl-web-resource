@@ -14,12 +14,12 @@ sub new_from_url_record ($$) {
   return bless {url_record => $_[1]}, $_[0];
 } # new_from_url_record
 
-sub proxies ($;$) {
+sub proxy_manager ($;$) {
   if (@_ > 1) {
-    $_[0]->{proxies} = $_[1];
+    $_[0]->{proxy_manager} = $_[1];
   }
-  return $_[0]->{proxies};
-} # proxies
+  return $_[0]->{proxy_manager};
+} # proxy_manager
 
 sub tls_options ($;$) {
   if (@_ > 1) {
@@ -35,136 +35,146 @@ sub last_resort_timeout ($;$) {
   return $_[0]->{last_resort_timeout} || 0;
 } # last_resort_timeout
 
+my $proxy_to_transport = sub {
+  ## create a transport for a proxy configuration
+  my ($proxy, $url_record) = @_;
+
+  ## 1. If $proxy->{protocol} is not supported, return null.
+
+  if ($proxy->{protocol} eq 'tcp') {
+    return Resolver->resolve_name ($url_record->{host})->then (sub {
+      my $addr = $_[0];
+      die "Can't resolve host |$url_record->{host}|\n" unless defined $addr;
+
+      my $port = $url_record->{port};
+      $port = get_default_port $url_record->{scheme} if not defined $port;
+      die "No port specified\n" unless defined $port;
+
+      return Transport::TCP->new (addr => $addr, port => 0+$port);
+    });
+  } elsif ($proxy->{protocol} eq 'http' or
+           $proxy->{protocol} eq 'https') {
+    return Resolver->resolve_name ($proxy->{host})->then (sub {
+      die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
+      my $transport = Transport::TCP->new
+          (addr => $_[0],
+           port => 0+(defined $proxy->{port} ? $proxy->{port} : ($proxy->{protocol} eq 'https' ? 443 : 80)));
+      if ($proxy->{protocol} eq 'https') {
+        $transport = Transport::TLS->new
+            (%{$proxy->{tls_options} or {}},
+             si_host => $proxy->{host},
+             sni_host => $proxy->{host},
+             transport => $transport);
+      }
+      if ($url_record->{scheme} eq 'https') {
+        # XXX HTTP version
+        my $http = HTTP->new (transport => $transport);
+        require Transport::H1CONNECT;
+        $transport = Transport::H1CONNECT->new
+            (http => $http,
+             host => (encode_web_utf8 $url_record->{host}),
+             port => (defined $url_record->{port} ? 0+$url_record->{port} : undef));
+        # XXX auth
+      } else {
+        $transport->request_mode ('HTTP proxy');
+      }
+      return $transport;
+    });
+  } elsif ($proxy->{protocol} eq 'socks4') {
+    return Promise->all ([
+      Resolver->resolve_name ($url_record->{host}, packed => 1),
+      Resolver->resolve_name ($proxy->{host}),
+    ])->then (sub {
+      my $packed_addr = $_[0]->[0];
+      die "Can't resolve host |$url_record->{host}|\n"
+          unless defined $packed_addr;
+      die "Can't resolve host |$url_record->{host}| into an IPv4 address\n"
+          unless length $packed_addr == 4;
+      my $proxy_addr = $_[0]->[1];
+      die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $proxy_addr;
+
+      my $port = $url_record->{port};
+      $port = get_default_port $url_record->{scheme} if not defined $port;
+      die "No port specified\n" unless defined $port;
+
+      my $tcp = Transport::TCP->new
+          (addr => $proxy_addr,
+           port => 0+(defined $proxy->{port} ? $proxy->{port} : 1080));
+      require Transport::SOCKS4;
+      return Transport::SOCKS4->new (transport => $tcp,
+                                     packed_addr => $packed_addr,
+                                     port => 0+$port);
+    });
+  } elsif ($proxy->{protocol} eq 'socks5') {
+    return Resolver->resolve_name ($proxy->{host})->then (sub {
+      die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
+
+      my $port = $url_record->{port};
+      $port = get_default_port $url_record->{scheme} if not defined $port;
+      die "No port specified\n" unless defined $port;
+
+      my $tcp = Transport::TCP->new
+          (addr => $_[0],
+           port => 0+(defined $proxy->{port} ? $proxy->{port} : 1080));
+
+      require Transport::SOCKS5;
+      return Transport::SOCKS5->new
+          (transport => $tcp,
+           host => encode_web_utf8 ($url_record->{host}),
+           #XXX packed_addr => ...,
+           port => 0+$port);
+    });
+  } elsif ($proxy->{protocol} eq 'unix') {
+    require Transport::UNIXDomainSocket;
+    my $transport = Transport::UNIXDomainSocket->new (path => $proxy->{path});
+    return Promise->resolve ($transport);
+  } else {
+    return Promise->reject
+        ("Proxy protocol |$proxy->{protocol}| not supported\n");
+  }
+}; # $proxy_to_transport
+
 sub connect ($) {
   my $self = $_[0];
   return $self->{connect_promise} ||= do {
-    my $proxies = $self->proxies;
-    $proxies = defined $proxies ? [@$proxies] : [{protocol => 'tcp'}];
+    ## Establish a transport
+
     my $url_record = $self->{url_record};
-    # XXX wait for WS
-    my $proxy_to_transport = sub {
-      my $proxy = $_[0];
-      if ($proxy->{protocol} eq 'tcp') {
-        return Resolver->resolve_name ($url_record->{host})->then (sub {
-          my $addr = $_[0];
-          die "Can't resolve host |$url_record->{host}|\n" unless defined $addr;
+    $self->proxy_manager->get_proxies_for_url_record ($url_record)->then (sub {
+      my $proxies = [@{$_[0]}];
 
-          my $port = $url_record->{port};
-          $port = get_default_port $url_record->{scheme} if not defined $port;
-          die "No port specified\n" unless defined $port;
+      # XXX wait for WS
 
-          return Transport::TCP->new (addr => $addr, port => 0+$port);
-        });
-      } elsif ($proxy->{protocol} eq 'http' or
-               $proxy->{protocol} eq 'https') {
-        return Resolver->resolve_name ($proxy->{host})->then (sub {
-          die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
-          my $transport = Transport::TCP->new
-              (addr => $_[0],
-               port => 0+($proxy->{port} || ($proxy->{protocol} eq 'https' ? 443 : 80)));
-          if ($proxy->{protocol} eq 'https') {
-            $transport = Transport::TLS->new
-                (%{$proxy->{tls_options} or {}},
-                 si_host => $proxy->{host},
-                 sni_host => $proxy->{host},
-                 transport => $transport);
-          }
-          if ($url_record->{scheme} eq 'https') {
-            # XXX HTTP version
-            my $http = HTTP->new (transport => $transport);
-            require Transport::H1CONNECT;
-            $transport = Transport::H1CONNECT->new
-                (http => $http,
-                 host => (encode_web_utf8 $url_record->{host}),
-                 port => (defined $url_record->{port} ? 0+$url_record->{port} : undef));
-            # XXX auth
-          } else {
-            $transport->request_mode ('HTTP proxy');
-          }
-          return $transport;
-        });
-      } elsif ($proxy->{protocol} eq 'socks4') {
-        return Promise->all ([
-          Resolver->resolve_name ($url_record->{host}, packed => 1),
-          Resolver->resolve_name ($proxy->{host}),
-        ])->then (sub {
-          my $packed_addr = $_[0]->[0];
-          die "Can't resolve host |$url_record->{host}|\n"
-              unless defined $packed_addr;
-          die "Can't resolve host |$url_record->{host}| into an IPv4 address\n"
-              unless length $packed_addr == 4;
-          my $proxy_addr = $_[0]->[1];
-          die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $proxy_addr;
-
-          my $port = $url_record->{port};
-          $port = get_default_port $url_record->{scheme} if not defined $port;
-          die "No port specified\n" unless defined $port;
-
-          my $tcp = Transport::TCP->new (addr => $proxy_addr,
-                                         port => 0+($proxy->{port} || 1080));
-          require Transport::SOCKS4;
-          return Transport::SOCKS4->new (transport => $tcp,
-                                         packed_addr => $packed_addr,
-                                         port => 0+$port);
-        });
-      } elsif ($proxy->{protocol} eq 'socks5') {
-        return Resolver->resolve_name ($proxy->{host})->then (sub {
-          die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
-
-          my $port = $url_record->{port};
-          $port = get_default_port $url_record->{scheme} if not defined $port;
-          die "No port specified\n" unless defined $port;
-
-          my $tcp = Transport::TCP->new
-              (addr => $_[0], port => 0+($proxy->{port} || 1080));
-
-          require Transport::SOCKS5;
-          return Transport::SOCKS5->new
-              (transport => $tcp,
-               host => encode_web_utf8 ($url_record->{host}),
-               #XXX packed_addr => ...,
-               port => 0+$port);
-        });
-      } elsif ($proxy->{protocol} eq 'unix') {
-        require Transport::UNIXDomainSocket;
-        my $transport = Transport::UNIXDomainSocket->new
-            (path => $proxy->{path});
-        return Promise->resolve ($transport);
-      } else {
-        return Promise->reject
-            ("Proxy protocol |$proxy->{protocol}| not supported\n");
-      }
-    }; # $proxy_to_transport
-
-    my $get; $get = sub {
-      if (@$proxies) {
-        my $proxy = shift @$proxies;
-        return $proxy_to_transport->($proxy)->catch (sub {
-          if (@$proxies) {
-            return $get->();
-          } else {
-            die $_[0];
-          }
-        });
-      } else {
-        return Promise->reject ("No proxy available\n");
-      }
-    }; # $get
-    $get->()->then (sub {
-      my $transport = $_[0];
-      undef $get;
-      if (defined $url_record->{scheme} and
-          $url_record->{scheme} eq 'https') {
-        return Transport::TLS->new
-            (%{$self->{tls_options}},
-             si_host => $url_record->{host},
-             sni_host => $url_record->{host},
-             transport => $_[0]);
-      }
-      return $transport;
-    }, sub {
-      undef $get;
-      die $_[0];
+      my $get; $get = sub {
+        if (@$proxies) {
+          my $proxy = shift @$proxies;
+          return $proxy_to_transport->($proxy, $url_record)->catch (sub {
+            if (@$proxies) {
+              return $get->();
+            } else {
+              die $_[0];
+            }
+          });
+        } else {
+          return Promise->reject ("No proxy available\n");
+        }
+      }; # $get
+      $get->()->then (sub {
+        my $transport = $_[0];
+        undef $get;
+        if (defined $url_record->{scheme} and
+            $url_record->{scheme} eq 'https') {
+          return Transport::TLS->new
+              (%{$self->{tls_options}},
+               si_host => $url_record->{host},
+               sni_host => $url_record->{host},
+               transport => $_[0]);
+        }
+        return $transport;
+      }, sub {
+        undef $get;
+        die $_[0];
+      });
     })->then (sub {
       # XXX switch to FTP if ...
       if (not $_[0]->request_mode eq 'HTTP proxy' and

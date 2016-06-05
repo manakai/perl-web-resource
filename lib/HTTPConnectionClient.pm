@@ -20,12 +20,15 @@ sub new_from_url ($$) {
   }, $_[0];
 } # new_from_url
 
-sub proxies ($;$) {
+sub proxy_manager ($;$) {
   if (@_ > 1) {
-    $_[0]->{proxies} = $_[1];
+    $_[0]->{proxy_manager} = $_[1];
   }
-  return $_[0]->{proxies};
-} # proxies
+  return $_[0]->{proxy_manager} ||= do {
+    require Web::Transport::ProxyManager;
+    Web::Transport::ProxyManager->new_from_envs;
+  };
+} # proxy_manager
 
 sub tls_options ($;$) {
   if (@_ > 1) {
@@ -61,7 +64,7 @@ sub _connect ($$) {
     return $self->{client}->abort if defined $self->{client};
   })->then (sub {
     $self->{client} = HTTPClientBareConnection->new_from_url_record ($url_record);
-    $self->{client}->proxies ($self->proxies);
+    $self->{client}->proxy_manager ($self->proxy_manager);
     $self->{client}->tls_options ($self->tls_options);
     $self->{client}->last_resort_timeout ($self->last_resort_timeout);
     return $self->{client};

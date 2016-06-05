@@ -13,13 +13,14 @@ use Promise;
 
 sub new ($%) {
   my $self = bless {}, shift;
-  $self->{id} = int rand 100000;
   my $args = $self->{args} = {@_};
   # XXX host vs ipaddr
   croak "Bad |addr|" unless defined $args->{addr};
   croak "utf8-flagged |addr|" if utf8::is_utf8 $args->{addr};
   croak "Bad |port|" unless defined $args->{port};
   croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
+  croak "Bad |id|" if defined $args->{id} and utf8::is_utf8 ($args->{id});
+  $self->{id} = (defined $args->{id} ? $args->{id} : int rand 100000);
   return $self;
 } # new
 

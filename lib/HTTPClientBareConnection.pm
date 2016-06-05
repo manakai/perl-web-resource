@@ -10,6 +10,8 @@ use HTTP;
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Canonicalize qw(serialize_parsed_url get_default_port);
 
+use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
+
 sub new_from_url_record ($$) {
   return bless {url_record => $_[1]}, $_[0];
 } # new_from_url_record
@@ -20,6 +22,13 @@ sub proxy_manager ($;$) {
   }
   return $_[0]->{proxy_manager};
 } # proxy_manager
+
+sub parent_id ($;$) {
+  if (@_ > 1) {
+    $_[0]->{parent_id} = $_[1];
+  }
+  return $_[0]->{parent_id};
+} # parent_id
 
 sub tls_options ($;$) {
   if (@_ > 1) {
@@ -37,7 +46,7 @@ sub last_resort_timeout ($;$) {
 
 my $proxy_to_transport = sub {
   ## create a transport for a proxy configuration
-  my ($proxy, $url_record) = @_;
+  my ($tid, $proxy, $url_record) = @_;
 
   ## 1. If $proxy->{protocol} is not supported, return null.
 
@@ -50,15 +59,18 @@ my $proxy_to_transport = sub {
       $port = get_default_port $url_record->{scheme} if not defined $port;
       die "No port specified\n" unless defined $port;
 
-      return Transport::TCP->new (addr => $addr, port => 0+$port);
+      $port = 0+$port;
+      warn "$tid: TCP $addr:$port...\n" if DEBUG;
+      return Transport::TCP->new (addr => $addr, port => $port, id => $tid);
     });
   } elsif ($proxy->{protocol} eq 'http' or
            $proxy->{protocol} eq 'https') {
     return Resolver->resolve_name ($proxy->{host})->then (sub {
       die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
+      my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : ($proxy->{protocol} eq 'https' ? 443 : 80));
+      warn "$tid: TCP $_[0]:$pport...\n" if DEBUG;
       my $transport = Transport::TCP->new
-          (addr => $_[0],
-           port => 0+(defined $proxy->{port} ? $proxy->{port} : ($proxy->{protocol} eq 'https' ? 443 : 80)));
+          (addr => $_[0], port => $pport, id => $tid);
       if ($proxy->{protocol} eq 'https') {
         $transport = Transport::TLS->new
             (%{$proxy->{tls_options} or {}},
@@ -97,9 +109,10 @@ my $proxy_to_transport = sub {
       $port = get_default_port $url_record->{scheme} if not defined $port;
       die "No port specified\n" unless defined $port;
 
+      my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : 1080);
+      warn "$tid: TCP $proxy_addr:$pport...\n" if DEBUG;
       my $tcp = Transport::TCP->new
-          (addr => $proxy_addr,
-           port => 0+(defined $proxy->{port} ? $proxy->{port} : 1080));
+          (addr => $proxy_addr, port => $pport, id => $tid);
       require Transport::SOCKS4;
       return Transport::SOCKS4->new (transport => $tcp,
                                      packed_addr => $packed_addr,
@@ -113,9 +126,10 @@ my $proxy_to_transport = sub {
       $port = get_default_port $url_record->{scheme} if not defined $port;
       die "No port specified\n" unless defined $port;
 
+      my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : 1080);
+      warn "$tid: TCP $_[0]:$pport...\n" if DEBUG;
       my $tcp = Transport::TCP->new
-          (addr => $_[0],
-           port => 0+(defined $proxy->{port} ? $proxy->{port} : 1080));
+          (addr => $_[0], port => $pport, id => $tid);
 
       require Transport::SOCKS5;
       return Transport::SOCKS5->new
@@ -126,7 +140,9 @@ my $proxy_to_transport = sub {
     });
   } elsif ($proxy->{protocol} eq 'unix') {
     require Transport::UNIXDomainSocket;
-    my $transport = Transport::UNIXDomainSocket->new (path => $proxy->{path});
+    warn "$tid: Unix $proxy->{path}...\n" if DEBUG;
+    my $transport = Transport::UNIXDomainSocket->new
+        (path => $proxy->{path}, id => $tid);
     return Promise->resolve ($transport);
   } else {
     return Promise->reject
@@ -139,6 +155,8 @@ sub connect ($) {
   return $self->{connect_promise} ||= do {
     ## Establish a transport
 
+    my $parent_id = $self->parent_id;
+
     my $url_record = $self->{url_record};
     $self->proxy_manager->get_proxies_for_url_record ($url_record)->then (sub {
       my $proxies = [@{$_[0]}];
@@ -148,7 +166,8 @@ sub connect ($) {
       my $get; $get = sub {
         if (@$proxies) {
           my $proxy = shift @$proxies;
-          return $proxy_to_transport->($proxy, $url_record)->catch (sub {
+          my $tid = $parent_id . '.' . ++$self->{tid};
+          return $proxy_to_transport->($tid, $proxy, $url_record)->catch (sub {
             if (@$proxies) {
               return $get->();
             } else {

@@ -5,6 +5,8 @@ use HTTPClientBareConnection;
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Canonicalize qw(url_to_canon_url parse_url serialize_parsed_url);
 
+use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
+
 sub new_from_url ($$) {
   my $url = $_[1];
   my $parsed_url = parse_url url_to_canon_url $url, 'about:blank';
@@ -17,6 +19,7 @@ sub new_from_url ($$) {
   return bless {
     origin => $origin,
     queue => Promise->resolve,
+    parent_id => (int rand 100000),
   }, $_[0];
 } # new_from_url
 
@@ -61,9 +64,15 @@ sub _connect ($$) {
   }
 
   return Promise->resolve->then (sub {
-    return $self->{client}->abort if defined $self->{client};
+    if (defined $self->{client}) {
+      warn "$self->{parent_id}: @{[__PACKAGE__]}: Current connection is no longer active @{[scalar gmtime]}\n" if DEBUG;
+      return $self->{client}->abort;
+    } else {
+      warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n" if DEBUG;
+    }
   })->then (sub {
     $self->{client} = HTTPClientBareConnection->new_from_url_record ($url_record);
+    $self->{client}->parent_id ($self->{parent_id});
     $self->{client}->proxy_manager ($self->proxy_manager);
     $self->{client}->tls_options ($self->tls_options);
     $self->{client}->last_resort_timeout ($self->last_resort_timeout);
@@ -173,6 +182,8 @@ sub close ($) {
   return $queue->then (sub {
     my $client = delete $self->{client};
     return $client->close if defined $client;
+  })->then (sub {
+    warn "$self->{parent_id}: @{[__PACKAGE__]}: Closed @{[scalar gmtime]}\n" if DEBUG;
   });
 } # close
 

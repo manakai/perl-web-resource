@@ -19,7 +19,7 @@ sub new ($%) {
   carp "|sni_host| is not defined" unless defined $self->{args}->{sni_host};
   $self->{args}->{now} ||= time;
   $self->{transport} = delete $self->{args}->{transport};
-  $self->{id} = $self->{transport}->id . 'S';
+  $self->{id} = $self->{transport}->id . 's';
   return $self;
 } # new
 

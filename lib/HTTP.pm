@@ -11,7 +11,7 @@ use AnyEvent;
 use AnyEvent::Socket;
 use Promise;
 
-my $DEBUG = $ENV{WEBUA_DEBUG} || 0;
+use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
 sub MAX_BYTES () { 2**31-1 }
 
@@ -262,9 +262,9 @@ sub _process_rbuf ($$;%) {
           if (defined $self->{pending_frame}) {
             $self->{ws_state} = 'CLOSING';
             $self->{transport}->push_write (\($self->{pending_frame}));
-            $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if $DEBUG;
+            $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if DEBUG;
             $self->{timer} = AE::timer 20, 0, sub {
-              warn "$self->{request}->{id}: WS timeout (20)\n" if $DEBUG;
+              warn "$self->{request}->{id}: WS timeout (20)\n" if DEBUG;
               delete $self->{timer};
               $self->_next;
             };
@@ -525,7 +525,7 @@ sub _process_rbuf ($$;%) {
                         RSV3 => !!($b1 & 0b00010000),
                         opcode => $opcode,
                         mask => $self->{ws_decode_mask_key},
-                        length => $self->{unread_length}) if $DEBUG;
+                        length => $self->{unread_length}) if DEBUG;
       if (not $fin and ($opcode == 8 or $opcode == 9 or $opcode == 10)) {
         $ws_failed = '';
         last WS;
@@ -563,9 +563,9 @@ sub _process_rbuf ($$;%) {
           length ($$ref) >= $self->{unread_length}) {
         # XXX xor if ws_decode_mask_key
         push @{$self->{ws_frame}->[1]}, substr $$ref, 0, $self->{unread_length};
-        #if ($DEBUG > 1 or
-        #    ($DEBUG and $self->{ws_frame}->[0] >= 8)) {
-        if ($DEBUG and $self->{ws_frame}->[0] == 8) {
+        #if (DEBUG > 1 or
+        #    (DEBUG and $self->{ws_frame}->[0] >= 8)) {
+        if (DEBUG and $self->{ws_frame}->[0] == 8) {
           if ($self->{ws_frame}->[0] == 8 and
               $self->{unread_length} > 1) {
             warn sprintf "$self->{request}->{id}: R: status=%d %s\n",
@@ -608,7 +608,7 @@ sub _process_rbuf ($$;%) {
             for (0..((length $data)-1)) {
               substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
             }
-            $self->_ws_debug ('S', $reason // '', FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $status) if $DEBUG;
+            $self->_ws_debug ('S', $reason // '', FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $status) if DEBUG;
             $self->{transport}->push_write
                 (\(pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
                    $mask . $data));
@@ -617,7 +617,7 @@ sub _process_rbuf ($$;%) {
           $self->{exit} = {status => $status, reason => $reason, cleanly => 1};
           # if server, $self->_next;
           $self->{timer} = AE::timer 1, 0, sub {
-            warn "$self->{request}->{id}: WS timeout (1)\n" if $DEBUG;
+            warn "$self->{request}->{id}: WS timeout (1)\n" if DEBUG;
             delete $self->{timer};
             $self->_next;
           };
@@ -651,7 +651,7 @@ sub _process_rbuf ($$;%) {
           for (0..((length $data)-1)) {
             substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
           }
-          $self->_ws_debug ('S', $data, FIN => 1, opcode => 10, mask => $mask, length => length $data) if $DEBUG;
+          $self->_ws_debug ('S', $data, FIN => 1, opcode => 10, mask => $mask, length => length $data) if DEBUG;
           $self->{transport}->push_write
               (\(pack ('CC', 0b10000000 | 10, 0b10000000 | length $data) .
                  $mask . $data));
@@ -678,7 +678,7 @@ sub _process_rbuf ($$;%) {
       substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
     }
     # length $data must be < 126
-    $self->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $self->{exit}->{status}) if $DEBUG;
+    $self->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $self->{exit}->{status}) if DEBUG;
     $self->{transport}->push_write
         (\(pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
            $mask . $data));
@@ -910,7 +910,7 @@ sub connect ($) {
   my $closed = Promise->new (sub { $onclosed = $_[0] });
   $self->{closed} = $closed;
 
-  if ($DEBUG) {
+  if (DEBUG) {
     my $id = $self->{transport}->id;
     warn "$id: Connect (@{[$self->{transport}->layered_type]})... @{[scalar gmtime]}\n";
   }
@@ -922,7 +922,7 @@ sub connect ($) {
       $self->_process_rbuf ($self->{rbuf});
     } elsif ($type eq 'readeof') {
       my $data = $_[2];
-      if ($DEBUG) {
+      if (DEBUG) {
         my $id = $self->{transport}->id;
         if (defined $data->{message}) {
           warn "$id: R: EOF ($data->{message})\n";
@@ -952,7 +952,7 @@ sub connect ($) {
       }
     } elsif ($type eq 'writeeof') {
       my $data = $_[2];
-      if ($DEBUG) {
+      if (DEBUG) {
         my $id = $self->{transport}->id;
         if (defined $data->{message}) {
           warn "$id: S: EOF ($data->{message})\n";
@@ -965,17 +965,17 @@ sub connect ($) {
         $self->_ev ('complete', {});
       }
     } elsif ($type eq 'close') {
-      if ($DEBUG) {
+      if (DEBUG) {
         my $id = $self->{transport}->id;
         warn "$id: Connection closed @{[scalar gmtime]}\n";
       }
       $onclosed->();
     }
   })->then (sub {
-    debug_handshake_done $self, 1, {transport_data => $_[0]} if $DEBUG;
+    debug_handshake_done $self, 1, {transport_data => $_[0]} if DEBUG;
   }, sub {
     my $error = $_[0];
-    debug_handshake_done $self, 0, $error if $DEBUG;
+    debug_handshake_done $self, 0, $error if DEBUG;
     $self->{transport}->abort;
     $onclosed->();
     die $error;
@@ -1029,7 +1029,7 @@ sub send_request_headers ($$;%) {
   }
 
   $self->{id} = $req->{id} = $self->{transport}->id . '.' . ++$self->{req_id};
-  if ($DEBUG) {
+  if (DEBUG) {
     warn "$req->{id}: ========== $$ @{[__PACKAGE__]}\n";
     warn "$req->{id}: @{[scalar gmtime]}\n";
   }
@@ -1057,7 +1057,7 @@ sub send_request_headers ($$;%) {
       "$method $url HTTP/1.1\x0D\x0A",
       (map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []}),
       "\x0D\x0A";
-  if ($DEBUG) {
+  if (DEBUG) {
     for (split /\x0A/, $header) {
       warn "$req->{id}: S: @{[_e4d $_]}\n";
     }
@@ -1075,7 +1075,7 @@ sub send_request_headers ($$;%) {
       $self->{request_state} = 'sending body';
     });
   }
-  if ($DEBUG) {
+  if (DEBUG) {
     $req_done = $req_done->then (sub {
       warn "$req->{id}: ==========\n";
     });
@@ -1097,7 +1097,7 @@ sub send_data ($$;%) {
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   return unless length $$ref;
 
-  if ($DEBUG > 1) {
+  if (DEBUG > 1) {
     warn "$self->{request}->{id}: S: @{[_e4d $$ref]}\n";
   }
 
@@ -1149,7 +1149,7 @@ sub send_text_header ($$) {
     $length0 = 0x7E;
     $len = pack 'Q>', $length;
   }
-  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 1, mask => $mask, length => $length) if $DEBUG;
+  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 1, mask => $mask, length => $length) if DEBUG;
   $self->{transport}->push_write
       (\(pack ('CC', 0b10000000 | 1, 0b10000000 | $length0) .
          $len . $mask));
@@ -1177,7 +1177,7 @@ sub send_binary_header ($$) {
     $length0 = 0x7E;
     $len = pack 'Q>', $length;
   }
-  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask, length => $length) if $DEBUG;
+  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask, length => $length) if DEBUG;
   $self->{transport}->push_write
       (\(pack ('CC', 0b10000000 | 2, 0b10000000 | $length0) .
          $len . $mask));
@@ -1197,7 +1197,7 @@ sub send_ping ($;%) {
     substr ($args{data}, $_, 1) = substr ($args{data}, $_, 1) ^ substr ($mask, $_ % 4, 1);
   }
   my $opcode = $args{pong} ? 10 : 9;
-  $self->_ws_debug ('S', $args{data}, FIN => 1, opcode => $opcode, mask => $mask, length => length $args{data}) if $DEBUG;
+  $self->_ws_debug ('S', $args{data}, FIN => 1, opcode => $opcode, mask => $mask, length => length $args{data}) if DEBUG;
   $self->{transport}->push_write
       (\(pack ('CC', 0b10000000 | $opcode, 0b10000000 | length $args{data}) .
          $mask . $args{data}));
@@ -1242,13 +1242,13 @@ sub close ($;%) {
         $mask . $data;
     if ($self->{ws_state} eq 'CONNECTING') {
       $self->{pending_frame} = $frame;
-      $self->{pending_frame_info} = [$args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}] if $DEBUG;
+      $self->{pending_frame_info} = [$args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}] if DEBUG;
     } else {
-      $self->_ws_debug ('S', $args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}) if $DEBUG;
+      $self->_ws_debug ('S', $args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}) if DEBUG;
       $self->{transport}->push_write (\$frame);
       $self->{ws_state} = 'CLOSING';
       $self->{timer} = AE::timer 20, 0, sub {
-        warn "$self->{request}->{id}: WS timeout (20)\n" if $DEBUG;
+        warn "$self->{request}->{id}: WS timeout (20)\n" if DEBUG;
         # XXX set exit ?
         $self->_next;
         delete $self->{timer};
@@ -1295,9 +1295,9 @@ sub onevent ($;$) {
 sub _ev ($$;$$) {
   my $self = shift;
   my $req = $self->{request};
-  if ($DEBUG) {
+  if (DEBUG) {
     warn "$req->{id}: $_[0] @{[scalar gmtime]}\n";
-    if ($_[0] eq 'data' and $DEBUG > 1) {
+    if ($_[0] eq 'data' and DEBUG > 1) {
       for (split /\x0D?\x0A/, $_[1], -1) {
         warn "$req->{id}: + @{[_e4d $_]}\n";
       }
@@ -1310,7 +1310,7 @@ sub _ev ($$;$$) {
           warn "$req->{id}: + @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
         }
       }
-      warn "$req->{id}: + WS established\n" if $DEBUG and $_[2];
+      warn "$req->{id}: + WS established\n" if DEBUG and $_[2];
     } elsif ($_[0] eq 'complete') {
       my $err = join ' ',
           $_[1]->{reset} ? 'reset' : (),
@@ -1364,7 +1364,7 @@ sub _ws_debug ($$$%) {
       $args{length};
   if ($args{opcode} == 8 and defined $args{status}) {
     warn "$id: S: status=$args{status} @{[_e4d $_[2]]}\n";
-  } elsif (($DEBUG > 1 or $args{opcode} >= 8) and length $_[2]) {
+  } elsif ((DEBUG > 1 or $args{opcode} >= 8) and length $_[2]) {
     warn "$id: S: @{[_e4d $_[2]]}\n";
   }
 } # _ws_sent

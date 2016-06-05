@@ -714,6 +714,7 @@ sub _process_rbuf ($$;%) {
 
 sub _process_rbuf_eof ($$;%) {
   my ($self, $ref, %args) = @_;
+
   if ($self->{state} eq 'before response') {
     if (length $$ref) {
       if ($self->{request}->{method} eq 'PUT' or
@@ -799,7 +800,7 @@ sub _process_rbuf_eof ($$;%) {
   }
 
   $self->{no_new_request} = 1;
-  $self->{request_state} = 'sent' if $args{abort};
+  $self->{request_state} = 'sent';
   $self->_next;
 } # _process_rbuf_eof
 
@@ -1299,15 +1300,15 @@ sub _ev ($$;$$) {
     warn "$req->{id}: $_[0] @{[scalar gmtime]}\n";
     if ($_[0] eq 'data' and DEBUG > 1) {
       for (split /\x0D?\x0A/, $_[1], -1) {
-        warn "$req->{id}: + @{[_e4d $_]}\n";
+        warn "$req->{id}: R: @{[_e4d $_]}\n";
       }
     } elsif ($_[0] eq 'headers') {
       if ($_[1]->{version} eq '0.9') {
-        warn "$req->{id}: + HTTP/0.9\n";
+        warn "$req->{id}: R: HTTP/0.9\n";
       } else {
-        warn "$req->{id}: + HTTP/$_[1]->{version} $_[1]->{status} $_[1]->{reason}\n";
+        warn "$req->{id}: R: HTTP/$_[1]->{version} $_[1]->{status} $_[1]->{reason}\n";
         for (@{$_[1]->{headers}}) {
-          warn "$req->{id}: + @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
+          warn "$req->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
         }
       }
       warn "$req->{id}: + WS established\n" if DEBUG and $_[2];
@@ -1325,9 +1326,9 @@ sub _ev ($$;$$) {
       warn "$req->{id}: + @{[_e4d $err]}\n" if length $err;
     } elsif ($_[0] eq 'ping') {
       if ($_[2]) {
-        warn "$req->{id}: + pong data=@{[_e4d $_[1]]}\n";
+        warn "$req->{id}: R: pong data=@{[_e4d $_[1]]}\n";
       } else {
-        warn "$req->{id}: + data=@{[_e4d $_[1]]}\n";
+        warn "$req->{id}: R: data=@{[_e4d $_[1]]}\n";
       }
     }
   }

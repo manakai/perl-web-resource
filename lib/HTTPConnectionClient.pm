@@ -10,8 +10,10 @@ use Web::Transport::RequestConstructor;
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
 sub new_from_url ($$) {
+  my $origin = $_[1]->get_origin;
+  croak "The URL does not have a tuple origin" if $origin->is_opaque;
   return bless {
-    origin => $_[1]->get_origin,
+    origin => $origin,
     queue => Promise->resolve,
     parent_id => (int rand 100000),
   }, $_[0];
@@ -86,7 +88,7 @@ sub request ($$%) {
   my $url_origin = $url_record->get_origin;
   unless ($url_origin->same_origin_as ($self->{origin})) {
     return Promise->reject
-        ("Bad origin |@{[$url_origin->to_ascii]}| (|@{[$self->{origin}->to_ascii]}| expected)");
+        ("Bad URL origin |@{[$url_origin->to_ascii]}| (|@{[$self->{origin}->to_ascii]}| expected)");
   }
 
   my $return_ok;
@@ -222,3 +224,12 @@ sub as_string ($) {
 } # as_string
 
 1;
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

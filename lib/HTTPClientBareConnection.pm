@@ -8,13 +8,13 @@ use Transport::TCP;
 use Transport::TLS;
 use HTTP;
 use Web::Encoding qw(encode_web_utf8);
-use Web::URL::Canonicalize qw(serialize_parsed_url get_default_port);
+use Web::URL::Scheme qw(get_default_port);
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
-sub new_from_url_record ($$) {
-  return bless {url_record => $_[1]}, $_[0];
-} # new_from_url_record
+sub new_from_url ($$) {
+  return bless {url => $_[1]}, $_[0];
+} # new_from_url
 
 sub proxy_manager ($;$) {
   if (@_ > 1) {
@@ -51,12 +51,12 @@ my $proxy_to_transport = sub {
   ## 1. If $proxy->{protocol} is not supported, return null.
 
   if ($proxy->{protocol} eq 'tcp') {
-    return Resolver->resolve_name ($url_record->{host})->then (sub {
+    return Resolver->resolve_name ($url_record->host)->then (sub {
       my $addr = $_[0];
-      die "Can't resolve host |$url_record->{host}|\n" unless defined $addr;
+      die "Can't resolve host |@{[$url_record->host]}|\n" unless defined $addr;
 
-      my $port = $url_record->{port};
-      $port = get_default_port $url_record->{scheme} if not defined $port;
+      my $port = $url_record->port;
+      $port = get_default_port $url_record->scheme if not defined $port;
       die "No port specified\n" unless defined $port;
 
       $port = 0+$port;
@@ -78,14 +78,13 @@ my $proxy_to_transport = sub {
              sni_host => $proxy->{host},
              transport => $transport);
       }
-      if ($url_record->{scheme} eq 'https') {
+      if ($url_record->scheme eq 'https') {
         # XXX HTTP version
         my $http = HTTP->new (transport => $transport);
         require Transport::H1CONNECT;
         $transport = Transport::H1CONNECT->new
             (http => $http,
-             host => (encode_web_utf8 $url_record->{host}),
-             port => (defined $url_record->{port} ? 0+$url_record->{port} : undef));
+             target => (encode_web_utf8 $url_record->hosportt));
         # XXX auth
       } else {
         $transport->request_mode ('HTTP proxy');
@@ -94,19 +93,19 @@ my $proxy_to_transport = sub {
     });
   } elsif ($proxy->{protocol} eq 'socks4') {
     return Promise->all ([
-      Resolver->resolve_name ($url_record->{host}, packed => 1),
+      Resolver->resolve_name ($url_record->host, packed => 1),
       Resolver->resolve_name ($proxy->{host}),
     ])->then (sub {
       my $packed_addr = $_[0]->[0];
-      die "Can't resolve host |$url_record->{host}|\n"
+      die "Can't resolve host |@{[$url_record->host]}|\n"
           unless defined $packed_addr;
-      die "Can't resolve host |$url_record->{host}| into an IPv4 address\n"
+      die "Can't resolve host |@{[$url_record->host]}| into an IPv4 address\n"
           unless length $packed_addr == 4;
       my $proxy_addr = $_[0]->[1];
       die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $proxy_addr;
 
-      my $port = $url_record->{port};
-      $port = get_default_port $url_record->{scheme} if not defined $port;
+      my $port = $url_record->port;
+      $port = get_default_port $url_record->scheme if not defined $port;
       die "No port specified\n" unless defined $port;
 
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : 1080);
@@ -122,8 +121,8 @@ my $proxy_to_transport = sub {
     return Resolver->resolve_name ($proxy->{host})->then (sub {
       die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
 
-      my $port = $url_record->{port};
-      $port = get_default_port $url_record->{scheme} if not defined $port;
+      my $port = $url_record->port;
+      $port = get_default_port $url_record->scheme if not defined $port;
       die "No port specified\n" unless defined $port;
 
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : 1080);
@@ -134,7 +133,7 @@ my $proxy_to_transport = sub {
       require Transport::SOCKS5;
       return Transport::SOCKS5->new
           (transport => $tcp,
-           host => encode_web_utf8 ($url_record->{host}),
+           host => encode_web_utf8 ($url_record->host),
            #XXX packed_addr => ...,
            port => 0+$port);
     });
@@ -157,8 +156,8 @@ sub connect ($) {
 
     my $parent_id = $self->parent_id;
 
-    my $url_record = $self->{url_record};
-    $self->proxy_manager->get_proxies_for_url_record ($url_record)->then (sub {
+    my $url_record = $self->{url};
+    $self->proxy_manager->get_proxies_for_url ($url_record)->then (sub {
       my $proxies = [@{$_[0]}];
 
       # XXX wait for WS
@@ -181,12 +180,11 @@ sub connect ($) {
       $get->()->then (sub {
         my $transport = $_[0];
         undef $get;
-        if (defined $url_record->{scheme} and
-            $url_record->{scheme} eq 'https') {
+        if ($url_record->scheme eq 'https') {
           return Transport::TLS->new
               (%{$self->{tls_options}},
-               si_host => $url_record->{host},
-               sni_host => $url_record->{host},
+               si_host => $url_record->host,
+               sni_host => $url_record->host,
                transport => $_[0]);
         }
         return $transport;
@@ -197,9 +195,9 @@ sub connect ($) {
     })->then (sub {
       # XXX switch to FTP if ...
       if (not $_[0]->request_mode eq 'HTTP proxy' and
-          not $url_record->{scheme} eq 'http' and
-          not $url_record->{scheme} eq 'https') {
-        die "Bad URL scheme |$url_record->{scheme}|\n";
+          not $url_record->scheme eq 'http' and
+          not $url_record->scheme eq 'https') {
+        die "Bad URL scheme |@{[$url_record->scheme]}|\n";
       }
       $self->{http} = HTTP->new (transport => $_[0]);
       return $self->{http}->connect;
@@ -211,16 +209,15 @@ sub request ($$$$$$) {
   my ($self, $method, $url_record, $headers, $body_ref, $cb) = @_;
   return $self->connect->then (sub {
     return {failed => 1, message => "Bad input URL"}
-        unless defined $url_record->{host};
+        unless defined $url_record->host;
     my $target;
     if ($self->{http}->transport->request_mode eq 'HTTP proxy') {
-      local $url_record->{fragment} = undef;
-      $target = serialize_parsed_url $url_record;
+      $target = $url_record->stringify_without_fragment;
     } else {
-      $target = $url_record->{path} . (defined $url_record->{query} ? '?' . $url_record->{query} : '');
+      $target = $url_record->pathquery;
     }
-    my $host = $url_record->{host} . (defined $url_record->{port} ? ':' . $url_record->{port} : '');
-    $headers = [['Host', encode_web_utf8 $host], ['Connection', 'keep-alive'],
+    $headers = [['Host', encode_web_utf8 $url_record->hostport],
+                ['Connection', 'keep-alive'],
                 @$headers];
 
     my $timeout = $self->last_resort_timeout;

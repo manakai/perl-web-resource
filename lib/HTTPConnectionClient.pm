@@ -1,25 +1,17 @@
 package HTTPConnectionClient;
 use strict;
 use warnings;
+our $VERSION = '1.0';
 require utf8;
 use Carp;
 use HTTPClientBareConnection;
-use Web::URL::Canonicalize qw(url_to_canon_url parse_url serialize_parsed_url);
 use Web::Transport::RequestConstructor;
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
 sub new_from_url ($$) {
-  my $url = $_[1];
-  my $parsed_url = parse_url url_to_canon_url $url, 'about:blank';
-  my $origin = defined $parsed_url->{host} ? serialize_parsed_url {
-    invalid => $parsed_url->{invalid},
-    scheme => $parsed_url->{scheme},
-    host => $parsed_url->{host},
-    port => $parsed_url->{port},
-  } : undef;
   return bless {
-    origin => $origin,
+    origin => $_[1]->get_origin,
     queue => Promise->resolve,
     parent_id => (int rand 100000),
   }, $_[0];
@@ -73,7 +65,7 @@ sub _connect ($$) {
       warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n" if DEBUG;
     }
   })->then (sub {
-    $self->{client} = HTTPClientBareConnection->new_from_url_record ($url_record);
+    $self->{client} = HTTPClientBareConnection->new_from_url ($url_record);
     $self->{client}->parent_id ($self->{parent_id});
     $self->{client}->proxy_manager ($self->proxy_manager);
     $self->{client}->tls_options ($self->tls_options);
@@ -83,26 +75,18 @@ sub _connect ($$) {
 } # _connect
 
 sub request ($$%) {
-  my ($self, $url, %args) = @_;
+  my ($self, $url_input, %args) = @_;
 
   my ($method, $url_record, $header_list, $body_ref)
-      = Web::Transport::RequestConstructor->create ($url, \%args);
+      = Web::Transport::RequestConstructor->create ($url_input, \%args);
   if (defined $body_ref and utf8::is_utf8 ($$body_ref)) {
     croak "|body| is utf8-flagged";
   }
 
-  my $url_origin = defined $url_record->{host} ? serialize_parsed_url {
-    invalid => $url_record->{invalid},
-    scheme => $url_record->{scheme},
-    host => $url_record->{host},
-    port => $url_record->{port},
-  } : undef;
-
-  if (not defined $self->{origin} or
-      not defined $url_origin or
-      not $self->{origin} eq $url_origin) {
+  my $url_origin = $url_record->get_origin;
+  unless ($url_origin->same_origin_as ($self->{origin})) {
     return Promise->reject
-        ("Bad origin |$url_origin| (|$self->{origin}| expected)");
+        ("Bad origin |@{[$url_origin->to_ascii]}| (|@{[$self->{origin}->to_ascii]}| expected)");
   }
 
   my $return_ok;

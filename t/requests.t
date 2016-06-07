@@ -1860,7 +1860,7 @@ CRLF
         (addr => $server->{addr}, port => $server->{port});
     my $proxy = HTTP->new (transport => $tcp);
     my $connect = Transport::H1CONNECT->new
-        (http => $proxy, host_name => 'hoge.test', port => undef);
+        (http => $proxy, target => 'hoge.test');
     my $tls = Transport::TLS->new
         (transport => $connect,
          sni_host_name => 'hoge.test',
@@ -1900,7 +1900,7 @@ test {
     my $tcp = Transport::TCP->new (addr => '260.0.0.0', port => int rand);
     my $proxy = HTTP->new (transport => $tcp);
     my $connect = Transport::H1CONNECT->new
-        (http => $proxy, host_name => 'hoge.test', port => undef);
+        (http => $proxy, target => 'hoge.test');
     my $tls = Transport::TLS->new
         (transport => $connect,
          sni_host_name => 'hoge.test',
@@ -1933,7 +1933,7 @@ test {
     my $tcp = Transport::TCP->new (addr => '260.0.0.0', port => int rand);
     my $proxy = HTTP->new (transport => $tcp);
     my $connect = Transport::H1CONNECT->new
-        (http => $proxy, host_name => 'hoge.test', port => undef);
+        (http => $proxy, target => 'hoge.test');
     my $http = HTTP->new (transport => $connect);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;

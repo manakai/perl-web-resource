@@ -5,8 +5,8 @@ use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
+use Web::URL;
 use Web::Transport::ProxyManager;
-use Web::URL::Canonicalize qw(parse_url);
 
 for (
   [{}, undef, q<http://hoge/>, [{protocol => 'tcp'}]],
@@ -51,7 +51,7 @@ for (
     my $c = shift;
     local %ENV = %$Envs;
     my $pm = Web::Transport::ProxyManager->new_from_envs ($envs);
-    my $result = $pm->get_proxies_for_url_record (parse_url $url);
+    my $result = $pm->get_proxies_for_url (Web::URL->parse_string ($url));
     isa_ok $result, 'Promise';
     $result->then (sub {
       my $proxies = $_[0];

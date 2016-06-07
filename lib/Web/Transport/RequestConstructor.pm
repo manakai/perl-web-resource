@@ -4,35 +4,14 @@ use warnings;
 our $VERSION = '1.0';
 use Carp;
 use Web::Encoding qw(encode_web_utf8);
-use Web::URL::Canonicalize qw(url_to_canon_url parse_url serialize_parsed_url);
-
-sub percent_encode_c ($) {
-  my $s = encode_web_utf8 $_[0];
-  $s =~ s/([^0-9A-Za-z._~-])/sprintf '%%%02X', ord $1/ge;
-  return $s;
-} # percent_encode_c
-
-sub serialize_form_urlencoded ($) {
-  my $params = shift || {};
-  return join '&', map {
-    my $n = percent_encode_c $_;
-    my $vs = $params->{$_};
-    if (defined $vs and ref $vs eq 'ARRAY') {
-      (map { $n . '=' . percent_encode_c $_ } grep { defined $_ } @$vs);
-    } elsif (defined $vs) {
-      ($n . '=' . percent_encode_c $vs);
-    } else {
-      ();
-    }
-  } sort { $a cmp $b } keys %$params;
-} # serialize_form_urlencoded
+use Web::URL::Encoding qw(serialize_form_urlencoded);
 
 my $QueryMethods = { # XXX
   GET => 1, HEAD => 1, DELETE => 1,
 };
 
 sub create ($$$) {
-  my (undef, $url, $args) = @_;
+  my (undef, $url_record, $args) = @_;
 
   my $method = encode_web_utf8
       (defined $args->{method} ? $args->{method} : 'GET');
@@ -58,8 +37,8 @@ sub create ($$$) {
 
   if (defined $args->{params}) {
     if ($QueryMethods->{$method} or defined $args->{body}) {
-      # XXX if $url has query or fragment
-      $url .= '?' . serialize_form_urlencoded $args->{params};
+      $url_record = $url_record->clone;
+      $url_record->set_query_params ($args->{params}, append => 1);
     } else {
       unless ($has_header->{'content-type'}) {
         push @$header_list, ['Content-Type', 'application/x-www-form-urlencoded'];
@@ -107,8 +86,6 @@ sub create ($$$) {
   for (@$header_list) {
     $_->[1] =~ tr/\x0D\x0A/\x20\x20/;
   }
-
-  my $url_record = parse_url url_to_canon_url $url, 'about:blank';
 
   return ($method, $url_record, $header_list, defined $args->{body} ? \($args->{body}) : undef);
 } # create

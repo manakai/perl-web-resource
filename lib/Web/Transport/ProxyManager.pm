@@ -3,35 +3,35 @@ use strict;
 use warnings;
 our $VERSION = '1.0';
 use Promise;
-use Web::DomainName::Canonicalize qw(canonicalize_url_host);
-use Web::URL::Canonicalize qw(url_to_canon_url parse_url);
 use Web::Encoding qw(decode_web_utf8);
+use Web::DomainName::Canonicalize qw(canonicalize_url_host);
+use Web::URL::Parser;
 
 sub _env ($$) {
   ## Parse an environment variable
   my $value = $_[0]->{$_[1]};
   return undef if not defined $value or not length $value;
   $value = decode_web_utf8 $value;
-  $value = 'http://' . $value unless $value =~ m{^[A-Za-z][A-Za-z0-9+.-]*://};
 
-  my $url = parse_url url_to_canon_url $value, 'about:blank';
+  my $parser = Web::URL::Parser->new;
+  my $url = $parser->parse_proxy_env ($value);
 
-  if (defined $url->{scheme} and
-      ($url->{scheme} eq 'http' or $url->{scheme} eq 'https')) {
-    return {protocol => $url->{scheme},
-            host => $url->{host}, port => $url->{port},
-            username => defined $url->{user} ? $url->{user} : '',
-            password => $url->{password}};
+  if (defined $url) {
+    my $scheme = $url->scheme;
+    if ($scheme eq 'http' or $scheme eq 'https') {
+      return {protocol => $scheme,
+              host => $url->host, port => $url->port,
+              username => $url->username, password => $url->password};
+    }
+
+    if ($scheme eq 'socks4' or $scheme eq 'socks5') {
+      my $host = $url->host;
+      if (defined $host) {
+        return {protocol => $url->scheme, host => $host, port => $url->port};
+      }
+    }
   }
-
-  if (defined $url->{scheme} and
-      defined $url->{host} and
-      ($url->{scheme} eq 'socks4' or $url->{scheme} eq 'socks5')) {
-    return {protocol => $url->{scheme},
-            host => $url->{host}, port => $url->{port}};
-  }
-
-
+  
   warn "Environment variable |$_[1]| is not a valid proxy URL ($value)";
   return undef;
 } # _env
@@ -50,10 +50,10 @@ sub new_from_envs ($;$) {
   }, $_[0];
 } # new_from_envs
 
-sub get_proxies_for_url_record ($$) {
+sub get_proxies_for_url ($$) {
   my ($self, $url) = @_;
 
-  my $host = $url->{host};
+  my $host = $url->host;
   return Promise->resolve ([]) unless defined $host;
 
   ## Get proxies
@@ -72,19 +72,20 @@ sub get_proxies_for_url_record ($$) {
     return Promise->resolve ([$self->{socks_proxy}]);
   }
 
-  if ($url->{scheme} eq 'http' and defined $self->{http_proxy}) {
+  my $scheme = $url->scheme;
+  if ($scheme eq 'http' and defined $self->{http_proxy}) {
     return Promise->resolve ([$self->{http_proxy}]);
   }
 
-  if ($url->{scheme} eq 'https' and defined $self->{https_proxy}) {
+  if ($scheme eq 'https' and defined $self->{https_proxy}) {
     return Promise->resolve ([$self->{https_proxy}]);
   }
 
-  if ($url->{scheme} eq 'ftp' and defined $self->{ftp_proxy}) {
+  if ($scheme eq 'ftp' and defined $self->{ftp_proxy}) {
     return Promise->resolve ([$self->{ftp_proxy}]);
   }
 
   return Promise->resolve ([{protocol => 'tcp'}]);
-} # get_proxies_for_url_record
+} # get_proxies_for_url
 
 1;

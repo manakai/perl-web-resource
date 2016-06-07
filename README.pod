@@ -1,0 +1,7 @@
+=over 4
+
+=item L<Web::HTTP::ConnectionClient>
+
+A connection-oriented HTTP client
+
+=back

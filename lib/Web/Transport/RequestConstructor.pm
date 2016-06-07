@@ -2,7 +2,6 @@ package Web::Transport::RequestConstructor;
 use strict;
 use warnings;
 our $VERSION = '1.0';
-use Carp;
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Encoding qw(serialize_form_urlencoded);
 
@@ -10,8 +9,12 @@ my $QueryMethods = { # XXX
   GET => 1, HEAD => 1, DELETE => 1,
 };
 
-sub create ($$$) {
-  my (undef, $url_record, $args) = @_;
+sub create ($$) {
+  my (undef, $args) = @_;
+
+  my $url_record = $args->{url};
+  return {failed => 1, message => "No |url| argument"}
+      unless defined $url_record;
 
   my $method = encode_web_utf8
       (defined $args->{method} ? $args->{method} : 'GET');

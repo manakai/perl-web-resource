@@ -76,25 +76,34 @@ sub _connect ($$) {
   });
 } # _connect
 
-sub request ($$%) {
-  my ($self, $url_input, %args) = @_;
-
-  my ($method, $url_record, $header_list, $body_ref)
-      = Web::Transport::RequestConstructor->create ($url_input, \%args);
-  if (defined $body_ref and utf8::is_utf8 ($$body_ref)) {
-    croak "|body| is utf8-flagged";
-  }
-
-  my $url_origin = $url_record->get_origin;
-  unless ($url_origin->same_origin_as ($self->{origin})) {
-    return Promise->reject
-        ("Bad URL origin |@{[$url_origin->to_ascii]}| (|@{[$self->{origin}->to_ascii]}| expected)");
-  }
+sub request ($%) {
+  my ($self, %args) = @_;
 
   my $return_ok;
   my $return_promise = Promise->new (sub { $return_ok = $_[0] });
   $self->{queue} ||= Promise->resolve;
   $self->{queue} = $self->{queue}->then (sub {
+
+    my ($method, $url_record, $header_list, $body_ref)
+        = Web::Transport::RequestConstructor->create (\%args);
+    if (ref $method) { # error
+      $return_ok->($method);
+      return;
+    }
+
+    if (defined $body_ref and utf8::is_utf8 ($$body_ref)) {
+      $return_ok->({failed => 1,
+                    message => "|body| is utf8-flagged"});
+      return;
+    }
+
+    my $url_origin = $url_record->get_origin;
+    unless ($url_origin->same_origin_as ($self->{origin})) {
+      $return_ok->({failed => 1,
+                    message => "Bad URL origin |@{[$url_origin->to_ascii]}| (|@{[$self->{origin}->to_ascii]}| expected)"});
+      return;
+    }
+
     my $body = [];
     my $body_length = 0;
     my $max = $self->max_size;
@@ -118,11 +127,11 @@ sub request ($$%) {
         $body_length = 0;
         return $self->_connect ($url_record)->then ($then)->then (sub {
           $_[0]->{body} = $body unless $_[0]->{failed};
-          return bless $_[0], 'HTTPConnectionClient::Response';
+          return bless $_[0], 'Web::HTTP::ConnectionClient::Response';
         });
       } else {
         $result->{body} = $body unless $result->{failed};
-        return bless $result, 'HTTPConnectionClient::Response';
+        return bless $result, 'Web::HTTP::ConnectionClient::Response';
       }
     });
     $return_ok->($return);
@@ -153,7 +162,7 @@ sub DESTROY ($) {
 
 } # DESTROY
 
-package HTTPConnectionClient::Response;
+package Web::HTTP::ConnectionClient::Response;
 
 sub is_network_error ($) {
   return $_[0]->{failed};

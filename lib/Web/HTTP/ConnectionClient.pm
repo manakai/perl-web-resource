@@ -1,4 +1,4 @@
-package HTTPConnectionClient;
+package Web::HTTP::ConnectionClient;
 use strict;
 use warnings;
 our $VERSION = '1.0';

@@ -8,7 +8,7 @@ use Test::X1;
 use Test::Certificates;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
-use HTTPConnectionClient;
+use Web::HTTP::ConnectionClient;
 use Web::URL;
 
 my $server_pids = {};
@@ -54,7 +54,7 @@ sub unix_server_as_cv ($) {
 test {
   my $c = shift;
   eval {
-    HTTPConnectionClient->new_from_url;
+    Web::HTTP::ConnectionClient->new_from_url;
   };
   ok $@;
   done $c;
@@ -64,7 +64,7 @@ test {
   my $c = shift;
   my $url = Web::URL->parse_string ('about:blank');
   eval {
-    HTTPConnectionClient->new_from_url ($url);
+    Web::HTTP::ConnectionClient->new_from_url ($url);
   };
   ok $@;
   done $c;
@@ -73,7 +73,7 @@ test {
 test {
   my $c = shift;
   my $url1 = Web::URL->parse_string ('http://test/');
-  my $client = HTTPConnectionClient->new_from_url ($url1);
+  my $client = Web::HTTP::ConnectionClient->new_from_url ($url1);
   my $url2 = Web::URL->parse_string ('foo:bar');
   my $p = $client->request ($url2);
   isa_ok $p, 'Promise';
@@ -97,7 +97,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     my $p = $client->request ($url);
     test {
       isa_ok $p, 'Promise';
@@ -105,7 +105,7 @@ test {
     return $p->then (sub {
       my $res = $_[0];
       test {
-        isa_ok $res, 'HTTPConnectionClient::Response';
+        isa_ok $res, 'Web::HTTP::ConnectionClient::Response';
         ok $res->is_network_error;
         is $res->network_error_message, 'Connection closed without response';
         is $res->body_bytes, undef;
@@ -132,7 +132,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return Promise->all ([
       $client->request ($url),
       $client->request ($url),
@@ -170,7 +170,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return Promise->all ([
       $client->request ($url),
       $client->request ($url),
@@ -202,7 +202,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return Promise->all ([
       $client->request ($url),
       $client->request ($url),
@@ -242,7 +242,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return Promise->all ([
       $client->request ($url),
       $client->request ($url),
@@ -278,7 +278,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return Promise->all ([
       $client->request ($url),
       $client->request ($url),
@@ -316,7 +316,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return Promise->all ([
       $client->request ($url),
     ])->then (sub {
@@ -359,7 +359,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return Promise->all ([
       $client->request ($url),
     ])->then (sub {
@@ -395,7 +395,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return Promise->all ([
       $client->request ($url),
     ])->then (sub {
@@ -426,7 +426,7 @@ test {
   my $c = shift;
   my $url1 = qq{http://hoge.example.com/};
   my $url2 = qq{http://fuga.example.com/};
-  my $client = HTTPConnectionClient->new_from_url ($url1);
+  my $client = Web::HTTP::ConnectionClient->new_from_url ($url1);
   return $client->request ($url2)->then (sub {
     test { ok 0 } $c;
   }, sub {
@@ -446,7 +446,7 @@ test {
   my $c = shift;
   my $url1 = q{mailto:foo@bar};
   my $url2 = q{http://fuga.example.com/};
-  my $client = HTTPConnectionClient->new_from_url ($url1);
+  my $client = Web::HTTP::ConnectionClient->new_from_url ($url1);
   return $client->request ($url2)->then (sub {
     test { ok 0 } $c;
   }, sub {
@@ -473,7 +473,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'http', host => $server->{host},
                         port => $server->{port}}]);
     return $client->request ($url)->then (sub {
@@ -494,7 +494,7 @@ test {
 test {
   my $c = shift;
   my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-  my $client = HTTPConnectionClient->new_from_url ($url);
+  my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
   $client->proxies ([{protocol => 'http', host => 'hoge.fuga.test'}]);
   return $client->request ($url)->then (sub {
     my $res = $_[0];
@@ -513,7 +513,7 @@ test {
 test {
   my $c = shift;
   my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-  my $client = HTTPConnectionClient->new_from_url ($url);
+  my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
   $client->proxies ([]);
   return $client->request ($url)->then (sub {
     my $res = $_[0];
@@ -532,7 +532,7 @@ test {
 test {
   my $c = shift;
   my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-  my $client = HTTPConnectionClient->new_from_url ($url);
+  my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
   $client->proxies ([{protocol => 'UnknownProtocol'}]);
   return $client->request ($url)->then (sub {
     my $res = $_[0];
@@ -561,7 +561,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'https', host => $server->{host},
                         port => $server->{port},
                         tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]);
@@ -592,7 +592,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'https', host => $server->{host},
                         port => $server->{port},
                         tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]);
@@ -623,7 +623,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{https://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
     return $client->request ($url)->then (sub {
       my $res = $_[0];
@@ -653,7 +653,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{https://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
     return $client->request ($url)->then (sub {
       my $res = $_[0];
@@ -682,7 +682,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{https://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
     return $client->request ($url)->then (sub {
       my $res = $_[0];
@@ -711,7 +711,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{https://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url)->then (sub {
       my $res = $_[0];
       test {
@@ -742,7 +742,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{https://hoge.example.net/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'http', host => $server->{host},
                         port => $server->{port}}]);
     $client->tls_options
@@ -783,7 +783,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'socks4', host => $server->{host},
                         port => $server->{port}}]);
     return $client->request ($url)->then (sub {
@@ -822,7 +822,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://badhost.test/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'socks4', host => $server->{host},
                         port => $server->{port}}]);
     return $client->request ($url)->then (sub {
@@ -867,7 +867,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'socks5', host => $server->{host},
                         port => $server->{port}}]);
     return $client->request ($url)->then (sub {
@@ -896,7 +896,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'unix', path => $server->{port}}]);
     return $client->request ($url)->then (sub {
       my $res = $_[0];
@@ -920,7 +920,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->last_resort_timeout (0.1);
     my $p = $client->request ($url);
     test {
@@ -929,7 +929,7 @@ test {
     return $p->then (sub {
       my $res = $_[0];
       test {
-        isa_ok $res, 'HTTPConnectionClient::Response';
+        isa_ok $res, 'Web::HTTP::ConnectionClient::Response';
         ok $res->is_network_error;
         is $res->network_error_message, 'Connection closed without response';
         is $res->body_bytes, undef;
@@ -954,7 +954,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->last_resort_timeout (0.1);
     my $p = $client->request ($url);
     test {
@@ -963,7 +963,7 @@ test {
     return $p->then (sub {
       my $res = $_[0];
       test {
-        isa_ok $res, 'HTTPConnectionClient::Response';
+        isa_ok $res, 'Web::HTTP::ConnectionClient::Response';
         ok ! $res->is_network_error;
         is $res->network_error_message, undef;
         is $res->body_bytes, 'hoge';
@@ -989,7 +989,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->last_resort_timeout (0.1);
     my $p = $client->request ($url);
     test {
@@ -998,7 +998,7 @@ test {
     return $p->then (sub {
       my $res = $_[0];
       test {
-        isa_ok $res, 'HTTPConnectionClient::Response';
+        isa_ok $res, 'Web::HTTP::ConnectionClient::Response';
         ok ! $res->is_network_error;
         is $res->network_error_message, undef;
         is $res->body_bytes, 'ho';
@@ -1021,7 +1021,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->last_resort_timeout (0.1);
     my $p = $client->request ($url);
     test {
@@ -1030,7 +1030,7 @@ test {
     return $p->then (sub {
       my $res = $_[0];
       test {
-        isa_ok $res, 'HTTPConnectionClient::Response';
+        isa_ok $res, 'Web::HTTP::ConnectionClient::Response';
         ok ! $res->is_network_error;
         is $res->network_error_message, undef;
         is $res->body_bytes, 'HT';
@@ -1056,7 +1056,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return Promise->all ([
       $client->request ($url),
       $client->last_resort_timeout (0.5) && $client->request ($url),
@@ -1083,7 +1083,7 @@ test {
 test {
   my $c = shift;
   my $url = Web::URL->parse_string (q{ftp://127.0.0.1/foo});
-  my $client = HTTPConnectionClient->new_from_url ($url);
+  my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
   return $client->request ($url)->then (sub {
     my $res = $_[0];
     test {
@@ -1109,7 +1109,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{ftp://hoge.example.net/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'http', host => $server->{host},
                         port => $server->{port}}]);
     return $client->request ($url)->then (sub {
@@ -1138,7 +1138,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{hoge://hoge.example.net/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'http', host => $server->{host},
                         port => $server->{port}}]);
     return $client->request ($url)->then (sub {
@@ -1177,7 +1177,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{ftp://$server->{host}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'socks4', host => $server->{host},
                         port => $server->{port}}]);
     return $client->request ($url)->then (sub {
@@ -1216,7 +1216,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{gopher://$server->{host}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'socks4', host => $server->{host},
                         port => $server->{port}}]);
     return $client->request ($url)->then (sub {
@@ -1245,7 +1245,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'http', host => 'unknown.host.test'},
                        {protocol => 'http', host => $server->{host},
                         port => $server->{port}}]);
@@ -1275,7 +1275,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->proxies ([{protocol => 'http', host => 'unknown.host.test'},
                        {protocol => 'tcp'}]);
     return $client->request ($url)->then (sub {
@@ -1305,7 +1305,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->max_size (6);
     return $client->request ($url)->then (sub {
       my $res = $_[0];
@@ -1336,7 +1336,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     $client->max_size (6);
     return $client->request ($url)->then (sub {
       my $res = $_[0];
@@ -1366,7 +1366,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, headers => {
       'X-hoge' => 124,
     })->then (sub {
@@ -1401,7 +1401,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, headers => {
       'X-hoge' => [124, "abc def", 0, ''],
     })->then (sub {
@@ -1434,7 +1434,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, headers => {
       'X-hoge' => "ab\x0A\x0Dxy",
     })->then (sub {
@@ -1464,7 +1464,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, headers => {
       'X-hoge' => undef,
     })->then (sub {
@@ -1494,7 +1494,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, headers => {
       'X-hoge' => [undef],
     })->then (sub {
@@ -1524,7 +1524,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, headers => {
       'X-hoge' => ["\xFE\x80\x9F\xAB", "\x{5400}\x{100}\xFE"],
     })->then (sub {
@@ -1555,7 +1555,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, superreload => 1)->then (sub {
       my $res = $_[0];
       test {
@@ -1584,7 +1584,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, headers => {
       'X-WSSE' => 'hoge faug',
     })->then (sub {
@@ -1616,7 +1616,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, method => 'DELETE')->then (sub {
       my $res = $_[0];
       test {
@@ -1644,7 +1644,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, params => {
       foo => undef,
       bar => ['abc', '123'],
@@ -1675,7 +1675,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, params => {
       foo => undef,
       bar => [undef, 0, ''],
@@ -1706,7 +1706,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, params => {
       "\x{5000}" => "\x{4000}",
     })->then (sub {
@@ -1736,7 +1736,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, params => {
       "\x80" => "\xFE",
     })->then (sub {
@@ -1770,7 +1770,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, params => {
       "\x80" => "\xFE",
     }, method => 'POST')->then (sub {
@@ -1808,7 +1808,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, params => {
       "\x80" => "\xFE",
     }, body => "\xFE\x84", method => 'POST')->then (sub {
@@ -1847,7 +1847,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, body => "\xFE\x84", method => 'POST')->then (sub {
       return $client->request ($url);
     })->then (sub {
@@ -1883,7 +1883,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, body => "\xFE\x84", method => 'GET')->then (sub {
       return $client->request ($url);
     })->then (sub {
@@ -1907,7 +1907,7 @@ test {
 test {
   my $c = shift;
   my $url = Web::URL->parse_string (qq{http://jogejoge.test/foo});
-  my $client = HTTPConnectionClient->new_from_url ($url);
+  my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
   eval {
     $client->request ($url, body => "\x{4543}");
   };
@@ -1933,7 +1933,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, bearer => "Fo+a/b==\x0D")->then (sub {
       return $client->request ($url);
     })->then (sub {
@@ -1969,7 +1969,7 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = HTTPConnectionClient->new_from_url ($url);
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
     return $client->request ($url, basic_auth => ["t36 46343 :4yt324432gesageasee\xFE\x80", "geaga\x{400}gewaaa r:e:: e56363y43yg43434 cd 4"])->then (sub {
       return $client->request ($url);
     })->then (sub {

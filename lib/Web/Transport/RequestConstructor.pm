@@ -3,7 +3,7 @@ use strict;
 use warnings;
 our $VERSION = '1.0';
 use Web::Encoding qw(encode_web_utf8);
-use Web::URL::Encoding qw(serialize_form_urlencoded);
+use Web::URL::Encoding qw(serialize_form_urlencoded percent_encode_c);
 
 my $QueryMethods = { # XXX
   GET => 1, HEAD => 1, DELETE => 1,
@@ -12,7 +12,17 @@ my $QueryMethods = { # XXX
 sub create ($$) {
   my (undef, $args) = @_;
 
-  my $url_record = $args->{url};
+  my $url_record;
+  if (defined $args->{url}) {
+    $url_record = $args->{url};
+  } elsif (defined $args->{base_url}) {
+    if (defined $args->{path}) {
+      require Web::URL;
+      $url_record = Web::URL->parse_string
+          ((join '/', '', map { percent_encode_c $_ } @{$args->{path}}),
+           $args->{base_url});
+    }
+  }
   return {failed => 1, message => "No |url| argument"}
       unless defined $url_record;
 

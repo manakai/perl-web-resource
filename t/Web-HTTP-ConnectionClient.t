@@ -2007,6 +2007,74 @@ test {
   });
 } n => 3, name => 'request options - basic';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo?bar#baz});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['ac', '0', '', "\x{533}ab", "\xFE"])->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{^GET /ac/0//%D4%B3ab/%C3%BE HTTP};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request - path';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo?bar#baz});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['ac', '0', '', "\x{533}ab", "\xFE"], params => {hoge => "abc"})->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{^GET /ac/0//%D4%B3ab/%C3%BE\?hoge=abc HTTP};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request - path and query';
+
 run_tests;
 
 =head1 LICENSE

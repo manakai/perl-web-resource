@@ -13,6 +13,7 @@ sub new_from_url ($$) {
   my $origin = $_[1]->get_origin;
   croak "The URL does not have a tuple origin" if $origin->is_opaque;
   return bless {
+    base_url => $_[1],
     origin => $origin,
     queue => Promise->resolve,
     parent_id => (int rand 100000),
@@ -79,28 +80,31 @@ sub _connect ($$) {
 sub request ($%) {
   my ($self, %args) = @_;
 
-  my $return_ok;
-  my $return_promise = Promise->new (sub { $return_ok = $_[0] });
+  my ($return_ok, $return_ng);
+  my $return_promise = Promise->new (sub { ($return_ok, $return_ng) = @_ });
   $self->{queue} ||= Promise->resolve;
   $self->{queue} = $self->{queue}->then (sub {
 
+    $args{base_url} ||= $self->{base_url};
     my ($method, $url_record, $header_list, $body_ref)
         = Web::Transport::RequestConstructor->create (\%args);
     if (ref $method) { # error
-      $return_ok->($method);
+      $return_ok->(bless $method, 'Web::HTTP::ConnectionClient::Response');
       return;
     }
 
     if (defined $body_ref and utf8::is_utf8 ($$body_ref)) {
-      $return_ok->({failed => 1,
-                    message => "|body| is utf8-flagged"});
+      $return_ok->(bless {failed => 1,
+                          message => "|body| is utf8-flagged"},
+                         'Web::HTTP::ConnectionClient::Response');
       return;
     }
 
     my $url_origin = $url_record->get_origin;
     unless ($url_origin->same_origin_as ($self->{origin})) {
-      $return_ok->({failed => 1,
-                    message => "Bad URL origin |@{[$url_origin->to_ascii]}| (|@{[$self->{origin}->to_ascii]}| expected)"});
+      $return_ok->(bless {failed => 1,
+                          message => "Bad URL origin |@{[$url_origin->to_ascii]}| (|@{[$self->{origin}->to_ascii]}| expected)"},
+                         'Web::HTTP::ConnectionClient::Response');
       return;
     }
 
@@ -133,9 +137,11 @@ sub request ($%) {
         $result->{body} = $body unless $result->{failed};
         return bless $result, 'Web::HTTP::ConnectionClient::Response';
       }
-    });
+    }); # $return
     $return_ok->($return);
     return $return->catch (sub { });
+  })->catch (sub {
+    $return_ng->($_[0]);
   });
   return $return_promise;
 } # request

@@ -84,11 +84,17 @@ standard environment variables into account (i.e. C<<
 Web::Transport::ProxyManager->new_from_envs >>) is set as the proxy
 manager.
 
+This option must be set before the first invocation of the C<request>
+method.
+
 =item $client->tls_options ({...})
 
 =item $hashref = $client->tls_options
 
 XXX
+
+This option must be set before the first invocation of the C<request>
+method.
 
 =item $client->max_size ($integer)
 
@@ -96,6 +102,9 @@ XXX
 
 Get or set the maximum size of the (uncompressed) body of the
 response, in bytes.  The initial value is -1, i.e. no limit is set.
+
+This option must be set before the first invocation of the C<request>
+method.
 
 =item $client->last_resort_timeout ($seconds)
 
@@ -108,7 +117,16 @@ response body.  If your application has specific realtimeness
 requirement, use your own timer to abort the request, rather than
 reusing this timer.
 
+This option must be set before the first invocation of the C<request>
+method.
+
 =back
+
+=head1 ENVIRONMENT VARIABLES
+
+XXX WEBUA_DEBUG
+
+XXX http_proxy https_proxy ftp_proxy no_proxy
 
 =head1 SPECIFICATION
 

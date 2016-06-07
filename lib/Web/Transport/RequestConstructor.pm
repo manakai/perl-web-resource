@@ -5,10 +5,6 @@ our $VERSION = '1.0';
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Encoding qw(serialize_form_urlencoded percent_encode_c);
 
-my $QueryMethods = { # XXX
-  GET => 1, HEAD => 1, DELETE => 1,
-};
-
 sub create ($$) {
   my (undef, $args) = @_;
 
@@ -49,7 +45,7 @@ sub create ($$) {
   }
 
   if (defined $args->{params}) {
-    if ($QueryMethods->{$method} or defined $args->{body}) {
+    if (defined $args->{body} or not $method eq 'POST') {
       $url_record = $url_record->clone;
       $url_record->set_query_params ($args->{params}, append => 1);
     } else {

@@ -50,10 +50,11 @@ that anything other than the origin of the URL is ignored.
 Send a request and return a promise (L<Promise>), which is to be
 resolved with the result.
 
-The input is XXX.  At minimum, the C<url> argument must be specified.
-It is a URL record object (L<Web::URL>).  It must have same origin as
-the client's origin (i.e. the origin of the argument to the
-C<new_from_url> method).
+The arguments are name/value pairs, as described in
+L<Web::Transport::RequestConstructor> documentation.  At minimum, the
+C<url> argument must be specified.  It is a URL record object
+(L<Web::URL>).  It must have same origin as the client's origin
+(i.e. the origin of the argument to the C<new_from_url> method).
 
 The promise is resolved with XXX.
 

@@ -1587,7 +1587,7 @@ test {
       undef $c;
     });
   });
-} n => 2, name => 'request options';
+} n => 2, name => 'request options - superreload';
 
 test {
   my $c = shift;
@@ -1609,7 +1609,7 @@ test {
       test {
         my $headers = $res->body_bytes;
         like $headers, qr{\x0AX-WSSE: hoge faug\x0D\x0A};
-        like $headers, qr{\x0ACache-Control: no-cache\x0D\x0A};
+        like $headers, qr{\x0ACache-Control: no-store\x0D\x0A};
         like $headers, qr{\x0APragma: no-cache\x0D\x0A};
       } $c;
     })->then (sub{
@@ -1619,7 +1619,7 @@ test {
       undef $c;
     });
   });
-} n => 3, name => 'request options';
+} n => 3, name => 'request options - X-WSSE: header';
 
 test {
   my $c = shift;
@@ -1959,7 +1959,7 @@ test {
         my $request = $res->body_bytes;
         $request =~ s/GET$//;
         like $request, qr{\x0AAuthorization: Bearer Fo\+a/b== \x0D\x0A};
-        like $request, qr{\x0ACache-Control: no-cache\x0D\x0A};
+        like $request, qr{\x0ACache-Control: no-store\x0D\x0A};
         like $request, qr{\x0APragma: no-cache\x0D\x0A};
       } $c;
     })->then (sub{
@@ -1995,7 +1995,7 @@ test {
         my $request = $res->body_bytes;
         $request =~ s/GET$//;
         like $request, qr{\x0AAuthorization: Basic dDM2IDQ2MzQzIDo0eXQzMjQ0MzJnZXNhZ2Vhc2Vlw77CgDpnZWFnYdCAZ2V3YWFhIHI6ZTo6IGU1NjM2M3k0M3lnNDM0MzQgY2QgNA==\x0D\x0A};
-        like $request, qr{\x0ACache-Control: no-cache\x0D\x0A};
+        like $request, qr{\x0ACache-Control: no-store\x0D\x0A};
         like $request, qr{\x0APragma: no-cache\x0D\x0A};
       } $c;
     })->then (sub{
@@ -2208,7 +2208,7 @@ test {
         $request =~ s/GET$//;
         like $request, qr{\x0ACookie: =\x0D\x0A};
         like $request, qr{\x0APragma: no-cache\x0D\x0A};
-        like $request, qr{\x0ACache-Control: no-cache\x0D\x0A};
+        like $request, qr{\x0ACache-Control: no-store\x0D\x0A};
       } $c;
     })->then (sub{
       return $client->close;
@@ -2293,6 +2293,290 @@ test {
     });
   });
 } n => 1, name => 'request - cookie';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], params => {
+      "XYZ\x{5000}" => "ddd\x{5003}",
+    }, oauth1 => ["\x{5000}", "\x{5001}", "\x{5301}", "a\x{506}"])->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{GET /foo/ab%20ce\?XYZ%E5%80%80=ddd%E5%80%83 HTTP};
+        like $request, qr{\x0AAuthorization: OAuth realm="", oauth_};
+        unlike $request, qr{Content-Type};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'request - oauth1';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], params => {
+      "XYZ\x{5000}" => "ddd\x{5003}",
+    }, oauth1 => ["\x{5000}", "\x{5001}", "\x{5301}", "a\x{506}"], oauth1_container => 'query')->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{GET /foo/ab%20ce\?XYZ%E5%80%80=ddd%E5%80%83&oauth_};
+        like $request, qr{\x0ACache-Control: no-store\x0D\x0A};
+        like $request, qr{\x0APragma: no-cache\x0D\x0A};
+        unlike $request, qr{Authorization};
+        unlike $request, qr{Content-Type};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'request - oauth1';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], params => {
+      "XYZ\x{5000}" => "ddd\x{5003}",
+    }, oauth1 => ["\x{5000}", "\x{5001}", "\x{5301}", "a\x{506}"], oauth1_container => 'body')->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{GET /foo/ab%20ce\?XYZ%E5%80%80=ddd%E5%80%83 HTTP};
+        like $request, qr{\x0ACache-Control: no-store\x0D\x0A};
+        like $request, qr{\x0APragma: no-cache\x0D\x0A};
+        unlike $request, qr{Authorization};
+        like $request, qr{\x0AContent-Type: application/x-www-form-urlencoded\x0D\x0A};
+        like $request, qr{&oauth_};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => 'request - oauth1';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "POST", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], params => {
+      "XYZ\x{5000}" => "ddd\x{5003}",
+    }, oauth1 => ["\x{5000}", "\x{5001}", "\x{5301}", "a\x{506}"], method => 'POST', headers => {
+      authorizatioN => 'Basic hogefuga',
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{POST /foo/ab%20ce HTTP};
+        like $request, qr{\x0ACache-Control: no-store\x0D\x0A};
+        like $request, qr{\x0APragma: no-cache\x0D\x0A};
+        unlike $request, qr{Authorization: OAuth};
+        like $request, qr{\x0AContent-Type: application/x-www-form-urlencoded\x0D\x0A};
+        like $request, qr{\x0AXYZ%E5%80%80=ddd%E5%80%83&oauth_};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => 'request - oauth1';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "POST", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], params => {
+      "XYZ\x{5000}" => "ddd\x{5003}",
+    }, oauth1 => ["\x{5000}", "\x{5001}", "\x{5301}", "a\x{506}"], method => 'POST')->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{POST /foo/ab%20ce HTTP};
+        like $request, qr{\x0ACache-Control: no-store\x0D\x0A};
+        like $request, qr{\x0APragma: no-cache\x0D\x0A};
+        like $request, qr{\x0AAuthorization: OAuth realm="", oauth_};
+        like $request, qr{\x0AContent-Type: application/x-www-form-urlencoded\x0D\x0A};
+        like $request, qr{\x0AXYZ%E5%80%80=ddd%E5%80%83(?!&)};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => 'request - oauth1';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "POST", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], body => "abc", oauth1 => ["\x{5000}", "\x{5001}", "\x{5301}", "a\x{506}"], method => 'POST', headers => {
+      authorizatioN => 'Basic hogefuga',
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{POST /foo/ab%20ce\?oauth_};
+        like $request, qr{\x0ACache-Control: no-store\x0D\x0A};
+        like $request, qr{\x0APragma: no-cache\x0D\x0A};
+        unlike $request, qr{Authorization: OAuth};
+        unlike $request, qr{\x0AContent-Type: application/x-www-form-urlencoded\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'request - oauth1';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "POST", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], body => "abc", oauth1 => ["\x{5000}", "\x{5001}", "\x{5301}", "a\x{506}"], method => 'POST', headers => {
+      authorizatioN => 'Basic hogefuga',
+      'content-Type' => 'text/plain; application/x-www-form-urlencoded',
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{POST /foo/ab%20ce\?oauth_};
+        like $request, qr{\x0ACache-Control: no-store\x0D\x0A};
+        like $request, qr{\x0APragma: no-cache\x0D\x0A};
+        unlike $request, qr{Authorization: OAuth};
+        unlike $request, qr{\x0AContent-Type: application/x-www-form-urlencoded\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'request - oauth1';
 
 run_tests;
 

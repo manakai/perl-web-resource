@@ -15,19 +15,116 @@ Following key/value pairs are available:
 
 XXX
 
+url
+method
+headers
+basic_auth
+bearer
+
+=item params => {$string => $string, ...}
+
+Parameters to be included in the request.
+
+The value must be a hash reference of zero or more key/value pairs,
+where keys are parameter names and values are corresponding parameter
+values.
+
+Parameter names and values must be strings of zero or more characters.
+Parameter values can be either a string or an array reference of zero
+or more strings, representing parameter values sharing same parameter
+name.  Any parameter whose value is C<undef> is ignored.
+
+They are encoded in the C<application/x-www-form-urlencoded> format in
+UTF-8.  If the C<method> is C<POST> and there is no conflicting
+options, they are put into the request body.  Otherwise, they are
+appended to the request URL.
+
 =item cookies => {$string => $string, ...}
 
 Cookies to be included in the request, using the C<Cookie:> header.
 The value must be a hash reference of zero or more key/value pairs,
 where keys are cookie names and values are corresponding cookie
-values.
+values.  Any key whose value is C<undef> is ignored.
 
 Names and values must be strings of zero or more characters.  They are
 encoded in UTF-8 and percent-encoded before included in the header
 value.  If this behavior is inappropriate, use C<headers> option
 instead.
 
+This option also adds C<Cache-Control: no-store> and C<Pragma:
+no-store> headers.
+
+=item oauth1 => [$string, $string, $string, $string]
+
+If a non-C<undef> value is specified, the request is to be signed
+using OAuth 1.0 C<HMAC-SHA1> signature method.
+
+The value must be an array reference of strings, which are consumer
+key, consumer secret, access token, and access token secret.  They
+must be specified even though they can be empty strings.
+
+This option also adds C<Cache-Control: no-store> and C<Pragma:
+no-store> headers.
+
+=item oauth1_container => 'authorization' | 'query' | 'body'
+
+Where to add OAuth 1.0 request parameters.  This option is ignored
+unless the C<oauth1> option is also specified.
+
+The value C<authorization> designates the HTTP C<Authorization:>
+header.
+
+The value C<query> designates the URL query component.
+
+The value C<body> designates the request body.
+
+If this option is not specified, or C<undef> is specified, parameters
+are added to the HTTP C<Authorization:> header, unless there is
+another C<Authorization:> header, in which case they are added to the
+same slot as C<params>.
+
+=item oauth_verifier => $string
+
+The OAuth 1.0 C<oauth_verifier> request parameter value.  If a
+non-C<undef> value is specified and the C<oauth1> option is also
+specified, this value is taken into account as a request parameter.
+Otherwise this option is ignored.
+
+=item oauth_callback => $string
+
+The OAuth 1.0 C<oauth_callback> request parameter value.  If a
+non-C<undef> value is specified and the C<oauth1> option is also
+specified, this value is taken into account as a request parameter.
+Otherwise this option is ignored.
+
+=item superreload => $boolean
+
+If true, C<Cache-Control: no-cache> and C<Pragma: no-store> headers
+are added.
+
+=item body => $bytes
+
+The request body.  If a non-C<undef> value is specified, it must be a
+string of zero or more bytes.
+
 =back
+
+=head1 SPECIFICATIONS
+
+Fetch Standard <https://fetch.spec.whatwg.org/>.
+
+URL Standard <https://url.spec.whatwg.org/>.
+
+Encoding Standard <https://encoding.spec.whatwg.org/>.
+
+When a text is encoded in UTF-8, UTF-8 encoder of the Encoding
+Standard MUST be used.
+
+RFC 6265, HTTP State Management Mechanism
+<https://tools.ietf.org/html/rfc6265>.
+
+RFC 5849, The OAuth 1.0 Protocol
+<https://tools.ietf.org/html/rfc5849>.
 
 =head1 SEE ALSO
 

@@ -79,6 +79,7 @@ sub _connect ($$) {
 
 sub request ($%) {
   my ($self, %args) = @_;
+  $args{debug_prefix} = "$self->{parent_id}: @{[__PACKAGE__]}";
 
   my ($return_ok, $return_ng);
   my $return_promise = Promise->new (sub { ($return_ok, $return_ng) = @_ });

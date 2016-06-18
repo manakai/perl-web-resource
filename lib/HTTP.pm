@@ -1099,7 +1099,9 @@ sub send_data ($$;%) {
   return unless length $$ref;
 
   if (DEBUG > 1) {
-    warn "$self->{request}->{id}: S: @{[_e4d $$ref]}\n";
+    for (split /\x0A/, $$ref, -1) {
+      warn "$self->{request}->{id}: S: @{[_e4d $_]}\n";
+    }
   }
 
   if (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') {

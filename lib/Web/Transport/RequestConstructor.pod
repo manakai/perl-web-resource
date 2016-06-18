@@ -21,24 +21,6 @@ headers
 basic_auth
 bearer
 
-=item params => {$string => $string, ...}
-
-Parameters to be included in the request.
-
-The value must be a hash reference of zero or more key/value pairs,
-where keys are parameter names and values are corresponding parameter
-values.
-
-Parameter names and values must be strings of zero or more characters.
-Parameter values can be either a string or an array reference of zero
-or more strings, representing parameter values sharing same parameter
-name.  Any parameter whose value is C<undef> is ignored.
-
-They are encoded in the C<application/x-www-form-urlencoded> format in
-UTF-8.  If the C<method> is C<POST> and there is no conflicting
-options, they are put into the request body.  Otherwise, they are
-appended to the request URL.
-
 =item cookies => {$string => $string, ...}
 
 Cookies to be included in the request, using the C<Cookie:> header.
@@ -53,6 +35,51 @@ instead.
 
 This option also adds C<Cache-Control: no-store> and C<Pragma:
 no-store> headers.
+
+=item params => {$string => $string, ...}
+
+Parameters to be included in the request.
+
+The value must be a hash reference of zero or more key/value pairs,
+where keys are parameter names and values are corresponding parameter
+values.
+
+Parameter names and values must be strings of zero or more characters.
+Parameter values can be either a string or an array reference of zero
+or more strings, representing parameter values sharing same parameter
+name.  Any parameter whose value is C<undef> is ignored.
+
+They are encoded in the C<application/x-www-form-urlencoded> format
+(or C<multipart/form-data>, if C<files> option is also specified) in
+UTF-8.  If the C<method> is C<POST> and there is no conflicting
+options, they are put into the request body.  Otherwise, they are
+appended to the request URL.
+
+=item files => {$string => $file, ...}
+
+Files to be included in the request.
+
+The value must be a hash reference of zero or more key/value pairs,
+where keys are parameter names and values are corresponding files.
+
+Parameter names must be strings of zero or more characters.
+
+Files can be either a hash reference or an array reference of zero or
+more hash references, representing files sharing same parameter name.
+Any pair whose value is C<undef> is ignored.
+
+A file hash reference must contain a C<body_ref> key, whose value must
+be a reference to a scalar containing zero or more bytes, i.e. the
+file content.
+
+A file hash reference can also contain C<mime_type> key, whose value
+is a MIME type string (C<Content-Type:> header value) and
+C<mime_filename> key, whose value is a file name string
+(C<Content-Disposition:> header's C<filename> parameter value).  Their
+defaults, used when the key is omitted or the value is C<undef>, are
+C<application/octet-stream> and the empty string, respectively.
+
+They are encoded in the C<multipart/form-data> format in UTF-8.
 
 =item oauth1 => [$string, $string, $string, $string]
 
@@ -126,9 +153,17 @@ RFC 6265, HTTP State Management Mechanism
 RFC 5849, The OAuth 1.0 Protocol
 <https://tools.ietf.org/html/rfc5849>.
 
+HTML Standard
+<https://html.spec.whatwg.org/#multipart/form-data-encoding-algorithm>.
+
 =head1 SEE ALSO
 
 L<Web::HTML::ConnectionClient>.
+
+=head1 HISTORY
+
+The module partially derived from L<Web::UserAgent::Functions> from
+<https://github.com/wakaba/perl-web-useragent-functions>.
 
 =head1 AUTHOR
 
@@ -136,7 +171,9 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
+
+Copyright 2014-2016 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

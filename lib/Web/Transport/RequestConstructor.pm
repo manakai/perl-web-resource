@@ -2,10 +2,20 @@ package Web::Transport::RequestConstructor;
 use strict;
 use warnings;
 our $VERSION = '1.0';
+require utf8;
+use Carp;
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Encoding qw(serialize_form_urlencoded percent_encode_c);
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
+
+my @BoundaryAlphabet = ('a'..'z', '0'..'9');
+
+sub _fde ($) {
+  my $s = encode_web_utf8 $_[0];
+  $s =~ s/([\x00-\x1F\x22\x25\x5C\x7F])/sprintf '%%%02X', ord $1/ge;
+  return $s;
+} # _fde
 
 sub create ($$) {
   my (undef, $args) = @_;
@@ -66,18 +76,68 @@ sub create ($$) {
     $has_header->{cookie} = 1;
   }
 
+  my $boundary;
+  if (defined $args->{files} and not defined $args->{body} and not defined $ct) {
+    $boundary = '';
+    $boundary .= $BoundaryAlphabet[rand @BoundaryAlphabet] for 1..50;
+    push @$header_list, ['Content-Type', $ct = 'multipart/form-data; boundary=' . $boundary];
+    $has_header->{'content-type'} = 1;
+  }
+  croak "Both |files| and |body| are specified"
+      if not defined $boundary and keys %{$args->{files} or {}};
+  if (defined $boundary) {
+    ## Unfortunately the multipart/form-data encoding is not well
+    ## defined and what browsers do is disaster...
+
+    my @part;
+
+    for my $key (keys %{$args->{params} or {}}) {
+      next unless defined $args->{params}->{$key};
+      for my $value (ref $args->{params}->{$key} eq 'ARRAY'
+                         ? @{$args->{params}->{$key}}
+                         : ($args->{params}->{$key})) {
+        push @part, 
+            'Content-Disposition: form-data; name="'._fde ($key).'"' . "\x0D\x0A" .
+            "\x0D\x0A" . 
+            (encode_web_utf8 $value);
+      }
+    }
+
+    for my $key (keys %{$args->{files} or {}}) {
+      next unless defined $args->{files}->{$key};
+      for my $value (ref $args->{files}->{$key} eq 'ARRAY'
+                         ? @{$args->{files}->{$key}}
+                         : ($args->{files}->{$key})) {
+        my $mime = defined $value->{mime_type} ? $value->{mime_type} : 'application/octet-stream';
+        my $file_name = defined $value->{mime_filename} ? $value->{mime_filename} : '';
+        croak "File's |body_ref|'s value is utf8-flagged"
+            if utf8::is_utf8 (${$value->{body_ref}});
+        push @part, 
+            "Content-Type: "._fde ($mime)."\x0D\x0A" .
+            'Content-Disposition: form-data; name="'._fde ($key).'"; filename="'._fde ($file_name).'"' . "\x0D\x0A" .
+            "\x0D\x0A" .
+            ${$value->{body_ref}};
+      }
+    }
+
+    $args->{body} = "--$boundary\x0D\x0A" .
+        join "\x0D\x0A--$boundary\x0D\x0A", @part if @part;
+    $args->{body} .= "\x0D\x0A--$boundary--\x0D\x0A";
+  }
+
   my $param_container = (
     $method eq 'POST' and
     ((not defined $ct and not defined $args->{body}) or
      (defined $ct and $ct eq 'application/x-www-form-urlencoded'))
   ) ? 'body' : 'query';
-  if (defined $args->{params}) {
+  if (not defined $boundary and defined $args->{params}) {
     if ($param_container eq 'query') {
       $url_record = $url_record->clone;
       $url_record->set_query_params ($args->{params}, append => 1);
     } else { # $param_container eq 'body'
       unless ($has_header->{'content-type'}) {
         push @$header_list, ['Content-Type', $ct = 'application/x-www-form-urlencoded'];
+        $has_header->{'content-type'} = 1;
       }
       $args->{body} = serialize_form_urlencoded $args->{params};
     }

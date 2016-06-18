@@ -2578,6 +2578,238 @@ test {
   });
 } n => 5, name => 'request - oauth1';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], params => {
+    }, files => {foo => undef})->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{GET /foo/ab%20ce HTTP};
+        unlike $request, qr{\x0AContent-Type: multipart/form-data\x0D\x0A};
+        like $request, qr{\x0AContent-Type: multipart/form-data; boundary=\w+\x0D\x0A};
+        like $request, qr{\x0D\x0A--};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'request - multipart/form-data';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], params => {
+      "\x{505}\x00" => "\x00\x0D\x{533}",
+    }, files => {})->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{GET /foo/ab%20ce HTTP};
+        unlike $request, qr{\x0AContent-Type: multipart/form-data\x0D\x0A};
+        like $request, qr{\x0AContent-Type: multipart/form-data; boundary=\w+\x0D\x0A};
+        like $request, qr{\x0D\x0A--};
+        like $request, qr{\x0AContent-Disposition: form-data; name="\xD4\x85%00"\x0D\x0A\x0D\x0A\x00\x0D\xD4\xB3\x0D\x0A--};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'request - multipart/form-data';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], params => {
+      "\x{505}\x00" => ["\x00\x0D\x{533}", ''],
+    }, files => {
+      "\x81\x91" => {body_ref => \"ab \x01\x02"},
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{GET /foo/ab%20ce HTTP};
+        unlike $request, qr{\x0AContent-Type: multipart/form-data\x0D\x0A};
+        like $request, qr{\x0AContent-Type: multipart/form-data; boundary=\w+\x0D\x0A};
+        like $request, qr{\x0D\x0A--};
+        like $request, qr{\x0AContent-Disposition: form-data; name="\xD4\x85%00"\x0D\x0A\x0D\x0A\x00\x0D\xD4\xB3\x0D\x0A--.+\x0D\x0AContent-Disposition: form-data; name="\xD4\x85%00"\x0D\x0A\x0D\x0A\x0D\x0A--.+\x0D\x0AContent-Type: application/octet-stream\x0D\x0AContent-Disposition: form-data; name="\xC2\x81\xC2\x91"; filename=""\x0D\x0A\x0D\x0Aab \x01\x02\x0D\x0A--};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'request - multipart/form-data';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], files => {
+      qq{\x81"} => {body_ref => \"", mime_filename => qq{\x0D\x0Aab/"c},
+                    mime_type => "hoge\x0D\x0Afuga"},
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{GET /foo/ab%20ce HTTP};
+        unlike $request, qr{\x0AContent-Type: multipart/form-data\x0D\x0A};
+        like $request, qr{\x0AContent-Type: multipart/form-data; boundary=\w+\x0D\x0A};
+        like $request, qr{\x0D\x0A--};
+        like $request, qr{\x0AContent-Type: hoge%0D%0Afuga\x0D\x0AContent-Disposition: form-data; name="\xC2\x81%22"; filename="%0D%0Aab/%22c"\x0D\x0A\x0D\x0A\x0D\x0A--};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'request - multipart/form-data';
+
+test {
+  my $c = shift;
+  my $url = Web::URL->parse_string (qq{http://jogejoge.test/foo});
+  my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+  my $p = $client->request (url => $url, body => "abc", files => {
+    foo => {body_ref => \""},
+  });
+  isa_ok $p, 'Promise';
+  $p->then (sub {
+    test { ok 0 } $c;
+  }, sub {
+    my $err = $_[0];
+    test {
+      like $err, qr{^\QBoth |files| and |body| are specified\E};
+    } $c;
+  })->then (sub {
+    return $client->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request options - multipart/form-data';
+
+test {
+  my $c = shift;
+  my $url = Web::URL->parse_string (qq{http://jogejoge.test/foo});
+  my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+  my $p = $client->request (url => $url, files => {
+    foo => {body_ref => \"\x{5000}"},
+  });
+  isa_ok $p, 'Promise';
+  $p->then (sub {
+    test { ok 0 } $c;
+  }, sub {
+    my $err = $_[0];
+    test {
+      like $err, qr{^\QFile's |body_ref|'s value is utf8-flagged\E};
+    } $c;
+  })->then (sub {
+    return $client->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request options - multipart/form-data';
+
+test {
+  my $c = shift;
+  my $url = Web::URL->parse_string (qq{http://jogejoge.test/foo});
+  my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+  my $p = $client->request (url => $url, headers => {
+    'content-type' => 'hoge',
+  }, files => {
+    foo => {body_ref => \""},
+  });
+  isa_ok $p, 'Promise';
+  $p->then (sub {
+    test { ok 0 } $c;
+  }, sub {
+    my $err = $_[0];
+    test {
+      like $err, qr{^\QBoth |files| and |body| are specified\E};
+    } $c;
+  })->then (sub {
+    return $client->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request options - multipart/form-data';
+
 run_tests;
 
 =head1 LICENSE

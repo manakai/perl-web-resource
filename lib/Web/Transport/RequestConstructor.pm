@@ -44,6 +44,19 @@ sub create ($$) {
     $has_header->{$name_lc} = 1;
   }
 
+  if (defined $args->{cookies}) {
+    push @$header_list,
+        ['Cookie', join '; ', map {
+          if (defined $args->{cookies}->{$_}) {
+            (percent_encode_c $_) . '=' . (percent_encode_c $args->{cookies}->{$_});
+          } else {
+            ();
+          }
+        } sort { $a cmp $b } keys %{$args->{cookies}}];
+    pop @$header_list unless length $header_list->[-1]->[1];
+    $has_header->{cookie} = 1;
+  }
+
   if (defined $args->{params}) {
     if (defined $args->{body} or not $method eq 'POST') {
       $url_record = $url_record->clone;
@@ -65,8 +78,6 @@ sub create ($$) {
   }
   # XXX or, method requires payload
 
-  # XXX Cookie
-  # XXX basic auth
   # XXX OAuth1
 
   if (defined $args->{bearer}) {

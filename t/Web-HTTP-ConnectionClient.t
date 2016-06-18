@@ -2075,6 +2075,225 @@ test {
   });
 } n => 1, name => 'request - path and query';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => [], cookies => {})->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        unlike $request, qr{[Cc]ookie};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request - cookie';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => [], cookies => {
+      hoge => 'Fuga', abc => undef,
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{\x0ACookie: hoge=Fuga\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request - cookie';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => [], cookies => {
+      "\x{544} !=;" => "\x{1333}a=%\x09",
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{\x0ACookie: %D5%84%20%21%3D%3B=%E1%8C%B3a%3D%25%09\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request - cookie';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => [], cookies => {
+      "" => "",
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{\x0ACookie: =\x0D\x0A};
+        like $request, qr{\x0APragma: no-cache\x0D\x0A};
+        like $request, qr{\x0ACache-Control: no-cache\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'request - cookie';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => [], cookies => {
+      0, 0,
+    }, headers => {Cookie => 'ab cd'})->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{\x0ACookie: ab cd\x0D\x0A};
+        like $request, qr{\x0ACookie: 0=0\x0D\x0A};
+        like $request, qr{ab cd.+0=0}s;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'request - cookie';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::HTTP::ConnectionClient->new_from_url ($url);
+    return $client->request (path => [], cookies => {
+      foo => "abc", XYZ => "ddd",
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        ok $request =~ m{\x0ACookie: foo=abc; XYZ=ddd\x0D\x0A} ||
+           $request =~ m{\x0ACookie: XYZ=ddd; foo=abc\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'request - cookie';
+
 run_tests;
 
 =head1 LICENSE

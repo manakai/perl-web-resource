@@ -1,0 +1,47 @@
+=head1 NAME
+
+Web::Transport::RequestConstructor - Options of requests
+
+=head1 DESCRIPTION
+
+This document describes options describing requests to send, which can
+be specified for L<Web::HTML::ConnectionClient>.
+
+=head1 OPTIONS
+
+Following key/value pairs are available:
+
+=over 4
+
+XXX
+
+=item cookies => {$string => $string, ...}
+
+Cookies to be included in the request, using the C<Cookie:> header.
+The value must be a hash reference of zero or more key/value pairs,
+where keys are cookie names and values are corresponding cookie
+values.
+
+Names and values must be strings of zero or more characters.  They are
+encoded in UTF-8 and percent-encoded before included in the header
+value.  If this behavior is inappropriate, use C<headers> option
+instead.
+
+=back
+
+=head1 SEE ALSO
+
+L<Web::HTML::ConnectionClient>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

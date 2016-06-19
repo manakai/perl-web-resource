@@ -8,6 +8,7 @@ use Test::X1;
 use Test::HTCT::Parser;
 use Encode;
 use JSON::PS;
+use Web::Host;
 use Web::Transport::TCPTransport;
 use Web::Transport::TLSTransport;
 use Web::Transport::HTTPConnection;
@@ -76,7 +77,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
       server_as_cv ($test->{data}->[0])->cb (sub {
         my $server = $_[0]->recv;
         my $transport = Web::Transport::TCPTransport->new
-            (addr => $server->{addr}, port => $server->{port});
+            (host => Web::Host->parse_string ($server->{addr}),
+             port => $server->{port});
 
         my $time = time + 60;
         if (defined $test->{time}) {
@@ -87,13 +89,14 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           $transport = Web::Transport::TLSTransport->new (
             transport => $transport,
             ca_file => Test::Certificates->ca_path ('cert.pem'),
-            sni_host => $server->{host},
-            si_host => $server->{host},
+            sni_host => Web::Host->parse_string ($server->{host}),
+            si_host => Web::Host->parse_string ($server->{host}),
             now => $time,
           );
         }
 
-        my $http = HTTP->new (transport => $transport);
+        my $http = Web::Transport::HTTPConnection->new
+            (transport => $transport);
         my $test_type = $test->{'test-type'}->[1]->[0] || '';
         
         my $req_results = {};
@@ -199,8 +202,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               unless ($http->is_active) {
                 return $http->close->then (sub {
                   $transport = Web::Transport::TCPTransport->new
-                      (addr => $server->{addr}, port => $server->{port});
-                  $http = HTTP->new (transport => $transport);
+                      (host => Web::Host->parse_string ($server->{addr}),
+                       port => $server->{port});
+                  $http = Web::Transport::HTTPConnection->new
+                      (transport => $transport);
                   $http->onevent ($onev);
                   return $http->connect;
                 })->then (sub {
@@ -384,3 +389,12 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
 
 Test::Certificates->wait_create_cert;
 run_tests;
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

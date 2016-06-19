@@ -37,6 +37,10 @@ A DNS cache.
 
 An environment variable based proxy manager.
 
+=item L<Web::MIME::Type>
+
+MIME types.
+
 =back
 
 =head1 REQUEST OPTIONS

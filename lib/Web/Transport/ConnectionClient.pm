@@ -117,12 +117,12 @@ sub request ($%) {
     my ($method, $url_record, $header_list, $body_ref)
         = Web::Transport::RequestConstructor->create (\%args);
     if (ref $method) { # error
-      $return_ok->(bless $method, __PACKAGE__ . '::Response');
+      $return_ng->(bless $method, __PACKAGE__ . '::Response');
       return;
     }
 
     if (defined $body_ref and utf8::is_utf8 ($$body_ref)) {
-      $return_ok->(bless {failed => 1,
+      $return_ng->(bless {failed => 1,
                           message => "|body| is utf8-flagged"},
                    __PACKAGE__ . '::Response');
       return;
@@ -130,7 +130,7 @@ sub request ($%) {
 
     my $url_origin = $url_record->get_origin;
     unless ($url_origin->same_origin_as ($self->{origin})) {
-      $return_ok->(bless {failed => 1,
+      $return_ng->(bless {failed => 1,
                           message => "Bad URL origin |@{[$url_origin->to_ascii]}| (|@{[$self->{origin}->to_ascii]}| expected)"},
                    __PACKAGE__ . '::Response');
       return;

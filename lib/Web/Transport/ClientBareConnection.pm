@@ -90,7 +90,7 @@ my $proxy_to_transport = sub {
       }
       if ($url_record->scheme eq 'https') {
         # XXX HTTP version
-        my $http = HTTP->new (transport => $transport);
+        my $http = Web::Transport::HTTPConnection->new (transport => $transport);
         require Web::Transport::H1CONNECTTransport;
         $transport = Web::Transport::H1CONNECTTransport->new
             (http => $http,
@@ -125,7 +125,7 @@ my $proxy_to_transport = sub {
           (host => $proxy_addr, port => $pport, id => $tid);
       require Web::Transport::SOCKS4Transport;
       return Web::Transport::SOCKS4Transport->new
-          (transport => $tcp, addr => $addr, port => 0+$port);
+          (transport => $tcp, host => $addr, port => 0+$port);
     });
   } elsif ($proxy->{protocol} eq 'socks5') {
     return $resolver->resolve ($proxy->{host})->then (sub {
@@ -138,7 +138,7 @@ my $proxy_to_transport = sub {
 
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : 1080);
       warn "$tid: TCP @{[$_[0]->stringify]}:$pport...\n" if DEBUG;
-      my $tcp = Transport::TCP->new
+      my $tcp = Web::Transport::TCPTransport->new
           (host => $_[0], port => $pport, id => $tid);
 
       require Web::Transport::SOCKS5Transport;

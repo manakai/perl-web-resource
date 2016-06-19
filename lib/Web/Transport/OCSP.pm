@@ -185,6 +185,7 @@ sub x509_has_must_staple ($$) {
     last unless $ext;
 
     my $oid = Net::SSLeay::X509_EXTENSION_get_object ($ext);
+    last unless $oid;
     if (Net::SSLeay::OBJ_cmp ($oid, $tlsext_oid) == 0) {
       my $d = Net::SSLeay::X509_EXTENSION_get_data ($ext);
       my $data = Net::SSLeay::P_ASN1_STRING_get ($d);
@@ -200,3 +201,12 @@ sub x509_has_must_staple ($$) {
 } # x509_has_must_staple
 
 1;
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

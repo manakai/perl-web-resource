@@ -1,11 +1,11 @@
 =head1 NAME
 
-Web::HTTP::ConnectionClient - A connection-oriented HTTP client
+Web::Transport::ConnectionClient - A connection-oriented HTTP client
 
 =head1 SYNOPSIS
 
-  use Web::HTTP::ConnectionClient;
-  $client = Web::HTTP::ConnectionClient->new_from_host (q<server.test>);
+  use Web::Transport::ConnectionClient;
+  $client = Web::Transport::ConnectionClient->new_from_host (q<server.test>);
   
   ## First request
   $client->request (
@@ -24,8 +24,8 @@ Web::HTTP::ConnectionClient - A connection-oriented HTTP client
 
 =head1 DESCRIPTION
 
-The C<Web::HTTP::ConnectionClient> module is a connection-oriented
-HTTP client.
+The C<Web::Transport::ConnectionClient> module is a
+connection-oriented HTTP client.
 
 It can only be used to send requests to a specific origin.  It does
 not support HTTP redirects by design.
@@ -36,7 +36,7 @@ There are following methods:
 
 =over 4
 
-=item $client = Web::HTTP::ConnectionClient->new_from_url ($url)
+=item $client = Web::Transport::ConnectionClient->new_from_url ($url)
 
 Create a new client object, which is associated with a URL's origin.
 
@@ -46,10 +46,10 @@ that anything other than the origin of the URL is ignored.
 
 Example:
 
-  $client = Web::HTTP::ConnectionClient->new_from_url
+  $client = Web::Transport::ConnectionClient->new_from_url
       (Web::URL->parse_url (q<http://server.test>));
 
-=item $client = Web::HTTP::ConnectionClient->new_from_host ($string)
+=item $client = Web::Transport::ConnectionClient->new_from_host ($string)
 
 Create a new client object, which is associated with a origin
 (C<https>, I<$string>, C<undef>).  That is, a client for the specified

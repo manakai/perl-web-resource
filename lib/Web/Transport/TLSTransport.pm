@@ -204,8 +204,12 @@ sub start ($$;%) {
       Net::SSLeay::set_verify $tls, $vmode, sub {
         my ($preverify_ok, $x509_store_ctx) = @_;
         my $depth = Net::SSLeay::X509_STORE_CTX_get_error_depth ($x509_store_ctx);
+        my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
+        $self->{starttls_data}->{tls_cert_chain}->[$depth]
+            = bless [Net::SSLeay::PEM_get_string_X509 ($cert)],
+                __PACKAGE__ . '::Certificate';
+
         if ($depth == 0) {
-          my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
           if (defined $args->{si_host}) {
             # XXX If ipaddr
             return 0 unless verify_hostname $cert, $args->{si_host}->stringify;
@@ -316,9 +320,6 @@ sub start ($$;%) {
       $data->{tls_session_resumed} = Net::SSLeay::session_reused ($self->{tls});
       $data->{tls_cipher} = Net::SSLeay::get_cipher ($self->{tls});
       $data->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($self->{tls});
-      $data->{tls_cert_chain} = [map {
-        bless [Net::SSLeay::PEM_get_string_X509 ($_)], __PACKAGE__ . '::Certificate'
-      } Net::SSLeay::get_peer_cert_chain ($self->{tls})];
     }
 
     if (defined $data and defined $data->{stapling_result} and
@@ -492,14 +493,10 @@ sub _tls ($) {
       $data->{tls_session_resumed} = Net::SSLeay::session_reused ($self->{tls});
       $data->{tls_cipher} = Net::SSLeay::get_cipher ($self->{tls});
       $data->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($self->{tls});
-      my @cert = Net::SSLeay::get_peer_cert_chain ($self->{tls});
-      $data->{tls_cert_chain} = [map {
-        bless [Net::SSLeay::PEM_get_string_X509 ($_)], __PACKAGE__ . '::Certificate'
-      } @cert];
 
       ## Check must-staple flag
       if (not defined $data->{stapling_result}) {
-        if (Web::Transport::OCSP->x509_has_must_staple ($cert[0])) {
+        if (Web::Transport::OCSP->x509_has_must_staple ($data->{tls_cert_chain}->[0])) {
           (delete $self->{starttls_done})->[1]->("There is no stapled OCSP response, which is required by the certificate");
           $self->abort (message => 'TLS error');
           return;

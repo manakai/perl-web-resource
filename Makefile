@@ -1,18 +1,14 @@
-# -*- Makefile -*-
-
 WGET = wget
 GIT = git
 PERL = ./perl
 
-all: deps update
+all: build
 
-update: lib/Web/MIME/_TypeDefs.pm
+updatenightly: build
+	$(GIT) add lib/Web/MIME/_TypeDefs.pm
 
 clean:
 	rm -fr local/mime-types.json
-
-dataautoupdate: clean deps update
-	$(GIT) add lib/Web/MIME/_TypeDefs.pm
 
 ## ------ Setup ------
 
@@ -35,6 +31,12 @@ pmbp-install: pmbp-upgrade
 
 ## ------ Build ------
 
+build: build-deps build-main
+
+build-deps: deps
+
+build-main: lib/Web/MIME/_TypeDefs.pm
+
 lib/Web/MIME/_TypeDefs.pm: local/mime-types.json bin/generate-list.pl
 	$(PERL) bin/generate-list.pl < $< > $@
 local/mime-types.json:
@@ -50,3 +52,5 @@ test-deps: deps
 
 test-main:
 	$(PROVE) t/*.t
+
+## License: Public Domain.

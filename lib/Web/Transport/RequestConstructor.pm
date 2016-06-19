@@ -228,6 +228,11 @@ sub create ($$) {
 
 1;
 
+=head1 HISTORY
+
+The module partially derived from L<Web::UserAgent::Functions> from
+<https://github.com/wakaba/perl-web-useragent-functions>.
+
 =head1 LICENSE
 
 Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.

@@ -8,9 +8,9 @@ use Test::X1;
 use Test::HTCT::Parser;
 use Encode;
 use JSON::PS;
-use Transport::TCP;
-use Transport::TLS;
-use HTTP;
+use Web::Transport::TCPTransport;
+use Web::Transport::TLSTransport;
+use Web::Transport::HTTPConnection;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
 use Test::Certificates;
@@ -75,7 +75,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
       my $c = shift;
       server_as_cv ($test->{data}->[0])->cb (sub {
         my $server = $_[0]->recv;
-        my $transport = Transport::TCP->new
+        my $transport = Web::Transport::TCPTransport->new
             (addr => $server->{addr}, port => $server->{port});
 
         my $time = time + 60;
@@ -84,7 +84,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
         }
 
         if ($test->{tls}) {
-          $transport = Transport::TLS->new (
+          $transport = Web::Transport::TLSTransport->new (
             transport => $transport,
             ca_file => Test::Certificates->ca_path ('cert.pem'),
             sni_host => $server->{host},
@@ -198,7 +198,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               }
               unless ($http->is_active) {
                 return $http->close->then (sub {
-                  $transport = Transport::TCP->new
+                  $transport = Web::Transport::TCPTransport->new
                       (addr => $server->{addr}, port => $server->{port});
                   $http = HTTP->new (transport => $transport);
                   $http->onevent ($onev);

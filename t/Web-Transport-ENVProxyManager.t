@@ -6,7 +6,7 @@ use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
 use Web::URL;
-use Web::Transport::ProxyManager;
+use Web::Transport::ENVProxyManager;
 
 for (
   [{}, undef, q<http://hoge/>, [{protocol => 'tcp'}]],
@@ -50,12 +50,15 @@ for (
   test {
     my $c = shift;
     local %ENV = %$Envs;
-    my $pm = Web::Transport::ProxyManager->new_from_envs ($envs);
+    my $pm = defined $envs ? Web::Transport::ENVProxyManager->new_from_envs ($envs) : Web::Transport::ENVProxyManager->new;
     my $result = $pm->get_proxies_for_url (Web::URL->parse_string ($url));
     isa_ok $result, 'Promise';
     $result->then (sub {
       my $proxies = $_[0];
       test {
+        for (@$proxies) {
+          $_->{host} = $_->{host}->stringify if defined $_->{host};
+        }
         is_deeply $proxies, $expected;
         done $c;
         undef $c;
@@ -65,7 +68,16 @@ for (
         ok 0;
       } $c;
     });
-  } n => 2;
+  } n => 2, name => $url;
 }
 
 run_tests;
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

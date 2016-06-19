@@ -1,15 +1,48 @@
 =head1 NAME
 
-Web::Transport::RequestConstructor - Options of requests
+Web::Transport - Implementations of transport layer for the Web
 
 =head1 DESCRIPTION
 
-This document describes options describing requests to send, which can
-be specified for L<Web::HTML::ConnectionClient>.
+These modules contain implementations of several protocols forming the
+Web platform's transport layer.
 
-=head1 OPTIONS
+Following protocols are supported by these modules and underlying
+platform (partially or fully; see documentation of relevant modules):
+TCP (for IPv4 and IPv6), UNIX domain sockets, TLS (including SNI, OCSP
+stapling), HTTP (including Cookies,
+C<application/x-www-form-urlencoded>, C<multipart/form-data>, Basic
+authentication, OAuth 1.0, OAuth 2.0 Bearer, C<CONNECT>), SOCKS4,
+SOCKS5, DNS.
 
-Following key/value pairs are available:
+=head1 MODULES
+
+There are following modules with public API:
+
+=over 4
+
+=item L<Web::Transport::ConnectionClient>
+
+A connection-oriented HTTP client.
+
+=item L<Web::Transport::PlatformResolver>
+
+A name resolver using system's resolver.
+
+=item L<Web::Transport::CachedResolver>
+
+A DNS cache.
+
+=item L<Web::Transport::ENVProxyManager>
+
+An environment variable based proxy manager.
+
+=back
+
+=head1 REQUEST OPTIONS
+
+Following key/value pairs are available for
+L<Web::HTML::ConnectionClient> to describe requests to send:
 
 =over 4
 
@@ -136,7 +169,7 @@ string of zero or more bytes.
 
 =back
 
-=head1 SPECIFICATIONS
+=head2 Relevant specifications
 
 Fetch Standard <https://fetch.spec.whatwg.org/>.
 
@@ -153,21 +186,66 @@ RFC 6265, HTTP State Management Mechanism
 RFC 5849, The OAuth 1.0 Protocol
 <https://tools.ietf.org/html/rfc5849>.
 
-HTML Standard
-<https://html.spec.whatwg.org/#multipart/form-data-encoding-algorithm>.
+HTML Standard <https://html.spec.whatwg.org/>.
 
-=head1 SEE ALSO
+=head1 PROXY MANAGERS
 
-L<Web::HTML::ConnectionClient>.
+XXX
 
-=head1 HISTORY
+There is following proxy manager in this repository:
+L<Web::Transport::ENVProxyManager>.
 
-The module partially derived from L<Web::UserAgent::Functions> from
-<https://github.com/wakaba/perl-web-useragent-functions>.
+=head1 PROXY CONFIGURATIONS
+
+XXX
+
+=head1 RESOLVERS
+
+XXX
+
+There are following resolvers in this repository:
+L<Web::Transport::PlatformResolver>,
+L<Web::Transport::CachedResolver>.
+
+=head1 ENVIRONMENT VARIABLE
+
+The C<WEBUA_DEBUG> environment variable can be specified to enable
+debug output.  If its value is a true value, debug messages, such as
+some of network input and output, are printed to the standard error
+output.  If its value is greater than C<1>, more verbose messages are
+printed.
+
+=head1 DEPENDENCY
+
+These module requires Perl 5.8 or later.  They require several core
+modules such as L<Digest::SHA> (which is not part of Perl 5.8).
+
+They require L<AnyEvent> and L<Net::SSLeay>.
+
+They also require following modules (which are submodules of this Git
+repository):
+
+=over 4
+
+=item L<Promise> <https://github.com/wakaba/perl-promise>
+
+=item modules from perl-web-url repository <https://github.com/manakai/perl-web-url> such as L<Web::URL> L<Web::Host>, and L<Web::Origin>
+
+=item modules from perl-web-encodings package <https://github.com/manakai/perl-web-encodings> repository such as L<Web::Encoding>
+
+=item modules from perl-web-datetime package <https://github.com/manakai/perl-web-datetime> repository such as L<Web::DateTime::Parser>
+
+=back
 
 =head1 AUTHOR
 
 Wakaba <wakaba@suikawiki.org>.
+
+=head1 ACKNOWLEDGEMENTS
+
+Some of modules derived from various earlier effort on these areas.
+See documentations of modules and comments in source codes for more
+information.
 
 =head1 LICENSE
 

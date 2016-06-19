@@ -15,6 +15,8 @@ Web::Transport::PlatformResolver - Resolve domain names using platform's resolve
 The C<Web::Transport::PlatformResolver> module defines a name resolver
 which resolves names using the system's resolution API.
 
+This module is a resolver (see L<Web::Transport/"RESOLVERS">).
+
 =head1 METHOD
 
 Following methods are available:

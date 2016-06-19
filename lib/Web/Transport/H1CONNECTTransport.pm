@@ -1,6 +1,8 @@
-package Transport::H1CONNECT;
+package Web::Transport::H1CONNECTTransport;
 use strict;
 use warnings;
+our $VERSION = '1.0';
+require utf8;
 use Carp qw(croak);
 use AnyEvent;
 use Promise;
@@ -135,8 +137,17 @@ sub DESTROY ($) {
 
   local $@;
   eval { die };
-  warn "Reference to Transport::H1CONNECT is not discarded before global destruction\n"
+  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 } # DESTROY
 
 1;
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

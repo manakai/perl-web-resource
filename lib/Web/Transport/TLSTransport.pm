@@ -1,6 +1,7 @@
-package Transport::TLS;
+package Web::Transport::TLSTransport;
 use strict;
 use warnings;
+our $VERSION = '1.0';
 use Carp qw(croak carp);
 use Scalar::Util qw(weaken);
 use AnyEvent;
@@ -560,12 +561,12 @@ sub DESTROY ($) {
 
   local $@;
   eval { die };
-  warn "Reference to Transport::TLS is not discarded before global destruction\n"
+  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 
 } # DESTROY
 
-package Transport::TLS::Certificate;
+package Web::Transport::TLSTransport::Certificate;
 
 sub debug_info ($) {
   my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
@@ -619,3 +620,12 @@ sub debug_info ($) {
 
 # XXX if destroy is called before establishment
 # XXX Web compatibility of service identity check
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

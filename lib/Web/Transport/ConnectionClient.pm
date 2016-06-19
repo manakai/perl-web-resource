@@ -1,11 +1,11 @@
-package Web::HTTP::ConnectionClient;
+package Web::Transport::ConnectionClient;
 use strict;
 use warnings;
 our $VERSION = '1.0';
 require utf8;
 use Carp;
 use Web::DomainName::Canonicalize qw(canonicalize_url_host);
-use HTTPClientBareConnection;
+use Web::Transport::ClientBareConnection;
 use Web::Transport::RequestConstructor;
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
@@ -37,10 +37,23 @@ sub proxy_manager ($;$) {
     $_[0]->{proxy_manager} = $_[1];
   }
   return $_[0]->{proxy_manager} ||= do {
-    require Web::Transport::ProxyManager;
-    Web::Transport::ProxyManager->new_from_envs;
+    require Web::Transport::ENVProxyManager;
+    Web::Transport::ENVProxyManager->new_from_envs;
   };
 } # proxy_manager
+
+sub resolver ($;$) {
+  if (@_ > 1) {
+    $_[0]->{resolver} = $_[1];
+    return unless defined wantarray;
+  }
+  return $_[0]->{resolver} ||= do {
+    require Web::Transport::PlatformResolver;
+    require Web::Transport::CachedResolver;
+    Web::Transport::CachedResolver->new_from_resolver
+        (Web::Transport::PlatformResolver->new);
+  };
+} # resolver
 
 sub tls_options ($;$) {
   if (@_ > 1) {
@@ -80,9 +93,11 @@ sub _connect ($$) {
       warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n" if DEBUG;
     }
   })->then (sub {
-    $self->{client} = HTTPClientBareConnection->new_from_url ($url_record);
+    $self->{client} = Web::Transport::ClientBareConnection->new_from_url
+        ($url_record);
     $self->{client}->parent_id ($self->{parent_id});
     $self->{client}->proxy_manager ($self->proxy_manager);
+    $self->{client}->resolver ($self->resolver);
     $self->{client}->tls_options ($self->tls_options);
     $self->{client}->last_resort_timeout ($self->last_resort_timeout);
     return $self->{client};
@@ -102,14 +117,14 @@ sub request ($%) {
     my ($method, $url_record, $header_list, $body_ref)
         = Web::Transport::RequestConstructor->create (\%args);
     if (ref $method) { # error
-      $return_ok->(bless $method, 'Web::HTTP::ConnectionClient::Response');
+      $return_ok->(bless $method, __PACKAGE__ . '::Response');
       return;
     }
 
     if (defined $body_ref and utf8::is_utf8 ($$body_ref)) {
       $return_ok->(bless {failed => 1,
                           message => "|body| is utf8-flagged"},
-                         'Web::HTTP::ConnectionClient::Response');
+                   __PACKAGE__ . '::Response');
       return;
     }
 
@@ -117,7 +132,7 @@ sub request ($%) {
     unless ($url_origin->same_origin_as ($self->{origin})) {
       $return_ok->(bless {failed => 1,
                           message => "Bad URL origin |@{[$url_origin->to_ascii]}| (|@{[$self->{origin}->to_ascii]}| expected)"},
-                         'Web::HTTP::ConnectionClient::Response');
+                   __PACKAGE__ . '::Response');
       return;
     }
 
@@ -144,11 +159,11 @@ sub request ($%) {
         $body_length = 0;
         return $self->_connect ($url_record)->then ($then)->then (sub {
           $_[0]->{body} = $body unless $_[0]->{failed};
-          return bless $_[0], 'Web::HTTP::ConnectionClient::Response';
+          return bless $_[0], __PACKAGE__ . '::Response';
         });
       } else {
         $result->{body} = $body unless $result->{failed};
-        return bless $result, 'Web::HTTP::ConnectionClient::Response';
+        return bless $result, __PACKAGE__ . '::Response';
       }
     }); # $return
     $return_ok->($return);
@@ -181,7 +196,7 @@ sub DESTROY ($) {
 
 } # DESTROY
 
-package Web::HTTP::ConnectionClient::Response;
+package Web::Transport::ConnectionClient::Response;
 
 sub is_network_error ($) {
   return $_[0]->{failed};

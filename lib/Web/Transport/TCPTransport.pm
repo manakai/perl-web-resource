@@ -1,6 +1,8 @@
-package Transport::TCP;
+package Web::Transport::TCPTransport;
 use strict;
 use warnings;
+our $VERSION = '1.0';
+require utf8;
 use Carp qw(croak);
 use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE);
@@ -9,12 +11,13 @@ use AnyEvent::Socket qw(tcp_connect);
 use Promise;
 
 ## Note that this class is also used as the base of the
-## |Transport::UNIXDomainSocket| class.
+## |Web::Transport::UNIXDomainSocket| class.
 
 sub new ($%) {
   my $self = bless {}, shift;
   my $args = $self->{args} = {@_};
   croak "Bad |host|" unless defined $args->{host} and $args->{host}->is_ip;
+  $args->{addr} = $args->{host}->text_addr;
   croak "Bad |port|" unless defined $args->{port};
   croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
   croak "Bad |id|" if defined $args->{id} and utf8::is_utf8 ($args->{id});
@@ -32,7 +35,7 @@ sub start ($$) {
 
   return Promise->new (sub {
     my ($ok, $ng) = @_;
-    tcp_connect $args->{host}->text_addr, $args->{port}, sub {
+    tcp_connect $args->{addr}, $args->{port}, sub {
       my $fh = shift or return $ng->($!);
       $ok->($fh);
     };
@@ -237,3 +240,12 @@ sub DESTROY ($) {
 } # DESTROY
 
 1;
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

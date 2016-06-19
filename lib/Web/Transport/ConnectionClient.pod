@@ -65,10 +65,10 @@ Send a request and return a promise (L<Promise>), which is to be
 resolved with the result.
 
 The arguments are name/value pairs, as described in
-L<Web::Transport::RequestConstructor> documentation.  At minimum, the
-C<url> argument must be specified.  It is a URL record object
-(L<Web::URL>).  It must have same origin as the client's origin
-(i.e. the origin of the argument to the C<new_from_url> method).
+L<Web::Transport/"REQUEST OPTIONS">.  At minimum, the C<url> argument
+must be specified.  It is a URL record object (L<Web::URL>).  It must
+have same origin as the client's origin (i.e. the origin of the
+argument to the C<new_from_url> method).
 
 The promise is resolved with XXX.
 
@@ -93,11 +93,22 @@ has closed.
 
 =item $pm = $client->proxy_manager
 
-Get or set the proxy manager (L<Web::Transport::ProxyManager>) used to
-establish connections.  Initially, a proxy manager which takes
-standard environment variables into account (i.e. C<<
-Web::Transport::ProxyManager->new_from_envs >>) is set as the proxy
-manager.
+Get or set the proxy manager used to establish connections.
+Initially, a proxy manager which takes standard environment variables
+into account (i.e. L<Web::Transport::ENVProxyManager>) is set as the
+proxy manager.
+
+This option must be set before the first invocation of the C<request>
+method.
+
+=item $client->resolver ($resolver)
+
+=item $resolver = $client->resolver
+
+Get or set the name resolver used to establish connections.
+Initially, a resolver using system's name resolution API
+(L<Web::Transport::PlatformResolver>) wrapped by DNS caching
+(L<Web::Transport::CachedResolver>) is set as the resolver.
 
 This option must be set before the first invocation of the C<request>
 method.
@@ -145,7 +156,9 @@ Return the origin (L<Web::Origin>) of the connection.
 
 This module supports C<WEBUA_DEBUG>.  See L<Web::Transport>.
 
-XXX http_proxy https_proxy ftp_proxy no_proxy
+When the default C<resolver> is used, proxy environment variables
+C<http_proxy>, C<https_proxy>, C<ftp_proxy>, and C<no_proxy> are taken
+into account.  See L<Web::Transport::ENVProxyManager>.
 
 =head1 SPECIFICATION
 

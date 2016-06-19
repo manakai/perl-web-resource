@@ -1,11 +1,12 @@
-package HTTPClientBareConnection;
+package Web::Transport::ClientBareConnection;
 use strict;
 use warnings;
+our $VERSION = '1.0';
 use AnyEvent;
 use Promise;
-use Transport::TCP;
-use Transport::TLS;
-use HTTP;
+use Web::Transport::TCPTransport;
+use Web::Transport::TLSTransport;
+use Web::Transport::HTTPConnection;
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Scheme qw(get_default_port);
 
@@ -25,14 +26,8 @@ sub proxy_manager ($;$) {
 sub resolver ($;$) {
   if (@_ > 1) {
     $_[0]->{resolver} = $_[1];
-    return unless defined wantarray;
   }
-  return $_[0]->{resolver} ||= do {
-    require Web::Transport::PlatformResolver;
-    require Web::Transport::CachedResolver;
-    Web::Transport::CachedResolver->new_from_resolver
-        (Web::Transport::PlatformResolver->new);
-  };
+  return $_[0]->{resolver};
 } # resolver
 
 sub parent_id ($;$) {
@@ -74,7 +69,8 @@ my $proxy_to_transport = sub {
 
       $port = 0+$port;
       warn "$tid: TCP @{[$addr->stringify]}:$port...\n" if DEBUG;
-      return Transport::TCP->new (host => $addr, port => $port, id => $tid);
+      return Web::Transport::TCPTransport->new
+          (host => $addr, port => $port, id => $tid);
     });
   } elsif ($proxy->{protocol} eq 'http' or
            $proxy->{protocol} eq 'https') {
@@ -83,10 +79,10 @@ my $proxy_to_transport = sub {
           unless defined $_[0];
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : ($proxy->{protocol} eq 'https' ? 443 : 80));
       warn "$tid: TCP @{[$_[0]->stringify]}:$pport...\n" if DEBUG;
-      my $transport = Transport::TCP->new
+      my $transport = Web::Transport::TCPTransport->new
           (host => $_[0], port => $pport, id => $tid);
       if ($proxy->{protocol} eq 'https') {
-        $transport = Transport::TLS->new
+        $transport = Web::Transport::TLSTransport->new
             (%{$proxy->{tls_options} or {}},
              si_host => $proxy->{host},
              sni_host => $proxy->{host},
@@ -95,8 +91,8 @@ my $proxy_to_transport = sub {
       if ($url_record->scheme eq 'https') {
         # XXX HTTP version
         my $http = HTTP->new (transport => $transport);
-        require Transport::H1CONNECT;
-        $transport = Transport::H1CONNECT->new
+        require Web::Transport::H1CONNECTTransport;
+        $transport = Web::Transport::H1CONNECTTransport->new
             (http => $http,
              target => (encode_web_utf8 $url_record->hostport));
         # XXX auth
@@ -125,12 +121,11 @@ my $proxy_to_transport = sub {
 
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : 1080);
       warn "$tid: TCP @{[$proxy_addr->stringify]}:$pport...\n" if DEBUG;
-      my $tcp = Transport::TCP->new
+      my $tcp = Web::Transport::TCPTransport->new
           (host => $proxy_addr, port => $pport, id => $tid);
-      require Transport::SOCKS4;
-      return Transport::SOCKS4->new (transport => $tcp,
-                                     addr => $addr,
-                                     port => 0+$port);
+      require Web::Transport::SOCKS4Transport;
+      return Web::Transport::SOCKS4Transport->new
+          (transport => $tcp, addr => $addr, port => 0+$port);
     });
   } elsif ($proxy->{protocol} eq 'socks5') {
     return $resolver->resolve ($proxy->{host})->then (sub {
@@ -146,14 +141,14 @@ my $proxy_to_transport = sub {
       my $tcp = Transport::TCP->new
           (host => $_[0], port => $pport, id => $tid);
 
-      require Transport::SOCKS5;
-      return Transport::SOCKS5->new
+      require Web::Transport::SOCKS5Transport;
+      return Web::Transport::SOCKS5Transport->new
           (transport => $tcp, host => $url_record->host, port => 0+$port);
     });
   } elsif ($proxy->{protocol} eq 'unix') {
-    require Transport::UNIXDomainSocket;
+    require Web::Transport::UNIXDomainSocketTransport;
     warn "$tid: Unix $proxy->{path}...\n" if DEBUG;
-    my $transport = Transport::UNIXDomainSocket->new
+    my $transport = Web::Transport::UNIXDomainSocketTransport->new
         (path => $proxy->{path}, id => $tid);
     return Promise->resolve ($transport);
   } else {
@@ -195,7 +190,7 @@ sub connect ($) {
         my $transport = $_[0];
         undef $get;
         if ($url_record->scheme eq 'https') {
-          return Transport::TLS->new
+          return Web::Transport::TLSTransport->new
               (%{$self->{tls_options}},
                si_host => $url_record->host,
                sni_host => $url_record->host,
@@ -213,7 +208,7 @@ sub connect ($) {
           not $url_record->scheme eq 'ftp') {
         die "Bad URL scheme |@{[$url_record->scheme]}|\n";
       }
-      $self->{http} = HTTP->new (transport => $_[0]);
+      $self->{http} = Web::Transport::HTTPConnection->new (transport => $_[0]);
       return $self->{http}->connect;
     });
   };

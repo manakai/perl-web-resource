@@ -7,11 +7,11 @@ use Test::More;
 use Test::X1;
 use Test::HTCT::Parser;
 use Test::Certificates;
-use Transport::TCP;
-use Transport::H1CONNECT;
-use Transport::TLS;
-use Transport::UNIXDomainSocket;
-use HTTP;
+use Web::Transport::TCPTransport;
+use Web::Transport::H1CONNECTTransport;
+use Web::Transport::TLSTransport;
+use Web::Transport::UNIXDomainSocketTransport;
+use Web::Transport::HTTPConnection;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
 
@@ -56,8 +56,8 @@ sub unix_server_as_cv ($) {
 
 test {
   my $c = shift;
-  my $tcp = Transport::TCP->new (addr => 'localhost', port => rand);
-  my $http = HTTP->new (transport => $tcp);
+  my $tcp = Web::Transport::TCPTransport->new (addr => 'localhost', port => rand);
+  my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
   my $p = $http->send_request_headers ({method => 'GET', target => '/'});
   isa_ok $p, 'Promise';
   $p->then (sub {
@@ -81,9 +81,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'});
     })->then (sub {
@@ -115,9 +115,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     $http->connect->then (sub {
       my $p1 = $http->send_request_headers ({method => 'GET', target => '/'});
       my $p = $http->send_request_headers ({method => 'GET', target => '/'});
@@ -149,9 +149,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     $http->connect->then (sub {
       my @p;
       for my $subtest (
@@ -189,9 +189,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -223,9 +223,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -261,9 +261,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -299,9 +299,9 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -347,9 +347,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -389,9 +389,9 @@ sleep 1
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -437,9 +437,9 @@ sleep 1
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -485,9 +485,9 @@ sleep 1
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error = 0;
     my @p;
     $http->onevent (sub {
@@ -550,9 +550,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -600,9 +600,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -644,9 +644,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -688,9 +688,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -732,9 +732,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -783,9 +783,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -834,9 +834,9 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -876,9 +876,9 @@ CRLF
 "abc"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -919,9 +919,9 @@ CRLF
 CRLF
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -967,9 +967,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     my $pong = 0;
     $http->onevent (sub {
@@ -1015,9 +1015,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1059,9 +1059,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1103,9 +1103,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1154,9 +1154,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1205,9 +1205,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1256,9 +1256,9 @@ ws-send-header opcode=9 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $ping = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1302,9 +1302,9 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error = 0;
     $http->connect->then (sub {
       return $http->send_ping;
@@ -1338,9 +1338,9 @@ CRLF
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     my $received = '';
     my @ev;
@@ -1386,9 +1386,9 @@ CRLF
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     my $received = '';
     my @ev;
@@ -1442,9 +1442,9 @@ CRLF
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $sent = 0;
     my $received = '';
     my @ev;
@@ -1490,9 +1490,9 @@ CRLF
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $error = 0;
     my $x;
     my $p = Promise->new (sub { $x = $_[0] });
@@ -1537,9 +1537,9 @@ sleep 1
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $received = '';
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1575,9 +1575,9 @@ CRLF
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'headers') {
@@ -1614,9 +1614,9 @@ CRLF
 "OK"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1649,9 +1649,9 @@ CRLF
 "NG"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1691,9 +1691,9 @@ CRLF
 "NG"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1734,9 +1734,9 @@ CRLF
 "NG"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1775,9 +1775,9 @@ receive "hoge"
 CRLF
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
     });
@@ -1810,9 +1810,9 @@ CRLF
 "NG"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $http = HTTP->new (transport => $tcp);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1856,17 +1856,17 @@ CRLF
 "abc"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Transport::TCP->new
+    my $tcp = Web::Transport::TCPTransport->new
         (addr => $server->{addr}, port => $server->{port});
-    my $proxy = HTTP->new (transport => $tcp);
-    my $connect = Transport::H1CONNECT->new
+    my $proxy = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $connect = Web::Transport::H1CONNECTTransport->new
         (http => $proxy, target => 'hoge.test');
-    my $tls = Transport::TLS->new
+    my $tls = Web::Transport::TLSTransport->new
         (transport => $connect,
          sni_host_name => 'hoge.test',
          si_host_name => Test::Certificates->cert_name,
          ca_file => Test::Certificates->ca_path ('cert.pem'));
-    my $http = HTTP->new (transport => $tls);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tls);
     my $d = '';
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1897,16 +1897,16 @@ CRLF
 test {
   my $c = shift;
   {
-    my $tcp = Transport::TCP->new (addr => '260.0.0.0', port => int rand);
-    my $proxy = HTTP->new (transport => $tcp);
-    my $connect = Transport::H1CONNECT->new
+    my $tcp = Web::Transport::TCPTransport->new (addr => '260.0.0.0', port => int rand);
+    my $proxy = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $connect = Web::Transport::H1CONNECTTransport->new
         (http => $proxy, target => 'hoge.test');
-    my $tls = Transport::TLS->new
+    my $tls = Web::Transport::TLSTransport->new
         (transport => $connect,
          sni_host_name => 'hoge.test',
          si_host_name => Test::Certificates->cert_name,
          ca_file => Test::Certificates->ca_path ('cert.pem'));
-    my $http = HTTP->new (transport => $tls);
+    my $http = Web::Transport::HTTPConnection->new (transport => $tls);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1930,11 +1930,11 @@ test {
 test {
   my $c = shift;
   {
-    my $tcp = Transport::TCP->new (addr => '260.0.0.0', port => int rand);
-    my $proxy = HTTP->new (transport => $tcp);
-    my $connect = Transport::H1CONNECT->new
+    my $tcp = Web::Transport::TCPTransport->new (addr => '260.0.0.0', port => int rand);
+    my $proxy = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $connect = Web::Transport::H1CONNECTTransport->new
         (http => $proxy, target => 'hoge.test');
-    my $http = HTTP->new (transport => $connect);
+    my $http = Web::Transport::HTTPConnection->new (transport => $connect);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1965,9 +1965,9 @@ CRLF
 "xyz"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $unix = Transport::UNIXDomainSocket->new
+    my $unix = Web::Transport::UNIXDomainSocketTransport->new
         (path => $server->{port});
-    my $http = HTTP->new (transport => $unix);
+    my $http = Web::Transport::HTTPConnection->new (transport => $unix);
     my $d = '';
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1990,3 +1990,12 @@ CRLF
 } n => 1, name => 'UNIX domain socket';
 
 run_tests;
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

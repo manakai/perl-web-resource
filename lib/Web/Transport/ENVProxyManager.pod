@@ -1,0 +1,67 @@
+=head1 NAME
+
+Web::Trasnport::ENVProxyManager - An environment variable based proxy manager
+
+=head1 SYNOPSIS
+
+  use Web::Transport::ENVProxyManager;
+  $pm = Web::Transport::ENVProxyManager->new;
+  $pm->get_proxies_for_url ($url)->then (sub {
+    $proxies = $_[0];
+  });
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::ENVProxyManager> object is a proxy manager,
+which choose proxies based on environment variables such as
+C<https_proxy>.
+
+This module is a proxy manager (see L<Web::Transport/"PROXY
+MANAGERS">).
+
+=head1 METHODS
+
+Following methods are available:
+
+=over 4
+
+=item $pm = Web::Transport::ENVProxyManager->new
+
+Create a proxy manager, using system's environment variable for this
+process (i.e. C<%ENV>).
+
+=item $pm = Web::Transport::ENVProxyManager->new_from_envs ($hashref)
+
+Create a proxy manager.  The argument must be a hash reference of
+environment variables.  Hash keys must be environment variable names
+and values must be corresponding environment variable values.  Names
+and values must be byte strings.
+
+=item $promise = $pm->get_proxies ($url)
+
+Get the list of the proxies for the specified URL.  The argument must
+be a URL record (L<Web::URL>).
+
+The method returns a promise (L<Promise>), which is to be resolved
+with a proxy configuration list (see L<Web::Transport/"PROXY
+CONFIGURATIONS">).
+
+=back
+
+=head1 SPECIFICATION
+
+Web Transport Processing
+<https://wiki.suikawiki.org/n/Web%20Transport%20Processing>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

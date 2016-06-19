@@ -1,4 +1,4 @@
-package Web::Transport::ProxyManager;
+package Web::Transport::ENVProxyManager;
 use strict;
 use warnings;
 our $VERSION = '1.0';
@@ -36,8 +36,12 @@ sub _env ($$) {
   return undef;
 } # _env
 
-sub new_from_envs ($;$) {
-  my $envs = $_[1] || \%ENV;
+sub new ($) {
+  return $_[0]->new_from_envs (\%ENV);
+} # new
+
+sub new_from_envs ($$) {
+  my $envs = $_[1];
   return bless {
     http_proxy => _env ($envs, 'http_proxy'),
     https_proxy => _env ($envs, 'https_proxy'),
@@ -59,7 +63,7 @@ sub get_proxies_for_url ($$) {
   ## Get proxies
 
   for (@{$self->{no_proxy_list}}) {
-    if ($_ eq $host) {
+    if ($_->equals ($host)) {
       return Promise->resolve ([{protocol => 'tcp'}]);
     }
   }
@@ -81,3 +85,12 @@ sub get_proxies_for_url ($$) {
 } # get_proxies_for_url
 
 1;
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

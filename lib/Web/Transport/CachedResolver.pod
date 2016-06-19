@@ -17,6 +17,8 @@ Web::Transport::CachedResolver - Resolve domain names, with caching
 The C<Web::Transport::CachedResolver> module defines a name resolver
 which has a 60-seconds cache.
 
+This module is a resolver (see L<Web::Transport/"RESOLVERS">).
+
 =head1 METHOD
 
 Following methods are available:

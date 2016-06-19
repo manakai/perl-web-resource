@@ -1,4 +1,4 @@
-package Transport::SOCKS5;
+package Web::Transport::SOCKS5Transport;
 use strict;
 use warnings;
 use Carp qw(croak);
@@ -171,9 +171,18 @@ sub DESTROY ($) {
 
   local $@;
   eval { die };
-  warn "Reference to Transport::SOCKS5 is not discarded before global destruction\n"
+  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 
 } # DESTROY
 
 1;
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

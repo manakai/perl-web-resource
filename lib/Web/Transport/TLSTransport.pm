@@ -538,7 +538,7 @@ sub _close ($$) {
     $self->{transport}->push_shutdown
         unless $self->{transport}->write_to_be_closed;
   }
-  while (@{$self->{wq} // []}) {
+  while (@{$self->{wq} || []}) {
     my $q = shift @{$self->{wq}};
     if (@$q == 2) { # promise
       $q->[1]->();
@@ -587,7 +587,7 @@ sub debug_info ($) {
     $type = {
       2 => 'DNS',
       7 => 'IP', # XXX decode value
-    }->{$type} // $type;
+    }->{$type} || $type;
     push @r, 'SAN.'.$type . '=' . (shift @san);
   }
   push @r, '#=' . Net::SSLeay::P_ASN1_INTEGER_get_hex Net::SSLeay::X509_get_serialNumber $cert;

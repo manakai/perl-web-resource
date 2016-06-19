@@ -9,8 +9,8 @@ use Promise;
 sub new ($%) {
   my $self = bless {}, shift;
   my $args = $self->{args} = {@_};
-  my $port = $args->{port} // '';
-  croak "Bad |port|" unless $port =~ /\A[0-9]+\z/ and $port <= 0xFFFF;
+  my $port = $args->{port};
+  croak "Bad |port|" unless defined $port and $port =~ /\A[0-9]+\z/ and $port <= 0xFFFF;
   croak "Bad |host|" unless defined $args->{host} and $args->{host}->is_ipv4;
   $self->{transport} = delete $self->{args}->{transport};
   $self->{id} = $self->{transport}->id . 'S4';

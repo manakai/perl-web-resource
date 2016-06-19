@@ -9,8 +9,8 @@ use Web::Encoding qw(encode_web_utf8);
 sub new ($%) {
   my $self = bless {}, shift;
   my $args = $self->{args} = {@_};
-  my $port = $args->{port} // '';
-  croak "Bad |port|" unless $port =~ /\A[0-9]+\z/ and $port <= 0xFFFF;
+  my $port = $args->{port};
+  croak "Bad |port|" unless defined $port and $port =~ /\A[0-9]+\z/ and $port <= 0xFFFF;
   croak "Bad |host|" if not defined $args->{host};
   $self->{transport} = delete $self->{args}->{transport};
   $self->{id} = $self->{transport}->id . 'S5';

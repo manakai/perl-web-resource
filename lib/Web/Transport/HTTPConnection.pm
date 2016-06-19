@@ -609,7 +609,8 @@ sub _process_rbuf ($$;%) {
             for (0..((length $data)-1)) {
               substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
             }
-            $self->_ws_debug ('S', $reason // '', FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $status) if DEBUG;
+            $self->_ws_debug ('S', defined $reason ? $reason : '',
+                              FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $status) if DEBUG;
             $self->{transport}->push_write
                 (\(pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
                    $mask . $data));
@@ -990,10 +991,8 @@ sub is_active ($) {
 
 sub send_request_headers ($$;%) {
   my ($self, $req, %args) = @_;
-  my $method = $req->{method} // '';
-  if (not defined $method or
-      not length $method or
-      $method =~ /[\x0D\x0A\x09\x20]/) {
+  my $method = defined $req->{method} ? $req->{method} : '';
+  if (not length $method or $method =~ /[\x0D\x0A\x09\x20]/) {
     croak "Bad |method|: |$method|";
   }
   my $url = $req->{target};
@@ -1237,7 +1236,7 @@ sub close ($;%) {
     my $data = '';
     if (defined $args{status}) {
       $data = pack 'n', $args{status};
-      $data .= $args{reason} // '';
+      $data .= $args{reason} if defined $args{reason};
       for (0..((length $data)-1)) {
         substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
       }
@@ -1358,7 +1357,7 @@ sub _ws_debug ($$$%) {
             8 => '(close)',
             9 => '(ping)',
             10 => '(pong)',
-          }->{$args{opcode}} // ()),
+          }->{$args{opcode}} || ()),
           ($args{FIN} ? 'F' : ()),
           ($args{RSV1} ? 'R1' : ()),
           ($args{RSV2} ? 'R2' : ()),

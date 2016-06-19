@@ -94,7 +94,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
         }
 
         my $http = HTTP->new (transport => $transport);
-        my $test_type = $test->{'test-type'}->[1]->[0] // '';
+        my $test_type = $test->{'test-type'}->[1]->[0] || '';
         
         my $req_results = {};
         my $onev = sub {
@@ -302,7 +302,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 if ($test->{'received-length'}) {
                   is length ($result->{body}), $test->{'received-length'}->[1]->[0] + length '(close)', 'received length';
                 } else {
-                  is $result->{body}, ($test->{received}->[0] // '') . '(close)', 'received';
+                  is $result->{body}, (defined $test->{received}->[0] ? $test->{received}->[0] : '') . '(close)', 'received';
                 }
               }
               if (not $result->{ws_established}) {
@@ -323,10 +323,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               is $actual, $expected, 'resultdata';
             } else {
               is $res->{status}, $is_error ? undef : $test->{status}->[1]->[0];
-              is $res->{reason}, $is_error ? undef : $test->{reason}->[1]->[0] // $test->{reason}->[0] // '';
+              is $res->{reason}, $is_error ? undef : defined $test->{reason}->[1]->[0] ? $test->{reason}->[1]->[0] : defined $test->{reason}->[0] ? $test->{reason}->[0] : '';
               is join ("\x0A", map {
                 $_->[0] . ': ' . $_->[1];
-              } @{$res->{headers}}), $test->{headers}->[0] // '';
+              } @{$res->{headers}}), defined $test->{headers}->[0] ? $test->{headers}->[0] : '';
               is $result->{body}, $test->{body}->[0], 'body';
               is !!$result->{response}->{incomplete}, !!$test->{incomplete}, 'incomplete message';
             }
@@ -378,7 +378,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
       });
     } n => 9 # + 1 + 3*@{$test->{'1xx'} || []}
       , name => [$path, $test->{name}->[0]],
-        timeout => (($test->{name}->[0] // '') =~ /length=/ ? 90 : 20);
+        timeout => (($test->{name}->[0] || '') =~ /length=/ ? 90 : 20);
   };
 } # $path
 

@@ -8,7 +8,7 @@ use Web::Transport::OCSP;
 
 my $root_path = path (__FILE__)->parent->parent->parent->parent->absolute;
 my $cert_path = $root_path->child ('local/cert');
-my $cn = $ENV{SERVER_HOST_NAME} // 'hoge.test';
+my $cn = $ENV{SERVER_HOST_NAME} || 'hoge.test';
 $cert_path->mkpath;
 
 sub ca_path ($$) {

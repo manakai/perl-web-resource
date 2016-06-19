@@ -16,7 +16,7 @@ use Test::Certificates;
 use Test::OpenSSL;
 
 my $host = shift;
-my $port = shift // die "Usage: $0 listen-host listen-port\n";
+my $port = shift || die "Usage: $0 listen-host listen-port\n";
 
 my $input;
 {
@@ -68,7 +68,7 @@ my $H2ReceivedDumper = do {
               3 => 'RST_STREAM', 4 => 'SETTINGS', 5 => 'PUSH_PROMISE',
               6 => 'PING', 7 => 'GOAWAY', 8 => 'WINDOW_UPDATE',
               9 => 'CONTINUATION',
-            }->{$type} // (),
+            }->{$type} || (),
             "($type)",
             (substr ($flags, 0, 1) ? 'END_STREAM/ACK' : ()),
             (substr ($flags, 1, 1) ? 'f1' : ()),
@@ -222,7 +222,7 @@ my $H2ReceivedDumper = do {
             5 => 'MAX_FRAME_SIZE (5)',
             6 => 'MAX_HEADER_LIST_SIZE (6)',
             16 => 'RENEG_PERMITTED (0x10)',
-          }->{$n} // $n;
+          }->{$n} || $n;
           warn "[$id] H2   $n=$v\n" if $DUMP;
         }
         if (length $data) {
@@ -255,7 +255,7 @@ my $H2ReceivedDumper = do {
 13 => 'HTTP_1_1_REQUIRED (0xd)',
         }->{$v};
         warn "[$id] H2   ".(join ' ',
-          'error code=' . ($et // $v),
+          'error code=' . ($et || $v),
         )."\n" if $DUMP;
         my $info = {type => 'RST_STREAM',
                     error => $v};
@@ -281,7 +281,7 @@ my $H2ReceivedDumper = do {
 11 => 'ENHANCE_YOUR_CALM (0xb)',
 12 => 'INADEQUATE_SECURITY (0xc)',
 13 => 'HTTP_1_1_REQUIRED (0xd)',
-        }->{$error} // $error;
+        }->{$error} || $error;
         warn "[$id] H2   ".(join ' ',
           ($r ? 'R' : ()),
           "last stream ID=$stream_id",
@@ -368,10 +368,10 @@ sub run_commands ($$$$) {
     } elsif ($command =~ /^client$/) {
       $hdl->push_write ($states->{client_host} . ':' . $states->{client_port});
     } elsif ($command =~ /^write\s+(sni_host)$/) {
-      $hdl->push_write ($states->{$1} // '(null)');
+      $hdl->push_write (defined $states->{$1} ? $states->{$1} : '(null)');
     } elsif ($command =~ /^ws-accept$/) {
       $states->{captured} =~ /^Sec-WebSocket-Key:\s*(\S+)\s*$/im;
-      my $key = $1 // '';
+      my $key = defined $1 ? $1 : '';
       my $sha = encode_base64 sha1 ($key . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), '';
       #warn "$key / $sha";
       $hdl->push_write ($sha);
@@ -664,7 +664,7 @@ sub run_commands ($$$$) {
       my $v = $2;
       $n =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
       if ($v eq 'authority') {
-        $v = ($ENV{SERVER_HOST_NAME} // 'hoge.test') . ':' . $port;
+        $v = ($ENV{SERVER_HOST_NAME} || 'hoge.test') . ':' . $port;
       } else {
         $v = substr $v, 1, -2 + length $v;
         $v =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
@@ -763,7 +763,7 @@ sub run_commands ($$$$) {
       while ($x =~ s/^\s+(\w+)=(\S*)//) {
         $args->{$1} = $2;
       }
-      $args->{cn} = ($ENV{SERVER_HOST_NAME} // 'hoge.test')
+      $args->{cn} = ($ENV{SERVER_HOST_NAME} || 'hoge.test')
           if defined $args->{cn} and $args->{cn} eq '##HOST##';
       Test::Certificates->wait_create_cert ($args);
       $states->{starttls_waiting} = 1;
@@ -992,7 +992,7 @@ sub dump_tls ($;%);
 sub dump_tls ($;%) {
   my ($key, %args) = @_;
   my $header_length = defined $args{content_type} ? 4 : 5;
-  my $id = $_dump_tls->{[split /\Q$;\E/, $key]->[0], 'id'} // '???:'.$key;
+  my $id = $_dump_tls->{[split /\Q$;\E/, $key]->[0], 'id'} || '???:'.$key;
   while ($header_length <= length $_dump_tls->{$_[0]}) {
     my $record = {};
     if (defined $args{content_type}) {
@@ -1127,7 +1127,7 @@ sub dump_tls ($;%) {
                       13172 => 'NPN',
                       30032 => 'channel_id',
                       65281 => 'renegotiation_info',
-                    }->{$type} // '', $length, hex_dump $data;
+                    }->{$type} || '', $length, hex_dump $data;
               }
             }
           }
@@ -1138,7 +1138,7 @@ sub dump_tls ($;%) {
               {
                 0 => 'hello_request',
                 16 => 'client_key_exchange',
-              }->{$record->{msg_type}} // '',
+              }->{$record->{msg_type}} || '',
               $record->{length};
         }
       } else {
@@ -1157,7 +1157,7 @@ sub dump_tls ($;%) {
               20 => 'change_cipher_spec',
               23 => 'application_data',
               24 => 'heartbeat',
-            }->{$record->{content_type}} // '',
+            }->{$record->{content_type}} || '',
             $record->{version}->{major}, $record->{version}->{minor},
             $record->{length};
         #warn hex_dump ($record->{fragment}), "\n"
@@ -1249,7 +1249,7 @@ my $server = tcp_server $host, $port, sub {
        },
        on_read => sub {
          $states->{received} .= $_[0]->{rbuf};
-         ($states->{dumper} // $ReceivedDumper)->($states, $_[0]->{rbuf});
+         ($states->{dumper} || $ReceivedDumper)->($states, $_[0]->{rbuf});
          $_[0]->{rbuf} = '';
          run_commands 'read', $_[0], $states, sub { };
        });

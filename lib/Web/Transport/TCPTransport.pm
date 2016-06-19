@@ -200,7 +200,7 @@ sub abort ($;%) {
   $self->{write_closed} = 1;
   $self->{read_closed} = 1;
   $self->{write_shutdown} = 1;
-  my $reason = $args{message} // 'Aborted';
+  my $reason = defined $args{message} ? $args{message} : 'Aborted';
   AE::postpone {
     $self->{cb}->($self, 'writeeof', {failed => 1, message => $reason})
         unless $wc;
@@ -212,7 +212,7 @@ sub abort ($;%) {
 
 sub _close ($$) {
   my $self = $_[0];
-  while (@{$self->{wq} // []}) {
+  while (@{$self->{wq} || []}) {
     my $q = shift @{$self->{wq}};
     if (@$q == 2) { # promise
       $q->[1]->();

@@ -1885,7 +1885,7 @@ CRLF
     })->catch (sub {
       my $error = $_[0];
       test {
-        is $error // '(undef)', undef;
+        is defined $error ? $error : '(undef)', undef;
       } $c;
     })->then (sub {
       done $c;

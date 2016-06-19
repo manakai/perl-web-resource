@@ -158,6 +158,8 @@ test {
   my $p = $client->request (url => undef);
   isa_ok $p, 'Promise';
   $p->then (sub {
+    test { ok 0 } $c;
+  }, sub {
     my $result = $_[0];
     test {
       ok $result->{failed};
@@ -179,6 +181,8 @@ test {
   my $p = $client->request (url => $url2);
   isa_ok $p, 'Promise';
   $p->then (sub {
+    test { ok 0 } $c;
+  }, sub {
     my $result = $_[0];
     test {
       ok $result->{failed};
@@ -1867,9 +1871,11 @@ test {
   my $url = Web::URL->parse_string (qq{http://jogejoge.test/foo});
   my $client = Web::Transport::ConnectionClient->new_from_url ($url);
   $client->request (url => $url, body => "\x{4543}")->then (sub {
+    test { ok 0 } $c;
+  }, sub {
     my $err = $_[0];
     test {
-      like $err, qr{^\|body\| is utf8-flagged};
+      like $err->network_error_message, qr{^\|body\| is utf8-flagged};
     } $c;
   })->then (sub {
     return $client->close;

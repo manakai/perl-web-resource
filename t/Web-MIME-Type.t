@@ -1,10 +1,9 @@
 use strict;
 use warnings;
-use Path::Class;
-use lib file (__FILE__)->dir->parent->subdir ('lib')->stringify;
-use lib glob file (__FILE__)->dir->parent->subdir ('t_deps', 'modules', '*', 'lib')->stringify;
+use Path::Tiny;
+use lib path (__FILE__)->parent->parent->child ('lib')->stringify;
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib')->stringify;
 use Test::More;
-use Test::Differences;
 use Test::HTCT::Parser;
 use Test::X1;
 use Web::MIME::Type;
@@ -35,7 +34,7 @@ test {
   done $c;
 } n => 5, name => '_new_from_type_and_subtype_2';
 
-for_each_test (file (__FILE__)->dir->parent->subdir ('t_deps', 'tests', 'mime')->file ('types.dat'), {
+for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/types.dat'), {
   data => {is_prefixed => 1},
   errors => {is_list => 1},
   result => {is_prefixed => 1},
@@ -65,7 +64,7 @@ for_each_test (file (__FILE__)->dir->parent->subdir ('t_deps', 'tests', 'mime')-
       warn qq[No #errors section: "$test->{data}->[0]];
     }
 
-    my $expected_result = $test->{result}->[0] // '';
+    my $expected_result = defined $test->{result}->[0] ? $test->{result}->[0] : '';
     my $actual_result = '';
     if ($parsed) {
       $actual_result .= $parsed->type . "\n";
@@ -87,7 +86,7 @@ test {
   my $c = shift;
   my $mt = Web::MIME::Type->new_from_type_and_subtype ('image', 'png');
   is $mt->type, 'image';
-  $mt->type('Audio');
+  $mt->type ('Audio');
   is $mt->type, 'audio';
   is $mt->as_valid_mime_type, 'audio/png';
   done $c;
@@ -483,7 +482,7 @@ test {
 
 ## ------ Conformance ------
 
-for_each_test (file (__FILE__)->dir->parent->subdir ('t_deps', 'tests', 'mime')->file ('type-conformance.dat'), {
+for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/type-conformance.dat'), {
   data => {is_prefixed => 1, is_list => 1},
   errors => {is_list => 1},
 }, sub {

@@ -25,6 +25,8 @@ Web::MIME::Type - MIME type object
 A C<Web::MIME::Type> object represents a MIME type (aka Internet Media
 Type), with or without parameters.
 
+XXX MIME Sniffing Standard is not supported yet.
+
 =head1 METHODS
 
 Following methods are available:

@@ -4,6 +4,7 @@ use warnings;
 our $VERSION = '1.0';
 use Web::Transport::ASN1;
 use Web::DateTime::Parser;
+use Net::SSLeay;
 
 ## Internal methods.  Don't use from external applications.
 
@@ -176,28 +177,38 @@ sub check_cert_id_with_response ($$$$) {
   return undef;
 } # check_cert_id_with_response
 
+my $tlsext_oid = Net::SSLeay::OBJ_txt2obj ('1.3.6.1.5.5.7.1.24', 1);
+
 sub x509_has_must_staple ($$) {
-  my $x509 = $_[1];
-  my $tlsext_oid = Net::SSLeay::OBJ_txt2obj ('1.3.6.1.5.5.7.1.24', 1);
+  my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
+  Net::SSLeay::BIO_write ($bio, $_[1]->[0]);
+  my $x509 = Net::SSLeay::PEM_read_bio_X509 ($bio);
+
+  my $result = 0;
+
   my $index = 0;
   {
     my $ext = Net::SSLeay::X509_get_ext ($x509, $index);
     last unless $ext;
 
     my $oid = Net::SSLeay::X509_EXTENSION_get_object ($ext);
-    last unless $oid;
     if (Net::SSLeay::OBJ_cmp ($oid, $tlsext_oid) == 0) {
       my $d = Net::SSLeay::X509_EXTENSION_get_data ($ext);
       my $data = Net::SSLeay::P_ASN1_STRING_get ($d);
       if ($data eq "\x30\x03\x02\x01\x05") {
-        return 1;
+        $result = 1;
+        last;
       }
     }
     
     $index++;
     redo;
   }
-  return 0;
+
+  Net::SSLeay::BIO_free ($bio);
+  Net::SSLeay::X509_free ($x509);
+
+  return $result;
 } # x509_has_must_staple
 
 1;

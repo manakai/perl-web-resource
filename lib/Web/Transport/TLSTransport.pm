@@ -495,12 +495,12 @@ sub _tls ($) {
       $data->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($self->{tls});
 
       ## Check must-staple flag
-      if (not defined $data->{stapling_result}) {
-        if (Web::Transport::OCSP->x509_has_must_staple ($data->{tls_cert_chain}->[0])) {
-          (delete $self->{starttls_done})->[1]->("There is no stapled OCSP response, which is required by the certificate");
-          $self->abort (message => 'TLS error');
-          return;
-        }
+      if (not defined $data->{stapling_result} and
+          defined $data->{tls_cert_chain}->[0] and
+          Web::Transport::OCSP->x509_has_must_staple ($data->{tls_cert_chain}->[0])) {
+        (delete $self->{starttls_done})->[1]->("There is no stapled OCSP response, which is required by the certificate");
+        $self->abort (message => 'TLS error');
+        return;
       }
 
       delete $self->{starttls_data};
@@ -600,7 +600,7 @@ sub debug_info ($) {
   if (@type) {
     push @r, 'netscapecerttype=' . join ',', @type;
   }
-  if (Web::Transport::OCSP->x509_has_must_staple ($cert)) {
+  if (Web::Transport::OCSP->x509_has_must_staple ($_[0])) {
     push @r, 'must-staple';
   }
 

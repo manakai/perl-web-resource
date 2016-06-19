@@ -5,8 +5,7 @@ Web::HTTP::ConnectionClient - A connection-oriented HTTP client
 =head1 SYNOPSIS
 
   use Web::HTTP::ConnectionClient;
-  $client = Web::HTTP::ConnectionClient->new_from_url
-      (Web::URL->parse_url (q<https://server.test>));
+  $client = Web::HTTP::ConnectionClient->new_from_host (q<server.test>);
   
   ## First request
   $client->request (
@@ -44,6 +43,21 @@ Create a new client object, which is associated with a URL's origin.
 The argument must be a URL record object (L<Web::URL>).  It's origin
 must be a tuple origin (typically an C<http:> or C<https:> URL).  Note
 that anything other than the origin of the URL is ignored.
+
+Example:
+
+  $client = Web::HTTP::ConnectionClient->new_from_url
+      (Web::URL->parse_url (q<http://server.test>));
+
+=item $client = Web::HTTP::ConnectionClient->new_from_host ($string)
+
+Create a new client object, which is associated with a origin
+(C<https>, I<$string>, C<undef>).  That is, a client for the specified
+host using HTTPS with port C<443> is created.
+
+The argument must be a string, which is either a domain, an IPv4
+address, or an IPv6 address enclosed by C<[> and C<]>.  They don't
+have to be in their canonicalized form.  IDNs are also allowed.
 
 =item $promise = $client->request (url => ..., ...)
 
@@ -120,6 +134,10 @@ reusing this timer.
 
 This option must be set before the first invocation of the C<request>
 method.
+
+=item $origin = $client->origin
+
+Return the origin (L<Web::Origin>) of the connection.
 
 =back
 

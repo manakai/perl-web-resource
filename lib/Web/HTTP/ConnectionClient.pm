@@ -4,6 +4,7 @@ use warnings;
 our $VERSION = '1.0';
 require utf8;
 use Carp;
+use Web::DomainName::Canonicalize qw(canonicalize_url_host);
 use HTTPClientBareConnection;
 use Web::Transport::RequestConstructor;
 
@@ -19,6 +20,17 @@ sub new_from_url ($$) {
     parent_id => (int rand 100000),
   }, $_[0];
 } # new_from_url
+
+sub new_from_host ($$) {
+  my $host = canonicalize_url_host $_[1];
+  croak "Not a valid host: |$_[1]|" unless defined $host;
+  my $url = Web::URL->parse_string ('https://' . $host);
+  return $_[0]->new_from_url ($url);
+} # new_from_host
+
+sub origin ($) {
+  return $_[0]->{origin};
+} # origin
 
 sub proxy_manager ($;$) {
   if (@_ > 1) {

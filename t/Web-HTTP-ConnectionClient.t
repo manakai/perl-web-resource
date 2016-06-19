@@ -72,6 +72,69 @@ test {
 
 test {
   my $c = shift;
+  eval {
+    Web::HTTP::ConnectionClient->new_from_host (undef);
+  };
+  ok $@;
+  done $c;
+} n => 1, name => 'new_from_host undef';
+
+test {
+  my $c = shift;
+  eval {
+    Web::HTTP::ConnectionClient->new_from_host ("foo:bar");
+  };
+  ok $@;
+  done $c;
+} n => 1, name => 'new_from_host invalid';
+
+test {
+  my $c = shift;
+  eval {
+    Web::HTTP::ConnectionClient->new_from_host ("[13.44:554:5");
+  };
+  ok $@;
+  done $c;
+} n => 1, name => 'new_from_host invalid';
+
+test {
+  my $c = shift;
+  my $client = Web::HTTP::ConnectionClient->new_from_host ('hoge.test');
+  isa_ok $client, 'Web::HTTP::ConnectionClient';
+  isa_ok $client->origin, 'Web::Origin';
+  is $client->origin->to_ascii, 'https://hoge.test';
+  done $c;
+} n => 3, name => 'new_from_host domain';
+
+test {
+  my $c = shift;
+  my $client = Web::HTTP::ConnectionClient->new_from_host ('192.168.000.01');
+  isa_ok $client, 'Web::HTTP::ConnectionClient';
+  isa_ok $client->origin, 'Web::Origin';
+  is $client->origin->to_ascii, 'https://192.168.0.1';
+  done $c;
+} n => 3, name => 'new_from_host ipv4';
+
+test {
+  my $c = shift;
+  my $client = Web::HTTP::ConnectionClient->new_from_host ('[0::1]');
+  isa_ok $client, 'Web::HTTP::ConnectionClient';
+  isa_ok $client->origin, 'Web::Origin';
+  is $client->origin->to_ascii, 'https://[::1]';
+  done $c;
+} n => 3, name => 'new_from_host ipv6';
+
+test {
+  my $c = shift;
+  my $client = Web::HTTP::ConnectionClient->new_from_host ("\x{5000}\x{5200}\x{3002}");
+  isa_ok $client, 'Web::HTTP::ConnectionClient';
+  isa_ok $client->origin, 'Web::Origin';
+  is $client->origin->to_ascii, 'https://xn--rvqq2c.';
+  done $c;
+} n => 3, name => 'new_from_host domain IDN';
+
+test {
+  my $c = shift;
   my $url1 = Web::URL->parse_string ('http://test/');
   my $client = Web::HTTP::ConnectionClient->new_from_url ($url1);
   my $p = $client->request (url => undef);
@@ -92,6 +155,8 @@ test {
   my $c = shift;
   my $url1 = Web::URL->parse_string ('http://test/');
   my $client = Web::HTTP::ConnectionClient->new_from_url ($url1);
+  isa_ok $client->origin, 'Web::Origin';
+  is $client->origin->to_ascii, 'http://test';
   my $url2 = Web::URL->parse_string ('foo:bar');
   my $p = $client->request (url => $url2);
   isa_ok $p, 'Promise';
@@ -105,7 +170,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 3, name => 'request opaque origin';
+} n => 5, name => 'request opaque origin';
 
 test {
   my $c = shift;

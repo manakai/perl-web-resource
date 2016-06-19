@@ -143,7 +143,7 @@ Return the origin (L<Web::Origin>) of the connection.
 
 =head1 ENVIRONMENT VARIABLES
 
-XXX WEBUA_DEBUG
+This module supports C<WEBUA_DEBUG>.  See L<Web::Transport>.
 
 XXX http_proxy https_proxy ftp_proxy no_proxy
 

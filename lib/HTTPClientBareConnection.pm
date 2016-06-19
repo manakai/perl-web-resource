@@ -3,7 +3,6 @@ use strict;
 use warnings;
 use AnyEvent;
 use Promise;
-use Resolver;
 use Transport::TCP;
 use Transport::TLS;
 use HTTP;
@@ -22,6 +21,19 @@ sub proxy_manager ($;$) {
   }
   return $_[0]->{proxy_manager};
 } # proxy_manager
+
+sub resolver ($;$) {
+  if (@_ > 1) {
+    $_[0]->{resolver} = $_[1];
+    return unless defined wantarray;
+  }
+  return $_[0]->{resolver} ||= do {
+    require Web::Transport::PlatformResolver;
+    require Web::Transport::CachedResolver;
+    Web::Transport::CachedResolver->new_from_resolver
+        (Web::Transport::PlatformResolver->new);
+  };
+} # resolver
 
 sub parent_id ($;$) {
   if (@_ > 1) {
@@ -46,31 +58,33 @@ sub last_resort_timeout ($;$) {
 
 my $proxy_to_transport = sub {
   ## create a transport for a proxy configuration
-  my ($tid, $proxy, $url_record) = @_;
+  my ($tid, $proxy, $url_record, $resolver) = @_;
 
   ## 1. If $proxy->{protocol} is not supported, return null.
 
   if ($proxy->{protocol} eq 'tcp') {
-    return Resolver->resolve_name ($url_record->host)->then (sub {
+    return $resolver->resolve ($url_record->host)->then (sub {
       my $addr = $_[0];
-      die "Can't resolve host |@{[$url_record->host->stringify]}|\n" unless defined $addr;
+      die "Can't resolve host |@{[$url_record->host->stringify]}|\n"
+          unless defined $addr;
 
       my $port = $url_record->port;
       $port = get_default_port $url_record->scheme if not defined $port;
       die "No port specified\n" unless defined $port;
 
       $port = 0+$port;
-      warn "$tid: TCP $addr:$port...\n" if DEBUG;
-      return Transport::TCP->new (addr => $addr, port => $port, id => $tid);
+      warn "$tid: TCP @{[$addr->stringify]}:$port...\n" if DEBUG;
+      return Transport::TCP->new (host => $addr, port => $port, id => $tid);
     });
   } elsif ($proxy->{protocol} eq 'http' or
            $proxy->{protocol} eq 'https') {
-    return Resolver->resolve_name ($proxy->{host})->then (sub {
-      die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
+    return $resolver->resolve ($proxy->{host})->then (sub {
+      die "Can't resolve proxy host |@{[$proxy->{host}->stringify]}|\n"
+          unless defined $_[0];
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : ($proxy->{protocol} eq 'https' ? 443 : 80));
-      warn "$tid: TCP $_[0]:$pport...\n" if DEBUG;
+      warn "$tid: TCP @{[$_[0]->stringify]}:$pport...\n" if DEBUG;
       my $transport = Transport::TCP->new
-          (addr => $_[0], port => $pport, id => $tid);
+          (host => $_[0], port => $pport, id => $tid);
       if ($proxy->{protocol} eq 'https') {
         $transport = Transport::TLS->new
             (%{$proxy->{tls_options} or {}},
@@ -93,14 +107,14 @@ my $proxy_to_transport = sub {
     });
   } elsif ($proxy->{protocol} eq 'socks4') {
     return Promise->all ([
-      Resolver->resolve_name ($url_record->host, packed => 1),
-      Resolver->resolve_name ($proxy->{host}),
+      $resolver->resolve ($url_record->host), # XXX force ipv4 option ?
+      $resolver->resolve ($proxy->{host}),
     ])->then (sub {
-      my $packed_addr = $_[0]->[0];
+      my $addr = $_[0]->[0];
       die "Can't resolve host |@{[$url_record->host->stringify]}|\n"
-          unless defined $packed_addr;
+          unless defined $addr;
       die "Can't resolve host |@{[$url_record->host->stringify]}| into an IPv4 address\n"
-          unless length $packed_addr == 4;
+          unless $addr->is_ipv4;
       my $proxy_addr = $_[0]->[1];
       die "Can't resolve proxy host |@{[$proxy->{host}->stringify]}|\n"
           unless defined $proxy_addr;
@@ -110,33 +124,31 @@ my $proxy_to_transport = sub {
       die "No port specified\n" unless defined $port;
 
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : 1080);
-      warn "$tid: TCP $proxy_addr:$pport...\n" if DEBUG;
+      warn "$tid: TCP @{[$proxy_addr->stringify]}:$pport...\n" if DEBUG;
       my $tcp = Transport::TCP->new
-          (addr => $proxy_addr, port => $pport, id => $tid);
+          (host => $proxy_addr, port => $pport, id => $tid);
       require Transport::SOCKS4;
       return Transport::SOCKS4->new (transport => $tcp,
-                                     packed_addr => $packed_addr,
+                                     addr => $addr,
                                      port => 0+$port);
     });
   } elsif ($proxy->{protocol} eq 'socks5') {
-    return Resolver->resolve_name ($proxy->{host})->then (sub {
-      die "Can't resolve proxy host |@{[$proxy->{host}->stringify]}|\n" unless defined $_[0];
+    return $resolver->resolve ($proxy->{host})->then (sub {
+      die "Can't resolve proxy host |@{[$proxy->{host}->stringify]}|\n"
+          unless defined $_[0];
 
       my $port = $url_record->port;
       $port = get_default_port $url_record->scheme if not defined $port;
       die "No port specified\n" unless defined $port;
 
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : 1080);
-      warn "$tid: TCP $_[0]:$pport...\n" if DEBUG;
+      warn "$tid: TCP @{[$_[0]->stringify]}:$pport...\n" if DEBUG;
       my $tcp = Transport::TCP->new
-          (addr => $_[0], port => $pport, id => $tid);
+          (host => $_[0], port => $pport, id => $tid);
 
       require Transport::SOCKS5;
       return Transport::SOCKS5->new
-          (transport => $tcp,
-           host => encode_web_utf8 ($url_record->host->stringify),
-           #XXX packed_addr => ...,
-           port => 0+$port);
+          (transport => $tcp, host => $url_record->host, port => 0+$port);
     });
   } elsif ($proxy->{protocol} eq 'unix') {
     require Transport::UNIXDomainSocket;
@@ -160,6 +172,7 @@ sub connect ($) {
     my $url_record = $self->{url};
     $self->proxy_manager->get_proxies_for_url ($url_record)->then (sub {
       my $proxies = [@{$_[0]}];
+      my $resolver = $self->resolver;
 
       # XXX wait for other connections
 
@@ -167,7 +180,7 @@ sub connect ($) {
         if (@$proxies) {
           my $proxy = shift @$proxies;
           my $tid = $parent_id . '.' . ++$self->{tid};
-          return $proxy_to_transport->($tid, $proxy, $url_record)->catch (sub {
+          return $proxy_to_transport->($tid, $proxy, $url_record, $resolver)->catch (sub {
             if (@$proxies) {
               return $get->();
             } else {

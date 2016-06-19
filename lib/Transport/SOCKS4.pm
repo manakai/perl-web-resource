@@ -10,9 +10,7 @@ sub new ($%) {
   my $args = $self->{args} = {@_};
   my $port = $args->{port} // '';
   croak "Bad |port|" unless $port =~ /\A[0-9]+\z/ and $port <= 0xFFFF;
-  my $addr = $args->{packed_addr} // '';
-  croak "Bad |packed_addr|"
-      unless 4 == length $addr and not utf8::is_utf8 $addr;
+  croak "Bad |host|" unless defined $args->{host} and $args->{host}->is_ipv4;
   $self->{transport} = delete $self->{args}->{transport};
   $self->{id} = $self->{transport}->id . 'S4';
   return $self;
@@ -86,7 +84,7 @@ sub start ($$;%) {
     }
   })->then (sub {
     my $port = $args->{port};
-    my $addr = $args->{packed_addr};
+    my $addr = $args->{host}->packed_addr;
     $self->{transport}->push_write
         (\("\x04\x01".(pack 'n', $port).$addr."\x00"));
     return $self->{transport}->push_promise;

@@ -4,24 +4,14 @@ use warnings;
 use Carp qw(croak);
 use AnyEvent;
 use Promise;
+use Web::Encoding qw(encode_web_utf8);
 
 sub new ($%) {
   my $self = bless {}, shift;
   my $args = $self->{args} = {@_};
   my $port = $args->{port} // '';
   croak "Bad |port|" unless $port =~ /\A[0-9]+\z/ and $port <= 0xFFFF;
-  my $host = $args->{host};
-  croak "Bad |host|" if defined $host and
-      (utf8::is_utf8 $host or length $host > 255);
-  my $addr = $args->{packed_addr};
-  croak "Bad |packed_addr|"
-      if defined $addr and
-         not ((4 == length $addr or 16 == length $addr) and
-              not utf8::is_utf8 $addr);
-  croak "Neither of |host| or |packed_addr| is specifed"
-      unless defined $host or defined $addr;
-  croak "Both |host| and |packed_addr| is specified"
-      if defined $host and defined $addr;
+  croak "Bad |host|" if not defined $args->{host};
   $self->{transport} = delete $self->{args}->{transport};
   $self->{id} = $self->{transport}->id . 'S5';
   return $self;
@@ -127,16 +117,18 @@ sub start ($$;%) {
   })->then (sub {
     my $port = $args->{port};
     my $host = $args->{host};
-    my $addr = $args->{packed_addr};
-    if (defined $host) {
+    if ($host->is_domain) {
+      $host = encode_web_utf8 $host->stringify;
       $self->{transport}->push_write
           (\("\x05\x01\x00\x03".(pack 'C', length $host).$host.(pack 'n', $port)));
-    } elsif (length $addr == 4) {
+    } elsif ($host->is_ipv4) {
       $self->{transport}->push_write
-          (\("\x05\x01\x00\x01".$addr.(pack 'n', $port)));
-    } elsif (length $addr == 16) {
+          (\("\x05\x01\x00\x01".$host->packed_addr.(pack 'n', $port)));
+    } elsif ($host->is_ipv6) {
       $self->{transport}->push_write
-          (\("\x05\x01\x00\x04".$addr.(pack 'n', $port)));
+          (\("\x05\x01\x00\x04".$host->packed_addr.(pack 'n', $port)));
+    } else { # never
+      die "Unknown |host| type";
     }
     return $self->{transport}->push_promise;
   })->catch (sub {

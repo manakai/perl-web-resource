@@ -14,9 +14,7 @@ use Promise;
 sub new ($%) {
   my $self = bless {}, shift;
   my $args = $self->{args} = {@_};
-  # XXX host vs ipaddr
-  croak "Bad |addr|" unless defined $args->{addr};
-  croak "utf8-flagged |addr|" if utf8::is_utf8 $args->{addr};
+  croak "Bad |host|" unless defined $args->{host} and $args->{host}->is_ip;
   croak "Bad |port|" unless defined $args->{port};
   croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
   croak "Bad |id|" if defined $args->{id} and utf8::is_utf8 ($args->{id});
@@ -34,7 +32,7 @@ sub start ($$) {
 
   return Promise->new (sub {
     my ($ok, $ng) = @_;
-    tcp_connect $args->{addr}, $args->{port}, sub {
+    tcp_connect $args->{host}->text_addr, $args->{port}, sub {
       my $fh = shift or return $ng->($!);
       $ok->($fh);
     };

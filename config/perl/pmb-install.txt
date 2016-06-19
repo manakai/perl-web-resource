@@ -41,3 +41,4 @@ Path::Tiny
 JSON~2.90
 Algorithm::Diff~1.1902
 Inline
+Inline::C

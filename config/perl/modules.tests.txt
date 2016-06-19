@@ -3,3 +3,4 @@ AnyEvent::Util
 Path::Tiny
 Test::More
 Inline
+Inline::C

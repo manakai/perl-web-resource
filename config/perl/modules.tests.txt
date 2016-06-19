@@ -1,4 +1,6 @@
 AnyEvent::HTTPD
 AnyEvent::Util
 Path::Tiny
+Path::Class
+Test::Differences
 Test::More

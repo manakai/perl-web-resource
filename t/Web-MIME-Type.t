@@ -1,8 +1,8 @@
 use strict;
 use warnings;
-use Path::Class;
-use lib file (__FILE__)->dir->parent->subdir ('lib')->stringify;
-use lib glob file (__FILE__)->dir->parent->subdir ('t_deps', 'modules', '*', 'lib')->stringify;
+use Path::Tiny;
+use lib path (__FILE__)->parent->parent->child ('lib')->stringify;
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib')->stringify;
 use Test::More;
 use Test::Differences;
 use Test::HTCT::Parser;
@@ -35,7 +35,7 @@ test {
   done $c;
 } n => 5, name => '_new_from_type_and_subtype_2';
 
-for_each_test (file (__FILE__)->dir->parent->subdir ('t_deps', 'tests', 'mime')->file ('types.dat'), {
+for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime')->child ('types.dat'), {
   data => {is_prefixed => 1},
   errors => {is_list => 1},
   result => {is_prefixed => 1},
@@ -483,7 +483,7 @@ test {
 
 ## ------ Conformance ------
 
-for_each_test (file (__FILE__)->dir->parent->subdir ('t_deps', 'tests', 'mime')->file ('type-conformance.dat'), {
+for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/type-conformance.dat'), {
   data => {is_prefixed => 1, is_list => 1},
   errors => {is_list => 1},
 }, sub {

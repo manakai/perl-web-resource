@@ -195,9 +195,9 @@ sub start ($$;%) {
       $self->{starttls_data}->{stapling_result} = {}; # not applicable
     } else { # client
       Net::SSLeay::set_connect_state ($tls);
-      # XXX If ipaddr
-      Net::SSLeay::set_tlsext_host_name ($tls, $args->{sni_host})
-          if defined $args->{sni_host};
+      if (defined $args->{sni_host} and $args->{sni_host}->is_domain) {
+        Net::SSLeay::set_tlsext_host_name ($tls, $args->{sni_host}->stringify);
+      }
 
       ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_verify.html>
       Net::SSLeay::set_verify $tls, $vmode, sub {
@@ -207,7 +207,7 @@ sub start ($$;%) {
           my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
           if (defined $args->{si_host}) {
             # XXX If ipaddr
-            return 0 unless verify_hostname $cert, $args->{si_host};
+            return 0 unless verify_hostname $cert, $args->{si_host}->stringify;
           }
 
           # XXX hook to verify the client cert

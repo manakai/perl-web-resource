@@ -53,7 +53,7 @@ my $proxy_to_transport = sub {
   if ($proxy->{protocol} eq 'tcp') {
     return Resolver->resolve_name ($url_record->host)->then (sub {
       my $addr = $_[0];
-      die "Can't resolve host |@{[$url_record->host]}|\n" unless defined $addr;
+      die "Can't resolve host |@{[$url_record->host->stringify]}|\n" unless defined $addr;
 
       my $port = $url_record->port;
       $port = get_default_port $url_record->scheme if not defined $port;
@@ -84,7 +84,7 @@ my $proxy_to_transport = sub {
         require Transport::H1CONNECT;
         $transport = Transport::H1CONNECT->new
             (http => $http,
-             target => (encode_web_utf8 $url_record->hosportt));
+             target => (encode_web_utf8 $url_record->hostport));
         # XXX auth
       } else {
         $transport->request_mode ('HTTP proxy');
@@ -97,12 +97,13 @@ my $proxy_to_transport = sub {
       Resolver->resolve_name ($proxy->{host}),
     ])->then (sub {
       my $packed_addr = $_[0]->[0];
-      die "Can't resolve host |@{[$url_record->host]}|\n"
+      die "Can't resolve host |@{[$url_record->host->stringify]}|\n"
           unless defined $packed_addr;
-      die "Can't resolve host |@{[$url_record->host]}| into an IPv4 address\n"
+      die "Can't resolve host |@{[$url_record->host->stringify]}| into an IPv4 address\n"
           unless length $packed_addr == 4;
       my $proxy_addr = $_[0]->[1];
-      die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $proxy_addr;
+      die "Can't resolve proxy host |@{[$proxy->{host}->stringify]}|\n"
+          unless defined $proxy_addr;
 
       my $port = $url_record->port;
       $port = get_default_port $url_record->scheme if not defined $port;
@@ -119,7 +120,7 @@ my $proxy_to_transport = sub {
     });
   } elsif ($proxy->{protocol} eq 'socks5') {
     return Resolver->resolve_name ($proxy->{host})->then (sub {
-      die "Can't resolve proxy host |$proxy->{host}|\n" unless defined $_[0];
+      die "Can't resolve proxy host |@{[$proxy->{host}->stringify]}|\n" unless defined $_[0];
 
       my $port = $url_record->port;
       $port = get_default_port $url_record->scheme if not defined $port;
@@ -133,7 +134,7 @@ my $proxy_to_transport = sub {
       require Transport::SOCKS5;
       return Transport::SOCKS5->new
           (transport => $tcp,
-           host => encode_web_utf8 ($url_record->host),
+           host => encode_web_utf8 ($url_record->host->stringify),
            #XXX packed_addr => ...,
            port => 0+$port);
     });
@@ -160,7 +161,7 @@ sub connect ($) {
     $self->proxy_manager->get_proxies_for_url ($url_record)->then (sub {
       my $proxies = [@{$_[0]}];
 
-      # XXX wait for WS
+      # XXX wait for other connections
 
       my $get; $get = sub {
         if (@$proxies) {
@@ -193,10 +194,10 @@ sub connect ($) {
         die $_[0];
       });
     })->then (sub {
-      # XXX switch to FTP if ...
       if (not $_[0]->request_mode eq 'HTTP proxy' and
           not $url_record->scheme eq 'http' and
-          not $url_record->scheme eq 'https') {
+          not $url_record->scheme eq 'https' and
+          not $url_record->scheme eq 'ftp') {
         die "Bad URL scheme |@{[$url_record->scheme]}|\n";
       }
       $self->{http} = HTTP->new (transport => $_[0]);
@@ -212,7 +213,7 @@ sub request ($$$$$$) {
         unless defined $url_record->host;
     my $target;
     if ($self->{http}->transport->request_mode eq 'HTTP proxy') {
-      $target = $url_record->stringify_without_fragment;
+      $target = $url_record->originpathquery;
     } else {
       $target = $url_record->pathquery;
     }

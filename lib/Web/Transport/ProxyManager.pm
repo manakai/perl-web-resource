@@ -4,7 +4,7 @@ use warnings;
 our $VERSION = '1.0';
 use Promise;
 use Web::Encoding qw(decode_web_utf8);
-use Web::DomainName::Canonicalize qw(canonicalize_url_host);
+use Web::Host;
 use Web::URL::Parser;
 
 sub _env ($$) {
@@ -45,7 +45,7 @@ sub new_from_envs ($;$) {
     no_proxy_list => [grep { defined $_ } map {
       s/\A[\x00-\x20]+//;
       s/[\x00-\x20]+\z//;
-      canonicalize_url_host $_;
+      Web::Host->parse_string ($_);
     } split /,/, defined $envs->{no_proxy} ? decode_web_utf8 ($envs->{no_proxy}) : ''],
   }, $_[0];
 } # new_from_envs
@@ -62,14 +62,6 @@ sub get_proxies_for_url ($$) {
     if ($_ eq $host) {
       return Promise->resolve ([{protocol => 'tcp'}]);
     }
-  }
-
-  if (defined $self->{pac_script}) {
-    # XXX
-  }
-
-  if (defined $self->{socks_proxy}) {
-    return Promise->resolve ([$self->{socks_proxy}]);
   }
 
   my $scheme = $url->scheme;

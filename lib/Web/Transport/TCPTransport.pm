@@ -155,9 +155,9 @@ sub push_write ($$;$$) {
   my ($self, $ref, $offset, $length) = @_;
   croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
-  $offset //= 0;
+  $offset ||= 0;
   croak "Bad offset" if $offset > length $$ref;
-  $length //= (length $$ref) - $offset;
+  $length = (length $$ref) - $offset unless defined $length;
   croak "Bad length" if $offset + $length > length $$ref;
   return if $length <= 0;
   push @{$self->{wq}}, [$ref, $length, $offset];

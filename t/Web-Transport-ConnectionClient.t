@@ -665,20 +665,20 @@ test {
 
 test {
   my $c = shift;
-  server_as_cv (qq{
-    starttls host=@{[$server->{host}]}
+  server_as_cv (q(
+    starttls host=localhost
     receive "GET http://hoge.example.net/foo"
     "HTTP/1.1 203 Hoe"CRLF
     "Content-Length: 6"CRLF
     CRLF
     "abcdef"
-  })->cb (sub {
+  ))->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
     $client->proxy_manager (pp [{protocol => 'https', host => $server->{host},
-                        port => $server->{port},
-                        tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]);
+                                 port => $server->{port},
+                                 tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]);
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {

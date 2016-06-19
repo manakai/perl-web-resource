@@ -1,3 +1,2 @@
 Path::Tiny
-Test::Differences
 Test::More

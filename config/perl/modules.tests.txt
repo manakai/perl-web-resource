@@ -2,3 +2,4 @@ AnyEvent::HTTPD
 AnyEvent::Util
 Path::Tiny
 Test::More
+Inline

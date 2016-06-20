@@ -141,8 +141,9 @@ sub request ($%) {
     my $body = [];
     my $body_length = 0;
     my $max = $self->max_size;
+    my $no_cache = $args{is_superreload}; # XXX per spec, this should look "cache mode"...
     my $then = sub {
-      return $_[0]->request ($method, $url_record, $header_list, $body_ref, sub {
+      return $_[0]->request ($method, $url_record, $header_list, $body_ref, $no_cache, sub {
         if (defined $_[2]) {
           push @$body, \($_[2]);
           if ($max >= 0) {

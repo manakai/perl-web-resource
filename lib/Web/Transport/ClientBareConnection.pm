@@ -53,12 +53,12 @@ sub last_resort_timeout ($;$) {
 
 my $proxy_to_transport = sub {
   ## create a transport for a proxy configuration
-  my ($tid, $proxy, $url_record, $resolver) = @_;
+  my ($tid, $proxy, $url_record, $resolver, $no_cache) = @_;
 
   ## 1. If $proxy->{protocol} is not supported, return null.
 
   if ($proxy->{protocol} eq 'tcp') {
-    return $resolver->resolve ($url_record->host)->then (sub {
+    return $resolver->resolve ($url_record->host, no_cache => $no_cache)->then (sub {
       my $addr = $_[0];
       die "Can't resolve host |@{[$url_record->host->stringify]}|\n"
           unless defined $addr;
@@ -103,7 +103,7 @@ my $proxy_to_transport = sub {
     });
   } elsif ($proxy->{protocol} eq 'socks4') {
     return Promise->all ([
-      $resolver->resolve ($url_record->host), # XXX force ipv4 option ?
+      $resolver->resolve ($url_record->host, no_cache => $no_cache), # XXX force ipv4 option ?
       $resolver->resolve ($proxy->{host}),
     ])->then (sub {
       my $addr = $_[0]->[0];
@@ -157,8 +157,8 @@ my $proxy_to_transport = sub {
   }
 }; # $proxy_to_transport
 
-sub connect ($) {
-  my $self = $_[0];
+sub connect ($%) {
+  my ($self, %args) = @_;
   return $self->{connect_promise} ||= do {
     ## Establish a transport
 
@@ -175,7 +175,7 @@ sub connect ($) {
         if (@$proxies) {
           my $proxy = shift @$proxies;
           my $tid = $parent_id . '.' . ++$self->{tid};
-          return $proxy_to_transport->($tid, $proxy, $url_record, $resolver)->catch (sub {
+          return $proxy_to_transport->($tid, $proxy, $url_record, $resolver, $args{no_cache})->catch (sub {
             if (@$proxies) {
               return $get->();
             } else {
@@ -214,9 +214,9 @@ sub connect ($) {
   };
 } # connect
 
-sub request ($$$$$$) {
-  my ($self, $method, $url_record, $headers, $body_ref, $cb) = @_;
-  return $self->connect->then (sub {
+sub request ($$$$$$$) {
+  my ($self, $method, $url_record, $headers, $body_ref, $no_cache, $cb) = @_;
+  return $self->connect (no_cache => $no_cache)->then (sub {
     return {failed => 1, message => "Bad input URL"}
         unless defined $url_record->host;
     my $target;

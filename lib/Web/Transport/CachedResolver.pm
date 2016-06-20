@@ -18,48 +18,51 @@ my $CacheMaxAge = 60;
 sub resolve ($$;%) {
   my ($self, $host, %args) = @_;
 
-  my $cached = $self->{cache}->{$host->stringify};
-  my $now = $self->{clock}->();
-  if (defined $cached and $cached->[1] + $CacheMaxAge > $now) {
-    if (DEBUG > 1) {
-      if (defined $cached->[0]) {
-        warn sprintf "%s: Using cache of |%s|: |%s| (age %.3f s)\n",
-            __PACKAGE__, $host->stringify,
-            $cached->[0]->stringify, $now - $cached->[1];
-      } else {
-        warn sprintf "%s: Using cache of |%s|: null (age %.3f s)\n",
-            __PACKAGE__, $host->stringify, $now - $cached->[1];
-      }
-    }
-    return Promise->resolve ($cached->[0]);
-  }
-
-  if (defined $cached and defined $cached->[2]) {
-    my $clock;
-    my $time1;
-    if (DEBUG > 1) {
-      require Web::DateTime::Clock;
-      $clock = Web::DateTime::Clock->realtime_clock;
-      $time1 = $clock->();
-      warn sprintf "%s: Waiting for cache of |%s|...\n",
-          __PACKAGE__, $host->stringify;
-    }
-    return $cached->[2]->then (sub {
+  my $cached = $args{no_cache} ? undef : $self->{cache}->{$host->stringify};
+  if (defined $cached) {
+    my $now = $self->{clock}->();
+    if (defined $cached and $cached->[1] + $CacheMaxAge > $now) {
       if (DEBUG > 1) {
-        if (defined $_[0]) {
-          warn sprintf "%s: Using cache: |%s| (elapsed %.3f s)\n",
-              __PACKAGE__, $_[0]->stringify, $clock->() - $time1;
+        if (defined $cached->[0]) {
+          warn sprintf "%s: Using cache of |%s|: |%s| (age %.3f s)\n",
+              __PACKAGE__, $host->stringify,
+              $cached->[0]->stringify, $now - $cached->[1];
         } else {
-          warn sprintf "%s: Using cache: null (elapsed %.3f s)\n",
-              __PACKAGE__, $clock->() - $time1;
+          warn sprintf "%s: Using cache of |%s|: null (age %.3f s)\n",
+              __PACKAGE__, $host->stringify, $now - $cached->[1];
         }
       }
-      return $_[0];
-    });
-  }
+      return Promise->resolve ($cached->[0]);
+    }
 
-  warn sprintf "%s: |%s| is not cached\n", __PACKAGE__, $host->stringify
-      if DEBUG > 1;
+    if (defined $cached and defined $cached->[2]) {
+      my $clock;
+      my $time1;
+      if (DEBUG > 1) {
+        require Web::DateTime::Clock;
+        $clock = Web::DateTime::Clock->realtime_clock;
+        $time1 = $clock->();
+        warn sprintf "%s: Waiting for cache of |%s|...\n",
+            __PACKAGE__, $host->stringify;
+      }
+      return $cached->[2]->then (sub {
+        if (DEBUG > 1) {
+          if (defined $_[0]) {
+            warn sprintf "%s: Using cache: |%s| (elapsed %.3f s)\n",
+                __PACKAGE__, $_[0]->stringify, $clock->() - $time1;
+          } else {
+            warn sprintf "%s: Using cache: null (elapsed %.3f s)\n",
+                __PACKAGE__, $clock->() - $time1;
+          }
+        }
+        return $_[0];
+      });
+    }
+
+    warn sprintf "%s: |%s| is not cached\n", __PACKAGE__, $host->stringify
+        if DEBUG > 1;
+  } # $cached
+
   my $p = $self->{resolver}->resolve ($host)->then (sub {
     my $now = $self->{clock}->();
     $self->{cache}->{$host->stringify} = [

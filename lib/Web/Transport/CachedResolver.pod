@@ -38,9 +38,16 @@ L<Web::Transport::PlatformResolver>'s C<resolve>.
 The second argument must be a monotonic clock, e.g. C<<
 Web::DateTime::Clock->monotonic_clock >>.
 
-=item $promise = $resolver->resolve ($host)
+=item $promise = $resolver->resolve ($host, no_cache => $boolean)
 
-Resolve a domain.  The argument must be a host (L<Web::Host>).
+Resolve a domain.
+
+The first argument must be a host (L<Web::Host>) to resolve.
+
+Additionally, named arguments can be specified.  The C<no_cache>
+argument specifies whether any previously cached result should be
+ignored or not.  Note that, even when C<no_cache> option is specified,
+the result of this resolution will be cached.
 
 The method returns a promise (L<Promise>), which is to be resolved
 with the result.  If the host is a domain and is successfully resolved

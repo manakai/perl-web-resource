@@ -37,6 +37,9 @@ into an IP address, or the host is an IP address, the promise is
 resolved with a host (L<Web::Host>) representing that IP address.
 Otherwise, it is resolved with C<undef>.
 
+The C<no_cache> named argument is ignored for this resolver (for now,
+at least).  That is, the platform's DNS cache can't be disabled.
+
 =back
 
 =head1 ENVIRONMENT VARIABLE

@@ -149,6 +149,41 @@ test {
   });
 } n => 3, name => 'input is a domain, custom resolver, cache';
 
+test {
+  my $c = shift;
+  my $r1 = bless {
+    'hoge.test' => '1.2.3.4',
+  }, 'CustomResolver';
+  my $time = 1;
+  my $clock = sub { return $time };
+  my $resolver = Web::Transport::CachedResolver->new_from_resolver_and_clock
+      ($r1, $clock);
+  $resolver->resolve (Web::Host->parse_string ('hoge.test'))->then (sub {
+    my $resolved = $_[0];
+    test {
+      is $resolved->stringify, '1.2.3.4';
+    } $c;
+    $time = 50;
+    $r1->{'hoge.test'} = '4.5.6.7';
+    return $resolver->resolve (Web::Host->parse_string ('hoge.test'), no_cache => 1);
+  })->then (sub {
+    my $resolved = $_[0];
+    test {
+      is $resolved->stringify, '4.5.6.7';
+    } $c;
+    $time = 100;
+    $r1->{'hoge.test'} = '8.9.0.1';
+    return $resolver->resolve (Web::Host->parse_string ('hoge.test'));
+  })->then (sub {
+    my $resolved = $_[0];
+    test {
+      is $resolved->stringify, '4.5.6.7';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'input is a domain, custom resolver, cache, no_cache arg';
+
 run_tests;
 
 =head1 LICENSE

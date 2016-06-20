@@ -6,8 +6,10 @@ Web::Transport::CachedResolver - Resolve domain names, with caching
 
   use Web::Transport::PlatformResolver;
   use Web::Transport::CachedResolver;
+  use Web::DateTime::Clock;
   $resolver = Web::Transport::CachedResolver->new_from_resolver
-      (Web::Transport::Resolver->new);
+      (Web::Transport::Resolver->new,
+       Web::DateTime::Clock->monotonic_clock);
   $resolver->resolve (Web::Host->parse_string ("example.com"))->then (sub {
     warn defined $_[0] && $_[0]->stringify;
   });
@@ -25,13 +27,16 @@ Following methods are available:
 
 =over 4
 
-=item $resolver = Web::Transport::CachedResolver->new_from_resolver ($resolver)
+=item $resolver = Web::Transport::CachedResolver->new_from_resolver_and_clock ($resolver, $clock)
 
 Create a resolver.
 
-The argument must be a "real" resolver.  It must implement the
+The first argument must be a "real" resolver.  It must implement the
 C<resolve> method which is compatible with
 L<Web::Transport::PlatformResolver>'s C<resolve>.
+
+The second argument must be a monotonic clock, e.g. C<<
+Web::DateTime::Clock->monotonic_clock >>.
 
 =item $promise = $resolver->resolve ($host)
 

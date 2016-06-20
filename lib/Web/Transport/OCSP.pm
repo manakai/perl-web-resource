@@ -129,7 +129,7 @@ sub parse_response_byte_string ($$) {
 } # parse_response_byte_string
 
 sub check_cert_id_with_response ($$$$) {
-  my (undef, $res, $cert_id, $now) = @_;
+  my (undef, $res, $cert_id, $clock) = @_;
 
   my $r = $res->{responses}->{$cert_id};
   if (not defined $r) {
@@ -144,6 +144,7 @@ sub check_cert_id_with_response ($$$$) {
     return "Unknown stapled OCSP certificate status |$r->{cert_status}|";
   }
 
+  my $now = $clock->();
   my $parser = Web::DateTime::Parser->new;
   $parser->onerror (sub { });
   if (defined $r->{this_update}) {

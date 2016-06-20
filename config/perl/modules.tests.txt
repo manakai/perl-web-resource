@@ -1,6 +1,7 @@
 AnyEvent::HTTPD
 AnyEvent::Util
-Path::Tiny
-Test::More
 Inline
 Inline::C
+Path::Tiny
+Test::More
+Time::HiRes

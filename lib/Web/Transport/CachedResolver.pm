@@ -8,18 +8,18 @@ use AnyEvent::Util qw(fork_call);
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
-sub new_from_resolver ($$) {
-  return bless {resolver => $_[1], cache => {}}, $_[0];
-} # new_from_resolver
+sub new_from_resolver_and_clock ($$$) {
+  return bless {resolver => $_[1], cache => {},
+                clock => $_[2]}, $_[0];
+} # new_from_resolver_and_clock
 
 my $CacheMaxAge = 60;
 
 sub resolve ($$;%) {
   my ($self, $host, %args) = @_;
-  $args{get_now} ||= sub { return time }; # XXX
 
   my $cached = $self->{cache}->{$host->stringify};
-  my $now = $args{get_now}->();
+  my $now = $self->{clock}->();
   if (defined $cached and $cached->[1] + $CacheMaxAge > $now) {
     if (DEBUG > 1) {
       if (defined $cached->[0]) {
@@ -35,10 +35,12 @@ sub resolve ($$;%) {
   }
 
   if (defined $cached and defined $cached->[2]) {
+    my $clock;
     my $time1;
     if (DEBUG > 1) {
-      require Time::HiRes;
-      $time1 = Time::HiRes::time ();
+      require Web::DateTime::Clock;
+      $clock = Web::DateTime::Clock->realtime_clock;
+      $time1 = $clock->();
       warn sprintf "%s: Waiting for cache of |%s|...\n",
           __PACKAGE__, $host->stringify;
     }
@@ -46,18 +48,20 @@ sub resolve ($$;%) {
       if (DEBUG > 1) {
         if (defined $_[0]) {
           warn sprintf "%s: Using cache: |%s| (elapsed %.3f s)\n",
-              __PACKAGE__, $_[0]->stringify, Time::HiRes::time () - $time1;
+              __PACKAGE__, $_[0]->stringify, $clock->() - $time1;
         } else {
           warn sprintf "%s: Using cache: null (elapsed %.3f s)\n",
-              __PACKAGE__, Time::HiRes::time () - $time1;
+              __PACKAGE__, $clock->() - $time1;
         }
       }
       return $_[0];
     });
   }
 
+  warn sprintf "%s: |%s| is not cached\n", __PACKAGE__, $host->stringify
+      if DEBUG > 1;
   my $p = $self->{resolver}->resolve ($host)->then (sub {
-    my $now = $args{get_now}->();
+    my $now = $self->{clock}->();
     $self->{cache}->{$host->stringify} = [
       $_[0],
       $now,

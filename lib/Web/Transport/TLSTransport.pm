@@ -10,7 +10,7 @@ use Net::SSLeay;
 use AnyEvent::TLS;
 use Web::Transport::OCSP;
 
-## Note that |now| option does not affect any OpenSSL's internal
+## Note that |clock| option does not affect any OpenSSL's internal
 ## verification process for, e.g., X.509 certificates.
 
 sub new ($%) {
@@ -18,7 +18,10 @@ sub new ($%) {
   $self->{args} = {@_};
   carp "|si_host| is not defined" unless defined $self->{args}->{si_host};
   carp "|sni_host| is not defined" unless defined $self->{args}->{sni_host};
-  $self->{args}->{now} ||= time;
+  $self->{args}->{clock} ||= do {
+    require Web::DateTime::Clock;
+    Web::DateTime::Clock->realtime_clock;
+  };
   $self->{transport} = delete $self->{args}->{transport};
   $self->{id} = $self->{transport}->id . 's';
   return $self;
@@ -259,7 +262,7 @@ sub start ($$;%) {
         my $res = Web::Transport::OCSP->parse_response_byte_string
             (Net::SSLeay::i2d_OCSP_RESPONSE ($response));
         my $error = Web::Transport::OCSP->check_cert_id_with_response
-            ($res, $certid, $args->{now});
+            ($res, $certid, $args->{clock});
         if (not defined $error) {
           $self->{starttls_data}->{stapling_result} = {response => $res};
           return 1;

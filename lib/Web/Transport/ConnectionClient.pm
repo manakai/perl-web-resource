@@ -50,8 +50,10 @@ sub resolver ($;$) {
   return $_[0]->{resolver} ||= do {
     require Web::Transport::PlatformResolver;
     require Web::Transport::CachedResolver;
-    Web::Transport::CachedResolver->new_from_resolver
-        (Web::Transport::PlatformResolver->new);
+    require Web::DateTime::Clock;
+    Web::Transport::CachedResolver->new_from_resolver_and_clock
+        (Web::Transport::PlatformResolver->new,
+         Web::DateTime::Clock->monotonic_clock);
   };
 } # resolver
 

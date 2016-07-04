@@ -755,9 +755,6 @@ $Web::MIME::_TypeDefs::Type = {
                                             'dicom+json' => {
                                                               'iana' => 'provisional'
                                                             },
-                                            'dicom+rle' => {
-                                                             'iana' => 'provisional'
-                                                           },
                                             'dicom+xml' => {
                                                              'iana' => 'provisional'
                                                            },
@@ -4363,6 +4360,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'label' => 'Amazon Kindle eBook format',
                                                                     'related' => {}
                                                                   },
+                                            'vnd.amazon.mobi8-ebook' => {
+                                                                          'iana' => 'permanent',
+                                                                          'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.amazon.mobi8-ebook'
+                                                                        },
                                             'vnd.americandynamics.acc' => {
                                                                             'iana' => 'permanent',
                                                                             'iana_intended_usage' => 'limited use',
@@ -4599,6 +4600,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'label' => 'CambridgeSoft Chem Draw',
                                                                     'related' => {}
                                                                   },
+                                            'vnd.chess-pgn' => {
+                                                                 'iana' => 'permanent',
+                                                                 'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.chess-pgn'
+                                                               },
                                             'vnd.chipnuts.karaoke-mmd' => {
                                                                             'iana' => 'permanent',
                                                                             'iana_intended_usage' => 'common',
@@ -4690,6 +4695,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                             'iana_intended_usage' => 'common',
                                                                             'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.collection.next+json'
                                                                           },
+                                            'vnd.comicbook+zip' => {
+                                                                     'iana' => 'permanent',
+                                                                     'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.comicbook+zip'
+                                                                   },
                                             'vnd.commerce-battelle' => {
                                                                          'iana' => 'permanent',
                                                                          'iana_intended_usage' => 'common',
@@ -5203,7 +5212,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'iana' => 'permanent',
                                                                     'iana_intended_usage' => 'common',
                                                                     'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.eszigno3+xml',
-                                                                    'label' => "MICROSEC e-Szign\x{a2}",
+                                                                    'label' => "MICROSEC e-Szign¢",
                                                                     'related' => {}
                                                                   },
                                             'vnd.etsi.aoc+xml' => {
@@ -8083,6 +8092,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                       'iana_intended_usage' => 'limited use',
                                                                       'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.oma.lwm2m+json'
                                                                     },
+                                            'vnd.oma.lwm2m+tlv' => {
+                                                                     'iana' => 'permanent',
+                                                                     'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.oma.lwm2m+tlv'
+                                                                   },
                                             'vnd.oma.pal+xml' => {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'limited use',
@@ -18276,6 +18289,10 @@ $Web::MIME::_TypeDefs::Type = {
                                       'dib' => {
                                                  'plugin' => 1
                                                },
+                                      'dicom-rle' => {
+                                                       'iana' => 'permanent',
+                                                       'iana_template_url' => 'https://www.iana.org/assignments/media-types/image/dicom-rle'
+                                                     },
                                       'djvu' => {
                                                   'plugin' => 1
                                                 },
@@ -18378,7 +18395,8 @@ $Web::MIME::_TypeDefs::Type = {
                                       'jb2' => {},
                                       'jbig' => {},
                                       'jls' => {
-                                                 'iana' => 'provisional'
+                                                 'iana' => 'permanent',
+                                                 'iana_template_url' => 'https://www.iana.org/assignments/media-types/image/jls'
                                                },
                                       'jng' => {},
                                       'jp2' => {
@@ -20140,7 +20158,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                   'plugin' => 1
                                                 },
                                       'gltf+json' => {
-                                                       'iana' => 'provisional'
+                                                       'iana' => 'permanent',
+                                                       'iana_template_url' => 'https://www.iana.org/assignments/media-types/model/gltf+json'
                                                      },
                                       'iges' => {
                                                   'compressible' => 0,

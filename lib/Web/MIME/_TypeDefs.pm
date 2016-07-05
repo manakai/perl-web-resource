@@ -755,6 +755,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'dicom+json' => {
                                                               'iana' => 'provisional'
                                                             },
+                                            'dicom+rle' => {
+                                                             'preferred_type' => 'image/dicom-rle'
+                                                           },
                                             'dicom+xml' => {
                                                              'iana' => 'provisional'
                                                            },
@@ -18289,6 +18292,9 @@ $Web::MIME::_TypeDefs::Type = {
                                       'dib' => {
                                                  'plugin' => 1
                                                },
+                                      'dicom+rle' => {
+                                                       'preferred_type' => 'image/dicom-rle'
+                                                     },
                                       'dicom-rle' => {
                                                        'iana' => 'permanent',
                                                        'iana_template_url' => 'https://www.iana.org/assignments/media-types/image/dicom-rle'
@@ -19869,6 +19875,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                           'image/x-xwd' => {}
                                                                         }
                                                          },
+                                      'x.dicom+rle' => {
+                                                         'preferred_type' => 'image/dicom-rle'
+                                                       },
                                       'x.djvu' => {
                                                     'plugin' => 1
                                                   },

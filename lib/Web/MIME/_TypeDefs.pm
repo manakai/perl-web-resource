@@ -1203,6 +1203,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                               },
                                             'gcwin' => {},
                                             'gdiff' => {},
+                                            'geo+json' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/geo+json'
+                                                          },
                                             'ghostview' => {
                                                              'obsolete' => 1,
                                                              'preferred_type' => 'application/x-ghostview'
@@ -5581,9 +5585,12 @@ $Web::MIME::_TypeDefs::Type = {
                                                                       },
                                             'vnd.geo+json' => {
                                                                 'compressible' => 1,
+                                                                'deprecated' => 'obsolete',
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common',
-                                                                'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.geo+json'
+                                                                'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.geo+json',
+                                                                'obsolete' => 1,
+                                                                'preferred_type' => 'application/geo+json'
                                                               },
                                             'vnd.geocube+xml' => {
                                                                    'deprecated' => 'obsolete',

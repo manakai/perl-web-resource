@@ -3241,6 +3241,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana_intended_usage' => 'common',
                                                                 'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/reputon+json'
                                                               },
+                                            'resedit' => {},
                                             'resource-lists+xml' => {
                                                                       'iana' => 'permanent',
                                                                       'iana_intended_usage' => 'common',
@@ -4230,6 +4231,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                                  },
                                             'vnd.adobe.assest-catalog' => {},
                                             'vnd.adobe.edn' => {},
+                                            'vnd.adobe.fla' => {},
                                             'vnd.adobe.flash.movie' => {
                                                                          'iana' => 'permanent',
                                                                          'iana_intended_usage' => 'common',
@@ -4253,6 +4255,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  'label' => 'Adobe Flex Project',
                                                                  'related' => {}
                                                                },
+                                            'vnd.adobe.illustrator' => {},
+                                            'vnd.adobe.indesign-idml-package' => {},
                                             'vnd.adobe.partial-upload' => {
                                                                             'iana' => 'permanent',
                                                                             'iana_intended_usage' => 'limited use',
@@ -4263,6 +4267,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'related' => {}
                                                                   },
                                             'vnd.adobe.pdx' => {},
+                                            'vnd.adobe.photoshop' => {},
                                             'vnd.adobe.rmf' => {},
                                             'vnd.adobe.x-mars' => {
                                                                     'plugin' => 1,
@@ -5219,7 +5224,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'iana' => 'permanent',
                                                                     'iana_intended_usage' => 'common',
                                                                     'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.eszigno3+xml',
-                                                                    'label' => "MICROSEC e-Szign¢",
+                                                                    'label' => "MICROSEC e-Szign\x{a2}",
                                                                     'related' => {}
                                                                   },
                                             'vnd.etsi.aoc+xml' => {
@@ -6925,6 +6930,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => {}
                                                                                 }
                                                                  },
+                                            'vnd.ms-excel.addin.macroenabled' => {},
                                             'vnd.ms-excel.addin.macroenabled.12' => {
                                                                                       'iana' => 'permanent',
                                                                                       'iana_intended_usage' => 'common',
@@ -6947,6 +6953,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.ms-excel.sheet.2' => {},
                                             'vnd.ms-excel.sheet.3' => {},
                                             'vnd.ms-excel.sheet.4' => {},
+                                            'vnd.ms-excel.sheet.binary.macroenabled' => {},
                                             'vnd.ms-excel.sheet.binary.macroenabled.12' => {
                                                                                              'iana' => 'permanent',
                                                                                              'iana_intended_usage' => 'common',
@@ -6961,6 +6968,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                                          },
                                                                                              'related' => {}
                                                                                            },
+                                            'vnd.ms-excel.sheet.macroenabled' => {},
                                             'vnd.ms-excel.sheet.macroenabled.12' => {
                                                                                       'iana' => 'permanent',
                                                                                       'iana_intended_usage' => 'common',
@@ -6975,6 +6983,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                                   },
                                                                                       'related' => {}
                                                                                     },
+                                            'vnd.ms-excel.template.macroenabled' => {},
                                             'vnd.ms-excel.template.macroenabled.12' => {
                                                                                          'iana' => 'permanent',
                                                                                          'iana_intended_usage' => 'common',
@@ -7152,6 +7161,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                                     'application/vnd.openxmlformats-officedocument.presentationml.presentation' => {}
                                                                                                   }
                                                                                    },
+                                            'vnd.ms-powerpoint.presentation.macroenabled' => {},
                                             'vnd.ms-powerpoint.presentation.macroenabled.12' => {
                                                                                                   'iana' => 'permanent',
                                                                                                   'iana_intended_usage' => 'common',
@@ -7182,6 +7192,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                                        },
                                                                                            'related' => {}
                                                                                          },
+                                            'vnd.ms-powerpoint.slideshow.macroenabled' => {},
                                             'vnd.ms-powerpoint.slideshow.macroenabled.12' => {
                                                                                                'iana' => 'permanent',
                                                                                                'iana_intended_usage' => 'common',
@@ -7196,6 +7207,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                                            },
                                                                                                'related' => {}
                                                                                              },
+                                            'vnd.ms-powerpoint.template.macroenabled' => {},
                                             'vnd.ms-powerpoint.template.macroenabled.12' => {
                                                                                               'iana' => 'permanent',
                                                                                               'iana_intended_usage' => 'common',
@@ -7343,6 +7355,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                           'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => {}
                                                                                         }
                                                                          },
+                                            'vnd.ms-word.document.macroenabled' => {},
                                             'vnd.ms-word.document.macroenabled.12' => {
                                                                                         'iana' => 'permanent',
                                                                                         'iana_intended_usage' => 'common',
@@ -7371,6 +7384,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                                     },
                                                                                         'related' => {}
                                                                                       },
+                                            'vnd.ms-word.template.macroenabledtemplate' => {},
                                             'vnd.ms-works' => {
                                                                 'iana' => 'permanent',
                                                                 'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.ms-works',
@@ -11184,6 +11198,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                               'text/x-c++src' => {}
                                                                             }
                                                              },
+                                            'x-captureone' => {},
                                             'x-caramel' => {},
                                             'x-casio-device' => {},
                                             'x-cb7' => {
@@ -11493,6 +11508,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                            },
                                             'x-detective' => {},
                                             'x-dex' => {},
+                                            'x-dfont' => {},
                                             'x-dgc-compressed' => {
                                                                     'related' => {}
                                                                   },
@@ -12436,6 +12452,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-indesign' => {
                                                               'related' => {}
                                                             },
+                                            'x-indesign-interchange' => {},
                                             'x-inf' => {
                                                          'related' => {
                                                                         'application/inf' => {},
@@ -13092,6 +13109,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-magic-cap-package-1.0' => {
                                                                            'related' => {}
                                                                          },
+                                            'x-magick-image' => {},
                                             'x-magicpoint' => {
                                                                 'related' => {
                                                                                'application/vnd.osgeo.mapguide.package' => {}
@@ -17230,7 +17248,9 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-cmf' => {},
                                       'x-dec-adbcm' => {},
                                       'x-dec-basic' => {},
+                                      'x-ds2' => {},
                                       'x-dspeech' => {},
+                                      'x-dss' => {},
                                       'x-dv' => {
                                                   'plugin' => 1
                                                 },
@@ -17396,6 +17416,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                   'video/mpeg' => {}
                                                                 }
                                                  },
+                                      'x-monkeys-audio' => {},
                                       'x-mp2' => {
                                                    'related' => {
                                                                   'audio/mpeg' => {},
@@ -18548,6 +18569,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'application/pdf' => {}
                                                               }
                                                },
+                                      'pgf' => {},
                                       'photoshop' => {
                                                        'related' => {
                                                                       'application/photoshop' => {}
@@ -19302,6 +19324,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-exr' => {
                                                    'related' => {}
                                                  },
+                                      'x-exv' => {},
                                       'x-fastbid2-fbs' => {
                                                             'plugin' => 1
                                                           },
@@ -19334,11 +19357,13 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-fuji-raf' => {
                                                         'related' => {}
                                                       },
+                                      'x-fujifilm-raf' => {},
                                       'x-gzeps' => {},
                                       'x-gzip' => {},
                                       'x-hasselblad-3fr' => {
                                                               'related' => {}
                                                             },
+                                      'x-hasselblad-fff' => {},
                                       'x-hpgl' => {
                                                     'plugin' => 1
                                                   },
@@ -19372,6 +19397,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-iw44' => {
                                                     'plugin' => 1
                                                   },
+                                      'x-j2c' => {},
                                       'x-jb2' => {},
                                       'x-jbig2' => {
                                                      'plugin' => 1
@@ -19409,6 +19435,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-kodak-kdc' => {
                                                          'related' => {}
                                                        },
+                                      'x-leica-rwl' => {},
                                       'x-lotusamideaw' => {},
                                       'x-lwo' => {
                                                    'related' => {}
@@ -19416,6 +19443,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-lws' => {
                                                    'related' => {}
                                                  },
+                                      'x-lytro-lfp' => {},
                                       'x-macpaint' => {
                                                         'plugin' => 1,
                                                         'related' => {}
@@ -19425,6 +19453,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                       'image/x-pict' => {}
                                                                     }
                                                      },
+                                      'x-mamiya-mef' => {},
                                       'x-mgx-dsf' => {
                                                        'related' => {}
                                                      },
@@ -19471,6 +19500,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-nikon-nef' => {
                                                          'related' => {}
                                                        },
+                                      'x-nikon-nrw' => {},
                                       'x-olympus-orf' => {
                                                            'related' => {}
                                                          },
@@ -19488,6 +19518,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-panasonic-raw2' => {
                                                               'related' => {}
                                                             },
+                                      'x-panasonic-rw2' => {},
                                       'x-pbm' => {
                                                    'related' => {
                                                                   'image/x-portable-bitmap' => {}
@@ -19605,6 +19636,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                         'application/x-qw' => {}
                                                                       }
                                                        },
+                                      'x-raw' => {},
                                       'x-raw-adobe' => {},
                                       'x-raw-canon' => {},
                                       'x-raw-casio' => {},
@@ -19626,6 +19658,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-raw-red' => {},
                                       'x-raw-sigma' => {},
                                       'x-raw-sony' => {},
+                                      'x-rawzor' => {},
                                       'x-rgb' => {
                                                    'label' => 'Silicon Graphics RGB Bitmap',
                                                    'related' => {
@@ -19635,6 +19668,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-rle' => {
                                                    'related' => {}
                                                  },
+                                      'x-samsung-srw' => {},
                                       'x-sgi' => {
                                                    'plugin' => 1,
                                                    'related' => {
@@ -19702,6 +19736,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                    'image/tiff' => {}
                                                                  }
                                                   },
+                                      'x-tiff-big' => {},
                                       'x-up-bmp' => {},
                                       'x-up-wpng' => {},
                                       'x-vasa' => {
@@ -23417,6 +23452,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                               }
                                                },
                                       'local' => {},
+                                      'm2ts' => {},
                                       'm4v' => {
                                                  'related' => {
                                                                 'video/mp4' => {}

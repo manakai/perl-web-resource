@@ -9025,6 +9025,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                              'iana' => 'permanent',
                                                              'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.rapid'
                                                            },
+                                            'vnd.rar' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.rar'
+                                                         },
                                             'vnd.realvnc.bed' => {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'limited use',

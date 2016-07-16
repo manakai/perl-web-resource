@@ -11,6 +11,15 @@ use AnyEvent::Util qw(run_cmd);
 use Web::Transport::ConnectionClient;
 use Web::URL;
 
+{
+  package test::resolver1;
+  sub resolve ($$) {
+    my $host = $_[1]->stringify;
+    warn "test::resolver1: Resolving |$host|...\n" if $ENV{WEBUA_DEBUG} > 1;
+    return Promise->resolve (Web::Host->parse_string ($_[0]->{$host}));
+  }
+}
+
 my $server_pids = {};
 END { kill 'KILL', $_ for keys %$server_pids }
 sub _server_as_cv ($$$$) {
@@ -666,7 +675,7 @@ test {
 test {
   my $c = shift;
   server_as_cv (q(
-    starttls host=localhost
+    starttls host=resolver1.test
     receive "GET http://hoge.example.net/foo"
     "HTTP/1.1 203 Hoe"CRLF
     "Content-Length: 6"CRLF
@@ -676,7 +685,9 @@ test {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'https', host => $server->{host},
+    $client->resolver (bless {'resolver1.test' => '127.0.0.1'}, 'test::resolver1');
+    $client->proxy_manager (pp [{protocol => 'https',
+                                 host => 'resolver1.test', #$server->{host},
                                  port => $server->{port},
                                  tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]);
     return $client->request (url => $url)->then (sub {
@@ -707,6 +718,7 @@ test {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->resolver (bless {'resolver1.test' => '127.0.0.1'}, 'test::resolver1');
     $client->proxy_manager (pp [{protocol => 'https', host => $server->{host},
                         port => $server->{port},
                         tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]);
@@ -729,7 +741,7 @@ test {
 test {
   my $c = shift;
   server_as_cv (q{
-    starttls
+    starttls host=host2.test
     receive "GET /foo"
     "HTTP/1.1 203 Hoe"CRLF
     "Content-Length: 6"CRLF
@@ -737,8 +749,9 @@ test {
     "abcdef"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{https://$server->{host}:$server->{port}/foo});
+    my $url = Web::URL->parse_string (qq{https://host2.test:$server->{port}/foo});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->resolver (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1');
     $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
@@ -758,7 +771,7 @@ test {
 test {
   my $c = shift;
   server_as_cv (q{
-    starttls
+    starttls host=host3.test
     receive "GET /foo"
     "HTTP/1.1 203 Hoe"CRLF
     CRLF
@@ -767,14 +780,15 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{https://$server->{host}:$server->{port}/foo});
+    my $url = Web::URL->parse_string (qq{https://host3.test:$server->{port}/foo});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->resolver (bless {'host3.test' => '127.0.0.1'}, 'test::resolver1');
     $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
         is $res->status, 203;
-        is $res->body_bytes, 'abcdef' . $server->{host};
+        is $res->body_bytes, 'abcdef' . 'host3.test';
       } $c;
     })->then (sub{
       return $client->close;
@@ -796,8 +810,9 @@ test {
     "abcdef"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{https://$server->{host}:$server->{port}/foo});
+    my $url = Web::URL->parse_string (qq{https://host4.test:$server->{port}/foo});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->resolver (bless {'host4.test' => '127.0.0.1'}, 'test::resolver1');
     $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
@@ -817,7 +832,7 @@ test {
 test {
   my $c = shift;
   server_as_cv (q{
-    starttls
+    starttls host=host5.test
     receive "GET /foo"
     "HTTP/1.1 203 Hoe"CRLF
     "Content-Length: 6"CRLF
@@ -825,8 +840,9 @@ test {
     "abcdef"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{https://$server->{host}:$server->{port}/foo});
+    my $url = Web::URL->parse_string (qq{https://host5.test:$server->{port}/foo});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->resolver (bless {'host5.test' => '127.0.0.1'}, 'test::resolver1');
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {

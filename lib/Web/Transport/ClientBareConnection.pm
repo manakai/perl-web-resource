@@ -210,6 +210,11 @@ sub connect ($%) {
       }
       $self->{http} = Web::Transport::HTTPConnection->new (transport => $_[0]);
       return $self->{http}->connect;
+    })->catch (sub {
+      delete $self->{connect_promise};
+      delete $self->{http};
+      undef $self;
+      die $_[0];
     });
   };
 } # connect

@@ -39,12 +39,11 @@ sub x ($) {
   system ($_[0]) == 0 or die $?;
 } # x
 
-sub generate_certs ($$) {
-  my ($class, $cert_args) = @_;
-
-  my $ca_name = "/CN=ca.test";
+sub generate_ca_cert ($) {
+  my $class = $_[0];
   my $ca_key_path = $class->ca_path ('key.pem');
   my $ca_cert_path = $class->ca_path ('cert.pem');
+  my $ca_name = "/CN=ca.test";
   my $ecname = 'prime256v1';
   unless ($ca_key_path->is_file) {
     my $ca_subj = $ca_name;
@@ -57,6 +56,15 @@ sub generate_certs ($$) {
     }
     sleep 1;
   }
+} # generate_ca_cert
+
+sub generate_certs ($$) {
+  my ($class, $cert_args) = @_;
+
+  $class->generate_ca_cert;
+  my $ca_key_path = $class->ca_path ('key.pem');
+  my $ca_cert_path = $class->ca_path ('cert.pem');
+  my $ecname = 'prime256v1';
 
   my $subject_name = $cert_args->{host} || $cn;
   my $subject_type = 'DNS';

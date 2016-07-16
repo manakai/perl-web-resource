@@ -20,6 +20,8 @@ use Web::URL;
   }
 }
 
+Test::Certificates->generate_ca_cert;
+
 my $server_pids = {};
 END { kill 'KILL', $_ for keys %$server_pids }
 sub _server_as_cv ($$$$) {

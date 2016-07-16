@@ -139,7 +139,8 @@ sub start ($$;%) {
       unless ($self->{read_closed}) {
         my $data = $_[2];
         #$data->{failed} = 1;
-        $data->{message} //= 'Underlying transport closed before TLS closure';
+        $data->{message} = 'Underlying transport closed before TLS closure'
+            unless defined $data->{message};
         if ($self->{started}) {
           AE::postpone { $self->{cb}->($self, 'readeof', $data) };
         }
@@ -152,7 +153,8 @@ sub start ($$;%) {
       unless ($self->{write_closed}) {
         my $data = $_[2];
         #$data->{failed} = 1;
-        $data->{message} //= 'Underlying transport closed before TLS closure';
+        $data->{message} = 'Underlying transport closed before TLS closure'
+            unless defined $data->{message};
         if ($self->{started}) {
           AE::postpone { $self->{cb}->($self, 'writeeof', $data) };
         }
@@ -178,7 +180,7 @@ sub start ($$;%) {
     if ($args->{insecure} and not $args->{verify}) {
       $vmode = Net::SSLeay::VERIFY_NONE ();
     } else {
-      $args->{verify} //= 1;
+      $args->{verify} = 1 unless defined $args->{verify};
       $vmode = Net::SSLeay::VERIFY_PEER ();
       $vmode |= Net::SSLeay::VERIFY_FAIL_IF_NO_PEER_CERT ()
           if $args->{verify_require_client_cert};
@@ -352,9 +354,9 @@ sub push_write ($$;$$) {
   my ($self, $ref, $offset, $length) = @_;
   croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
-  $offset //= 0;
+  $offset = 0 unless defined $offset;
   croak "Bad offset" if $offset > length $$ref;
-  $length //= (length $$ref) - $offset;
+  $length = (length $$ref) - $offset unless defined $length;
   croak "Bad length" if $offset + $length > length $$ref;
   return if $length <= 0;
   push @{$self->{wq}}, [$ref, $length, $offset];

@@ -129,7 +129,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             }
           }
           if ($type eq 'data' or $type eq 'text') {
-            $result->{body} //= '';
+            $result->{body} = '' unless defined $result->{body};
             $result->{body} .= $_[3];
             $result->{body} .= '(boundary)' if $test->{boundary};
           }
@@ -140,7 +140,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           }
           if ($type eq 'complete') {
             $result->{version} = $result->{response} ? $result->{response}->{version} : '1.1';
-            $result->{body} //= '';
+            $result->{body} = '' unless defined $result->{body};
             $result->{body} .= '(close)';
             $result->{is_error} = 1 if $_[3]->{failed};
             $result->{can_retry} = 1 if $_[3]->{can_retry};

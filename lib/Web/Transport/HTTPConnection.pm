@@ -1188,7 +1188,7 @@ sub send_binary_header ($$) {
 
 sub send_ping ($;%) {
   my ($self, %args) = @_;
-  $args{data} //= '';
+  $args{data} = '' unless defined $args{data};
   croak "Data is utf8-flagged" if utf8::is_utf8 $args{data};
   croak "Data too large" if 0x7D < length $args{data}; # spec limit 2**63
   croak "Bad state"

@@ -100,9 +100,9 @@ sub push_write ($$;$$) {
   my ($self, $ref, $offset, $length) = @_;
   croak "Bad state" if defined $self->{args} or $self->{write_shutdown};
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
-  $offset //= 0;
+  $offset = 0 unless defined $offset;
   croak "Bad offset" if $offset > length $$ref;
-  $length //= (length $$ref) - $offset;
+  $length = (length $$ref) - $offset unless defined $length;
   croak "Bad length" if $offset + $length > length $$ref;
   $self->{http}->send_data (\substr $$ref, $offset, $length);
 } # push_write

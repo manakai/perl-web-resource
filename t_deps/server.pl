@@ -1199,7 +1199,7 @@ require AnyEvent::Handle;
 {
   my $orig = AnyEvent::Handle->can ('_dotls');
   *AnyEvent::Handle::_dotls = sub {
-    $_dump_tls->{$_[0]->{_rbio}} //= '';
+    $_dump_tls->{$_[0]->{_rbio}} = '' if not defined $_dump_tls->{$_[0]->{_rbio}};
     if (defined $CurrentID) {
       $_dump_tls->{$_[0]->{_rbio}, 'id'} = $CurrentID;
     }

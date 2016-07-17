@@ -1207,7 +1207,7 @@ require AnyEvent::Handle;
   } if $DUMP;
 }
 
-warn "Listening $host:$port...\n";
+warn "Listening $host:$port...\n" if $DUMP;
 my $server = tcp_server $host, $port, sub {
   my ($fh, $client_host, $client_port) = @_;
   my $id = int rand 100000;

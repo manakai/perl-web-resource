@@ -485,7 +485,8 @@ sub _tls ($) {
   }
 
   unless ($self->{transport}->write_to_be_closed) {
-    while (length (my $read = Net::SSLeay::BIO_read ($self->{_wbio}))) {
+    my $read = Net::SSLeay::BIO_read ($self->{_wbio});
+    while (defined $read and length $read) {
       $self->{transport}->push_write (\$read);
     }
   }

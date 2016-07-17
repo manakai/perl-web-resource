@@ -756,7 +756,7 @@ sub run_commands ($$$$) {
     } elsif ($command =~ /^reset$/) {
       setsockopt $hdl->{fh}, SOL_SOCKET, SO_LINGER, pack "II", 1, 0;
       close $hdl->{fh};
-      $hdl->on_drain (sub { eval { shutdown $_[0]->{fh}, 1; 1 } or warn $@ }); # let $hdl report an error
+      $states->{on_error}->($hdl, 1, "reset by command");
     } elsif ($command =~ /^starttls((?:\s+\w+=\S*)*)$/) {
       my $x = $1;
       my $args = {};
@@ -1216,23 +1216,26 @@ my $server = tcp_server $host, $port, sub {
   my $states = {commands => [@$Commands], received => '', id => $id,
                 client_host => $client_host, client_port => $client_port};
 
-  my $hdl; $hdl = AnyEvent::Handle->new
+  my $hdl;
+  my $on_error = $states->{on_error} = sub {
+    my (undef, $fatal, $msg) = @_;
+    if ($fatal) {
+      warn "[$id] @{[time]} @{[scalar gmtime]} $msg (fatal)\n" if $DUMP;
+      syswrite STDOUT, "[server done]\n";
+      if (defined $hdl->{tls}) {
+        Net::SSLeay::set_info_callback ($hdl->{tls}, undef);
+        Net::SSLeay::set_verify ($hdl->{tls}, 0, undef);
+      }
+      $hdl->destroy;
+      $cv->end;
+    } else {
+      warn "[$id] @{[time]} @{[scalar gmtime]} $msg\n" if $DUMP;
+    }
+  }; # $on_error
+
+  $hdl = AnyEvent::Handle->new
       (fh => $fh,
-       on_error => sub {
-         my (undef, $fatal, $msg) = @_;
-         if ($fatal) {
-           warn "[$id] @{[time]} @{[scalar gmtime]} $msg (fatal)\n" if $DUMP;
-           syswrite STDOUT, "[server done]\n";
-           if (defined $hdl->{tls}) {
-             Net::SSLeay::set_info_callback ($hdl->{tls}, undef);
-             Net::SSLeay::set_verify ($hdl->{tls}, 0, undef);
-           }
-           $hdl->destroy;
-           $cv->end;
-         } else {
-           warn "[$id] @{[time]} @{[scalar gmtime]} $msg\n" if $DUMP;
-         }
-       },
+       on_error => $on_error,
        on_eof => sub {
          warn "[$id] @{[time]} @{[scalar gmtime]} EOF\n" if $DUMP;
          $hdl->on_drain (sub {

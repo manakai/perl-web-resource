@@ -69,10 +69,11 @@ sub start ($$) {
         $self->{read_closed} = 1;
         $self->{write_closed} = 1;
         delete $self->{rw};
+        my $err = $!;
         AE::postpone {
           $self->{cb}->($self, 'readeof', {failed => 1,
-                                           errno => 0+$!,
-                                           message => "$!"});
+                                           errno => 0+$err,
+                                           message => "$err"});
           $self->{cb}->($self, 'writeeof', {failed => 1,
                                             message => 'Closed by read error'})
               unless $wc;
@@ -124,10 +125,11 @@ sub _start_write ($) {
           my $rc = $self->{read_closed};
           $self->{read_closed} = 1;
           $self->{write_closed} = 1;
+          my $err = $!;
           AE::postpone {
             $self->{cb}->($self, 'writeeof', {failed => 1,
-                                              errno => 0+$!,
-                                              message => "$!"});
+                                              errno => 0+$err,
+                                              message => "$err"});
             $self->{cb}->($self, 'readeof', {failed => 1,
                                              message => 'Closed by write error'})
                 unless $rc;

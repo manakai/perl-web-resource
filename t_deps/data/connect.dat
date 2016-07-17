@@ -149,7 +149,7 @@ data then reset
 #url /
 #data escaped
 receive "HTTP/"
-"HTTP/1.1 200 hoge"CRLF
+"HTTP/1.1 200 data then reset"CRLF
 "Content-Length: 3"CRLF
 CRLF
 "anchoge"

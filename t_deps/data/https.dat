@@ -353,7 +353,7 @@ Content-Length: 2
 ab(close)
 
 #name
-TLS renegotiation (no client auth)
+TLS renegotiation (no client auth) 1
 #tls
 #method GET
 #url /
@@ -377,7 +377,9 @@ Content-Length: 3
 abc(close)
 
 #name
-TLS renegotiation (no client auth)
+TLS renegotiation (no client auth) 2
+#note
+Chrome and curl fail with "empty response"
 #tls
 #method GET
 #url /
@@ -390,12 +392,10 @@ receive "GET"
 CRLF
 "abc"
 close
-#status 200
-#reason OK
+#status 0
 #headers escaped
-Content-Length: 3
 #body
-abc(close)
+(close)
 
 #name
 https client, http server

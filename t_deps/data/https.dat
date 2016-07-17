@@ -379,7 +379,8 @@ abc(close)
 #name
 TLS renegotiation (no client auth) 2
 #note
-Chrome and curl fail with "empty response"
+Chrome and curl fail with "empty response"; OpenSSL might or might not fail,
+depending on its version (?).
 #tls
 #method GET
 #url /

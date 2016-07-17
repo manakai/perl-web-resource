@@ -58,7 +58,7 @@ sub unix_server_as_cv ($) {
 test {
   my $c = shift;
   my $tcp = Web::Transport::TCPTransport->new
-      (host => Web::Host->parse_string ('localhost'), port => rand);
+      (host => Web::Host->parse_string ('255.255.0.0'), port => rand);
   my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
   my $p = $http->send_request_headers ({method => 'GET', target => '/'});
   isa_ok $p, 'Promise';
@@ -1941,7 +1941,7 @@ test {
   my $c = shift;
   {
     my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ('260.0.0.0'), port => int rand);
+        (host => Web::Host->parse_string ('250.0.0.0'), port => int rand);
     my $proxy = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $connect = Web::Transport::H1CONNECTTransport->new
         (http => $proxy, target => 'hoge.test');
@@ -1975,7 +1975,7 @@ test {
   my $c = shift;
   {
     my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ('260.0.0.0'), port => int rand);
+        (host => Web::Host->parse_string ('250.0.0.0'), port => int rand);
     my $proxy = Web::Transport::HTTPConnection->new (transport => $tcp);
     my $connect = Web::Transport::H1CONNECTTransport->new
         (http => $proxy, target => 'hoge.test');

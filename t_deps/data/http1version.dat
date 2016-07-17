@@ -15,6 +15,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -39,6 +40,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -63,6 +65,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -87,6 +90,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -111,6 +115,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -135,6 +140,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -159,6 +165,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -208,6 +215,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -382,6 +390,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -406,6 +415,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -455,6 +465,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -579,6 +590,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -603,6 +615,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -627,6 +640,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -651,6 +665,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers
@@ -675,6 +690,7 @@ CRLF
 "ab"
 close
 #test-type second
+#version 1.0
 #status 202
 #reason hoge
 #headers

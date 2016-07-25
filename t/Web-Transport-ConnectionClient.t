@@ -39,9 +39,11 @@ use Web::URL;
     return 1;
   } # is_listenable_port
 
+  my $using = {};
   sub find_listenable_port () {
     for (1..10000) {
       my $port = int rand($EphemeralEnd - $EphemeralStart);
+      next if $using->{$port}++;
       return $port if is_listenable_port $port;
     }
     die "Listenable port not found";

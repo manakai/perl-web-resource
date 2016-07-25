@@ -25,8 +25,10 @@ pmbp-upgrade: local/bin/pmbp.pl
 pmbp-update: git-submodules pmbp-upgrade
 	perl local/bin/pmbp.pl --update
 pmbp-install: pmbp-upgrade
+	PMBP_VERBOSE=10 \
 	perl local/bin/pmbp.pl \
 	    --install \
+	    --install-openssl-if-mac \
             --create-perl-command-shortcut @perl \
             --create-perl-command-shortcut @prove
 

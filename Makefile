@@ -51,6 +51,7 @@ test: test-deps test-main
 test-deps: deps
 
 test-main:
+	-TEST_METHOD="TLS truncated headers|urgent data|TLS \+ HTTP/1.0 \+ Content-Length" WEBUA_DEBUG=2 ./perl t/parsing.t
 	$(PROVE) t/*.t
 
 ## License: Public Domain.

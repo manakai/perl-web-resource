@@ -36,7 +36,7 @@ sub cert_name ($) {
 } # cert_name
 
 sub x ($) {
-  system ($_[0]) == 0 or die $?;
+  system ($_[0]) == 0 or die "|$_[0]| failed: $?";
 } # x
 
 sub generate_ca_cert ($) {

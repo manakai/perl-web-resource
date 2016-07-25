@@ -52,6 +52,7 @@ PROVE = ./prove
 test: test-deps test-main
 
 test-deps: deps
+	which openssl
 	openssl version
 	openssl ciphers
 

@@ -1039,6 +1039,7 @@ test {
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
+        is $res->network_error_message, undef;
         is $res->status, 203;
         is $res->body_bytes, 'abcdef';
       } $c;
@@ -1049,7 +1050,7 @@ test {
       undef $c;
     });
   });
-} n => 2, name => 'socks5 proxy';
+} n => 3, name => 'socks5 proxy';
 
 test {
   my $c = shift;

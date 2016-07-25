@@ -101,6 +101,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
   }, sub {
     my $test = $_[0];
     return if defined $test->{name}->[0] and $test->{name}->[0] =~ /crash|2147483648/; # XXX not supported yet
+    return if defined $test->{name}->[0] and
+              $test->{name}->[0] eq 'TLS renegotiation (no client auth) 2';
     test {
       my $c = shift;
       server_as_cv ($test->{data}->[0])->cb (sub {

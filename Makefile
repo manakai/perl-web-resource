@@ -61,6 +61,8 @@ test-deps: deps
 	local/common/bin/openssl version
 	./openssl version
 	./openssl ciphers
+	cat openssl
+	cat perl
 	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (0)'
 	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (2)'
 	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (3)'

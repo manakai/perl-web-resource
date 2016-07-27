@@ -106,12 +106,12 @@ sub generate_certs ($$) {
   }
 
   my $server_cert_path = $_[0]->cert_path ('cert.pem', $cert_args);
+  my $chained_cert_path = $_[0]->cert_path ('cert-chained.pem', $cert_args);
   x "openssl x509 -req -in \Q$server_req_path\E -days 1 -CA \Q$ica_cert_path\E -CAkey \Q$ica_key_path\E -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E -extensions exts";
 
   my $server_p12_path = $_[0]->cert_path ('keys.p12', $cert_args);
-  x "openssl pkcs12 -export -passout pass: -in \Q$server_cert_path\E -inkey \Q$server_key_path\E -out \Q$server_p12_path\E";
+  x "openssl pkcs12 -export -passout pass: -CAfile \Q$chained_cert_path\E -in \Q$server_cert_path\E -inkey \Q$server_key_path\E -out \Q$server_p12_path\E";
 
-  my $chained_cert_path = $_[0]->cert_path ('cert-chained.pem', $cert_args);
   x "cat \Q$server_cert_path\E \Q$ica_cert_path\E > \Q$chained_cert_path\E";
   my $ca_cert_path = $class->ca_path ('cert.pem');
   x "cat \Q$ca_cert_path\E >> \Q$chained_cert_path\E";
@@ -193,10 +193,11 @@ sub ocsp_response ($$;%) {
   
   (system 'openssl', 'ocsp',
        '-index' => $index_path,
-       '-CA' => $class->cert_path ('cert-chained.pem', {host => 'intermediate'}),
+       '-CAfile' => $class->cert_path ('cert-chained.pem', {host => 'intermediate'}),
+       '-CA' => $class->cert_path ('cert.pem', {host => 'intermediate'}),
        '-rkey' => $class->cert_path ('key.pem', {host => 'intermediate'}),
-       '-rsigner' => $class->cert_path ('cert-chained.pem', {host => 'intermediate'}),
-       '-issuer' => $class->cert_path ('cert-chained.pem', {host => 'intermediate'}),
+       '-rsigner' => $class->cert_path ('cert.pem', {host => 'intermediate'}),
+       '-issuer' => $class->cert_path ('cert.pem', {host => 'intermediate'}),
        '-cert' => $cert_chained_path,
        ($args{no_next} ? () : ('-ndays' => 1)),
        #'-text', # DEBUG

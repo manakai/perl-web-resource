@@ -58,6 +58,10 @@ test: test-deps test-main
 test-deps: deps
 	./openssl version
 	./openssl ciphers
+	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (0)'
+	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (2)'
+	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (3)'
+	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (4)'
 
 test-main:
 	$(PROVE) t/*.t

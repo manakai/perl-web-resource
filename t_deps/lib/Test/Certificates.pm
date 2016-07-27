@@ -66,6 +66,7 @@ sub generate_certs ($$) {
   $class->generate_ca_cert;
   my $ica_key_path = $cert_args->{intermediate} ? $class->ca_path ('key.pem') : $class->cert_path ('key.pem', {host => 'intermediate'});
   my $ica_cert_path = $cert_args->{intermediate} ? $class->ca_path ('cert.pem') : $class->cert_path ('cert.pem', {host => 'intermediate'});
+  my $chained_ca_cert_path = $cert_args->{intermediate} ? $class->ca_path ('cert.pem') : $class->cert_path ('cert-chained.pem', {host => 'intermediate'});
   my $ecname = 'prime256v1';
 
   my $subject_name = $cert_args->{host} || $cn;
@@ -107,7 +108,7 @@ sub generate_certs ($$) {
 
   my $server_cert_path = $_[0]->cert_path ('cert.pem', $cert_args);
   my $chained_cert_path = $_[0]->cert_path ('cert-chained.pem', $cert_args);
-  x "openssl x509 -req -in \Q$server_req_path\E -days 1 -CA \Q$ica_cert_path\E -CAkey \Q$ica_key_path\E -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E -extensions exts";
+  x "openssl x509 -req -in \Q$server_req_path\E -days 1 -CA \Q$chained_ca_cert_path\E -CAkey \Q$ica_key_path\E -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E -extensions exts";
 
   my $server_p12_path = $_[0]->cert_path ('keys.p12', $cert_args);
   x "openssl pkcs12 -export -passout pass: -CAfile \Q$chained_cert_path\E -in \Q$server_cert_path\E -inkey \Q$server_key_path\E -out \Q$server_p12_path\E";

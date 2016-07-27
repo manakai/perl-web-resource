@@ -28,7 +28,8 @@ pmbp-install: pmbp-upgrade
 	-ls local/common/bin
 	PMBP_VERBOSE=10 \
 	perl local/bin/pmbp.pl \
-	    --install-openssl
+	    --install-openssl \
+	    --create-perl-command-shortcut @openssl
 	ls local/common/bin
 	perl local/bin/pmbp.pl \
 	    --install \
@@ -55,9 +56,8 @@ PROVE = ./prove
 test: test-deps test-main
 
 test-deps: deps
-	which openssl
-	openssl version
-	openssl ciphers
+	./openssl version
+	./openssl ciphers
 
 test-main:
 	$(PROVE) t/*.t

@@ -10,7 +10,7 @@ perl:
   - "5.10"
 before_install: git submodule update --init
 install: "make test-deps"
-script: "make test"
+script: "make test-main"
 notifications:
   email:
     - wakaba@suikawiki.org

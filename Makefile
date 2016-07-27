@@ -56,6 +56,8 @@ PROVE = ./prove
 test: test-deps test-main
 
 test-deps: deps
+	./perl local/bin/pmbp.pl --create-perl-command-shortcut which
+	./which openssl
 	./openssl version
 	./openssl ciphers
 	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (0)'

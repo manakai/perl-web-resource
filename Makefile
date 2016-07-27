@@ -56,18 +56,9 @@ PROVE = ./prove
 test: test-deps test-main
 
 test-deps: deps
-	./perl local/bin/pmbp.pl --create-perl-command-shortcut which
-	./which openssl
-	./openssl version
-	./openssl ciphers
-	cat openssl
-	cat perl
-	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (0)'
-	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (2)'
-	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (3)'
-	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (4)'
 
 test-main:
+	TEST_METHOD="Stapled, good" ./perl t/parsing.t
 	$(PROVE) t/*.t
 
 ## License: Public Domain.

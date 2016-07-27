@@ -58,7 +58,6 @@ test: test-deps test-main
 test-deps: deps
 	./perl local/bin/pmbp.pl --create-perl-command-shortcut which
 	./which openssl
-	local/common/bin/openssl version
 	./openssl version
 	./openssl ciphers
 	cat openssl

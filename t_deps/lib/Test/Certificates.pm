@@ -127,7 +127,8 @@ sub wait_create_cert ($$) {
   }
   my $cert_pem_path = $_[0]->cert_path ('cert.pem', $cert_args);
   unless ($cert_pem_path->is_file) {
-    $class->generate_certs ({host => 'intermediate', intermediate => 1});
+    $class->generate_certs ({host => 'intermediate', intermediate => 1})
+        unless $_[0]->cert_path ('cert.pem', {host => 'intermediate'})->is_file;
     $class->generate_certs ($cert_args);
   }
 

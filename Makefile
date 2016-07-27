@@ -58,6 +58,7 @@ test: test-deps test-main
 test-deps: deps
 	./perl local/bin/pmbp.pl --create-perl-command-shortcut which
 	./which openssl
+	local/common/bin/openssl version
 	./openssl version
 	./openssl ciphers
 	./perl -MNet::SSLeay -e 'print +Net::SSLeay::SSLeay_version (0)'

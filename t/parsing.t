@@ -58,7 +58,7 @@ sub server_as_cv ($) {
   my $pid;
   my $data = '';
   my $port = find_listenable_port;
-  my $host = rand (10000) . '.our.parsing.test';
+  my $host = (int rand 10000) . '.our.parsing.test';
   my $resultdata = [];
   my $after_server_close_cv;
   my $close_server = 0;

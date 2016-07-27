@@ -822,7 +822,7 @@ sub run_commands ($$$$) {
       };
 
       local $CurrentID = $states->{id};
-      my $server_cert_path = Test::Certificates->cert_path ('cert.pem', $args);
+      my $server_cert_path = Test::Certificates->cert_path ('cert-chained.pem', $args);
       warn "[$states->{id}] TLS server certificate: |$server_cert_path|\n" if $DUMP;
       $hdl->starttls ('accept', {
         method => 'TLSv1_2',

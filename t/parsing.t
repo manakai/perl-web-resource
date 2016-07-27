@@ -393,12 +393,13 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           } $c;
           return $http->close;
         }, sub { # connect failed
+          my $error = $_[0];
           test {
             my $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
             is !!1, !!$is_error, 'is error';
             ok 1, 'response version (skipped)';
             is 0, $test->{status}->[1]->[0], 'status';
-            ok 1, 'reason (skipped)';
+            is $error, undef;
             ok 1, 'headers (skipped)';
             is '(close)', $test->{body}->[0], 'body';
             ok 1, 'incomplete (skipped)';

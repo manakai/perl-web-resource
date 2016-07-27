@@ -10,6 +10,7 @@ my $root_path = path (__FILE__)->parent->parent->parent->parent->absolute;
 my $cert_path = $root_path->child ('local/cert');
 my $cn = $ENV{SERVER_HOST_NAME} || 'hoge.test';
 $cert_path->mkpath;
+my $DUMP = $ENV{DUMP};
 
 sub ca_path ($$) {
   return $cert_path->child ("ca-" . $_[1]);
@@ -36,6 +37,7 @@ sub cert_name ($) {
 } # cert_name
 
 sub x ($) {
+  warn "\$ $_[0]\n" if $DUMP;
   system ($_[0]) == 0 or die "|$_[0]| failed: $?";
 } # x
 
@@ -62,8 +64,8 @@ sub generate_certs ($$) {
   my ($class, $cert_args) = @_;
 
   $class->generate_ca_cert;
-  my $ca_key_path = $class->ca_path ('key.pem');
-  my $ca_cert_path = $class->ca_path ('cert.pem');
+  my $ica_key_path = $cert_args->{intermediate} ? $class->ca_path ('key.pem') : $class->cert_path ('key.pem', {host => 'intermediate'});
+  my $ica_cert_path = $cert_args->{intermediate} ? $class->ca_path ('cert.pem') : $class->cert_path ('cert.pem', {host => 'intermediate'});
   my $ecname = 'prime256v1';
 
   my $subject_name = $cert_args->{host} || $cn;
@@ -86,6 +88,7 @@ sub generate_certs ($$) {
         q{1.3.6.1.5.5.7.1.24 = DER:3003020105};
         #q{tlsfeature = status_request};
   }
+  push @conf, q{nsCertType = sslCA} if $cert_args->{intermediate};
   $config_path->spew (join "\n", @conf);
   #my $server_subj = '/';
   #my $server_subj = '/subjectAltName=DNS.1='.$subject_name;
@@ -103,10 +106,15 @@ sub generate_certs ($$) {
   }
 
   my $server_cert_path = $_[0]->cert_path ('cert.pem', $cert_args);
-  x "openssl x509 -req -in \Q$server_req_path\E -days 1 -CA \Q$ca_cert_path\E -CAkey \Q$ca_key_path\E -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E -extensions exts";
+  x "openssl x509 -req -in \Q$server_req_path\E -days 1 -CA \Q$ica_cert_path\E -CAkey \Q$ica_key_path\E -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E -extensions exts";
 
   my $server_p12_path = $_[0]->cert_path ('keys.p12', $cert_args);
   x "openssl pkcs12 -export -passout pass: -in \Q$server_cert_path\E -inkey \Q$server_key_path\E -out \Q$server_p12_path\E";
+
+  my $chained_cert_path = $_[0]->cert_path ('cert-chained.pem', $cert_args);
+  x "cat \Q$server_cert_path\E \Q$ica_cert_path\E > \Q$chained_cert_path\E";
+  my $ca_cert_path = $class->ca_path ('cert.pem');
+  x "cat \Q$ca_cert_path\E >> \Q$chained_cert_path\E";
 } # generate_certs
 
 sub wait_create_cert ($$) {
@@ -118,6 +126,7 @@ sub wait_create_cert ($$) {
   }
   my $cert_pem_path = $_[0]->cert_path ('cert.pem', $cert_args);
   unless ($cert_pem_path->is_file) {
+    $class->generate_certs ({host => 'intermediate', intermediate => 1});
     $class->generate_certs ($cert_args);
   }
 
@@ -148,6 +157,7 @@ sub ocsp_response ($$;%) {
   my ($class, $cert_args, %args) = @_;
 
   my $cert_path = $class->cert_path ('cert.pem', $cert_args);
+  my $cert_chained_path = $class->cert_path ('cert-chained.pem', $cert_args);
 
   my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
   my $rv = Net::SSLeay::BIO_write ($bio, $cert_path->slurp);
@@ -183,11 +193,11 @@ sub ocsp_response ($$;%) {
   
   (system 'openssl', 'ocsp',
        '-index' => $index_path,
-       '-CA' => $class->ca_path ('cert.pem'),
-       '-rkey' => $class->ca_path ('key.pem'),
-       '-rsigner' => $class->ca_path ('cert.pem'),
-       '-issuer' => $class->ca_path ('cert.pem'),
-       '-cert' => $cert_path,
+       '-CA' => $class->cert_path ('cert-chained.pem', {host => 'intermediate'}),
+       '-rkey' => $class->cert_path ('key.pem', {host => 'intermediate'}),
+       '-rsigner' => $class->cert_path ('cert-chained.pem', {host => 'intermediate'}),
+       '-issuer' => $class->cert_path ('cert-chained.pem', {host => 'intermediate'}),
+       '-cert' => $cert_chained_path,
        ($args{no_next} ? () : ('-ndays' => 1)),
        #'-text', # DEBUG
        '-respout' => $res_path) == 0

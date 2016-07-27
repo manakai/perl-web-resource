@@ -863,7 +863,11 @@ sub debug_handshake_done ($$$) {
     warn "$id: + Resumed session\n" if $data->{tls_session_resumed};
     my $i = 0;
     for (@{$data->{tls_cert_chain} or []}) {
-      warn "$id: + #$i: @{[$_->debug_info]}\n";
+      if (defined $_) {
+        warn "$id: + #$i: @{[$_->debug_info]}\n";
+      } else {
+        warn "$id: + #$i: ?\n";
+      }
       $i++;
     }
     if (defined (my $result = $data->{stapling_result})) {

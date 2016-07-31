@@ -58,7 +58,7 @@ test: test-deps test-main
 test-deps: deps
 
 test-main:
-	TEST_METHOD="Stapled, good" ./perl t/parsing.t
+	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="Stapled, good" ./perl t/parsing.t
 	$(PROVE) t/*.t
 
 ## License: Public Domain.

@@ -417,7 +417,11 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             is !!1, !!$is_error, 'is error';
             ok 1, 'response version (skipped)';
             is 0, $test->{status}->[1]->[0], 'status';
-            is $error, undef;
+            if ($is_error) {
+              ok 1;
+            } else {
+              is $error, undef, 'no error';
+            }
             ok 1, 'headers (skipped)';
             is '(close)', $test->{body}->[0], 'body';
             ok 1, 'incomplete (skipped)';

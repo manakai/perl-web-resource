@@ -53,7 +53,7 @@ sub _server_as_cv ($$$) {
   my $started;
   my $pid;
   my $data = '';
-  run_cmd
+  my $run_cv = run_cmd
       ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), $host, $port],
       '<' => \$code,
       '>' => sub {
@@ -70,6 +70,12 @@ sub _server_as_cv ($$$) {
       },
       '$$' => \$pid;
   $server_pids->{$pid} = 1;
+  $run_cv->cb (sub {
+    my $result = $_[0]->recv;
+    if ($result) {
+      $cv->croak ("Server error: $result") unless $started;
+    }
+  });
   return $cv;
 } # _server_as_cv
 

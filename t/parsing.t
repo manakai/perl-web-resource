@@ -54,16 +54,16 @@ END { kill 'KILL', $_ for keys %$server_pids }
 sub server_as_cv ($) {
   my $code = $_[0];
   my $cv = AE::cv;
-  my $started;
+  my $started = 0;
   my $pid;
   my $data = '';
   my $port = find_listenable_port;
   my $host = (int rand 10000) . '.our.parsing.test';
   my $resultdata = [];
-  my $after_server_close_cv;
+  my $after_server_close_cv = AE::cv;
   my $close_server = 0;
   local $ENV{SERVER_HOST_NAME} = $host;
-  $after_server_close_cv = run_cmd
+  my $run_cv = run_cmd
       ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), '127.0.0.1', $port],
       '<' => \$code,
       '>' => sub {
@@ -89,6 +89,15 @@ sub server_as_cv ($) {
       },
       '$$' => \$pid;
   $server_pids->{$pid} = 1;
+  $run_cv->cb (sub {
+    my $result = $_[0]->recv;
+    if ($result) {
+      $after_server_close_cv->croak ("Server error: $result");
+      $cv->croak ("Server error: $result") unless $started;
+    } else {
+      $after_server_close_cv->send;
+    }
+  });
   return $cv;
 } # server_as_cv
 
@@ -108,7 +117,16 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
     test {
       my $c = shift;
       server_as_cv ($test->{data}->[0])->cb (sub {
-        my $server = $_[0]->recv;
+        my $server = eval { $_[0]->recv };
+        if ($@) {
+          my $error = $@;
+          test {
+            is $error, undef, 'server_as_cv';
+          } $c;
+          done $c;
+          undef $c;
+          return;
+        }
         my $transport = Web::Transport::TCPTransport->new
             (host => Web::Host->parse_string ($server->{addr}),
              port => $server->{port});

@@ -206,8 +206,14 @@ sub ocsp_response ($$;%) {
        #'-text', # DEBUG
        '-respout' => $res_path) == 0
       or die $?;
-  warn "OCSP response generated\n" if $DUMP;
+  warn "OCSP response generated: |$res_path|\n" if $DUMP;
 
+  die "|$res_path| not found" unless $res_path->is_file;
+#XXX
+warn "slurp1";
+  eval { $res_path->slurp };
+warn $@;
+warn "slurp2";
   my $der = $res_path->slurp; # DER encoded
 
   warn "Check OCSP response's timestamp...\n" if $DUMP;

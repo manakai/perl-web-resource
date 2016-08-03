@@ -889,20 +889,20 @@ sub run_commands ($$$$) {
               $res = join '', map { pack 'C', rand 256 } 1..1 + int rand 1024;
               warn "[$states->{id}] OCSP staple = broken\n" if $DUMP;
             } else {
+              warn "[$states->{id}] OCSP staple = response...\n" if $DUMP;
               $res = Test::Certificates->ocsp_response
                   ($args,
                    revoked => $args->{stapling} eq 'revoked',
                    expired => $args->{stapling} eq 'expired',
                    no_next => $args->{stapling_no_next});
-              warn "[$states->{id}] OCSP staple = response\n" if $DUMP;
+              warn "[$states->{id}] OK\n" if $DUMP;
             }
             Test::OpenSSL::p_SSL_set_tlsext_status_ocsp_resp_data
                 ($tls, $res, length $res);
             warn "[$states->{id}] OCSP stapled!\n" if $DUMP;
 
             return 0; # SSL_TLSEXT_ERR_OK
-          })
-if 0;
+          });
         },
       });
       unshift @{$states->{commands}}, 'waitstarttls';

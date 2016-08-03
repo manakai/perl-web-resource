@@ -58,8 +58,7 @@ test: test-deps test-main
 test-deps: deps
 
 test-main:
-	WEBUA_DEBUG=1 ./perl sketch/client.pl --url https://www.amazon.co.jp
-	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="270" ./perl t/parsing.t
+	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="292" ./perl t/parsing.t
 	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="293" ./perl t/parsing.t
 	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="Stapled, good" ./perl t/parsing.t
 	$(PROVE) t/*.t

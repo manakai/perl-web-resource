@@ -58,7 +58,7 @@ test: test-deps test-main
 test-deps: deps
 
 test-main:
-	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="TLS + HTTP/1.0" ./perl t/parsing.t
+	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="TLS . HTTP/1.0" ./perl t/parsing.t
 	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="Stapled, good" ./perl t/parsing.t
 	$(PROVE) t/*.t
 

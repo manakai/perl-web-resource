@@ -170,9 +170,8 @@ sub ocsp_response ($$;%) {
   my $sno = Net::SSLeay::P_ASN1_INTEGER_get_hex (Net::SSLeay::X509_get_serialNumber ($x509));
   Net::SSLeay::X509_free($x509);
 
-  my $index_file = $root_path->child ('local/temp/' . int rand 10000);
-  $index_file->parent->mkpath;
-  my $index_path = path ($index_file->filename);
+  my $index_path = $root_path->child ('local/temp/' . int rand 10000);
+  $index_path->parent->mkpath;
 
   my $status = 'V';
   my $rdate = '';
@@ -190,9 +189,8 @@ sub ocsp_response ($$;%) {
   push @$index, join "\t", $status, $xdate, $rdate, $sno, 'unknown', $subj;
   $index_path->spew ((join "\n", @$index) . "\n");
 
-  my $res_file = $root_path->child ('local/temp/' . int rand 10000);
-  $res_file->parent->mkpath;
-  my $res_path = path ($res_file->filename);
+  my $res_path = $root_path->child ('local/temp/' . int rand 10000);
+  $res_path->parent->mkpath;
 
   warn "opsnssl ocsp...\n" if $DUMP;
   (system 'openssl', 'ocsp',

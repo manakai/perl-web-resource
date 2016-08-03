@@ -881,7 +881,7 @@ sub run_commands ($$$$) {
 
             unless ($args->{stapling}) {
               warn "[$states->{id}] No OCSP stapling\n" if $DUMP;
-              return 1;
+              return 3; # SSL_TLSEXT_ERR_NOACK
             }
 
             my $res;
@@ -901,7 +901,8 @@ sub run_commands ($$$$) {
             warn "[$states->{id}] OCSP stapled!\n" if $DUMP;
 
             return 0; # SSL_TLSEXT_ERR_OK
-          });
+          })
+if 0;
         },
       });
       unshift @{$states->{commands}}, 'waitstarttls';

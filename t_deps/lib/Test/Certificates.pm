@@ -210,6 +210,9 @@ sub ocsp_response ($$;%) {
 
   die "|$res_path| not found" unless $res_path->is_file;
 #XXX
+ system "ls -l " . $res_path->parent;
+warn "/ls";
+  system "cat $res_path";
 warn "slurp1";
   eval { $res_path->slurp };
 warn $@;

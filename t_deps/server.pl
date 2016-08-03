@@ -879,7 +879,10 @@ sub run_commands ($$$$) {
           Net::SSLeay::CTX_set_tlsext_status_cb ($ctx, sub {
             my ($tls, $response) = @_;
 
-            return 1 unless $args->{stapling}; # no OCSP stapling
+            unless ($args->{stapling}) {
+              warn "[$states->{id}] No OCSP stapling\n" if $DUMP;
+              return 1;
+            }
 
             my $res;
             if ($args->{stapling} eq 'broken') {

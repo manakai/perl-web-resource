@@ -192,7 +192,8 @@ sub ocsp_response ($$;%) {
 
   my $res_file = File::Temp->new;
   my $res_path = path ($res_file->filename);
-  
+
+  warn "opsnssl ocsp...\n" if $DUMP;
   (system 'openssl', 'ocsp',
        '-index' => $index_path,
        '-CAfile' => $class->cert_path ('cert-chained.pem', {host => 'intermediate'}),
@@ -205,9 +206,11 @@ sub ocsp_response ($$;%) {
        #'-text', # DEBUG
        '-respout' => $res_path) == 0
       or die $?;
+  warn "OCSP response generated\n" if $DUMP;
 
   my $der = $res_path->slurp; # DER encoded
 
+  warn "Check OCSP response's timestamp...\n" if $DUMP;
   my $parsed = Web::Transport::OCSP->parse_response_byte_string ($der);
   my $dtp = Web::DateTime::Parser->new;
   my $max = time;
@@ -222,6 +225,7 @@ sub ocsp_response ($$;%) {
     warn "Wait for $delta seconds for OCSP response...\n";
     sleep $delta;
   }
+  warn "OK!\n" if $DUMP;
 
   return $der;
 } # ocsp_response

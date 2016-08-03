@@ -210,6 +210,11 @@ sub ocsp_response ($$;%) {
 
   die "|$res_path| not found" unless $res_path->is_file;
 #XXX
+  x "ls -l /";
+warn "/ls";
+  x "ls -l /var/folders";
+warn "/ls";
+
  x "ls -l " . $res_path->parent->parent->parent;
 warn "/ls";
  x "ls -l " . $res_path->parent->parent;

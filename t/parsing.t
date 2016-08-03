@@ -96,6 +96,7 @@ sub server_as_cv ($) {
   $server_pids->{$pid} = 1;
   $run_cv->cb (sub {
     my $result = $_[0]->recv;
+    warn "Server stopped ($result)" if $ENV{DUMP};
     if ($result) {
       $after_server_close_cv->croak ("Server error: $result");
       $cv->croak ("Server error: $result") unless $started;

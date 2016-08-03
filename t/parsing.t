@@ -439,7 +439,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
       });
     } n => 9 # + 1 + 3*@{$test->{'1xx'} || []}
       , name => [$path, $test->{name}->[0]],
-        timeout => (($test->{name}->[0] || '') =~ /length=/ ? 90 : 20);
+        timeout => 120;
   };
 } # $path
 

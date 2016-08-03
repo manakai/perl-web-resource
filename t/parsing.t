@@ -68,6 +68,11 @@ sub server_as_cv ($) {
       '<' => \$code,
       '>' => sub {
         $data .= $_[0] if defined $_[0];
+        if ($ENV{DUMP}) {
+          warn "--- .parsing.t received. ---\n";
+          warn "$data\n";
+          warn "--- ^parsing.t received^ ---\n";
+        }
         while ($data =~ s/^\[data (.+)\]$//m) {
           push @$resultdata, json_bytes2perl $1;
         }

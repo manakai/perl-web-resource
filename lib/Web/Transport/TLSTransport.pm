@@ -277,7 +277,8 @@ warn "XXX s4";
               = {failed => 1, message => $error, response => $res};
           return 0;
         }
-      };
+      }
+if 0;
 
       ## XXX As Net::SSLeay does not export OpenSSL's
       ## |SSL_CTX_set_client_cert_cb| function, it's not possible to

@@ -313,6 +313,7 @@ warn "XXX s5 " . $where;
     $self->{wq} = [];
     $self->_tls;
   })->catch (sub {
+warn "XXX s8 " . $_[0];
     if (defined $self->{starttls_done}) {
       (delete $self->{starttls_done})->[1]->($_[0]);
     } else {
@@ -321,6 +322,7 @@ warn "XXX s5 " . $where;
   });
 
   return $p->catch (sub {
+warn "XXX s9 " . $_[0];
     delete $self->{cb};
 
     my $data = $self->{starttls_data};

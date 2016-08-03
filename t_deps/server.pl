@@ -1259,6 +1259,7 @@ my $server = tcp_server $host, $port, sub {
   run_commands 'accepted', $hdl, $states, sub { };
 };
 syswrite STDOUT, "[server $host $port]\x0A";
+warn "@{[scalar gmtime]} [server $host $port]\n" if $DUMP;
 
 $cv->recv;
 #warn "end";

@@ -311,7 +311,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               headers => [['Content-Length' => $test_type eq 'largerequest' ? 1024*1024 : 0]],
             );
             $http->send_request_headers ($req);
-            $http->send_data (\('x' x (1024*1024))) if $test_type eq 'largerequest';
+            if ($test_type eq 'largerequest') {
+              $http->send_data (\('x' x 1024)) for 1..1024;
+            }
             if ($req->{method} eq 'CONNECT') {
               $req->{tunnel}->then (sub {
                 for (@{$test->{'tunnel-send'} or []}) {

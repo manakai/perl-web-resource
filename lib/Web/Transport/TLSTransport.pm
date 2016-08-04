@@ -200,7 +200,6 @@ sub start ($$;%) {
       });
       $self->{starttls_data}->{stapling_result} = {}; # not applicable
     } else { # client
-warn "XXX s1";
       Net::SSLeay::set_connect_state ($tls);
       if (defined $args->{sni_host} and $args->{sni_host}->is_domain) {
         Net::SSLeay::set_tlsext_host_name ($tls, $args->{sni_host}->stringify);
@@ -208,7 +207,6 @@ warn "XXX s1";
 
       ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_verify.html>
       Net::SSLeay::set_verify $tls, $vmode, sub {
-warn "XXX s2";
         my ($preverify_ok, $x509_store_ctx) = @_;
         my $depth = Net::SSLeay::X509_STORE_CTX_get_error_depth ($x509_store_ctx);
         my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
@@ -232,7 +230,6 @@ warn "XXX s2";
           $tls, Net::SSLeay::TLSEXT_STATUSTYPE_ocsp ();
       Net::SSLeay::CTX_set_tlsext_status_cb $self->{tls_ctx}->ctx, sub {
         my ($tls, $response) = @_;
-warn "XXX s3";
         unless ($response) {
           $self->{starttls_data}->{stapling_result} = undef;
           return 1;
@@ -264,7 +261,6 @@ warn "XXX s3";
         }
         $certid = substr $certid, 2; # remove SEQUENCE header
 
-warn "XXX s4";
         my $res = Web::Transport::OCSP->parse_response_byte_string
             (Net::SSLeay::i2d_OCSP_RESPONSE ($response));
         my $error = Web::Transport::OCSP->check_cert_id_with_response
@@ -291,7 +287,6 @@ warn "XXX s4";
     ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_info_callback.html>
     Net::SSLeay::set_info_callback ($tls, sub {
       my ($tls, $where, $ret) = @_;
-warn "XXX s5 " . $where;
       if ($where & SSL_CB_ALERT and $where & SSL_CB_READ) {
         ## <https://www.openssl.org/docs/manmaster/ssl/SSL_alert_type_string.html>
         my $level = Net::SSLeay::alert_type_string ($ret); # W F U
@@ -313,7 +308,6 @@ warn "XXX s5 " . $where;
     $self->{wq} = [];
     $self->_tls;
   })->catch (sub {
-warn "XXX s8 " . $_[0];
     if (defined $self->{starttls_done}) {
       (delete $self->{starttls_done})->[1]->($_[0]);
     } else {
@@ -322,7 +316,6 @@ warn "XXX s8 " . $_[0];
   });
 
   return $p->catch (sub {
-warn "XXX s9 " . $_[0];
     delete $self->{cb};
 
     my $data = $self->{starttls_data};

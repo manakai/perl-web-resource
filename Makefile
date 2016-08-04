@@ -25,16 +25,12 @@ pmbp-upgrade: local/bin/pmbp.pl
 pmbp-update: git-submodules pmbp-upgrade
 	perl local/bin/pmbp.pl --update
 pmbp-install: pmbp-upgrade
-	-ls local/common/bin
-	PMBP_VERBOSE=10 \
 	perl local/bin/pmbp.pl \
 	    --install-openssl \
-	    --create-perl-command-shortcut @openssl
-	ls local/common/bin
-	perl local/bin/pmbp.pl \
 	    --install \
             --create-perl-command-shortcut @perl \
-            --create-perl-command-shortcut @prove
+            --create-perl-command-shortcut @prove \
+	    --create-perl-command-shortcut @openssl
 
 ## ------ Build ------
 
@@ -56,12 +52,8 @@ PROVE = ./prove
 test: test-deps test-main
 
 test-deps: deps
-	touch local/common/include/openssl/XXX.h
 
 test-main:
-	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="292" ./perl t/parsing.t
-	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="293" ./perl t/parsing.t
-	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="Stapled, good" ./perl t/parsing.t
 	$(PROVE) t/*.t
 
 ## License: Public Domain.

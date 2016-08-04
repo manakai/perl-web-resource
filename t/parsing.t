@@ -414,7 +414,11 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               } else {
                 like $r_events, qr{^(?:headers,datastart,data,dataend,|)complete$}, 'r_events';
               }
-              is join (',', @{$result->{s_events} || []}), 'requestsent,complete', 's_events';
+              ## If server closes the connection before sending all
+              ## data to the server, requestsent event might not be
+              ## reported.
+              like join (',', @{$result->{s_events} || []}),
+                  qr{^(?:requestsent,|)complete$}, 's_events';
             }
           } $c;
           return $http->close;

@@ -4,6 +4,7 @@ use warnings;
 use DynaLoader;
 use Path::Tiny;
 use Inline 'C', 'config', inc => '-I' . path (__FILE__)->parent->parent->parent->parent->child ('local/common/include')->absolute->stringify;
+use Inline 'C';
 
 our $ref = DynaLoader::dl_load_file ("libssl.so", 0x01);
 

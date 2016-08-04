@@ -208,26 +208,6 @@ sub ocsp_response ($$;%) {
   warn "OCSP response generated: |$res_path|\n" if $DUMP;
 
   die "|$res_path| not found" unless $res_path->is_file;
-#XXX
-  x "ls -l";
-  x "pwd";
-warn "/ls";
-  x "ls -l /";
-warn "/ls";
-  x "ls -l /var/folders";
-warn "/ls";
-
- x "ls -l " . $res_path->parent->parent->parent;
-warn "/ls";
- x "ls -l " . $res_path->parent->parent;
-warn "/ls";
- x "ls -l " . $res_path->parent;
-warn "/ls";
-  x "cat $res_path";
-warn "slurp1";
-  eval { $res_path->slurp };
-warn $@;
-warn "slurp2";
   my $der = $res_path->slurp; # DER encoded
 
   warn "Check OCSP response's timestamp...\n" if $DUMP;

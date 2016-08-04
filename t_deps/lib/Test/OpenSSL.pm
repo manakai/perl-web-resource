@@ -3,8 +3,7 @@ use strict;
 use warnings;
 use DynaLoader;
 use Path::Tiny;
-use Inline 'C', 'Config', inc => '-I' . path (__FILE__)->parent->parent->parent->parent->child ('local/common/include')->absolute->stringify;
-use Inline 'C';
+use Inline 'C', 'config', inc => '-I' . path (__FILE__)->parent->parent->parent->parent->child ('local/common/include')->absolute->stringify;
 
 our $ref = DynaLoader::dl_load_file ("libssl.so", 0x01);
 

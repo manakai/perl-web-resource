@@ -68,7 +68,7 @@ sub server_as_cv ($) {
       '<' => \$code,
       '>' => sub {
         $data .= $_[0] if defined $_[0];
-        if ($ENV{DUMP}) {
+        if ($ENV{DUMP} and defined $_[0]) {
           warn "--- .parsing.t received. ---\n";
           warn "$_[0]\n";
           warn "--- ^parsing.t received^ ---\n";

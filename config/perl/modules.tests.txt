@@ -1,7 +1,5 @@
 AnyEvent::HTTPD
 AnyEvent::Util
-Inline
-Inline::C
 Path::Tiny
 Test::More
 Time::HiRes

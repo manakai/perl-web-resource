@@ -56,6 +56,7 @@ PROVE = ./prove
 test: test-deps test-main
 
 test-deps: deps
+	touch local/common/include/openssl/XXX.h
 
 test-main:
 	DUMP=1 WEBUA_DEBUG=2 TEST_CONCUR=1 TEST_METHOD="292" ./perl t/parsing.t

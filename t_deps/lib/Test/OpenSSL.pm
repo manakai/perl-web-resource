@@ -15,6 +15,7 @@ __C__
 #include <openssl/ssl.h>
 #include <openssl/tls1.h>
 #include <openssl/ocsp.h>
+#include <openssl/XXX.h>
 
 int p_SSL_set_tlsext_status_ocsp_resp_data (int ssl, unsigned char *res, int len) {
   unsigned char *p = OPENSSL_malloc (len);

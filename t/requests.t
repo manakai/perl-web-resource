@@ -2069,6 +2069,7 @@ CRLF
   });
 } n => 1, name => 'UNIX domain socket';
 
+Test::Certificates->wait_create_cert;
 run_tests;
 
 =head1 LICENSE

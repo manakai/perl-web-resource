@@ -2811,6 +2811,7 @@ test {
   });
 } n => 2, name => 'request options - multipart/form-data';
 
+Test::Certificates->wait_create_cert;
 run_tests;
 
 =head1 LICENSE

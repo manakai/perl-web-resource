@@ -70,7 +70,7 @@ sub server_as_cv ($) {
         $data .= $_[0] if defined $_[0];
         if ($ENV{DUMP}) {
           warn "--- .parsing.t received. ---\n";
-          warn "$data\n";
+          warn "$_[0]\n";
           warn "--- ^parsing.t received^ ---\n";
         }
         while ($data =~ s/^\[data (.+)\]$//m) {

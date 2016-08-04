@@ -2,6 +2,8 @@ package Test::OpenSSL;
 use strict;
 use warnings;
 use DynaLoader;
+use Path::Tiny;
+use Inline 'C', 'Config', inc => path (__FILE__)->parent->parent->parent->parent->child ('local/common/include')->stringify;
 use Inline 'C';
 
 our $ref = DynaLoader::dl_load_file ("libssl.so", 0x01);

@@ -3877,7 +3877,11 @@ $Web::MIME::_TypeDefs::Type = {
                                             'testfontstream' => {},
                                             'tex' => {},
                                             'texinfo' => {},
-                                            'text' => {},
+                                            'text' => {
+                                                        'related' => {
+                                                                       'application/octet-stream' => {}
+                                                                     }
+                                                      },
                                             'tga' => {
                                                        'related' => {
                                                                       'image/x-targa' => {}

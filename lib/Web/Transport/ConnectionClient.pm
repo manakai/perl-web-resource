@@ -15,6 +15,7 @@ sub new_from_url ($$) {
   croak "The URL does not have a tuple origin" if $origin->is_opaque;
   return bless {
     base_url => $_[1],
+    path_prefix => $_[1]->path,
     origin => $origin,
     queue => Promise->resolve,
     parent_id => (int rand 100000),
@@ -116,6 +117,7 @@ sub request ($%) {
   $self->{queue} = $self->{queue}->then (sub {
 
     $args{base_url} ||= $self->{base_url};
+    $args{path_prefix} = $self->{path_prefix} if not defined $args{path_prefix};
     my ($method, $url_record, $header_list, $body_ref)
         = Web::Transport::RequestConstructor->create (\%args);
     if (ref $method) { # error
@@ -200,6 +202,7 @@ sub DESTROY ($) {
 } # DESTROY
 
 package Web::Transport::ConnectionClient::Response;
+use overload '""' => 'stringify', fallback => 1;
 
 sub is_network_error ($) {
   return $_[0]->{failed};
@@ -268,6 +271,15 @@ sub as_string ($) {
       "\x0D\x0A" .
       $_[0]->content;
 } # as_string
+
+sub stringify ($) {
+  my $self = $_[0];
+  if ($self->is_network_error) {
+    return "Network error: @{[$self->network_error_message]}";
+  } else {
+    return "Response: @{[$self->status_line]}";
+  }
+} # stringify
 
 1;
 

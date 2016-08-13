@@ -2031,7 +2031,7 @@ test {
       test {
         my $request = $res->body_bytes;
         $request =~ s/GET$//;
-        like $request, qr{^GET /ac/0//%D4%B3ab/%C3%BE HTTP};
+        like $request, qr{^GET /foo/ac/0//%D4%B3ab/%C3%BE HTTP};
       } $c;
     })->then (sub{
       return $client->close;
@@ -2065,7 +2065,7 @@ test {
       test {
         my $request = $res->body_bytes;
         $request =~ s/GET$//;
-        like $request, qr{^GET /ac/0//%D4%B3ab/%C3%BE\?hoge=abc HTTP};
+        like $request, qr{^GET /foo/ac/0//%D4%B3ab/%C3%BE\?hoge=abc HTTP};
       } $c;
     })->then (sub{
       return $client->close;
@@ -2075,6 +2075,187 @@ test {
     });
   });
 } n => 1, name => 'request - path and query';
+
+for (
+  [qq</hoge/\x{5000}>, q</hoge/%E5%80%80/ac/%E5%80%84>],
+  [qq<hoge/\x{5000}>, q</hoge/%E5%80%80/ac/%E5%80%84>],
+  [qq</>, q</ac/%E5%80%84>],
+  [qq<>, q</ac/%E5%80%84>],
+) {
+  my ($path_prefix, $expected) = @$_;
+  test {
+    my $c = shift;
+    server_as_cv (q{
+      receive "GET", start capture
+      "HTTP/1.1 203 Hoe"CRLF
+      "content-length: 0"CRLF
+      CRLF
+      receive "GET", end capture
+      "HTTP/1.1 200 OK"CRLF
+      CRLF
+      sendcaptured
+      close
+    })->cb (sub {
+      my $server = $_[0]->recv;
+      my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo?bar#baz});
+      my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+      return $client->request (path_prefix => $path_prefix, path => ['ac', "\x{5004}"])->then (sub {
+        return $client->request (url => $url);
+      })->then (sub {
+        my $res = $_[0];
+        test {
+          my $request = $res->body_bytes;
+          $request =~ s/GET$//;
+          like $request, qr{^GET \Q$expected\E HTTP};
+        } $c;
+      })->then (sub{
+        return $client->close;
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          is $error, undef, 'No exception';
+        } $c;
+      })->then (sub {
+        done $c;
+        undef $c;
+      });
+    });
+  } n => 1, name => ['request - path_prefix', $path_prefix];
+}
+
+for (
+  [qq<http://abc/def/xyzxs>],
+  [qq<//abc/def/xyzxs>],
+  [qq<https://abc/def/xyzxs>],
+  [qq<ftp://abc/def/xyzxs>],
+  [qq<about:blank>],
+  [qq<http://hoge:[foo]>],
+) {
+  my ($path_prefix) = @$_;
+  test {
+    my $c = shift;
+    server_as_cv (q{
+      receive "GET", start capture
+      "HTTP/1.1 203 Hoe"CRLF
+      "content-length: 0"CRLF
+      CRLF
+      receive "GET", end capture
+      "HTTP/1.1 200 OK"CRLF
+      CRLF
+      sendcaptured
+      close
+    })->cb (sub {
+      my $server = $_[0]->recv;
+      my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo?bar#baz});
+      my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+      return $client->request (path_prefix => $path_prefix, path => ['ac', "\x{5004}"])->then (sub {
+        return $client->request (url => $url);
+      })->then (sub {
+        my $res = $_[0];
+        test {
+          ok 0;
+        } $c;
+      }, sub {
+        my $error = $_[0];
+        test {
+          ok $error->is_network_error;
+          is $error->network_error_message, "Bad |path_prefix|: |$path_prefix|";
+          is ''.$error, "Network error: " . $error->network_error_message;
+        } $c;
+      })->then (sub{
+        return $client->close;
+      })->then (sub {
+        done $c;
+        undef $c;
+      });
+    });
+  } n => 3, name => ['request - path_prefix', $path_prefix];
+}
+
+for (
+  [[], q</f/oo/>],
+  [['abc'], q</f/oo/abc>],
+  [['', 'abc'], q</f/oo//abc>],
+) {
+  my ($input, $expected) = @$_;
+  test {
+    my $c = shift;
+    server_as_cv (q{
+      receive "GET", start capture
+      "HTTP/1.1 203 Hoe"CRLF
+      "content-length: 0"CRLF
+      CRLF
+      receive "GET", end capture
+      "HTTP/1.1 200 OK"CRLF
+      CRLF
+      sendcaptured
+      close
+    })->cb (sub {
+      my $server = $_[0]->recv;
+      my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/f/oo?bar#baz});
+      my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+      return $client->request (path => $input)->then (sub {
+        return $client->request (path => ['captured']);
+      })->then (sub {
+        my $res = $_[0];
+        test {
+          my $request = $res->body_bytes;
+          $request =~ s/GET$//;
+          like $request, qr{^GET \Q$expected\E HTTP};
+        } $c;
+      })->then (sub{
+        return $client->close;
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          is $error, undef, 'No exception';
+        } $c;
+      })->then (sub {
+        done $c;
+        undef $c;
+      });
+    });
+  } n => 1, name => ['request - path_prefix', @$input];
+
+  test {
+    my $c = shift;
+    server_as_cv (q{
+      receive "GET", start capture
+      "HTTP/1.1 203 Hoe"CRLF
+      "content-length: 0"CRLF
+      CRLF
+      receive "GET", end capture
+      "HTTP/1.1 200 OK"CRLF
+      CRLF
+      sendcaptured
+      close
+    })->cb (sub {
+      my $server = $_[0]->recv;
+      my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/f/oo/?bar#baz});
+      my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+      return $client->request (path => $input)->then (sub {
+        return $client->request (path => ['captured']);
+      })->then (sub {
+        my $res = $_[0];
+        test {
+          my $request = $res->body_bytes;
+          $request =~ s/GET$//;
+          like $request, qr{^GET \Q$expected\E HTTP};
+        } $c;
+      })->then (sub{
+        return $client->close;
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          is $error, undef, 'No exception';
+        } $c;
+      })->then (sub {
+        done $c;
+        undef $c;
+      });
+    });
+  } n => 1, name => ['request - path_prefix', @$input];
+}
 
 test {
   my $c = shift;

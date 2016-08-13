@@ -52,11 +52,32 @@ L<Web::HTML::ConnectionClient> to describe requests to send:
 
 XXX
 
-url
 method
 headers
 basic_auth
 bearer
+
+=item url => $url
+
+Specify the request URL.  If specified, the value must be a
+L<Web::URL> object.
+
+The scheme of the URL must be one of C<http>, C<https>, or C<ftp>.
+
+Any username, password, or fragment of the URL is ignored.
+
+Either C<url> or C<path> option must be specified.
+
+=item path => [$seg1, $seg2, ...]
+
+Specify the path segments of the request URL.  If specified, the value
+must be an array reference of zero or more character strings.  They
+are encoded in UTF-8 and then concatenated with C</>.
+
+If a "prefix" is defined by the context, the path segments given by
+this option is appended to the prefix.
+
+When the C<url> option is specified, this option is ignored.
 
 =item cookies => {$string => $string, ...}
 

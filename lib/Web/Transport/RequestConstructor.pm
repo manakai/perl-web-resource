@@ -26,8 +26,18 @@ sub create ($$) {
   } elsif (defined $args->{base_url}) {
     if (defined $args->{path}) {
       require Web::URL;
+      my $prefix = '/';
+      if (defined $args->{path_prefix}) {
+        $prefix = Web::URL->parse_string ($args->{path_prefix}, Web::URL->parse_string (q<https://base/>));
+        if (defined $prefix and $prefix->get_origin->to_ascii eq q<https://base>) {
+          $prefix = $prefix->path;
+          $prefix .= '/' unless $prefix =~ m{/\z};
+        } else {
+          return {failed => 1, message => "Bad |path_prefix|: |$args->{path_prefix}|"};
+        }
+      }
       $url_record = Web::URL->parse_string
-          ((join '/', '', map { percent_encode_c $_ } @{$args->{path}}),
+          (($prefix . join '/', map { percent_encode_c $_ } @{$args->{path}}),
            $args->{base_url});
     }
   }

@@ -36,19 +36,6 @@ There are following methods:
 
 =over 4
 
-=item $client = Web::Transport::ConnectionClient->new_from_url ($url)
-
-Create a new client object, which is associated with a URL's origin.
-
-The argument must be a URL record object (L<Web::URL>).  It's origin
-must be a tuple origin (typically an C<http:> or C<https:> URL).  Note
-that anything other than the origin of the URL is ignored.
-
-Example:
-
-  $client = Web::Transport::ConnectionClient->new_from_url
-      (Web::URL->parse_url (q<http://server.test>));
-
 =item $client = Web::Transport::ConnectionClient->new_from_host ($string)
 
 Create a new client object, which is associated with a origin
@@ -58,6 +45,36 @@ host using HTTPS with port C<443> is created.
 The argument must be a string, which is either a domain, an IPv4
 address, or an IPv6 address enclosed by C<[> and C<]>.  They don't
 have to be in their canonicalized form.  IDNs are also allowed.
+
+=item $client = Web::Transport::ConnectionClient->new_from_url ($url)
+
+Create a new client object, which is associated with a URL's origin
+and path.
+
+The argument must be a URL record object (L<Web::URL>).  It's origin
+must be a tuple origin (typically an C<http:> or C<https:> URL).
+
+The path of the URL is used as the "prefix" of the URL path used for
+the requests (See L<Web::Transport/"REQUEST OPTIONS">' C<path>).
+
+Note that anything other than the origin and path of the URL is
+ignored.
+
+Example:
+
+  $client = Web::Transport::ConnectionClient->new_from_url
+      (Web::URL->parse_url (q<https://server.test>));
+  $client->request (path => []); # https://server.test/
+  $client->request (path => ['a', 'b']); # https://server.test/a/b
+  $client->request (url => Web::URL->parse_string (q<https://server.test/x>));
+
+Example:
+
+  $client = Web::Transport::ConnectionClient->new_from_url
+      (Web::URL->parse_url (q<https://server.test/z>));
+  $client->request (path => []); # https://server.test/z/
+  $client->request (path => ['a', 'b']); # https://server.test/z/a/b
+  $client->request (url => Web::URL->parse_string (q<https://server.test/x>));
 
 =item $promise = $client->request (url => ..., ...)
 

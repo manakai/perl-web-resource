@@ -5216,6 +5216,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                           'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.ericsson.quickcall'
                                                                         },
                                             'vnd.error+json' => {},
+                                            'vnd.espass-espass+zip' => {
+                                                                         'iana' => 'permanent',
+                                                                         'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.espass-espass+zip'
+                                                                       },
                                             'vnd.eszigno3+xml' => {
                                                                     'iana' => 'permanent',
                                                                     'iana_intended_usage' => 'common',
@@ -7489,6 +7493,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                      'iana_intended_usage' => 'limited use',
                                                                      'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.ncd.reference'
                                                                    },
+                                            'vnd.nearst.inv+json' => {
+                                                                       'iana' => 'permanent',
+                                                                       'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.nearst.inv+json'
+                                                                     },
                                             'vnd.nervana' => {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'common',
@@ -10710,16 +10718,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                  'application/x-wordperfect6.0' => {}
                                                                                }
                                                                 },
-                                            'wordperfect6.0' => {
-                                                                  'related' => {
-                                                                                 'application/vnd.wordperfect' => {},
-                                                                                 'application/vnd.wordperfect5.1' => {},
-                                                                                 'application/wordperfect' => {},
-                                                                                 'application/wordperfect5.1' => {},
-                                                                                 'application/x-wordperfect' => {},
-                                                                                 'application/x-wordperfect6.0' => {}
-                                                                               }
-                                                                },
+                                            'wordperfect6.0' => {},
                                             'wordperfect6.1' => {
                                                                   'obsolete' => 1,
                                                                   'preferred_type' => 'application/x-wordperfect6.1',
@@ -21622,6 +21621,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                    'text/x-abc' => {}
                                                                  }
                                                   },
+                                     'vnd.ascii-art' => {
+                                                          'iana' => 'permanent',
+                                                          'iana_template_url' => 'https://www.iana.org/assignments/media-types/text/vnd.ascii-art'
+                                                        },
                                      'vnd.csr' => {},
                                      'vnd.curl' => {
                                                      'iana' => 'permanent',

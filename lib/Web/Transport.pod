@@ -1,10 +1,10 @@
 =head1 NAME
 
-Web::Transport - Implementations of transport layer for the Web
+Web::Transport - Transport layer protocols for the Web
 
 =head1 DESCRIPTION
 
-These modules contain implementations of several protocols forming the
+These modules contain implementations of various protocols forming the
 Web platform's transport layer.
 
 Following protocols are supported by these modules and underlying
@@ -17,7 +17,7 @@ SOCKS5, DNS.
 
 =head1 MODULES
 
-There are following modules with public API:
+There are following modules that expose public APIs:
 
 =over 4
 
@@ -202,8 +202,8 @@ URL Standard <https://url.spec.whatwg.org/>.
 
 Encoding Standard <https://encoding.spec.whatwg.org/>.
 
-When a text is encoded in UTF-8, UTF-8 encoder of the Encoding
-Standard MUST be used.
+When a text is encoded in UTF-8, the UTF-8 encode steps of the
+Encoding Standard MUST be used.
 
 RFC 6265, HTTP State Management Mechanism
 <https://tools.ietf.org/html/rfc6265>.
@@ -256,11 +256,11 @@ repository):
 
 =item L<Promise> <https://github.com/wakaba/perl-promise>
 
-=item modules from perl-web-url repository <https://github.com/manakai/perl-web-url> such as L<Web::URL> L<Web::Host>, and L<Web::Origin>
+=item modules from perl-web-url repository <https://github.com/manakai/perl-web-url>, e.g. L<Web::URL> L<Web::Host>, and L<Web::Origin>
 
-=item modules from perl-web-encodings package <https://github.com/manakai/perl-web-encodings> repository such as L<Web::Encoding>
+=item modules from perl-web-encodings package <https://github.com/manakai/perl-web-encodings>, e.g. L<Web::Encoding>
 
-=item modules from perl-web-datetime package <https://github.com/manakai/perl-web-datetime> repository such as L<Web::DateTime::Parser>
+=item modules from perl-web-datetime package <https://github.com/manakai/perl-web-datetime>, e.g. L<Web::DateTime::Parser>
 
 =back
 

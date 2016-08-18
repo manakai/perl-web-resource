@@ -48,6 +48,10 @@ CONFIGURATIONS">).
 
 =back
 
+This module defines I<the encoding of the platform> (see Web Transport
+Processing) as UTF-8, ignoring any C<LOCALE> environment variable's
+encoding.
+
 =head1 SPECIFICATION
 
 Web Transport Processing

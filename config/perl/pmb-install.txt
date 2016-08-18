@@ -1,4 +1,4 @@
-Net::SSLeay~1.74
+Net::SSLeay~1.78
 Capture::Tiny~0.36
 Object::Event~1.23
 Inline::C~0.76

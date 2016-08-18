@@ -45,17 +45,11 @@ MIME types.
 
 =head1 REQUEST OPTIONS
 
-Following key/value pairs are available for
-L<Web::HTML::ConnectionClient> to describe requests to send:
+For the C<request> method of L<Web::HTML::ConnectionClient> objects,
+following key/value pairs can be used to specify the parameters of the
+request to send:
 
 =over 4
-
-XXX
-
-method
-headers
-basic_auth
-bearer
 
 =item url => $url
 
@@ -79,12 +73,25 @@ this option is appended to the prefix.
 
 When the C<url> option is specified, this option is ignored.
 
+=item method => $string
+
+Specify the HTTP request method.  Note that HTTP request methods are
+case-sensitive.  If not specified, C<GET> is used.
+
+=item headers => {$string => $string, ...}
+
+Specify HTTP headers.  The value must be a hash reference, whose keys
+are header names and values are corresponding header values.  If a
+value is an array reference, the array's items are used as the header
+values (i.e. multiple headers with same name are generated).  Header
+names are case-insensitive.
+
 =item cookies => {$string => $string, ...}
 
-Cookies to be included in the request, using the C<Cookie:> header.
-The value must be a hash reference of zero or more key/value pairs,
-where keys are cookie names and values are corresponding cookie
-values.  Any key whose value is C<undef> is ignored.
+Specify cookies, to be included in the C<Cookie:> header.  The value
+must be a hash reference of zero or more key/value pairs, where keys
+are cookie names and values are corresponding cookie values.  Any key
+whose value is C<undef> is ignored.
 
 Names and values must be strings of zero or more characters.  They are
 encoded in UTF-8 and percent-encoded before included in the header
@@ -138,6 +145,16 @@ defaults, used when the key is omitted or the value is C<undef>, are
 C<application/octet-stream> and the empty string, respectively.
 
 They are encoded in the C<multipart/form-data> format in UTF-8.
+
+=item basic_auth => [$userid, $password]
+
+Specifies the credentials of the C<Basic> authentication.  The value
+must be an array reference of two strings, which are used as user ID
+and password.
+
+=item bearer => $string
+
+Specifies the credentials of the C<Bearer> authentication.
 
 =item oauth1 => [$string, $string, $string, $string]
 

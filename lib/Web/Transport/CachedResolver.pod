@@ -1,0 +1,84 @@
+=head1 NAME
+
+Web::Transport::CachedResolver - Resolve domain names, with caching
+
+=head1 SYNOPSIS
+
+  use Web::Transport::PlatformResolver;
+  use Web::Transport::CachedResolver;
+  use Web::DateTime::Clock;
+  $resolver = Web::Transport::CachedResolver->new_from_resolver
+      (Web::Transport::Resolver->new,
+       Web::DateTime::Clock->monotonic_clock);
+  $resolver->resolve (Web::Host->parse_string ("example.com"))->then (sub {
+    warn defined $_[0] && $_[0]->stringify;
+  });
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::CachedResolver> module defines a name resolver
+which has a 60-seconds cache.
+
+This module is a resolver (see L<Web::Transport/"RESOLVERS">).
+
+=head1 METHOD
+
+Following methods are available:
+
+=over 4
+
+=item $resolver = Web::Transport::CachedResolver->new_from_resolver_and_clock ($resolver, $clock)
+
+Create a resolver.
+
+The first argument must be a "real" resolver.  It must implement the
+C<resolve> method which is compatible with
+L<Web::Transport::PlatformResolver>'s C<resolve>.
+
+The second argument must be a monotonic clock, e.g. C<<
+Web::DateTime::Clock->monotonic_clock >>.
+
+=item $promise = $resolver->resolve ($host, no_cache => $boolean)
+
+Resolve a domain.
+
+The first argument must be a host (L<Web::Host>) to resolve.
+
+Additionally, named arguments can be specified.  The C<no_cache>
+argument specifies whether any previously cached result should be
+ignored or not.  Note that, even when C<no_cache> option is specified,
+the result of this resolution will be cached.
+
+The method returns a promise (L<Promise>), which is to be resolved
+with the result.  If the host is a domain and is successfully resolved
+into an IP address, or the host is an IP address, the promise is
+resolved with a host (L<Web::Host>) representing that IP address.
+Otherwise, it is resolved with C<undef>.
+
+=back
+
+=head1 ENVIRONMENT VARIABLE
+
+This module supports C<WEBUA_DEBUG>.  See L<Web::Transport>.
+
+=head1 SEE ALSO
+
+L<Web::Transport::PlatformResolver>.
+
+=head1 SPECIFICATION
+
+Web Transport Processing
+<https://wiki.suikawiki.org/n/Web%20Transport%20Processing>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

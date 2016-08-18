@@ -1,0 +1,5 @@
+
+- "../../modules/web-url" build tests
+- "../../modules/web-encodings" build tests
+- "../../modules/charclass" build tests
+- "../../modules/web-datetime" build tests

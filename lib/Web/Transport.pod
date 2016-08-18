@@ -1,0 +1,286 @@
+=head1 NAME
+
+Web::Transport - Transport layer protocols for the Web
+
+=head1 DESCRIPTION
+
+These modules contain implementations of various protocols forming the
+Web platform's transport layer.
+
+Following protocols are supported by these modules and underlying
+platform (partially or fully; see documentation of relevant modules):
+TCP (for IPv4 and IPv6), UNIX domain sockets, TLS (including SNI, OCSP
+stapling), HTTP (including Cookies,
+C<application/x-www-form-urlencoded>, C<multipart/form-data>, Basic
+authentication, OAuth 1.0, OAuth 2.0 Bearer, C<CONNECT>), SOCKS4,
+SOCKS5, DNS.
+
+=head1 MODULES
+
+There are following modules that expose public APIs:
+
+=over 4
+
+=item L<Web::Transport::ConnectionClient>
+
+A connection-oriented HTTP client.
+
+=item L<Web::Transport::PlatformResolver>
+
+A name resolver using system's resolver.
+
+=item L<Web::Transport::CachedResolver>
+
+A DNS cache.
+
+=item L<Web::Transport::ENVProxyManager>
+
+An environment variable based proxy manager.
+
+=item L<Web::MIME::Type>
+
+MIME types.
+
+=back
+
+=head1 REQUEST OPTIONS
+
+Following key/value pairs are available for
+L<Web::HTML::ConnectionClient> to describe requests to send:
+
+=over 4
+
+XXX
+
+method
+headers
+basic_auth
+bearer
+
+=item url => $url
+
+Specify the request URL.  If specified, the value must be a
+L<Web::URL> object.
+
+The scheme of the URL must be one of C<http>, C<https>, or C<ftp>.
+
+Any username, password, or fragment of the URL is ignored.
+
+Either C<url> or C<path> option must be specified.
+
+=item path => [$seg1, $seg2, ...]
+
+Specify the path segments of the request URL.  If specified, the value
+must be an array reference of zero or more character strings.  They
+are encoded in UTF-8 and then concatenated with C</>.
+
+If a "prefix" is defined by the context, the path segments given by
+this option is appended to the prefix.
+
+When the C<url> option is specified, this option is ignored.
+
+=item cookies => {$string => $string, ...}
+
+Cookies to be included in the request, using the C<Cookie:> header.
+The value must be a hash reference of zero or more key/value pairs,
+where keys are cookie names and values are corresponding cookie
+values.  Any key whose value is C<undef> is ignored.
+
+Names and values must be strings of zero or more characters.  They are
+encoded in UTF-8 and percent-encoded before included in the header
+value.  If this behavior is inappropriate, use C<headers> option
+instead.
+
+This option also adds C<Cache-Control: no-store> and C<Pragma:
+no-store> headers.
+
+=item params => {$string => $string, ...}
+
+Parameters to be included in the request.
+
+The value must be a hash reference of zero or more key/value pairs,
+where keys are parameter names and values are corresponding parameter
+values.
+
+Parameter names and values must be strings of zero or more characters.
+Parameter values can be either a string or an array reference of zero
+or more strings, representing parameter values sharing same parameter
+name.  Any parameter whose value is C<undef> is ignored.
+
+They are encoded in the C<application/x-www-form-urlencoded> format
+(or C<multipart/form-data>, if C<files> option is also specified) in
+UTF-8.  If the C<method> is C<POST> and there is no conflicting
+options, they are put into the request body.  Otherwise, they are
+appended to the request URL.
+
+=item files => {$string => $file, ...}
+
+Files to be included in the request.
+
+The value must be a hash reference of zero or more key/value pairs,
+where keys are parameter names and values are corresponding files.
+
+Parameter names must be strings of zero or more characters.
+
+Files can be either a hash reference or an array reference of zero or
+more hash references, representing files sharing same parameter name.
+Any pair whose value is C<undef> is ignored.
+
+A file hash reference must contain a C<body_ref> key, whose value must
+be a reference to a scalar containing zero or more bytes, i.e. the
+file content.
+
+A file hash reference can also contain C<mime_type> key, whose value
+is a MIME type string (C<Content-Type:> header value) and
+C<mime_filename> key, whose value is a file name string
+(C<Content-Disposition:> header's C<filename> parameter value).  Their
+defaults, used when the key is omitted or the value is C<undef>, are
+C<application/octet-stream> and the empty string, respectively.
+
+They are encoded in the C<multipart/form-data> format in UTF-8.
+
+=item oauth1 => [$string, $string, $string, $string]
+
+If a non-C<undef> value is specified, the request is to be signed
+using OAuth 1.0 C<HMAC-SHA1> signature method.
+
+The value must be an array reference of strings, which are consumer
+key, consumer secret, access token, and access token secret.  They
+must be specified even though they can be empty strings.
+
+This option also adds C<Cache-Control: no-store> and C<Pragma:
+no-store> headers.
+
+=item oauth1_container => 'authorization' | 'query' | 'body'
+
+Where to add OAuth 1.0 request parameters.  This option is ignored
+unless the C<oauth1> option is also specified.
+
+The value C<authorization> designates the HTTP C<Authorization:>
+header.
+
+The value C<query> designates the URL query component.
+
+The value C<body> designates the request body.
+
+If this option is not specified, or C<undef> is specified, parameters
+are added to the HTTP C<Authorization:> header, unless there is
+another C<Authorization:> header, in which case they are added to the
+same slot as C<params>.
+
+=item oauth_verifier => $string
+
+The OAuth 1.0 C<oauth_verifier> request parameter value.  If a
+non-C<undef> value is specified and the C<oauth1> option is also
+specified, this value is taken into account as a request parameter.
+Otherwise this option is ignored.
+
+=item oauth_callback => $string
+
+The OAuth 1.0 C<oauth_callback> request parameter value.  If a
+non-C<undef> value is specified and the C<oauth1> option is also
+specified, this value is taken into account as a request parameter.
+Otherwise this option is ignored.
+
+=item superreload => $boolean
+
+If true, C<Cache-Control: no-cache> and C<Pragma: no-store> headers
+are added.
+
+=item body => $bytes
+
+The request body.  If a non-C<undef> value is specified, it must be a
+string of zero or more bytes.
+
+=back
+
+=head2 Relevant specifications
+
+Fetch Standard <https://fetch.spec.whatwg.org/>.
+
+URL Standard <https://url.spec.whatwg.org/>.
+
+Encoding Standard <https://encoding.spec.whatwg.org/>.
+
+When a text is encoded in UTF-8, the UTF-8 encode steps of the
+Encoding Standard MUST be used.
+
+RFC 6265, HTTP State Management Mechanism
+<https://tools.ietf.org/html/rfc6265>.
+
+RFC 5849, The OAuth 1.0 Protocol
+<https://tools.ietf.org/html/rfc5849>.
+
+HTML Standard <https://html.spec.whatwg.org/>.
+
+=head1 PROXY MANAGERS
+
+XXX
+
+There is following proxy manager in this repository:
+L<Web::Transport::ENVProxyManager>.
+
+=head1 PROXY CONFIGURATIONS
+
+XXX
+
+=head1 RESOLVERS
+
+XXX
+
+There are following resolvers in this repository:
+L<Web::Transport::PlatformResolver>,
+L<Web::Transport::CachedResolver>.
+
+=head1 ENVIRONMENT VARIABLE
+
+The C<WEBUA_DEBUG> environment variable can be specified to enable
+debug output.  If its value is a true value, debug messages, such as
+some of network input and output, are printed to the standard error
+output.  If its value is greater than C<1>, more verbose messages are
+printed.
+
+=head1 DEPENDENCY
+
+These module requires Perl 5.10 or later.  They require several core
+modules such as L<Digest::SHA>.
+
+They require L<AnyEvent> and L<Net::SSLeay>.  The L<Net::SSLeay>
+module requires OpenSSL or equivalent (e.g. LibreSSL).  For Web
+compatibility and security, OpenSSL version must be latest enough.
+
+They also require following modules (which are submodules of this Git
+repository):
+
+=over 4
+
+=item L<Promise> <https://github.com/wakaba/perl-promise>
+
+=item modules from perl-web-url repository <https://github.com/manakai/perl-web-url>, e.g. L<Web::URL> L<Web::Host>, and L<Web::Origin>
+
+=item modules from perl-web-encodings package <https://github.com/manakai/perl-web-encodings>, e.g. L<Web::Encoding>
+
+=item modules from perl-web-datetime package <https://github.com/manakai/perl-web-datetime>, e.g. L<Web::DateTime::Parser>
+
+=back
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 ACKNOWLEDGEMENTS
+
+Some of modules derived from various earlier effort on these areas.
+See documentations of modules and comments in source codes for more
+information.
+
+=head1 LICENSE
+
+Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
+
+Copyright 2014-2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

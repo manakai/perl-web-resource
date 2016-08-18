@@ -1,8 +1,8 @@
+all: build
+
 WGET = wget
 GIT = git
 PERL = ./perl
-
-all: build
 
 updatenightly: build
 	$(GIT) add lib/Web/MIME/_TypeDefs.pm
@@ -26,8 +26,9 @@ pmbp-update: git-submodules pmbp-upgrade
 	perl local/bin/pmbp.pl --update
 pmbp-install: pmbp-upgrade
 	perl local/bin/pmbp.pl --install \
-            --create-perl-command-shortcut perl \
-            --create-perl-command-shortcut prove
+            --create-perl-command-shortcut @perl \
+            --create-perl-command-shortcut @prove \
+	    --create-perl-command-shortcut @openssl
 
 ## ------ Build ------
 

@@ -1,0 +1,196 @@
+=head1 NAME
+
+Web::Transport::ConnectionClient - A connection-oriented HTTP client
+
+=head1 SYNOPSIS
+
+  use Web::Transport::ConnectionClient;
+  $client = Web::Transport::ConnectionClient->new_from_host (q<server.test>);
+  
+  ## First request
+  $client->request (
+    url => Web::URL->parse_url (q<https://server.test/p1>), ...
+  )->then (sub {
+    my $res = $_[0];
+    warn $res->body_bytes;
+    
+    ## Second request
+    return $client->request (
+      url => Web::URL->parse_url (q<https://server.test/p2>), ...
+    );
+  })->then (sub {
+    return $client->close;
+  });
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::ConnectionClient> module is a
+connection-oriented HTTP client.
+
+It can only be used to send requests to a specific origin.  It does
+not support HTTP redirects by design.
+
+=head1 METHODS
+
+There are following methods:
+
+=over 4
+
+=item $client = Web::Transport::ConnectionClient->new_from_host ($string)
+
+Create a new client object, which is associated with a origin
+(C<https>, I<$string>, C<undef>).  That is, a client for the specified
+host using HTTPS with port C<443> is created.
+
+The argument must be a string, which is either a domain, an IPv4
+address, or an IPv6 address enclosed by C<[> and C<]>.  They don't
+have to be in their canonicalized form.  IDNs are also allowed.
+
+=item $client = Web::Transport::ConnectionClient->new_from_url ($url)
+
+Create a new client object, which is associated with a URL's origin
+and path.
+
+The argument must be a URL record object (L<Web::URL>).  It's origin
+must be a tuple origin (typically an C<http:> or C<https:> URL).
+
+The path of the URL is used as the "prefix" of the URL path used for
+the requests (See L<Web::Transport/"REQUEST OPTIONS">' C<path>).
+
+Note that anything other than the origin and path of the URL is
+ignored.
+
+Example:
+
+  $client = Web::Transport::ConnectionClient->new_from_url
+      (Web::URL->parse_url (q<https://server.test>));
+  $client->request (path => []); # https://server.test/
+  $client->request (path => ['a', 'b']); # https://server.test/a/b
+  $client->request (url => Web::URL->parse_string (q<https://server.test/x>));
+
+Example:
+
+  $client = Web::Transport::ConnectionClient->new_from_url
+      (Web::URL->parse_url (q<https://server.test/z>));
+  $client->request (path => []); # https://server.test/z/
+  $client->request (path => ['a', 'b']); # https://server.test/z/a/b
+  $client->request (url => Web::URL->parse_string (q<https://server.test/x>));
+
+=item $promise = $client->request (url => ..., ...)
+
+Send a request and return a promise (L<Promise>), which is to be
+resolved with the result.
+
+The arguments are name/value pairs, as described in
+L<Web::Transport/"REQUEST OPTIONS">.  At minimum, the C<url> argument
+must be specified.  It is a URL record object (L<Web::URL>).  It must
+have same origin as the client's origin (i.e. the origin of the
+argument to the C<new_from_url> method).
+
+The promise is resolved with XXX.
+
+This method creates an HTTP connection, if there is no existing
+connection, or the existing connection has terminated for some reason.
+Otherwise the existing connection is used to send the new request.  If
+the connection is in use, the new request is delayed until any current
+and enqueued request has been processed unless HTTP/2 is available.
+
+=item $promise = $client->close
+
+Close any existing connection.  This method must be explicitly invoked
+whenever the client has sent some request.
+
+If the connection is in use, it is closed only after any current and
+enqueued request are processed.
+
+The method returns a promise, which is resolved once any connection
+has closed.
+
+=item $client->proxy_manager ($pm)
+
+=item $pm = $client->proxy_manager
+
+Get or set the proxy manager used to establish connections.
+Initially, a proxy manager which takes standard environment variables
+into account (i.e. L<Web::Transport::ENVProxyManager>) is set as the
+proxy manager.
+
+This option must be set before the first invocation of the C<request>
+method.
+
+=item $client->resolver ($resolver)
+
+=item $resolver = $client->resolver
+
+Get or set the name resolver used to establish connections.
+Initially, a resolver using system's name resolution API
+(L<Web::Transport::PlatformResolver>) wrapped by DNS caching
+(L<Web::Transport::CachedResolver>) is set as the resolver.
+
+This option must be set before the first invocation of the C<request>
+method.
+
+=item $client->tls_options ({...})
+
+=item $hashref = $client->tls_options
+
+XXX
+
+This option must be set before the first invocation of the C<request>
+method.
+
+=item $client->max_size ($integer)
+
+=item $integer = $client->max_size
+
+Get or set the maximum size of the (uncompressed) body of the
+response, in bytes.  The initial value is -1, i.e. no limit is set.
+
+This option must be set before the first invocation of the C<request>
+method.
+
+=item $client->last_resort_timeout ($seconds)
+
+=item $seconds = $client->last_resort_timeout
+
+Get or set the last-resort timeout value, in seconds.  In most
+applications, this value does not have to be changed.  It is used to
+avoid the application blocked by a server which returns infinite
+response body.  If your application has specific realtimeness
+requirement, use your own timer to abort the request, rather than
+reusing this timer.
+
+This option must be set before the first invocation of the C<request>
+method.
+
+=item $origin = $client->origin
+
+Return the origin (L<Web::Origin>) of the connection.
+
+=back
+
+=head1 ENVIRONMENT VARIABLES
+
+This module supports C<WEBUA_DEBUG>.  See L<Web::Transport>.
+
+When the default C<resolver> is used, proxy environment variables
+C<http_proxy>, C<https_proxy>, C<ftp_proxy>, and C<no_proxy> are taken
+into account.  See L<Web::Transport::ENVProxyManager>.
+
+=head1 SPECIFICATION
+
+Web Transport Processing
+<https://wiki.suikawiki.org/n/Web%20Transport%20Processing>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

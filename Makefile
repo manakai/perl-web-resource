@@ -26,7 +26,6 @@ pmbp-update: git-submodules pmbp-upgrade
 	perl local/bin/pmbp.pl --update
 pmbp-install: pmbp-upgrade
 	perl local/bin/pmbp.pl \
-	    --install-openssl \
 	    --install \
             --create-perl-command-shortcut @perl \
             --create-perl-command-shortcut @prove \
@@ -54,6 +53,6 @@ test: test-deps test-main
 test-deps: deps
 
 test-main:
-	$(PROVE) t/*.t
+	TEST_MAX_CONCUR=1 WEBUA_DEBUG=2 DUMP=1 $(PROVE) --verbose t/*.t
 
 ## License: Public Domain.

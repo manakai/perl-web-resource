@@ -245,7 +245,9 @@ printed.
 These module requires Perl 5.10 or later.  They require several core
 modules such as L<Digest::SHA>.
 
-They require L<AnyEvent> and L<Net::SSLeay>.
+They require L<AnyEvent> and L<Net::SSLeay>.  The L<Net::SSLeay>
+module requires OpenSSL or equivalent (e.g. LibreSSL).  For Web
+compatibility and security, OpenSSL version must be latest enough.
 
 They also require following modules (which are submodules of this Git
 repository):

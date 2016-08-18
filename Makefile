@@ -53,6 +53,6 @@ test: test-deps test-main
 test-deps: deps
 
 test-main:
-	TEST_MAX_CONCUR=1 WEBUA_DEBUG=2 DUMP=1 $(PROVE) --verbose t/*.t
+	$(PROVE) t/*.t
 
 ## License: Public Domain.

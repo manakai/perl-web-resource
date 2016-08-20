@@ -190,7 +190,10 @@ sub start ($$;%) {
 
     $self->{tls_ctx} = AnyEvent::TLS->new (%$args);
     my $tls = $self->{tls} = Net::SSLeay::new ($self->{tls_ctx}->ctx);
-    $self->{starttls_data} = {};
+    $self->{starttls_data} = {
+      parent_transport_type => $self->{transport}->type,
+      parent_transport_data => $_[0],
+    };
     if ($args->{server}) {
       Net::SSLeay::set_accept_state ($tls);
       Net::SSLeay::CTX_set_tlsext_servername_callback ($self->{tls_ctx}->ctx, sub {

@@ -7,7 +7,7 @@ use Carp qw(croak);
 use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE);
 use AnyEvent::Util qw(WSAEWOULDBLOCK);
-use AnyEvent::Socket qw(tcp_connect);
+use AnyEvent::Socket qw(tcp_connect format_address);
 use Promise;
 
 ## Note that this class is also used as the base of the
@@ -36,17 +36,19 @@ sub start ($$) {
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     tcp_connect $args->{addr}, $args->{port}, sub {
-      my $fh = shift or return $ng->($!);
-      $ok->($fh);
+      return $ng->($!) unless $_[0];
+      $ok->($_[0]);
     };
   })->then (sub {
-    my $fh = $self->{fh} = $_[0];
-    AnyEvent::Util::fh_nonblocking $fh, 1;
+    $self->{fh} = $_[0];
+    my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $self->{fh};
+    my $info = {local_host => format_address $h, local_port => $p};
+    AnyEvent::Util::fh_nonblocking $self->{fh}, 1;
 
     ## Applied to TCP only (not applied to Unix domain socket)
-    setsockopt $fh, SOL_SOCKET, SO_OOBINLINE, 0;
-    setsockopt $fh, IPPROTO_TCP, TCP_NODELAY, 1;
-    setsockopt $fh, SOL_SOCKET, SO_KEEPALIVE, 1;
+    setsockopt $self->{fh}, SOL_SOCKET, SO_OOBINLINE, 0;
+    setsockopt $self->{fh}, IPPROTO_TCP, TCP_NODELAY, 1;
+    setsockopt $self->{fh}, SOL_SOCKET, SO_KEEPALIVE, 1;
     # XXX KA options
 
     $self->{wq} = [];
@@ -81,6 +83,8 @@ sub start ($$) {
         $self->_close;
       }
     }; # $self->{rw}
+
+    return $info;
   });
 } # start
 

@@ -866,8 +866,19 @@ sub debug_handshake_done ($$$) {
   my $id = $self->{transport}->id;
   warn "$id: Connection established @{[scalar gmtime]}\n" if $ok;
 
+  if ($self->{transport}->type eq 'TCP') {
+    my $data = $info->{transport_data};
+    warn "$id: + Local: $data->{local_host}:$data->{local_port}\n";
+  }
+
   if ($self->{transport}->type eq 'TLS') {
     my $data = $info->{transport_data};
+
+    if ($data->{parent_transport_type} eq 'TCP') {
+      my $data = $data->{parent_transport_data};
+      warn "$id: + TCP Local: $data->{local_host}:$data->{local_port}\n";
+    }
+
     if (defined $data->{tls_protocol}) {
       my $ver = $data->{tls_protocol} == 0x0301 ? '1.0' :
                 $data->{tls_protocol} == 0x0302 ? '1.1' :

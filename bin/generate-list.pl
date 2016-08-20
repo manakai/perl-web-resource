@@ -1,10 +1,12 @@
 use strict;
 use warnings;
-use JSON;
+use Path::Tiny;
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
+use JSON::PS;
 use Data::Dumper;
 
 local $/ = undef;
-my $json = JSON->new->utf8->decode (scalar <>);
+my $json = json_bytes2perl scalar <>;
 
 my $Data = {};
 
@@ -18,13 +20,14 @@ for (keys %$json) {
     delete $Data->{$type}->{type};
   } elsif ($json->{$_}->{type} eq 'subtype') {
     my ($type, $subtype) = split m{/}, $_;
-    delete $json->{$_}->{type};
-    delete $json->{$_}->{mac_type};
-    delete $json->{$_}->{mac_creator};
-    delete $json->{$_}->{extensions};
-    delete $json->{$_}->{preferred_cte};
-    delete $json->{$_}->{application};
-    $Data->{$type}->{subtype}->{$subtype} = $json->{$_};
+    my $def = {};
+    for my $key (qw(
+      styling scripting_language text iana iana_intended_usage
+      obsolete limited_usage params syntax
+    )) {
+      $def->{$key} = $json->{$_}->{$key} if defined $json->{$_}->{$key};
+    }
+    $Data->{$type}->{subtype}->{$subtype} = $def if keys %$def;
   }
 }
 

@@ -27,7 +27,7 @@ for (keys %$json) {
     )) {
       $def->{$key} = $json->{$_}->{$key} if defined $json->{$_}->{$key};
     }
-    $Data->{$type}->{subtype}->{$subtype} = $def if keys %$def;
+    $Data->{$type}->{subtype}->{$subtype} = $def;
   }
 }
 

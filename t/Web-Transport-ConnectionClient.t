@@ -251,7 +251,7 @@ test {
     return $p->then (sub {
       my $res = $_[0];
       test {
-        isa_ok $res, 'Web::Transport::ConnectionClient::Response';
+        isa_ok $res, 'Web::Transport::Response';
         ok $res->is_network_error;
         is $res->network_error_message, 'Connection closed without response';
         is $res->body_bytes, undef;
@@ -1097,7 +1097,7 @@ test {
     return $p->then (sub {
       my $res = $_[0];
       test {
-        isa_ok $res, 'Web::Transport::ConnectionClient::Response';
+        isa_ok $res, 'Web::Transport::Response';
         ok $res->is_network_error;
         is $res->network_error_message, 'Connection closed without response';
         is $res->body_bytes, undef;
@@ -1131,7 +1131,7 @@ test {
     return $p->then (sub {
       my $res = $_[0];
       test {
-        isa_ok $res, 'Web::Transport::ConnectionClient::Response';
+        isa_ok $res, 'Web::Transport::Response';
         ok ! $res->is_network_error;
         is $res->network_error_message, undef;
         is $res->body_bytes, 'hoge';
@@ -1166,7 +1166,7 @@ test {
     return $p->then (sub {
       my $res = $_[0];
       test {
-        isa_ok $res, 'Web::Transport::ConnectionClient::Response';
+        isa_ok $res, 'Web::Transport::Response';
         ok ! $res->is_network_error;
         is $res->network_error_message, undef;
         is $res->body_bytes, 'ho';
@@ -1198,7 +1198,7 @@ test {
     return $p->then (sub {
       my $res = $_[0];
       test {
-        isa_ok $res, 'Web::Transport::ConnectionClient::Response';
+        isa_ok $res, 'Web::Transport::Response';
         ok ! $res->is_network_error;
         is $res->network_error_message, undef;
         is $res->body_bytes, 'HT';

@@ -11,6 +11,12 @@ sub _env ($$) {
   ## Parse an environment variable
   my $value = $_[0]->{$_[1]};
   return undef if not defined $value or not length $value;
+
+  my $uc_name = $_[1];
+  $uc_name =~ tr/a-z/A-Z/;
+  my $uc_value = $_[0]->{$uc_name};
+  return undef if defined $uc_value and $value eq $uc_value;
+
   $value = decode_web_utf8 $value;
 
   my $parser = Web::URL::Parser->new;

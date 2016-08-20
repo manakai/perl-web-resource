@@ -14,6 +14,8 @@ for (
   [{http_proxy => q<foo>}, undef, q<http://hoge/>,
    [{protocol => 'http', host => 'foo', port => undef,
      username => '', password => undef}]],
+  [{http_proxy => q<foo>, HTTP_PROXY => q<foo>}, undef, q<http://hoge/>,
+   [{protocol => 'tcp'}]],
   [{http_proxy => q<foo:0324>}, undef, q<http://hoge/>,
    [{protocol => 'http', host => 'foo', port => 324,
      username => '', password => undef}]],

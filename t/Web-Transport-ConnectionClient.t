@@ -9,6 +9,7 @@ use Test::Certificates;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
 use Web::Transport::ConnectionClient;
+use Web::Host;
 use Web::URL;
 
 {

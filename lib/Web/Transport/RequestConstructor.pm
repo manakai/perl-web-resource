@@ -2,8 +2,6 @@ package Web::Transport::RequestConstructor;
 use strict;
 use warnings;
 our $VERSION = '1.0';
-require utf8;
-use Carp;
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Encoding qw(serialize_form_urlencoded percent_encode_c);
 
@@ -46,6 +44,9 @@ sub create ($$) {
 
   my $method = encode_web_utf8
       (defined $args->{method} ? $args->{method} : 'GET');
+  if ($args->{get_only} and not $method eq 'GET') {
+    return {failed => 1, message => "Bad |method| argument |$args->{method}|"};
+  }
 
   my $headers = $args->{headers} || {};
   my $header_list = [];
@@ -93,7 +94,7 @@ sub create ($$) {
     push @$header_list, ['Content-Type', $ct = 'multipart/form-data; boundary=' . $boundary];
     $has_header->{'content-type'} = 1;
   }
-  croak "Both |files| and |body| are specified"
+  return {failed => 1, message => "Both |files| and |body| are specified"}
       if not defined $boundary and keys %{$args->{files} or {}};
   if (defined $boundary) {
     ## Unfortunately the multipart/form-data encoding is not well
@@ -120,7 +121,7 @@ sub create ($$) {
                          : ($args->{files}->{$key})) {
         my $mime = defined $value->{mime_type} ? $value->{mime_type} : 'application/octet-stream';
         my $file_name = defined $value->{mime_filename} ? $value->{mime_filename} : '';
-        croak "File's |body_ref|'s value is utf8-flagged"
+        return {failed => 1, message => "File's |body_ref|'s value is utf8-flagged"}
             if utf8::is_utf8 (${$value->{body_ref}});
         push @part, 
             "Content-Type: "._fde ($mime)."\x0D\x0A" .
@@ -211,6 +212,10 @@ sub create ($$) {
   }
 
   if (defined $args->{body}) {
+    if ($args->{no_body}) {
+      return {failed => 1, message => "Request body not allowed"};
+    }
+
     push @$header_list, ['Content-Length', length ($args->{body})];
   }
   # XXX or, method requires payload

@@ -506,7 +506,8 @@ sub run_commands ($$$$) {
       unshift @{$states->{commands}}, $command;
       $then->();
       return;
-    } elsif ($command =~ /^ws-receive-data$/) {
+    } elsif ($command =~ /^ws-receive-data(, capture|)$/) {
+      my $capture = $1;
       if (length $states->{received} >= $states->{ws_length}) {
         my @data = split //, substr $states->{received}, 0, $states->{ws_length};
         substr ($states->{received}, 0, $states->{ws_length}) = '';
@@ -538,6 +539,7 @@ sub run_commands ($$$$) {
                 perl2json_bytes "  @{[pe_b $data]}";
           }
         }
+        $states->{captured} = $data if $capture;
         next;
       }
       unshift @{$states->{commands}}, $command;
@@ -549,6 +551,9 @@ sub run_commands ($$$$) {
                     opcode => 0, masking => 0, length => 0};
       while ($args =~ s/^\s+(\w+)=(\S*)//) {
         $fields->{$1} = $2;
+      }
+      if (defined $fields->{length} and $fields->{length} eq 'captured') {
+        $fields->{length} = length $states->{captured};
       }
       $hdl->push_write (pack 'C', ($fields->{FIN} << 7) |
                                   ($fields->{RSV1} << 6) |

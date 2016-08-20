@@ -1,0 +1,172 @@
+=head1 NAME
+
+Web::Transport::WSClient - A WebSocket client
+
+=head1 SYNOPSIS
+
+  use Web::Transport::WSClient;
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_url (q<wss://server.test/p1>),
+    cb => sub {
+      my ($client, $data, $is_binary) = @_;
+      if (defined $is_binary) { # text or binary
+        if (defined $data) { # frame data
+          $current_data .= $data;
+        } else { # end of frame
+          if ($data_type) { # text
+            warn "Received |$current_data| (text)";
+          } else { # binary
+            warn "Received |$current_data| (binary)";
+          }
+          if ($current_data eq 'end') {
+            $client->close;
+          } else {
+            $client->send_binary ("\x01");
+          }
+          $current_data = '';
+        }
+      } else { # handshake done
+        $client->send_text ('Hello!');
+        $current_data = '';
+      }
+    },
+  )->then (sub {
+    my $res = $_[0];
+    if ($res->ws_closed_cleanly) {
+      warn "Done!";
+    } else {
+      warn $res->ws_code, "\t", $res->ws_reason;
+    }
+  });
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::WSClient> module is a WebSocket client.
+
+=head1 METHODS
+
+There are following methods:
+
+=over 4
+
+=item $promise = Web::Transport::WSClient->new (KEY => VALUE, ...)
+
+Connect to a WebSocket server.  The URL of the server, as well as
+various connection parameters, has to be specified as named arguments.
+
+It returns a promise (L<Promise> object), which is resolved with a
+response object (L<Web::Transport::Response> object) when the
+connection is closed.  (If the connection has failed, the promise is
+resolved with a response object representing the failure.  If any
+argument to the method is incorrect, the promise is rejected.)
+
+Following key/value pairs, including required C<url> and C<cb>
+options, are available as named arguments:
+
+=over 4
+
+=item url => $url
+
+Specify the URL (a L<Web::URL> object) of the WebSocket server.  Its
+scheme must be C<wss> or C<ws>.
+
+This option is required.
+
+=item headers => {$string => $string, ...}
+
+=item cookies => {$string => $string, ...}
+
+=item params => {$string => $string, ...}
+
+=item basic_auth => [$userid, $password]
+
+=item bearer => $string
+
+=item oauth1 => [$string, $string, $string, $string]
+
+=item oauth1_container => 'authorization' | 'query'
+
+=item superreload => $boolean
+
+See L<Web::Transport/"REQUEST OPTIONS">.
+
+=item proxy_manager => $pm
+
+Specify the proxy manager used to establish the connection.  By
+default, a proxy manager which takes standard environment variables
+into account (i.e. L<Web::Transport::ENVProxyManager>) is set as the
+proxy manager.
+
+=item resolver => $resolver
+
+Specify the name resolver used to establish the connection.  By
+default, a resolver using system's name resolution API
+(L<Web::Transport::PlatformResolver>) wrapped by DNS caching
+(L<Web::Transport::CachedResolver>) is set as the resolver.
+
+=item tls_options => {...}
+
+XXX
+
+=item cb => $code
+
+Specify the callback subroutine.  The value must be a code reference.
+This option must be specified.
+
+When a WebSocket connection has successfully established, I<$code> is
+invoked with three arguments: the client object, C<undef>, and
+C<undef>.
+
+Whenever a WebSocket text or binary message has received, I<$code> is
+invoked zero or more times with partial data I<$data>, and then is
+invoked with C<undef>.  It is invoked with three arguments: the client
+object, I<$data> or C<undef>, and I<$is_binary>.  The concatenation of
+I<$data>, in order, represents the received message's data.  If the
+message's data is binary, I<$is_binary> is true.  Otherwise,
+I<$is_binary> is false.
+
+If the connection is failed while receiving a message, the final
+invocation with C<undef> argument might not happen.
+
+=back
+
+=item $client->send_text ($text)
+
+Send a text message.  The argument must be a character string.
+
+=item $client->send_binary ($bytes)
+
+Send a binary message.  The argument must be a byte string.
+
+=item $promise = $client->close
+
+Close any connection.  It returns a promise, which is to be resolved
+once the connection has been closed.
+
+=back
+
+=head1 ENVIRONMENT VARIABLES
+
+This module supports C<WEBUA_DEBUG>.  See L<Web::Transport>.
+
+When the default C<resolver> is used, proxy environment variables
+C<http_proxy>, C<https_proxy>, C<ftp_proxy>, and C<no_proxy> are taken
+into account.  See L<Web::Transport::ENVProxyManager>.
+
+=head1 SPECIFICATION
+
+Web Transport Processing
+<https://wiki.suikawiki.org/n/Web%20Transport%20Processing>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

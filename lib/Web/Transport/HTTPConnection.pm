@@ -11,6 +11,7 @@ use Errno qw(ECONNRESET);
 use AnyEvent;
 use AnyEvent::Socket;
 use Promise;
+use Web::Encoding;
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
@@ -55,6 +56,20 @@ sub _e4d ($) {
   $x =~ s/([^\x20-\x5B\x5D-\x7E])/sprintf '\x%02X', ord $1/ge;
   return $x;
 } # _e4d
+
+sub _e4d_t ($) {
+  return encode_web_utf8 $_[0] unless $_[0] =~ /[^\x20-\x5B\x5D-\x7E]/;
+  my $x = $_[0];
+  $x =~ s{([^\x20-\x5B\x5D-\x7E])}{
+    my $c = ord $1;
+    if ($c < 0x10000) {
+      sprintf '\u%04X', $c;
+    } else {
+      sprintf '\U%08X', $c;
+    }
+  }ge;
+  return encode_web_utf8 $x;
+} # _e4d_t
 
 sub _process_rbuf ($$;%) {
   my ($self, $ref, %args) = @_;
@@ -250,7 +265,7 @@ sub _process_rbuf ($$;%) {
         }
         if ($failed) {
           $self->_ev ('headers', $res);
-          $self->{exit} = {failed => 1, status => 1006, reason => ''};
+          $self->{exit} = {ws => 1, failed => 1, status => 1006, reason => ''};
           $self->{no_new_request} = 1;
           $self->{request_state} = 'sent';
           $self->_next;
@@ -289,7 +304,7 @@ sub _process_rbuf ($$;%) {
           #  headers => $res->{headers},
           #};
           $res->{version} = '0.9';
-          $res->{status} = '200';
+          $res->{status} = 200;
           $res->{reason} = 'OK';
           $res->{headers} = [];
           $self->{state} = 'before response';
@@ -616,7 +631,9 @@ sub _process_rbuf ($$;%) {
                    $mask . $data));
           }
           $self->{state} = 'ws terminating';
-          $self->{exit} = {status => $status, reason => $reason, cleanly => 1};
+          $self->{exit} = {status => defined $status ? $status : 1005,
+                           reason => defined $reason ? $reason : '',
+                           ws => 1, cleanly => 1};
           # if server, $self->_next;
           $self->{timer} = AE::timer 1, 0, sub {
             warn "$self->{request}->{id}: WS timeout (1)\n" if DEBUG;
@@ -672,7 +689,7 @@ sub _process_rbuf ($$;%) {
     $self->{ws_state} = 'CLOSING';
     $ws_failed = 'WebSocket Protocol Error' unless length $ws_failed;
     $ws_failed = '' if $ws_failed eq '-';
-    $self->{exit} = {failed => 1, status => 1002, reason => $ws_failed};
+    $self->{exit} = {ws => 1, failed => 1, status => 1002, reason => $ws_failed};
     my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
     my $data = pack 'n', $self->{exit}->{status};
     $data .= $self->{exit}->{reason};
@@ -694,6 +711,7 @@ sub _process_rbuf ($$;%) {
     if (length $$ref) {
       if (not $self->{exit}->{failed}) {
         $self->{exit}->{failed} = 1;
+        $self->{exit}->{ws} = 1;
         $self->{exit}->{status} = 1006;
         $self->{exit}->{reason} = '';
         delete $self->{exit}->{cleanly};
@@ -791,11 +809,12 @@ sub _process_rbuf_eof ($$;%) {
   } elsif ($self->{state} eq 'before ws frame' or
            $self->{state} eq 'ws data') {
     $self->{ws_state} = 'CLOSING';
-    $self->{exit} = {failed => 1, status => 1006, reason => ''};
+    $self->{exit} = {ws => 1, failed => 1, status => 1006, reason => ''};
   } elsif ($self->{state} eq 'ws terminating') {
     $self->{ws_state} = 'CLOSING';
     if ($args{abort} and not $self->{exit}->{failed}) {
       $self->{exit}->{failed} = 1;
+      $self->{exit}->{ws} = 1;
       $self->{exit}->{status} = 1006;
       $self->{exit}->{reason} = '';
     }
@@ -1021,7 +1040,7 @@ sub send_request_headers ($$;%) {
     }
   }
   # XXX transfer-encoding
-  # XXX WS protocols
+  # XXX croak if WS protocols is bad
   # XXX utf8 flag
   # XXX header size
 
@@ -1307,6 +1326,10 @@ sub _ev ($$;$$) {
     if ($_[0] eq 'data' and DEBUG > 1) {
       for (split /\x0D?\x0A/, $_[1], -1) {
         warn "$req->{id}: R: @{[_e4d $_]}\n";
+      }
+    } elsif ($_[0] eq 'text' and DEBUG > 1) {
+      for (split /\x0D?\x0A/, $_[1], -1) {
+        warn "$req->{id}: R: @{[_e4d_t $_]}\n";
       }
     } elsif ($_[0] eq 'headers') {
       if ($_[1]->{version} eq '0.9') {

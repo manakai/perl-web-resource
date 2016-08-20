@@ -143,9 +143,9 @@ sub request ($%) {
     my $body = [];
     my $body_length = 0;
     my $max = $self->max_size;
-    my $no_cache = $args{is_superreload}; # XXX per spec, this should look "cache mode"...
+    my $no_cache = $args{superreload};
     my $then = sub {
-      return $_[0]->request ($method, $url_record, $header_list, $body_ref, $no_cache, sub {
+      return $_[0]->request ($method, $url_record, $header_list, $body_ref, $no_cache, ! 'ws', sub {
         if (defined $_[2]) {
           push @$body, \($_[2]);
           if ($max >= 0) {
@@ -158,17 +158,26 @@ sub request ($%) {
       });
     };
     my $return = $self->_connect ($url_record)->then ($then)->then (sub {
-      my $result = $_[0];
+      my ($response, $result) = @{$_[0]};
       if ($result->{failed} and $result->{can_retry}) {
         $body = [];
         $body_length = 0;
         return $self->_connect ($url_record)->then ($then)->then (sub {
-          $_[0]->{body} = $body unless $_[0]->{failed};
-          return bless $_[0], __PACKAGE__ . '::Response';
+          my ($response, $result) = @{$_[0]};
+          if ($result->{failed}) {
+            return bless $result, __PACKAGE__ . '::Response';
+          } else {
+            $response->{body} = $body;
+            return bless $response, __PACKAGE__ . '::Response';
+          }
         });
       } else {
-        $result->{body} = $body unless $result->{failed};
-        return bless $result, __PACKAGE__ . '::Response';
+        if ($result->{failed}) {
+          return bless $result, __PACKAGE__ . '::Response';
+        } else {
+          $response->{body} = $body;
+          return bless $response, __PACKAGE__ . '::Response';
+        }
       }
     }); # $return
     $return_ok->($return);

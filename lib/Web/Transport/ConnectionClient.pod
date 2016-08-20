@@ -87,7 +87,8 @@ must be specified.  It is a URL record object (L<Web::URL>).  It must
 have same origin as the client's origin (i.e. the origin of the
 argument to the C<new_from_url> method).
 
-The promise is resolved with XXX.
+The promise is resolved with a response (L<Web::Transport::Response>
+object).
 
 This method creates an HTTP connection, if there is no existing
 connection, or the existing connection has terminated for some reason.

@@ -309,12 +309,14 @@ test {
     my @data;
     Web::Transport::WSClient->new (url => $url, cb => sub {
       my ($client, $data, $is_text) = @_;
-      if (@data and defined $data[-1] and defined $data) {
-        $data[-1] .= $data;
-      } else {
-        push @data, $data;
+      if (defined $is_text) {
+        if (@data and defined $data[-1] and defined $data) {
+          $data[-1] .= $data;
+        } else {
+          push @data, $data;
+        }
+        return $client->close if not defined $data;
       }
-      return $client->close if not defined $data;
     })->then (sub {
       my ($res) = $_[0];
       test {

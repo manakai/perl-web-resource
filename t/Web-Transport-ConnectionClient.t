@@ -2935,7 +2935,7 @@ test {
   }, sub {
     my $err = $_[0];
     test {
-      like $err, qr{^\QBoth |files| and |body| are specified\E};
+      is ''.$err, "Network error: Both |files| and |body| are specified";
     } $c;
   })->then (sub {
     return $client->close;
@@ -2958,7 +2958,7 @@ test {
   }, sub {
     my $err = $_[0];
     test {
-      like $err, qr{^\QFile's |body_ref|'s value is utf8-flagged\E};
+      is ''.$err, "Network error: File's |body_ref|'s value is utf8-flagged";
     } $c;
   })->then (sub {
     return $client->close;
@@ -2983,7 +2983,7 @@ test {
   }, sub {
     my $err = $_[0];
     test {
-      like $err, qr{^\QBoth |files| and |body| are specified\E};
+      is ''.$err, "Network error: Both |files| and |body| are specified";
     } $c;
   })->then (sub {
     return $client->close;

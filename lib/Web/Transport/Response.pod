@@ -1,0 +1,100 @@
+=head1 NAME
+
+Web::Transport::Response - Responses
+
+=head1 SYNOPSIS
+
+  if ($res->is_network_error) {
+    warn $res->network_error_message;
+  } else {
+    warn $res->status, "\t", $res->status_text;
+  }
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::Response> object represents a response, to be
+returned by L<Web::Transport::Connection> and
+L<Web::Transport::WSClient>.
+
+=head1 METHODS
+
+The following methods are available:
+
+=over 4
+
+=item $boolean = $res->is_network_error
+
+Whether the response represents a network error or not.  A network
+error is a fatal error of the connection, including failures to
+establish a connection, non-recoverable parsing errors of an HTTP
+message, and unexpected termination of connection.
+
+=item $string = $res->network_error_message
+
+A human-readable short description of the network error, if any.
+
+=item $integer = $res->status
+
+If the response represents an HTTP response, the status code of the
+response.
+
+If the response represents a WebSocket connection close event, the
+WebSocket connection close code.
+
+=item $integer = $res->ws_code
+
+The WebSocket connection close code.  Unlike C<< $res->status >>, this
+method can be used when the response does not represent a WebSocket
+connection close event (e.g. network error).
+
+=item $string = $res->status_text
+
+If the response represents an HTTP response, the reason phrase of the
+response (bytes).
+
+If the response represents a WebSocket connection close event, the
+WebSocket connection close reason (text).
+
+=item $text = $res->ws_reason
+
+The WebSocket connection close reason.  Unlike C<< $res->status_text
+>>, this method can be used when the response does not represent a
+WebSocket connection close event (e.g. network error).
+
+=item $boolean = $res->ws_closed_cleanly
+
+Whether the WebSocket connection has been closed cleanly or not.  This
+method can be used when the response does not represent a WebSocket
+connection close event (e.g. network error).
+
+=item $bytes = $res->body_bytes
+
+The response body, if any.
+
+=item $boolean = $res->incomplete
+
+Whether it is an incomplete message or not.
+
+=item $text = '' . $res
+
+=item $text = $res->stringify
+
+A human-readable short string describing the response.
+
+The stringify operation of the response object is overloaded such that
+throwing the response as (uncaught) exception would print the string.
+
+=back
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

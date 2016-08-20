@@ -2,11 +2,11 @@ package Web::Transport::ConnectionClient;
 use strict;
 use warnings;
 our $VERSION = '1.0';
-require utf8;
 use Carp;
 use Web::DomainName::Canonicalize qw(canonicalize_url_host);
 use Web::Transport::ClientBareConnection;
 use Web::Transport::RequestConstructor;
+use Web::Transport::Response;
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
@@ -121,14 +121,14 @@ sub request ($%) {
     my ($method, $url_record, $header_list, $body_ref)
         = Web::Transport::RequestConstructor->create (\%args);
     if (ref $method) { # error
-      $return_ng->(bless $method, __PACKAGE__ . '::Response');
+      $return_ng->(bless $method, 'Web::Transport::Response');
       return;
     }
 
     if (defined $body_ref and utf8::is_utf8 ($$body_ref)) {
       $return_ng->(bless {failed => 1,
                           message => "|body| is utf8-flagged"},
-                   __PACKAGE__ . '::Response');
+                   'Web::Transport::Response');
       return;
     }
 
@@ -136,7 +136,7 @@ sub request ($%) {
     unless ($url_origin->same_origin_as ($self->{origin})) {
       $return_ng->(bless {failed => 1,
                           message => "Bad URL origin |@{[$url_origin->to_ascii]}| (|@{[$self->{origin}->to_ascii]}| expected)"},
-                   __PACKAGE__ . '::Response');
+                   'Web::Transport::Response');
       return;
     }
 
@@ -165,18 +165,18 @@ sub request ($%) {
         return $self->_connect ($url_record)->then ($then)->then (sub {
           my ($response, $result) = @{$_[0]};
           if ($result->{failed}) {
-            return bless $result, __PACKAGE__ . '::Response';
+            return bless $result, 'Web::Transport::Response';
           } else {
             $response->{body} = $body;
-            return bless $response, __PACKAGE__ . '::Response';
+            return bless $response, 'Web::Transport::Response';
           }
         });
       } else {
         if ($result->{failed}) {
-          return bless $result, __PACKAGE__ . '::Response';
+          return bless $result, 'Web::Transport::Response';
         } else {
           $response->{body} = $body;
-          return bless $response, __PACKAGE__ . '::Response';
+          return bless $response, 'Web::Transport::Response';
         }
       }
     }); # $return
@@ -209,86 +209,6 @@ sub DESTROY ($) {
       if $@ =~ /during global destruction/;
 
 } # DESTROY
-
-package Web::Transport::ConnectionClient::Response;
-use overload '""' => 'stringify', fallback => 1;
-
-sub is_network_error ($) {
-  return $_[0]->{failed};
-} # is_network_error
-
-sub network_error_message ($) {
-  return $_[0]->{message};
-} # network_error_message
-
-sub status ($) {
-  return $_[0]->{status} || 0;
-} # status
-
-## HTTP::Response compatibility
-*code = \&status;
-
-## HTTP::Response compatibility
-sub is_success ($) {
-  return 0 if $_[0]->{failed};
-  return (200 <= $_[0]->{status} and $_[0]->{status} <= 299);
-} # is_success
-
-## HTTP::Response compatibility
-sub is_error ($) {
-  return 1 if $_[0]->{failed};
-  return (400 <= $_[0]->{status} and $_[0]->{status} <= 599);
-} # is_error
-
-## HTTP::Response compatibility
-sub status_line ($) {
-  return $_[0]->status . ' ' . (defined $_[0]->{reason} ? $_[0]->{reason} : '');
-} # status_line
-
-## HTTP::Response compatibility
-sub header ($$) {
-  my $name = $_[1];
-  $name =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-  for (@{$_[0]->{headers}}) {
-    if ($_->[2] eq $name) {
-      return $_->[1];
-    }
-  }
-  return undef;
-} # header
-
-sub body_bytes ($) {
-  return undef unless defined $_[0]->{body};
-  return join '', map { $$_ } @{$_[0]->{body}};
-} # body_bytes
-
-## HTTP::Response compatibility
-sub content ($) {
-  return '' if not defined $_[0]->{body};
-  return $_[0]->body_bytes;
-} # content
-
-sub incomplete ($) {
-  return $_[0]->{incomplete};
-} # incomplete
-
-## HTTP::Response compatibility
-sub as_string ($) {
-  my $self = $_[0];
-  return 'HTTP/1.1 ' . $self->status_line . "\x0D\x0A" .
-      (join '', map { "$_->[0]: $_->[1]\x0D\x0A" } @{$_[0]->{headers}}) .
-      "\x0D\x0A" .
-      $_[0]->content;
-} # as_string
-
-sub stringify ($) {
-  my $self = $_[0];
-  if ($self->is_network_error) {
-    return "Network error: @{[$self->network_error_message]}";
-  } else {
-    return "Response: @{[$self->status_line]}";
-  }
-} # stringify
 
 1;
 

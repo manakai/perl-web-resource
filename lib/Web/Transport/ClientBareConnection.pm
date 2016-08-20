@@ -220,7 +220,7 @@ sub connect ($%) {
 } # connect
 
 sub request ($$$$$$$) {
-  my ($self, $method, $url_record, $headers, $body_ref, $no_cache, $cb) = @_;
+  my ($self, $method, $url_record, $headers, $body_ref, $no_cache, $is_ws, $cb) = @_;
   return $self->connect (no_cache => $no_cache)->then (sub {
     return {failed => 1, message => "Bad input URL"}
         unless defined $url_record->host;
@@ -248,21 +248,21 @@ sub request ($$$$$$$) {
     $self->{http}->onevent (sub {
       my $http = $_[0];
       my $type = $_[2];
-      if ($type eq 'data') {
+      if ($type eq 'data' or $type eq 'text') {
         if (not defined $result) {
           my $v = $_[3]; # buffer copy!
-          Promise->resolve->then (sub { return $cb->($http, $response, $v) });
+          Promise->resolve->then (sub { return $cb->($http, $response, $v, $type eq 'text') });
         }
-      } elsif ($type eq 'dataend') {
+      } elsif ($type eq 'dataend' or $type eq 'textend') {
         if (not defined $result) {
-          Promise->resolve->then (sub { return $cb->($http, $response, undef) });
+          Promise->resolve->then (sub { return $cb->($http, $response, undef, $type eq 'textend') });
         }
       } elsif ($type eq 'complete') {
         my $exit = $_[3];
         if ($exit->{failed}) {
           $response = undef;
-          $result ||= $exit;
         }
+        $result ||= $exit;
         undef $timer;
       } elsif ($type eq 'headers') {
         my $transport = $_[0]->transport;
@@ -279,14 +279,15 @@ sub request ($$$$$$$) {
           }
         }
         if (not defined $result) {
-          Promise->resolve->then (sub { return $cb->($http, $response, '') });
+          $response->{ws_connection_established} = $_[4];
+          Promise->resolve->then (sub { return $cb->($http, $response, '', undef) });
         }
       }
     });
     my $p = $self->{http}->send_request_headers
         ({method => $method, target => encode_web_utf8 ($target),
-          headers => $headers})->then (sub {
-      return $result || $response;
+          headers => $headers}, ws => $is_ws)->then (sub {
+      return [$response, $result];
     });
     if (defined $body_ref) {
       $self->{http}->send_data ($body_ref);
@@ -294,13 +295,13 @@ sub request ($$$$$$$) {
     return $p;
   })->catch (sub {
     if (ref $_[0] eq 'HASH' and defined $_[0]->{exit}) {
-      return $_[0]->{exit};
+      return [undef, $_[0]->{exit}];
     } elsif (ref $_[0] eq 'HASH' and $_[0]->{failed}) {
-      return $_[0];
+      return [undef, $_[0]];
     } else {
       my $err = ''.$_[0];
       $err =~ s/\n$//;
-      return {failed => 1, message => $err};
+      return [undef, {failed => 1, message => $err}];
     }
 #XXX warn if DEBUG
   });

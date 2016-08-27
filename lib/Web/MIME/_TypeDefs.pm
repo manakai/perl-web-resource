@@ -3289,6 +3289,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'label' => 'XML Resource Lists',
                                                                     'related' => {}
                                                                   },
+                                            'route-s-tsid+xml' => {
+                                                                    'iana' => 'provisional'
+                                                                  },
                                             'rpki-ghostbusters' => {
                                                                      'iana' => 'permanent',
                                                                      'iana_intended_usage' => 'common',

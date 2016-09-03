@@ -3880,11 +3880,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'testfontstream' => {},
                                             'tex' => {},
                                             'texinfo' => {},
-                                            'text' => {
-                                                        'related' => {
-                                                                       'application/octet-stream' => {}
-                                                                     }
-                                                      },
+                                            'text' => {},
                                             'tga' => {
                                                        'related' => {
                                                                       'image/x-targa' => {}
@@ -10725,7 +10721,16 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                  'application/x-wordperfect6.0' => {}
                                                                                }
                                                                 },
-                                            'wordperfect6.0' => {},
+                                            'wordperfect6.0' => {
+                                                                  'related' => {
+                                                                                 'application/vnd.wordperfect' => {},
+                                                                                 'application/vnd.wordperfect5.1' => {},
+                                                                                 'application/wordperfect' => {},
+                                                                                 'application/wordperfect5.1' => {},
+                                                                                 'application/x-wordperfect' => {},
+                                                                                 'application/x-wordperfect6.0' => {}
+                                                                               }
+                                                                },
                                             'wordperfect6.1' => {
                                                                   'obsolete' => 1,
                                                                   'preferred_type' => 'application/x-wordperfect6.1',
@@ -15975,6 +15980,7 @@ $Web::MIME::_TypeDefs::Type = {
           'audio' => {
                        'audiovideo' => 1,
                        'iana' => 'permanent',
+                       'not_script' => 1,
                        'subtype' => {
                                       '1d-interleaved-parityfec' => {
                                                                       'iana' => 'permanent',
@@ -18235,6 +18241,7 @@ $Web::MIME::_TypeDefs::Type = {
           'image' => {
                        'iana' => 'permanent',
                        'image' => 1,
+                       'not_script' => 1,
                        'subtype' => {
                                       'amidraw' => {},
                                       'any' => {},
@@ -20790,6 +20797,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                 'mac_types' => {
                                                                  'TEXT' => 1
                                                                },
+                                                'not_script' => 1,
                                                 'params' => {
                                                               'charset' => {},
                                                               'header' => {}
@@ -23257,6 +23265,7 @@ $Web::MIME::_TypeDefs::Type = {
           'video' => {
                        'audiovideo' => 1,
                        'iana' => 'permanent',
+                       'not_script' => 1,
                        'subtype' => {
                                       '1d-interleaved-parityfec' => {
                                                                       'iana' => 'permanent',

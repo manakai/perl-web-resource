@@ -562,6 +562,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                             'application/x-clariscad' => {}
                                                                           }
                                                            },
+                                            'clue_info+xml' => {
+                                                                 'iana' => 'permanent',
+                                                                 'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/clue_info+xml'
+                                                               },
                                             'cms' => {
                                                        'iana' => 'permanent',
                                                        'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/cms',
@@ -10721,7 +10725,16 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                  'application/x-wordperfect6.0' => {}
                                                                                }
                                                                 },
-                                            'wordperfect6.0' => {},
+                                            'wordperfect6.0' => {
+                                                                  'related' => {
+                                                                                 'application/vnd.wordperfect' => {},
+                                                                                 'application/vnd.wordperfect5.1' => {},
+                                                                                 'application/wordperfect' => {},
+                                                                                 'application/wordperfect5.1' => {},
+                                                                                 'application/x-wordperfect' => {},
+                                                                                 'application/x-wordperfect6.0' => {}
+                                                                               }
+                                                                },
                                             'wordperfect6.1' => {
                                                                   'obsolete' => 1,
                                                                   'preferred_type' => 'application/x-wordperfect6.1',

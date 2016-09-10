@@ -57,8 +57,9 @@ $Texts->{'408h'} = qr{HTTP/1.1 408 Request Timeout\x0D
 <[\s\S]+?(?:408)[\s\S]+?</html>\x0D?
 };
 
-$Texts->{'411h'} = qr{HTTP/1.1 411 Length Required\x0D
-(?:[^\x0A]+\x0A)+\x0D
+$Texts->{'411header'} = qr{HTTP/1.1 411 Length Required\x0D
+(?:[^\x0A]+\x0A)+};
+$Texts->{'411h'} = qr{$Texts->{'411header'}\x0D
 <[\s\S]+?(?:411)[\s\S]+?</html>\x0D?
 };
 
@@ -69,6 +70,11 @@ $Texts->{'414h'} = qr{HTTP/1.1 (?:414 Request-URI Too (?:Large|Long))\x0D
 $Texts->{'414body'}};
 
 $Texts->{'500body'} = qr{<[\s\S]+?(?:500)[\s\S]+?</html>\x0D?
+};
+
+$Texts->{'501h'} = qr{HTTP/1.1 501 Not Implemented\x0D
+(?:[^\x0A]+\x0A)+\x0D
+<[\s\S]+?(?:501)[\s\S]+?</html>\x0D?
 };
 
 $Texts->{eof} = qr{\[\[EOF\]\]};

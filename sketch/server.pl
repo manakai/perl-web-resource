@@ -148,6 +148,8 @@ sub _ondata ($$) {
             push @length, $_->[1];
           } elsif ($n eq 'host') {
             push @host, $_->[1];
+          } elsif ($n eq 'transfer-encoding') {
+            return $self->_411 ($self->{request});
           }
         }
         if (@host == 1) {
@@ -171,7 +173,6 @@ sub _ondata ($$) {
       } else { # 1.0
         $self->{close_after_response} = 1;
       }
-      # XXX if transfer-encoding
       if (@length == 1 and $length[0] =~ /\A[0-9]+\z/) {
         my $l = 0+$length[0];
         $self->{request}->{body_length} = $l;
@@ -182,15 +183,12 @@ sub _ondata ($$) {
         } else {
           $self->{state} = 'request body';
         }
-      } elsif (@length) {
-        return $self->_fatal ($self->{request}->{version});
-      } else {
-        $self->onrequest ($self->{request});
-        $self->_request_done ($self->{request});
-      }
-
-  # XXX length=0 tests
-
+        } elsif (@length) {
+          return $self->_fatal ($self->{request}->{version});
+        } else {
+          $self->onrequest ($self->{request});
+          $self->_request_done ($self->{request});
+        }
       } elsif (@{$self->{request}->{headers}} and
                $self->{rbuf} =~ s/^([\x09\x20][^\x00\x0A\x0D]*)\x0D?\x0A//) {
         $self->{request}->{headers}->[-1]->[1] .= "\x0D\x0A" . $1;
@@ -307,6 +305,14 @@ sub _fatal ($$) {
   $self->_send_error ($req, 400, 'Bad Request') unless $self->{write_closed};
   return $self->_response_done ($req);
 } # _fatal
+
+sub _411 ($$) {
+  my ($self, $req) = @_;
+  $self->_request_done ($req);
+  $self->_send_error ($req, 411, 'Length Required')
+      unless $self->{write_closed};
+  return $self->_response_done ($req);
+} # _411
 
 sub _414 ($) {
   my ($self) = @_;

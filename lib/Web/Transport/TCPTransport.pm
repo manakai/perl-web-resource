@@ -16,10 +16,12 @@ use Promise;
 sub new ($%) {
   my $self = bless {}, shift;
   my $args = $self->{args} = {@_};
-  croak "Bad |host|" unless defined $args->{host} and $args->{host}->is_ip;
-  $args->{addr} = $args->{host}->text_addr;
-  croak "Bad |port|" unless defined $args->{port};
-  croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
+  if (not defined $args->{fh}) {
+    croak "Bad |host|" unless defined $args->{host} and $args->{host}->is_ip;
+    $args->{addr} = $args->{host}->text_addr;
+    croak "Bad |port|" unless defined $args->{port};
+    croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
+  }
   croak "Bad |id|" if defined $args->{id} and utf8::is_utf8 ($args->{id});
   $self->{id} = (defined $args->{id} ? $args->{id} : int rand 100000);
   return $self;
@@ -35,10 +37,14 @@ sub start ($$) {
 
   return Promise->new (sub {
     my ($ok, $ng) = @_;
-    tcp_connect $args->{addr}, $args->{port}, sub {
-      return $ng->($!) unless $_[0];
-      $ok->($_[0]);
-    };
+    if (defined $args->{fh}) {
+      $ok->($args->{fh});
+    } else {
+      tcp_connect $args->{addr}, $args->{port}, sub {
+        return $ng->($!) unless $_[0];
+        $ok->($_[0]);
+      };
+    }
   })->then (sub {
     $self->{fh} = $_[0];
     my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $self->{fh};

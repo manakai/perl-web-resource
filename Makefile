@@ -48,11 +48,17 @@ local/mime-types.json:
 
 PROVE = ./prove
 
-test: test-deps test-main
+test: test-deps test-main test-main-server
 
 test-deps: deps
 
 test-main:
 	$(PROVE) t/*.t
+
+test-main-server:
+	$(PERL) sketch/server.pl &
+	sleep 1
+#	$(PROVE) t/server/*.t
+	curl http://localhost:8522/end
 
 ## License: Public Domain.

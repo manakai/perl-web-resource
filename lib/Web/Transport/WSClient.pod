@@ -8,12 +8,12 @@ Web::Transport::WSClient - A WebSocket client
   Web::Transport::WSClient->new (
     url => Web::URL->parse_url (q<wss://server.test/p1>),
     cb => sub {
-      my ($client, $data, $is_binary) = @_;
-      if (defined $is_binary) { # text or binary
+      my ($client, $data, $is_text) = @_;
+      if (defined $is_text) { # text or binary
         if (defined $data) { # frame data
           $current_data .= $data;
         } else { # end of frame
-          if ($data_type) { # text
+          if ($is_text) { # text
             warn "Received |$current_data| (text)";
           } else { # binary
             warn "Received |$current_data| (binary)";

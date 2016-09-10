@@ -62,6 +62,12 @@ $Texts->{'411h'} = qr{HTTP/1.1 411 Length Required\x0D
 <[\s\S]+?(?:411)[\s\S]+?</html>\x0D?
 };
 
+$Texts->{'414body'} = qr{<[\s\S]+?(?:414)[\s\S]+?</html>\x0D?
+};
+$Texts->{'414h'} = qr{HTTP/1.1 (?:414 Request-URI Too (?:Large|Long))\x0D
+(?:[^\x0A]+\x0A)+\x0D
+$Texts->{'414body'}};
+
 $Texts->{'500body'} = qr{<[\s\S]+?(?:500)[\s\S]+?</html>\x0D?
 };
 
@@ -82,6 +88,12 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
       if (/^"([^"]+)"$/) {
         push @$commands, {type => 'send', value => $1};
         $commands->[-1]->{value} =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
+      } elsif (/^"([^"]+)" x ([0-9]+)$/) {
+        my $v = $1;
+        my $n = $2;
+        $v =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
+        $v = $v x ($n);
+        push @$commands, {type => 'send', value => $v};
       } elsif (/^"([^"]+)"LF$/) {
         push @$commands, {type => 'send', value => $1."\x0A"};
         $commands->[-1]->{value} =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
@@ -105,18 +117,21 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
       } elsif (/^receive\s+"([^"]+)"$/) {
         push @$commands, {type => 'receive', value => $1};
         $commands->[-1]->{value} =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
+      } elsif (/^\s*#/) {
+        #
       } elsif (/\S/) {
         die "Bad line |$_|";
       }
     }
 
-    my $expected = $test->{'result-' . $mode}->[0] || $test->{result}->[0];
-    $expected =~ s{\{\{([\w|]+)\}\}}{
-      '(' . (join '|', map { "(?:$_)" } map {
-        $Texts->{$_} // die "Unknown text |$_|";
-      } split /\|/, $1) . ')';
-    }ge;
-    $expected = qr/\A(?:$expected)\z/;
+      my $expected_o = $test->{'result-' . $mode}->[0] || $test->{result}->[0];
+      my $expected = $expected_o;
+      $expected =~ s{\{\{([\w|]+)\}\}}{
+        '(' . (join '|', map { "(?:$_)" } map {
+          $Texts->{$_} // die "Unknown text |$_|";
+        } split /\|/, $1) . ')';
+      }ge;
+      $expected = qr/\A(?:$expected)\z/;
 
     my $received_data = '';
     Web::Transport::PlatformResolver->new->resolve ($host)->then (sub {
@@ -176,17 +191,17 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
         $end_ng->($error);
       });
 
-      return $end_p;
-    })->then (sub {
-      test {
-        like $received_data, $expected;
-      } $c;
-    }, sub {
-      my $error = $_[0];
-      test {
-        is $error, undef;
-        ok 0;
-      } $c;
+        return $end_p;
+      })->then (sub {
+        test {
+          like $received_data, $expected, $expected_o;
+        } $c;
+      }, sub {
+        my $error = $_[0];
+        test {
+          is $error, undef;
+          ok 0;
+        } $c;
       })->then (sub {
         done $c;
         undef $c;

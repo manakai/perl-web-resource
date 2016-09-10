@@ -2,6 +2,7 @@ use strict;
 use warnings;
 use AnyEvent::Socket;
 use Promise;
+use Web::URL;
 use Web::Transport::TCPTransport;
 
 my $host = 0;
@@ -9,13 +10,26 @@ my $port = 8522;
 
 my $ReadTimeout = $ENV{SERVER_READ_TIMEOUT} || 60;
 
+my $cb = sub {
+  my $self = $_[0];
+  my $type = $_[1];
+  if ($type eq 'open') {
+    my $data = $_[2];
+    warn "> Connection opened (Client: $data->{client_ip_addr}:$data->{client_port})\n";
+  } elsif ($type eq 'close') {
+    warn "> Connection closed\n";
+  } else {
+    warn "> $type\n";
+  }
+}; # $cb
+
 my $server = tcp_server $host, $port, sub {
   my ($fh, $client_host, $client_port) = @_;
-  #warn "$client_host / $client_port";
 
   my $transport = Web::Transport::TCPTransport->new (fh => $fh);
   my $self = bless {transport => $transport,
-                    rbuf => '', state => 'initial'}, 'Hoge';
+                    rbuf => '', state => 'initial',
+                    cb => $cb}, 'Hoge';
   my $read_timer;
   my $onreadtimeout = sub {
     undef $read_timer;
@@ -32,13 +46,18 @@ my $server = tcp_server $host, $port, sub {
     } elsif ($type eq 'writeeof') {
       $self->{write_closed} = 1;
     } elsif ($type eq 'close') {
-      #warn "Closed";
-      #warn scalar gmtime;
+      AE::postpone {
+        $self->{cb}->($self, 'close');
+      };
     }
   })->then (sub {
     #warn "Established";
     #warn scalar gmtime;
     $read_timer = AE::timer $ReadTimeout, 0, $onreadtimeout;
+    AE::postpone {
+      $self->{cb}->($self, 'open', {client_ip_addr => $client_host,
+                                    client_port => $client_port});
+    };
   });
 };
 
@@ -49,6 +68,7 @@ package Hoge;
 sub _ondata ($$) {
   my ($self, $inref) = @_;
   while (1) {
+    #warn "[$self->{state}] |$self->{rbuf}|";
     if ($self->{state} eq 'initial') {
       $self->{rbuf} .= $$inref;
       if ($self->{rbuf} =~ s/^\x0D?\x0A// or
@@ -67,15 +87,16 @@ sub _ondata ($$) {
       }
     } elsif ($self->{state} eq 'before request-line') {
       $self->{rbuf} .= $$inref;
-      if ($self->{rbuf} =~ s/\A([^\x0A]*)\x0A//) {
+      if ($self->{rbuf} =~ s/\A([^\x0A]{0,8191})\x0A//) {
         my $line = $1;
         $line =~ s/\x0D\z//;
+        return $self->_fatal (0.9) if $line =~ /[\x00\x0D]/;
         my $method;
         my $version;
-        if ($line =~ s{[\x09\x20]+(H[^\x09\x20]*)\z}{}) {
+        if ($line =~ s{\x20+(H[^\x20]*)\z}{}) {
           $version = $1;
           if ($version =~ m{\AHTTP/1\.([0-9]+)\z}) {
-            $version = $version =~ /[^0]/ ? 1.1 : 1.0;
+            $version = $1 =~ /[^0]/ ? 1.1 : 1.0;
           } elsif ($version =~ m{\AHTTP/0+1?\.}) {
             return $self->_fatal (0.9);
           } elsif ($version =~ m{\AHTTP/[0-9]+\.[0-9]+\z}) {
@@ -84,7 +105,7 @@ sub _ondata ($$) {
             return $self->_fatal (0.9);
           }
         }
-        if ($line =~ s{\A([^\x09\x20]+)[\x09\x20]+}{}) {
+        if ($line =~ s{\A([^\x20]+)\x20+}{}) {
           $method = $1;
         }
         return $self->_fatal (0.9) unless defined $method;
@@ -104,28 +125,47 @@ sub _ondata ($$) {
           return $self->_fatal ($version) unless length $line;
           $self->{state} = 'before request header';
         }
+      } elsif (8192 <= length $self->{rbuf}) {
+        return $self->_414;
       } else {
         return;
       }
-      # XXX if rbuf is too long
-  } elsif ($self->{state} eq 'before request header') {
-    $self->{rbuf} .= $$inref;
-    if ($self->{rbuf} =~ s/\A([^:\x20\x0A]+):([^\x0A]*)\x0A//) { # XXX \x09 \x0D
-      my $name = $1;
-      my $value = $2;
-      $value =~ s/\A[\x09\x20]+//;
-      $value =~ s/\x0D\z//;
-      push @{$self->{request}->{headers}}, [$name, $value];
-    } elsif ($self->{rbuf} =~ s/\A\x0D?\x0A//) {
-      my @length;
-      for (@{$self->{request}->{headers}}) {
-        my $n = $_->[0];
-        $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-        if ($n eq 'content-length') {
-          push @length, $_->[1];
+    } elsif ($self->{state} eq 'before request header') {
+      $self->{rbuf} .= $$inref;
+      if ($self->{rbuf} =~ s/\A([^\x00\x0A\x0D:]+):([^\x00\x0A\x0D]*)\x0D?\x0A//) {
+        my $name = $1;
+        my $value = $2;
+        $value =~ s/\A[\x20]+//;
+        push @{$self->{request}->{headers}}, [$name, $value];
+      } elsif ($self->{rbuf} =~ s/\A\x0D?\x0A//) {
+        my @length;
+        my @host;
+        for (@{$self->{request}->{headers}}) {
+          $_->[1] =~ s/\x20+\z//;
+          my $n = $_->[0];
+          $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+          if ($n eq 'content-length') {
+            push @length, $_->[1];
+          } elsif ($n eq 'host') {
+            push @host, $_->[1];
+          }
         }
-      }
-      # XXX if connection
+        if (@host == 1) {
+          my $url = Web::URL->parse_string ("https://$host[0]/");
+          if (not defined $url or
+              not $url->path eq '/' or
+              defined $url->query or
+              defined $url->{fragment}) { # XXX
+            return $self->_fatal ($self->{request}->{version});
+          }
+        } elsif (@host) { # multiple Host:
+          return $self->_fatal ($self->{request}->{version});
+        } else { # no Host:
+          if ($self->{request}->{version} == 1.1) {
+            return $self->_fatal ($self->{request}->{version});
+          }
+        }
+        # XXX if connection
       if ($self->{request}->{version} == 1.1) {
         
       } else { # 1.0
@@ -150,20 +190,21 @@ sub _ondata ($$) {
       }
 
   # XXX length=0 tests
-  # XXX wrapped
 
+      } elsif (@{$self->{request}->{headers}} and
+               $self->{rbuf} =~ s/^([\x09\x20][^\x00\x0A\x0D]*)\x0D?\x0A//) {
+        $self->{request}->{headers}->[-1]->[1] .= "\x0D\x0A" . $1;
       } elsif ($self->{rbuf} =~ s/\A[^\x0A]*\x0A//) {
         return $self->_fatal ($self->{request}->{version});
       } else {
         return;
       }
-  # XXX bad name
-  # XXX spaces
   # XXX if rbuf is too long
 
     } elsif ($self->{state} eq 'request body') {
       if (length $self->{rbuf}) {
         $inref = \($self->{rbuf} . $$inref);
+        $self->{rbuf} = '';
       }
       my $in_length = length $$inref;
       if ($self->{unread_length} == $in_length) {
@@ -240,35 +281,45 @@ sub _done ($$) {
   }
 } # _done
 
+sub _send_error ($$$$) {
+  my ($self, $req, $status, $status_text) = @_;
+  $self->{close_after_response} = 1;
+  my $res = qq{<!DOCTYPE html><html>
+<head><title>$status $status_text</title></head>
+<body>$status $status_text};
+  #$res .= Carp::longmess;
+  $res .= qq{</body></html>\x0A};
+  $self->send_response_headers
+      ($req,
+       {status => $status, status_text => $status_text,
+        headers => [
+          ['Content-Type' => 'text/html; charset=utf-8'],
+          ['Content-Length' => length $res],
+          ['Connection' => 'close'],
+        ]});
+  $self->{transport}->push_write (\$res);
+} # _send_error
+
 sub _fatal ($$) {
   my ($self, $version) = @_;
   my $req = {version => $version, method => 'GET'}; # XXX HEAD fatal
   $self->_request_done ($req);
-  unless ($self->{write_closed}) {
-  my $res = q{<!DOCTYPE html><html>
-<head><title>400 Bad Request</title></head>
-<body>400 Bad Request</body>
-</html>
-};
-    $self->{close_after_response} = 1;
-    $self->send_response_headers
-        ($req,
-         {status => 400, status_text => 'Bad Request',
-          headers => [
-            ['Content-Type' => 'text/html; charset=utf-8'],
-            ['Content-Length' => length $res],
-            ['Connection' => 'close'],
-          ]});
-    $self->{transport}->push_write (\$res);
-  }
+  $self->_send_error ($req, 400, 'Bad Request') unless $self->{write_closed};
   return $self->_response_done ($req);
 } # _fatal
 
+sub _414 ($) {
+  my ($self) = @_;
+  my $req = {version => 1.1, method => 'GET'};
+  $self->_request_done ($req);
+  $self->_send_error ($req, 414, 'Request-URI Too Large')
+      unless $self->{write_closed};
+  return $self->_response_done ($req);
+} # _414
+
 sub onrequest ($$) {
   my ($self, $request) = @_;
-  if ($request->{target} =~ /[\x00]/) {
-    return $self->_fatal ($request->{version});
-  } elsif ($request->{target} =~ m{^/}) {
+  if ($request->{target} =~ m{^/}) {
     #
   } elsif ($request->{target} =~ m{^[A-Za-z0-9.-]+://}) { # XXX
     #
@@ -341,3 +392,5 @@ sub send_response_headers ($$$) {
 
 # XXX TRACE
 # XXX space in target
+# XXX CONNECT
+# XXX WS

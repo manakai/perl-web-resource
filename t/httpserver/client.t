@@ -191,7 +191,7 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
         done $c;
         undef $c;
       });
-    } n => 1, name => [$path, $test->{name}->[0]];
+    } n => 1, name => [$path, $test->{name}->[0]], timeout => 90;
   };
 } # $path
 

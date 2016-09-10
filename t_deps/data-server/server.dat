@@ -3,9 +3,9 @@ bad request-line
 #input
 "hoge"
 #result
-{{400body}}{{eof}}
-#result-apache
 {{eof}}
+#result-nginx
+{{400body}}{{eof}}
 #notes
 apache - timeout
 
@@ -111,7 +111,7 @@ CRLF
 {{404h}}{{eof}}
 
 #name
-bad HTTP-version in request-line
+bad HTTP-version in request-line (HTTP/0.900)
 #input
 "GET /404 HTTP/0.900"CRLF
 #result
@@ -120,7 +120,7 @@ bad HTTP-version in request-line
 {{408h}}{{eof}}
 
 #name
-bad HTTP-version in request-line
+bad HTTP-version in request-line (HTTP/12345)
 #input
 "GET /404 HTTP/12345"CRLF
 #result
@@ -129,7 +129,61 @@ bad HTTP-version in request-line
 {{408h}}{{eof}}
 
 #name
-bad HTTP-version in request-line
+bad HTTP-version in request-line (HTTPFOOBAR)
+#input
+"GET /404 HTTPFOOBAR"CRLF
+#result
+{{400body}}{{eof}}
+#result-apache
+{{408h}}{{eof}}
+
+#name
+bad HTTP-version in request-line (H)
+#input
+"GET /404 H"CRLF
+#result
+{{400body}}{{eof}}
+#result-apache
+{{408h}}{{eof}}
+
+#name
+bad HTTP-version in request-line (HT)
+#input
+"GET /404 HT"CRLF
+#result
+{{400body}}{{eof}}
+#result-apache
+{{408h}}{{eof}}
+
+#name
+bad HTTP-version in request-line (HTTX)
+#input
+"GET /404 HTTX"CRLF
+#result
+{{400body}}{{eof}}
+#result-apache
+{{408h}}{{eof}}
+
+#name
+bad HTTP-version in request-line (FOOHTTPBAR)
+#input
+"GET /404 FOOHTTPBAR"CRLF
+#result
+{{404nohostbody}}{{eof}}
+#result-apache
+{{408h}}{{eof}}
+
+#name
+bad HTTP-version in request-line (FOOBAR)
+#input
+"GET /404 FOOBAR"CRLF
+#result
+{{404nohostbody}}{{eof}}
+#result-apache
+{{408h}}{{eof}}
+
+#name
+bad HTTP-version in request-line (foobar)
 #input
 "GET /404 foobar"CRLF
 #result
@@ -138,7 +192,7 @@ bad HTTP-version in request-line
 {{408h}}{{eof}}
 
 #name
-bad HTTP-version in request-line
+bad HTTP-version in request-line (HTTP)
 #input
 "GET /404 HTTP"CRLF
 #result
@@ -147,9 +201,18 @@ bad HTTP-version in request-line
 {{408h}}{{eof}}
 
 #name
-bad HTTP-version in request-line
+bad HTTP-version in request-line (HTTP/0)
 #input
 "GET /404 HTTP/0"CRLF
+#result
+{{400body}}{{eof}}
+#result-apache
+{{408h}}{{eof}}
+
+#name
+bad HTTP-version in request-line (HTTP/0.1)
+#input
+"GET /404 HTTP/0.1"CRLF
 #result
 {{400body}}{{eof}}
 #result-apache
@@ -186,28 +249,28 @@ HTTP/0.9 request-target authority-URL
 {{404nohostbody}}{{eof}}
 
 #name
-HTTP/0.9 request-target absolute URL
+HTTP/0.9 request-target absolute URL (https://)
 #input
 "GET https://foo/bar"CRLF
 #result
 {{404nohostbody}}{{eof}}
 
 #name
-HTTP/0.9 request-target absolute URL
+HTTP/0.9 request-target absolute URL (about:)
 #input
 "GET about:blank"CRLF
 #result
 {{400body}}{{eof}}
 
 #name
-HTTP/0.9 request-target absolute URL
+HTTP/0.9 request-target absolute URL (https:)
 #input
 "GET https:foo/bar"CRLF
 #result
 {{400body}}{{eof}}
 
 #name
-HTTP/0.9 request-target absolute URL
+HTTP/0.9 request-target absolute URL (FTP:)
 #input
 "GET FTP://foo/bar"CRLF
 #result
@@ -274,7 +337,7 @@ CRLF
 {{404h}}{{405body}}{{eof}}
 
 #name
-HTTP/1.0 request (closed by server)
+HTTP/1.0 GET request (closed by server)
 #input
 "GET /404 HTTP/1.0"CRLF
 "Host: "
@@ -293,7 +356,10 @@ hostport
 CRLF
 CRLF
 #result
-{{400body|405body}}{{eof}}
+{{400body|405h}}{{eof}}
+#notes
+nginx - HTTP/0.9 400
+apache - HTTP/1.1 501
 
 #name
 HTTP/1.0 request (closed by server) - bad request-method
@@ -402,6 +468,10 @@ hostport
 CRLF
 CRLF
 #result
+{{400h}}{{eof}}
+#result-nginx
+{{404h}}{{eof}}
+#result-apache
 {{404h}}{{eof}}
 
 #name
@@ -414,6 +484,10 @@ hostport
 CRLF
 CRLF
 #result
+{{400h}}{{eof}}
+#result-nginx
+{{404h}}{{eof}}
+#result-apache
 {{404h}}{{eof}}
 
 #name
@@ -427,10 +501,14 @@ CRLF
 CRLF
 close
 #result
+{{400h}}{{eof}}
+#result-nginx
+{{404h}}{{eof}}
+#result-apache
 {{404h}}{{eof}}
 
 #name
-HTTP/1.1 bad header name
+HTTP/1.1 bad header name (non-ASCII)
 #input
 "GET /404 HTTP/1.1"CRLF
 "a\x53\x98\x01\xFE:hoge"CRLF
@@ -443,7 +521,7 @@ close
 {{404h}}{{eof}}
 
 #name
-HTTP/1.1 bad header
+HTTP/1.1 bad header (no-: line after request line)
 #input
 "GET /404 HTTP/1.1"CRLF
 "foo"CRLF
@@ -458,7 +536,7 @@ close
 {{404h}}{{eof}}
 
 #name
-HTTP/1.1 bad header
+HTTP/1.1 bad header (continuous after request-line)
 #input
 "GET /404 HTTP/1.1"CRLF
 " foo"CRLF
@@ -473,7 +551,7 @@ close
 {{404h}}{{eof}}
 
 #name
-HTTP/1.1 bad header
+HTTP/1.1 bad header (continuous with : after request line)
 #input
 "GET /404 HTTP/1.1"CRLF
 " fo:o"CRLF
@@ -495,9 +573,17 @@ newlines before request
 CRLF
 "hoge"
 #result
-{{400body}}{{eof}}
-#result-apache
 {{eof}}
+#result-nginx
+{{400body}}{{eof}}
+
+#name
+newlines before request
+#input
+CRLF
+"hoge"CRLF
+#result
+{{400body}}{{eof}}
 
 #name
 newlines before request
@@ -598,6 +684,8 @@ LF
 "GET /404 HTTP/1.0"CRLF
 CRLF
 #result
+{{400body}}{{eof}}
+#result-nginx
 {{404nohosth}}{{eof}}
 #result-apache
 {{405body}}{{eof}}
@@ -660,7 +748,7 @@ close
 {{404h}}{{404h}}{{eof}}
 
 #name
-two GET requests, newline between requests
+two GET requests, newline between requests (CRLF)
 #input
 "GET /404 HTTP/1.1"CRLF
 "Host:"
@@ -679,7 +767,7 @@ close
 {{404h}}{{404h}}{{eof}}
 
 #name
-two GET requests, newline between requests
+two GET requests, newline between requests (CRLF CRLF)
 #input
 "GET /404 HTTP/1.1"CRLF
 "Host:"
@@ -698,7 +786,7 @@ CRLF
 {{404h}}{{404h}}{{eof}}
 
 #name
-two GET requests, newline between requests
+two GET requests, newline between requests (CRLF LF LF LF)
 #input
 "GET /404 HTTP/1.1"CRLF
 "Host:"
@@ -761,7 +849,7 @@ CRLF
 {{404h}}{{404h}}{{eof}}
 
 #name
-two GET requests, newline between requests
+two GET requests, newline between requests (CR LF CR CR LF LF LF)
 #input
 "GET /404 HTTP/1.1"CRLF
 "Host:"
@@ -776,6 +864,33 @@ CR
 LF
 LF
 LF
+"GET /404 HTTP/1.0"CRLF
+"Host: "
+hostport
+CRLF
+CRLF
+#result
+{{404h}}{{404h}}{{eof}}
+#result-apache
+{{404h}}{{405body}}{{eof}}
+
+#name
+two GET requests, newline between requests (CR LF CR CR LF LF LF CR)
+#input
+"GET /404 HTTP/1.1"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+receive "</html>"
+CR
+LF
+CR
+CR
+LF
+LF
+LF
+CR
 "GET /404 HTTP/1.0"CRLF
 "Host: "
 hostport
@@ -843,9 +958,10 @@ CRLF
 "abcde"
 close
 #result
-{{400h}}{{eof}}
-#result-nginx
 {{404h}}{{eof}}
+#result-apache
+{{400h}}{{eof}}
+#incomplete
 
 #name
 client closed before end of header, HTTP/1.0
@@ -863,7 +979,7 @@ close
 {{eof}}
 
 #name
-GET with Content-Length, multiple
+GET with Content-Length, multiple (same values)
 #input
 "GET /404 HTTP/1.0"CRLF
 "Host:"
@@ -879,7 +995,7 @@ CRLF
 {{408h}}{{eof}}
 
 #name
-GET with Content-Length, multiple
+GET with Content-Length, multiple (different values)
 #input
 "GET /404 HTTP/1.0"CRLF
 "Host:"
@@ -1091,7 +1207,7 @@ CRLF
 {{404h}}{{eof}}
 
 #name
-bad protocol-version - HTTP/1.0 + e
+bad protocol-version - HTTP/1.0 + e (1.1 leading 0)
 #input
 "GET /404 HTTP/1.0001"CRLF
 "Host:"
@@ -1160,6 +1276,71 @@ receive "</html>"
 {{404h}}{{eof}}
 
 #name
+bad protocol-version - HTTP/1:2
+#input
+"GET /404 HTTP/1:2"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+receive "</html>"
+"hoge"CRLF
+#result
+{{400body}}{{eof}}
+
+#name
+bad protocol-version - HTTP/102
+#input
+"GET /404 HTTP/102"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+receive "</html>"
+"hoge"CRLF
+#result
+{{400body}}{{eof}}
+
+#name
+bad protocol-version - HTTP/1.0002
+#input
+"GET /404 HTTP/1.0002"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+receive "</html>"
+"hoge"CRLF
+#result
+{{404h}}{{400body|405body}}{{eof}}
+
+#name
+bad protocol-version - HTTP/1.0abc
+#input
+"GET /404 HTTP/1.0abc"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+receive "</html>"
+"hoge"CRLF
+#result
+{{400body}}{{eof}}
+
+#name
+bad protocol-version - HTTP/1.0.0
+#input
+"GET /404 HTTP/1.0.0"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+receive "</html>"
+"hoge"CRLF
+#result
+{{400body}}{{eof}}
+
+#name
 bad protocol-version - HTTP/1.2
 #input
 "GET /404 HTTP/1.2"CRLF
@@ -1197,6 +1378,79 @@ receive "</html>"
 "hoge"CRLF
 #result
 {{404h}}{{400body|405body}}{{eof}}
+
+#name
+bad protocol-version - HTTP/31.0
+#input
+"GET /404 HTTP/31.0"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+receive "</html>"
+"hoge"CRLF
+#result
+{{404h}}{{400body|405body}}{{eof}}
+
+#name
+bad protocol-version - HTTP/0.5
+#input
+"GET /404 HTTP/0.5"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+receive "</html>"
+"hoge"CRLF
+#result
+{{400body}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
+
+#name
+bad protocol-version - HTTP/0.90
+#input
+"GET /404 HTTP/0.90"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+receive "</html>"
+"hoge"CRLF
+#result
+{{400body}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
+
+#name
+bad protocol-version - HTTP/0.0009
+#input
+"GET /404 HTTP/0.0009"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+receive "</html>"
+"hoge"CRLF
+#result
+{{400body}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
+
+#name
+bad protocol-version - HTTP/000.90
+#input
+"GET /404 HTTP/000.90"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+receive "</html>"
+"hoge"CRLF
+#result
+{{400body}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
 
 #name
 bad protocol-version - http/1.0

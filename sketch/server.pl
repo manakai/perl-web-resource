@@ -132,85 +132,89 @@ sub _ondata ($$) {
       }
     } elsif ($self->{state} eq 'before request header') {
       $self->{rbuf} .= $$inref;
-      if ($self->{rbuf} =~ s/\A([^\x00\x0A\x0D:]+):([^\x00\x0A\x0D]*)\x0D?\x0A//) {
-        my $name = $1;
-        my $value = $2;
-        $value =~ s/\A[\x20]+//;
-        push @{$self->{request}->{headers}}, [$name, $value];
-      } elsif ($self->{rbuf} =~ s/\A\x0D?\x0A//) {
-        my @length;
-        my @host;
-        my @con;
-        for (@{$self->{request}->{headers}}) {
-          $_->[1] =~ s/\x20+\z//;
-          my $n = $_->[0];
-          $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-          if ($n eq 'content-length') {
-            push @length, $_->[1];
-          } elsif ($n eq 'host') {
-            push @host, $_->[1];
-          } elsif ($n eq 'connection') {
-            push @con, $_->[1];
-          } elsif ($n eq 'transfer-encoding') {
-            return $self->_411 ($self->{request});
+      if ($self->{rbuf} =~ s/\A([^\x0A]{0,8191})\x0A//) {
+        my $line = $1;
+        $line =~ s/\x0D\z//;
+        return $self->_fatal ($self->{request}->{version})
+            if $line =~ /[\x00\x0D]/;
+        if ($line =~ s/\A([^:]+):[\x20]*//) { # XXX
+          my $name = $1;
+          $line =~ s/\A[\x20]+//;
+          push @{$self->{request}->{headers}}, [$name, $line];
+        } elsif ($line =~ /\A[\x09\x20]/ and @{$self->{request}->{headers}}) {
+          $self->{request}->{headers}->[-1]->[1] .= "\x0D\x0A" . $line;
+        } elsif ($line eq '') { # end of headers
+          my @length;
+          my @host;
+          my @con;
+          for (@{$self->{request}->{headers}}) {
+            $_->[1] =~ s/\x20+\z//;
+            my $n = $_->[0];
+            $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+            if ($n eq 'content-length') {
+              push @length, $_->[1];
+            } elsif ($n eq 'host') {
+              push @host, $_->[1];
+            } elsif ($n eq 'connection') {
+              push @con, $_->[1];
+            } elsif ($n eq 'transfer-encoding') {
+              return $self->_411 ($self->{request});
+            }
           }
-        }
 
-        ## Host:
-        if (@host == 1) {
-          my $url = Web::URL->parse_string ("https://$host[0]/");
-          if (not defined $url or
-              not $url->path eq '/' or
-              defined $url->query or
-              defined $url->{fragment}) { # XXX
+          ## Host:
+          if (@host == 1) {
+            my $url = Web::URL->parse_string ("https://$host[0]/");
+            if (not defined $url or
+                not $url->path eq '/' or
+                defined $url->query or
+                defined $url->{fragment}) { # XXX
+              return $self->_fatal ($self->{request}->{version});
+            }
+          } elsif (@host) { # multiple Host:
             return $self->_fatal ($self->{request}->{version});
+          } else { # no Host:
+            if ($self->{request}->{version} == 1.1) {
+              return $self->_fatal ($self->{request}->{version});
+            }
           }
-        } elsif (@host) { # multiple Host:
-          return $self->_fatal ($self->{request}->{version});
-        } else { # no Host:
-          if ($self->{request}->{version} == 1.1) {
-            return $self->_fatal ($self->{request}->{version});
-          }
-        }
 
-        ## Connection:
-        my $con = join ',', '', @con, '';
-        $con =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
-        if ($con =~ /,[\x09\x0A\x0D\x20]*close[\x09\x0A\x0D\x20]*,/) {
-          $self->{close_after_response} = 1;
-        } elsif ($self->{request}->{version} == 1.0) {
-          unless ($con =~ /,[\x09\x0A\x0D\x20]*keep-alive[\x09\x0A\x0D\x20]*,/) {
+          ## Connection:
+          my $con = join ',', '', @con, '';
+          $con =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
+          if ($con =~ /,[\x09\x0A\x0D\x20]*close[\x09\x0A\x0D\x20]*,/) {
             $self->{close_after_response} = 1;
+          } elsif ($self->{request}->{version} == 1.0) {
+            unless ($con =~ /,[\x09\x0A\x0D\x20]*keep-alive[\x09\x0A\x0D\x20]*,/) {
+              $self->{close_after_response} = 1;
+            }
           }
-        }
 
-        ## Content-Length:
-        if (@length == 1 and $length[0] =~ /\A[0-9]+\z/) {
-          my $l = 0+$length[0];
-          $self->{request}->{body_length} = $l;
-          $self->{unread_length} = $l;
-          $self->onrequest ($self->{request});
-          if ($l == 0) {
-            $self->_request_done ($self->{request});
+          ## Content-Length:
+          if (@length == 1 and $length[0] =~ /\A[0-9]+\z/) {
+            my $l = 0+$length[0];
+            $self->{request}->{body_length} = $l;
+            $self->{unread_length} = $l;
+            $self->onrequest ($self->{request});
+            if ($l == 0) {
+              $self->_request_done ($self->{request});
+            } else {
+              $self->{state} = 'request body';
+            }
+          } elsif (@length) {
+            return $self->_fatal ($self->{request}->{version});
           } else {
-            $self->{state} = 'request body';
+            $self->onrequest ($self->{request});
+            $self->_request_done ($self->{request});
           }
-        } elsif (@length) {
-          return $self->_fatal ($self->{request}->{version});
         } else {
-          $self->onrequest ($self->{request});
-          $self->_request_done ($self->{request});
+          return $self->_fatal ($self->{request}->{version});
         }
-      } elsif (@{$self->{request}->{headers}} and
-               $self->{rbuf} =~ s/^([\x09\x20][^\x00\x0A\x0D]*)\x0D?\x0A//) {
-        $self->{request}->{headers}->[-1]->[1] .= "\x0D\x0A" . $1;
-      } elsif ($self->{rbuf} =~ s/\A[^\x0A]*\x0A//) {
+      } elsif (8192 <= length $self->{rbuf}) {
         return $self->_fatal ($self->{request}->{version});
       } else {
         return;
       }
-  # XXX if rbuf is too long
-
     } elsif ($self->{state} eq 'request body') {
       if (length $self->{rbuf}) {
         $inref = \($self->{rbuf} . $$inref);

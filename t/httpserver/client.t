@@ -27,57 +27,30 @@ my $test_data_path = path (__FILE__)->parent->parent->parent->child ('t_deps/dat
 
 my $Texts = {};
 
-$Texts->{'400header'} = qr{HTTP/1.1 (?:400 Bad Request)\x0D
-(?:[^\x0A]+\x0A)+};
-$Texts->{'400body'} = qr{<[\s\S]+?(?:400)[\s\S]+?</html>\x0D?
-};
-$Texts->{'400h'} = qr{$Texts->{'400header'}\x0D
-$Texts->{'400body'}};
+my $Something = qr{(?:(?!</html>)[\s\S])+?};
+my $HTTPHeader = sub { return qr{HTTP/1.1 (?:$_[0])\x0D
+(?:(?:(?!</html>)[^\x0A\x0D])+\x0D?\x0A)+} };
+my $HTMLBody = sub { return qr{<$Something(?:$_[0])$Something</html>\x0D?
+} };
 
-$Texts->{'404header'} = qr{HTTP/1.1 404 Not Found\x0D
-(?:[^\x0A]+\x0A)+};
-$Texts->{'404body'} = qr{<[\s\S]+?(?:404)[\s\S]+?</html>\x0D?
-};
-$Texts->{'404nohostbody'} = qr{<[\s\S]+?(?:404|301)[\s\S]+?</html>\x0D?
-};
-$Texts->{'404h'} = qr{$Texts->{'404header'}\x0D
-$Texts->{'404body'}};
-$Texts->{'404nohosth'} = qr{HTTP/1.1 (?:404 Not Found|301 Moved Permanently)\x0D
-(?:[^\x0A]+\x0A)+\x0D
-$Texts->{'404nohostbody'}};
-
-$Texts->{'405body'} = qr{<[\s\S]+?(?:405|501)[\s\S]+?</html>\x0D?
-};
-$Texts->{'405h'} = qr{HTTP/1.1 (?:405 (?:Method |)Not Allowed|501 Not Implemented)\x0D
-(?:[^\x0A]+\x0A)+\x0D
-$Texts->{'405body'}};
-
-$Texts->{'408h'} = qr{HTTP/1.1 408 Request Timeout\x0D
-(?:[^\x0A]+\x0A)+\x0D
-<[\s\S]+?(?:408)[\s\S]+?</html>\x0D?
-};
-
-$Texts->{'411header'} = qr{HTTP/1.1 411 Length Required\x0D
-(?:[^\x0A]+\x0A)+};
-$Texts->{'411h'} = qr{$Texts->{'411header'}\x0D
-<[\s\S]+?(?:411)[\s\S]+?</html>\x0D?
-};
-
-$Texts->{'414body'} = qr{<[\s\S]+?(?:414)[\s\S]+?</html>\x0D?
-};
-$Texts->{'414h'} = qr{HTTP/1.1 (?:414 Request-URI Too (?:Large|Long))\x0D
-(?:[^\x0A]+\x0A)+\x0D
-$Texts->{'414body'}};
-
-$Texts->{'500body'} = qr{<[\s\S]+?(?:500)[\s\S]+?</html>\x0D?
-};
-
-$Texts->{'501h'} = qr{HTTP/1.1 501 Not Implemented\x0D
-(?:[^\x0A]+\x0A)+\x0D
-<[\s\S]+?(?:501)[\s\S]+?</html>\x0D?
-};
+for (
+  ['400', q{400 Bad Request}, '400'],
+  ['404', q{404 Not Found}, '404'],
+  ['404nohost', q{404 Not Found|301 Moved Permanently}, '404|301'],
+  ['405', q{405 (?:Method |)Not Allowed|501 Not Implemented}, '405|501'],
+  ['408', q{408 Request Timeout}, '408'],
+  ['411', q{411 Length Required}, '411'],
+  ['414', q{414 Request-URI Too (?:Large|Long)}, '414'],
+  ['500', q{500 Internal Server Error}, '500'],
+  ['501', q{501 Not Implemented}, '501'],
+) {
+  $Texts->{$_->[0].'header'} = $HTTPHeader->($_->[1]);
+  $Texts->{$_->[0].'body'} = $HTMLBody->($_->[2]);
+  $Texts->{$_->[0].'h'} = qr{$Texts->{$_->[0].'header'}\x0D\x0A$Texts->{$_->[0].'body'}};
+}
 
 $Texts->{eof} = qr{\[\[EOF\]\]};
+$Texts->{timeout} = qr{\[\[timeout\]\]};
 
 for my $path ($test_data_path->children (qr/\.dat\z/)) {
   for_each_test $path, {
@@ -88,12 +61,13 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
     my $test = $_[0];
     test {
       my $c = $_[0];
+      my @timer;
 
-    my $commands = [];
-    for (split /\x0A/, $test->{input}->[0]) {
-      if (/^"([^"]+)"$/) {
-        push @$commands, {type => 'send', value => $1};
-        $commands->[-1]->{value} =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
+      my $commands = [];
+      for (split /\x0A/, $test->{input}->[0]) {
+        if (/^"([^"]+)"$/) {
+          push @$commands, {type => 'send', value => $1};
+          $commands->[-1]->{value} =~ s/\\x([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
       } elsif (/^"([^"]+)" x ([0-9]+)$/) {
         my $v = $1;
         my $n = $2;
@@ -118,6 +92,8 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
         push @$commands, {type => 'close'};
       } elsif (/^sleep\s+(\d+)$/) {
         push @$commands, {type => 'sleep', value => $1};
+      } elsif (/^timeout\s+(\d+)$/) {
+        push @$commands, {type => 'timeout', value => $1};
       } elsif (/^receive\s+CRLFCRLF$/) {
         push @$commands, {type => 'receive', value => "\x0D\x0A\x0D\x0A"};
       } elsif (/^receive\s+"([^"]+)"$/) {
@@ -146,6 +122,9 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
 
       my ($end_ok, $end_ng);
       my $end_p = Promise->new (sub { ($end_ok, $end_ng) = @_ });
+      my $reof;
+      my $cend;
+      my $write_closed;
 
       #warn "Started";
       #warn scalar gmtime;
@@ -160,9 +139,14 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
           #warn "Received EOF";
           #warn scalar gmtime;
           $received_data .= '[[EOF]]';
+          $reof = 1;
+          if ($cend) {
+            $transport->push_shutdown unless $write_closed;
+          }
         } elsif ($type eq 'writeeof') {
           #warn "Sent EOF";
           #warn scalar gmtime;
+          $write_closed = 1;
         } elsif ($type eq 'close') {
           #warn "Closed";
           #warn scalar gmtime;
@@ -178,8 +162,16 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
             $transport->push_write (\(encode_web_utf8 $command->{value}));
           } elsif ($command->{type} eq 'close') {
             $transport->push_shutdown;
+            $write_closed = 1;
           } elsif ($command->{type} eq 'sleep') {
             return promised_sleep $command->{value};
+          } elsif ($command->{type} eq 'timeout') {
+            my $timer; $timer = AE::timer $command->{value}, 0, sub {
+              $timer = undef;
+              $received_data .= '[[timeout]]';
+              $transport->abort (message => "Timeout ($command->{value})");
+            };
+            push @timer, \$timer;
           } elsif ($command->{type} eq 'receive') {
             return promised_wait_until {
               #warn "Waiting |$command->{value}| (Data: |$received_data|)";
@@ -188,16 +180,21 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
           } else {
             die "Unknown command |$command->{type}|";
           }
-        } $commands;
-      }, sub {
-        my $error = $_[0];
-        #warn "Error |$error|";
-        #warn scalar gmtime;
-        $transport->abort;
-        $end_ng->($error);
-      });
+          } $commands;
+        })->then (sub {
+          $cend = 1;
+          if ($reof) {
+            return $transport->push_shutdown;
+          }
+        })->catch (sub {
+          my $error = $_[0];
+          #warn "Error |$error|";
+          #warn scalar gmtime;
+          $transport->abort;
+          $end_ng->($error);
+        });
 
-        return $end_p;
+        return promised_cleanup { undef $transport } $end_p;
       })->then (sub {
         test {
           like $received_data, $expected, $expected_o;
@@ -211,6 +208,7 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
       })->then (sub {
         done $c;
         undef $c;
+        $$_ = undef for @timer;
       });
     } n => 1, name => [$path, $test->{name}->[0]], timeout => 90;
   };

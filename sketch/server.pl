@@ -140,6 +140,7 @@ sub _ondata ($$) {
       } elsif ($self->{rbuf} =~ s/\A\x0D?\x0A//) {
         my @length;
         my @host;
+        my @con;
         for (@{$self->{request}->{headers}}) {
           $_->[1] =~ s/\x20+\z//;
           my $n = $_->[0];
@@ -148,10 +149,14 @@ sub _ondata ($$) {
             push @length, $_->[1];
           } elsif ($n eq 'host') {
             push @host, $_->[1];
+          } elsif ($n eq 'connection') {
+            push @con, $_->[1];
           } elsif ($n eq 'transfer-encoding') {
             return $self->_411 ($self->{request});
           }
         }
+
+        ## Host:
         if (@host == 1) {
           my $url = Web::URL->parse_string ("https://$host[0]/");
           if (not defined $url or
@@ -167,22 +172,29 @@ sub _ondata ($$) {
             return $self->_fatal ($self->{request}->{version});
           }
         }
-        # XXX if connection
-      if ($self->{request}->{version} == 1.1) {
-        
-      } else { # 1.0
-        $self->{close_after_response} = 1;
-      }
-      if (@length == 1 and $length[0] =~ /\A[0-9]+\z/) {
-        my $l = 0+$length[0];
-        $self->{request}->{body_length} = $l;
-        $self->{unread_length} = $l;
-        $self->onrequest ($self->{request});
-        if ($l == 0) {
-          $self->_request_done ($self->{request});
-        } else {
-          $self->{state} = 'request body';
+
+        ## Connection:
+        my $con = join ',', '', @con, '';
+        $con =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
+        if ($con =~ /,[\x09\x0A\x0D\x20]*close[\x09\x0A\x0D\x20]*,/) {
+          $self->{close_after_response} = 1;
+        } elsif ($self->{request}->{version} == 1.0) {
+          unless ($con =~ /,[\x09\x0A\x0D\x20]*keep-alive[\x09\x0A\x0D\x20]*,/) {
+            $self->{close_after_response} = 1;
+          }
         }
+
+        ## Content-Length:
+        if (@length == 1 and $length[0] =~ /\A[0-9]+\z/) {
+          my $l = 0+$length[0];
+          $self->{request}->{body_length} = $l;
+          $self->{unread_length} = $l;
+          $self->onrequest ($self->{request});
+          if ($l == 0) {
+            $self->_request_done ($self->{request});
+          } else {
+            $self->{state} = 'request body';
+          }
         } elsif (@length) {
           return $self->_fatal ($self->{request}->{version});
         } else {

@@ -414,7 +414,7 @@ hostport
 CRLF
 CRLF
 #result
-{{404header}}{{eof}}
+{{404header}}\x0D\x0A{{eof}}
 
 #name
 HTTP/1.0 bad header line
@@ -568,7 +568,7 @@ close
 {{404h}}{{eof}}
 
 #name
-newlines before request
+newlines before request 1
 #input
 CRLF
 "hoge"
@@ -578,15 +578,17 @@ CRLF
 {{400body}}{{eof}}
 
 #name
-newlines before request
+newlines before request 2
 #input
 CRLF
 "hoge"CRLF
 #result
 {{400body}}{{eof}}
+#result-apache
+{{405body}}{{eof}}
 
 #name
-newlines before request
+newlines before request 3
 #input
 CRLF
 "GET /404 HTTP/1.0"CRLF
@@ -942,9 +944,9 @@ CRLF
 CRLF
 "abcde"
 #result
-{{404header}}{{eof}}
+{{404header}}\x0D\x0A{{eof}}
 #result-apache
-{{400header}}{{eof}}
+{{400header}}\x0D\x0A{{eof}}
 
 #name
 client closed before Content-Length
@@ -1287,6 +1289,8 @@ receive "</html>"
 "hoge"CRLF
 #result
 {{400body}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
 
 #name
 bad protocol-version - HTTP/102
@@ -1300,6 +1304,8 @@ receive "</html>"
 "hoge"CRLF
 #result
 {{400body}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
 
 #name
 bad protocol-version - HTTP/1.0002
@@ -1326,6 +1332,8 @@ receive "</html>"
 "hoge"CRLF
 #result
 {{400body}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
 
 #name
 bad protocol-version - HTTP/1.0.0
@@ -1339,6 +1347,8 @@ receive "</html>"
 "hoge"CRLF
 #result
 {{400body}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
 
 #name
 bad protocol-version - HTTP/1.2
@@ -1465,7 +1475,7 @@ receive "</html>"
 #result
 {{404nohostbody}}{{eof}}
 #result-apache
-{{404h}}{{eof}}
+{{404h}}{{405body}}{{eof}}
 
 #name
 bad protocol-version - http/1.1
@@ -1480,7 +1490,7 @@ receive "</html>"
 #result
 {{404nohostbody}}{{eof}}
 #result-apache
-{{404h}}{{eof}}
+{{404h}}{{405body}}{{eof}}
 
 #name
 bad protocol-version - HOGE/1.1

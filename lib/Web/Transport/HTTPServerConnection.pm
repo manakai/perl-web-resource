@@ -51,7 +51,7 @@ sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
 sub _new_req ($) {
   my $self = $_[0];
   my $req = $self->{request} = bless {
-    transport => $self->{transport}, headers => [],
+    connection => $self, headers => [],
     # method target version
   }, __PACKAGE__ . '::Request';
   my $p1 = Promise->new (sub { $req->{req_done} = $_[0] });
@@ -295,14 +295,21 @@ sub _oneof ($$) {
     };
     $self->_request_done ($self->{request}, $exit->{failed} ? $exit : {failed => 1, message => "Connection closed"});
   } elsif ($self->{state} eq 'after request') {
-    return $self->_fatal (bless {
-      transport => $self->{transport},
-      version => 0.9, method => 'GET',
-      close_after_response => 1,
-    }) if length $self->{rbuf};
-    $self->_response_done (undef);
+    if (length $self->{rbuf}) {
+      my $req = $self->_new_req;
+      $req->{version} = 0.9;
+      $req->{method} = 'GET';
+      return $self->_fatal ($req);
+    }
+
+    $self->{transport}->push_shutdown
+        unless $self->{write_closed};
+    $self->{write_closed} = 1;
+    $self->{state} = 'end';
   } elsif ($self->{state} eq 'end') {
-    $self->_response_done (undef);
+    $self->{transport}->push_shutdown
+        unless $self->{write_closed};
+    $self->{write_closed} = 1;
   } else {
     die "Bad state |$self->{state}|";
   }
@@ -312,29 +319,15 @@ sub _request_done ($$;$) {
   my ($self, $req, $exit) = @_;
   delete $self->{request};
   delete $self->{unread_length};
-  if (defined $req and $req->{close_after_response}) {
+  if ($req->{close_after_response}) {
     $self->{state} = 'end';
   } else {
     $self->{state} = 'after request';
   }
-  if (defined $req and defined $req->{req_done}) {
+  if (defined $req->{req_done}) {
     $req->{req_done}->($exit);
   }
 } # _request_done
-
-sub _response_done ($$;$) {
-  my ($self, $req, $exit) = @_;
-  if (not defined $req or
-      delete $req->{close_after_response}) {
-    $self->{transport}->push_shutdown
-        unless $self->{write_closed};
-    $self->{write_closed} = 1;
-    $self->{state} = 'end';
-  }
-  if (defined $req and defined $req->{res_done}) {
-    $req->{res_done}->($exit);
-  }
-} # _response_done
 
 sub _done ($$$) {
   my ($self, $req, $exit) = @_;
@@ -372,7 +365,7 @@ sub _fatal ($$) {
   $self->{state} = 'end';
   $self->{rbuf} = '';
   $self->_send_error ($req, 400, 'Bad Request') unless $self->{write_closed};
-  return $self->_response_done ($req);
+  $req->_response_done;
 } # _fatal
 
 sub _411 ($$) {
@@ -380,7 +373,7 @@ sub _411 ($$) {
   $self->_request_done ($req);
   $self->_send_error ($req, 411, 'Length Required')
       unless $self->{write_closed};
-  return $self->_response_done ($req);
+  $req->_response_done;
 } # _411
 
 sub _414 ($$) {
@@ -390,7 +383,7 @@ sub _414 ($$) {
   $self->_request_done ($req);
   $self->_send_error ($req, 414, 'Request-URI Too Large')
       unless $self->{write_closed};
-  return $self->_response_done ($req);
+  $req->_response_done;
 } # _414
 
 sub DESTROY ($) {
@@ -423,7 +416,7 @@ sub send_response_headers ($$$;%) {
       $res .= "$_->[0]: $_->[1]\x0D\x0A";
     }
     $res .= "\x0D\x0A";
-    $req->{transport}->push_write (\$res);
+    $req->{connection}->{transport}->push_write (\$res);
   }
   # XXX
   if ($req->{method} eq 'HEAD' or
@@ -436,6 +429,19 @@ sub send_response_headers ($$$;%) {
     
   }
 } # send_response_headers
+
+sub _response_done ($;$) {
+  my ($req, $exit) = @_;
+  if (delete $req->{close_after_response}) {
+    $req->{connection}->{transport}->push_shutdown
+        unless $req->{connection}->{write_closed};
+    $req->{connection}->{write_closed} = 1;
+    $req->{connection}->{state} = 'end';
+  }
+  if (defined $req->{res_done}) {
+    $req->{res_done}->($exit);
+  }
+} # _response_done
 
 sub DESTROY ($) {
   local $@;

@@ -73,7 +73,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga'],
         ]}, close => 1);
-    $self->_response_done ($req);
+    $req->_response_done;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);

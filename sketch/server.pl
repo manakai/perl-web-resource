@@ -40,25 +40,28 @@ my $cb = sub {
       $self->{transport}->push_write (\qq{<html>200 Goodbye!\x0D\x0A\x0D\x0A</html>
 });
       AE::postpone { exit };
+      $req->_response_done;
     } elsif ($self->{write_closed}) {
       #
+      $req->_response_done;
     } elsif ($req->{method} eq 'GET' or
              $req->{method} eq 'POST') {
       $req->send_response_headers
           ({status => 404, status_text => 'Not Found', headers => []}, close => 0); # XXX
       $self->{transport}->push_write (\qq{<html>...404 Not Found\x0D\x0A\x0D\x0A</html>
 });
+      $req->_response_done;
     } elsif ($req->{method} eq 'HEAD') {
       $req->send_response_headers
           ({status => 404, status_text => 'Not Found', headers => []}); # XXX
+      $req->_response_done;
     } else {
       $req->send_response_headers
           ({status => 405, status_text => 'Not Allowed', headers => []}); # XXX
       $self->{transport}->push_write (\qq{<html>...405 Not Allowed (@{[$req->{method}]})</html>
 });
+      $req->_response_done;
     }
-
-    $self->_response_done ($req);
   } elsif ($type eq 'data') {
     my $d = $_[2];
     if (length $d > 100) {

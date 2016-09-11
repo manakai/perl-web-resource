@@ -34,6 +34,7 @@ sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
     } elsif ($type eq 'close') {
       AE::postpone {
         $self->{cb}->($self, 'close');
+        delete $self->{cb};
       };
     }
   })->then (sub {
@@ -445,6 +446,8 @@ sub DESTROY ($) {
 
 # XXX CONNECT
 # XXX WS
+# XXX leaking
+# XXX reset
 
 1;
 

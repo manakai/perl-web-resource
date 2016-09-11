@@ -45,3 +45,33 @@ CRLF
 CRLF
 #result
 {{400h}}{{eof}}
+
+#input
+"GET /400 HTTP/1.0"CRLF
+"host:"
+hostport
+CRLF
+"a:"
+"x" x 8188
+CRLF
+" "LF
+CRLF
+#result
+{{400h}}{{eof}}
+#result-nginx
+{{404h}}{{eof}}
+
+#input
+"GET /400 HTTP/1.0"CRLF
+"host:"
+hostport
+CRLF
+"a:"
+"x" x 8188
+CRLF
+" abcde"LF
+CRLF
+#result
+{{400h}}{{eof}}
+#result-nginx
+{{404h}}{{eof}}

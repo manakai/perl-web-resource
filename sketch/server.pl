@@ -142,7 +142,13 @@ sub _ondata ($$) {
           $line =~ s/\A[\x20]+//;
           push @{$self->{request}->{headers}}, [$name, $line];
         } elsif ($line =~ /\A[\x09\x20]/ and @{$self->{request}->{headers}}) {
-          $self->{request}->{headers}->[-1]->[1] .= "\x0D\x0A" . $line;
+          if ((length $self->{request}->{headers}->[-1]->[0]) + 1 +
+              (length $self->{request}->{headers}->[-1]->[1]) + 2 +
+              (length $line) + 2 > 8192) {
+            return $self->_fatal ($self->{request}->{version});
+          } else {
+            $self->{request}->{headers}->[-1]->[1] .= "\x0D\x0A" . $line;
+          }
         } elsif ($line eq '') { # end of headers
           my @length;
           my @host;

@@ -1,35 +1,20 @@
 use strict;
 use warnings;
-use AnyEvent::Socket;
+
+package Hoge;
 use Promise;
 use Web::URL;
 use Web::Transport::TCPTransport;
 
-my $host = 0;
-my $port = 8522;
-
 my $ReadTimeout = $ENV{SERVER_READ_TIMEOUT} || 60;
 
-my $cb = sub {
-  my $self = $_[0];
-  my $type = $_[1];
-  if ($type eq 'open') {
-    my $data = $_[2];
-    warn "> Connection opened (Client: $data->{client_ip_addr}:$data->{client_port})\n";
-  } elsif ($type eq 'close') {
-    warn "> Connection closed\n";
-  } else {
-    warn "> $type\n";
-  }
-}; # $cb
-
-my $server = tcp_server $host, $port, sub {
-  my ($fh, $client_host, $client_port) = @_;
+sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
+  my ($class, $fh, $client_host, $client_port, $cb) = @_;
 
   my $transport = Web::Transport::TCPTransport->new (fh => $fh);
   my $self = bless {transport => $transport,
                     rbuf => '', state => 'initial',
-                    cb => $cb}, 'Hoge';
+                    cb => $cb}, $class;
   my $read_timer;
   my $onreadtimeout = sub {
     undef $read_timer;
@@ -59,11 +44,7 @@ my $server = tcp_server $host, $port, sub {
                                     client_port => $client_port});
     };
   });
-};
-
-AE::cv->recv;
-
-package Hoge;
+} # new_from_...
 
 sub _ondata ($$) {
   my ($self, $inref) = @_;
@@ -210,10 +191,10 @@ sub _ondata ($$) {
           ## Connection:
           my $con = join ',', '', @con, '';
           $con =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
-          if ($con =~ /,[\x09\x0A\x0D\x20]*close[\x09\x0A\x0D\x20]*,/) {
+          if ($con =~ /,[\x09\x20]*close[\x09\x20]*,/) {
             $self->{request}->{close_after_response} = 1;
           } elsif ($self->{request}->{version} == 1.0) {
-            unless ($con =~ /,[\x09\x0A\x0D\x20]*keep-alive[\x09\x0A\x0D\x20]*,/) {
+            unless ($con =~ /,[\x09\x20]*keep-alive[\x09\x20]*,/) {
               $self->{request}->{close_after_response} = 1;
             }
           }
@@ -482,3 +463,33 @@ sub DESTROY ($) {
 
 # XXX CONNECT
 # XXX WS
+
+
+
+{
+use AnyEvent::Socket;
+
+my $host = 0;
+my $port = 8522;
+
+my $cb = sub {
+  my $self = $_[0];
+  my $type = $_[1];
+  if ($type eq 'open') {
+    my $data = $_[2];
+    warn "> Connection opened (Client: $data->{client_ip_addr}:$data->{client_port})\n";
+  } elsif ($type eq 'close') {
+    warn "> Connection closed\n";
+  } else {
+    warn "> $type\n";
+  }
+}; # $cb
+
+my $server = tcp_server $host, $port, sub {
+  Hoge->new_from_fh_and_host_and_port_and_cb
+      ($_[0], $_[1], $_[2], $cb);
+};
+
+AE::cv->recv;
+
+}

@@ -190,11 +190,11 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
           my $error = $_[0];
           #warn "Error |$error|";
           #warn scalar gmtime;
-          $transport->abort;
+          $transport->abort if defined $transport;
           $end_ng->($error);
         });
 
-        return promised_cleanup { undef $transport } $end_p;
+        return promised_cleanup { $transport->abort; undef $transport } $end_p;
       })->then (sub {
         test {
           like $received_data, $expected, $expected_o;

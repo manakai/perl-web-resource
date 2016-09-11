@@ -90,8 +90,11 @@ sub _ondata ($$) {
       if ($self->{rbuf} =~ s/\A([^\x0A]{0,8191})\x0A//) {
         my $line = $1;
         $line =~ s/\x0D\z//;
-        return $self->_fatal ({version => 0.9, method => 'GET'})
-            if $line =~ /[\x00\x0D]/;
+        return $self->_fatal (bless {
+          transport => $self->{transport},
+          version => 0.9, method => 'GET',
+          write_closed_ref => \($self->{write_closed}),
+        }, 'Hoge::Request') if $line =~ /[\x00\x0D]/;
         my $method;
         my $version;
         if ($line =~ s{\x20+(H[^\x20]*)\z}{}) {
@@ -99,30 +102,45 @@ sub _ondata ($$) {
           if ($version =~ m{\AHTTP/1\.([0-9]+)\z}) {
             $version = $1 =~ /[^0]/ ? 1.1 : 1.0;
           } elsif ($version =~ m{\AHTTP/0+1?\.}) {
-            return $self->_fatal ({version => 0.9, method => 'GET'});
+            return $self->_fatal (bless {
+              transport => $self->{transport},
+              version => 0.9, method => 'GET',
+              write_closed_ref => \($self->{write_closed}),
+            }, 'Hoge::Request');
           } elsif ($version =~ m{\AHTTP/[0-9]+\.[0-9]+\z}) {
             $version = 1.1;
           } else {
-            return $self->_fatal ({version => 0.9, method => 'GET'});
+            return $self->_fatal (bless {
+              transport => $self->{transport},
+              version => 0.9, method => 'GET',
+              write_closed_ref => \($self->{write_closed}),
+            }, 'Hoge::Request');
           }
         }
         if ($line =~ s{\A([^\x20]+)\x20+}{}) {
           $method = $1;
         }
-        return $self->_fatal ({version => 0.9, method => 'GET'})
-            unless defined $method;
-        my $req = $self->{request} = {version => $version, method => $method,
-                                      target => $line, headers => []};
+        return $self->_fatal (bless {
+          transport => $self->{transport},
+          version => 0.9, method => 'GET',
+          write_closed_ref => \($self->{write_closed}),
+        }, 'Hoge::Request') unless defined $method;
+        my $req = $self->{request} = bless {
+          transport => $self->{transport},
+          version => $version, method => $method,
+          target => $line, headers => [],
+          write_closed_ref => \($self->{write_closed}),
+        }, 'Hoge::Request';
         my $p1 = Promise->new (sub { $self->{request}->{req_done} = $_[0] });
         my $p2 = Promise->new (sub { $self->{request}->{res_done} = $_[0] });
         Promise->all ([$p1, $p2])->then (sub {
           $self->_done ($req);
         });
         if (not defined $version) {
-          return $self->_fatal ({version => 0.9, method => 'GET'})
-              unless $method eq 'GET';
           $self->{request}->{version} = 0.9;
-          $self->{close_after_response} = 1;
+          $self->{request}->{close_after_response} = 1;
+          $self->{request}->{method} = 'GET';
+          return $self->_fatal ($self->{request}) unless $method eq 'GET';
           $self->onrequest ($self->{request});
         } else { # 1.0 / 1.1
           return $self->_fatal ($req) unless length $line;
@@ -193,10 +211,10 @@ sub _ondata ($$) {
           my $con = join ',', '', @con, '';
           $con =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
           if ($con =~ /,[\x09\x0A\x0D\x20]*close[\x09\x0A\x0D\x20]*,/) {
-            $self->{close_after_response} = 1;
+            $self->{request}->{close_after_response} = 1;
           } elsif ($self->{request}->{version} == 1.0) {
             unless ($con =~ /,[\x09\x0A\x0D\x20]*keep-alive[\x09\x0A\x0D\x20]*,/) {
-              $self->{close_after_response} = 1;
+              $self->{request}->{close_after_response} = 1;
             }
           }
 
@@ -237,7 +255,7 @@ sub _ondata ($$) {
         $self->_request_done ($self->{request});
       } elsif ($self->{unread_length} < $in_length) {
         $self->{request}->{incomplete} = 1;
-        $self->{close_after_response} = 1;
+        $self->{request}->{close_after_response} = 1;
         $self->ondata (substr ($$inref, 0, $self->{unread_length}));
         $self->onreof ({});
         $self->_request_done ($self->{request});
@@ -246,6 +264,8 @@ sub _ondata ($$) {
         $self->{unread_length} -= $in_length;
         return;
       }
+    } elsif ($self->{state} eq 'end') {
+      return;
     } else {
       die "Bad state |$self->{state}|";
     }
@@ -255,20 +275,30 @@ sub _ondata ($$) {
 
 sub _oneof ($$) {
   my ($self, $exit) = @_;
-  $self->{close_after_response} = 1;
   if ($self->{state} eq 'initial' or
       $self->{state} eq 'before request-line') {
-    return $self->_fatal ({version => 0.9, method => 'GET'});
+    return $self->_fatal (bless {
+      transport => $self->{transport}, version => 0.9, method => 'GET',
+      write_closed_ref => \($self->{write_closed}),
+    }, 'Hoge::Request');
   } elsif ($self->{state} eq 'before request header') {
+    $self->{request}->{close_after_response} = 1;
     return $self->_fatal ($self->{request});
   } elsif ($self->{state} eq 'request body') {
     # $self->{unread_length} > 0
+    $self->{request}->{close_after_response} = 1;
     $self->{request}->{incomplete} = 1;
     $self->onreof ($exit->{failed} ? $exit : {failed => 1, message => "Connection closed"});
     $self->_request_done ($self->{request});
   } elsif ($self->{state} eq 'after request') {
-    return $self->_fatal ({version => 0.9, method => 'GET'})
-        if length $self->{rbuf};
+    return $self->_fatal (bless {
+      transport => $self->{transport},
+      version => 0.9, method => 'GET',
+      close_after_response => 1,
+      write_closed_ref => \($self->{write_closed}),
+    }) if length $self->{rbuf};
+    $self->_response_done (undef);
+  } elsif ($self->{state} eq 'end') {
     $self->_response_done (undef);
   } else {
     die "Bad state |$self->{state}|";
@@ -287,10 +317,12 @@ sub _request_done ($$) {
 
 sub _response_done ($$) {
   my ($self, $req) = @_;
-  if (delete $self->{close_after_response}) {
+  if (not defined $req or
+      delete $req->{close_after_response}) {
     $self->{transport}->push_shutdown
         unless $self->{write_closed};
     $self->{write_closed} = 1;
+    $self->{state} = 'end';
   }
   if (defined $req and defined $req->{res_done}) {
     $req->{res_done}->();
@@ -299,29 +331,27 @@ sub _response_done ($$) {
 
 sub _done ($$) {
   my ($self, $req) = @_;
-  if (delete $self->{close_after_response}) {
+  if (delete $req->{close_after_response}) {
     $self->{transport}->push_shutdown
         unless $self->{write_closed};
     $self->{write_closed} = 1;
+    $self->{state} = 'end';
   }
 } # _done
 
 sub _send_error ($$$$) {
   my ($self, $req, $status, $status_text) = @_;
-  $self->{close_after_response} = 1;
   my $res = qq{<!DOCTYPE html><html>
 <head><title>$status $status_text</title></head>
 <body>$status $status_text};
   #$res .= Carp::longmess;
   $res .= qq{</body></html>\x0A};
-  $self->send_response_headers
-      ($req,
-       {status => $status, status_text => $status_text,
+  $req->send_response_headers
+      ({status => $status, status_text => $status_text,
         headers => [
           ['Content-Type' => 'text/html; charset=utf-8'],
           ['Content-Length' => length $res],
-          ['Connection' => 'close'],
-        ]});
+        ]}, close => 1);
   $self->{transport}->push_write (\$res)
       unless $req->{method} eq 'HEAD';
 } # _send_error
@@ -329,6 +359,8 @@ sub _send_error ($$$$) {
 sub _fatal ($$) {
   my ($self, $req) = @_;
   $self->_request_done ($req);
+  $self->{state} = 'end';
+  $self->{rbuf} = '';
   $self->_send_error ($req, 400, 'Bad Request') unless $self->{write_closed};
   return $self->_response_done ($req);
 } # _fatal
@@ -343,7 +375,9 @@ sub _411 ($$) {
 
 sub _414 ($) {
   my ($self) = @_;
-  my $req = {version => 1.1, method => 'GET'};
+  my $req = bless {
+    version => 1.1, method => 'GET', transport => $self->{transport},
+  }, 'Hoge::Request';
   $self->_request_done ($req);
   $self->_send_error ($req, 414, 'Request-URI Too Large')
       unless $self->{write_closed};
@@ -351,44 +385,40 @@ sub _414 ($) {
 } # _414
 
 sub onrequest ($$) {
-  my ($self, $request) = @_;
-  if ($request->{target} =~ m{^/}) {
+  my ($self, $req) = @_;
+  if ($req->{target} =~ m{^/}) {
     #
-  } elsif ($request->{target} =~ m{^[A-Za-z][A-Za-z0-9.+-]+://}) { # XXX
+  } elsif ($req->{target} =~ m{^[A-Za-z][A-Za-z0-9.+-]+://}) {
     #
   } else {
-    return $self->_fatal ($request);
+    return $self->_fatal ($req);
   }
 
-    if ($request->{target} eq '/end') {
-      $self->send_response_headers
-          ($request,
-           {status => 200, status_text => 'OK', headers => []}); # XXX
+    if ($req->{target} eq '/end') {
+      $req->send_response_headers
+          ({status => 200, status_text => 'OK', headers => []}); # XXX
       $self->{transport}->push_write (\qq{<html>200 Goodbye!\x0D\x0A\x0D\x0A</html>
 });
       AE::postpone { exit };
     } elsif ($self->{write_closed}) {
       #
-    } elsif ($request->{method} eq 'GET' or
-             $request->{method} eq 'POST') {
-      $self->send_response_headers
-          ($request,
-           {status => 404, status_text => 'Not Found', headers => []}); # XXX
+    } elsif ($req->{method} eq 'GET' or
+             $req->{method} eq 'POST') {
+      $req->send_response_headers
+          ({status => 404, status_text => 'Not Found', headers => []}, close => 0); # XXX
       $self->{transport}->push_write (\qq{<html>...404 Not Found\x0D\x0A\x0D\x0A</html>
 });
-    } elsif ($request->{method} eq 'HEAD') {
-      $self->send_response_headers
-          ($request,
-           {status => 404, status_text => 'Not Found', headers => []}); # XXX
+    } elsif ($req->{method} eq 'HEAD') {
+      $req->send_response_headers
+          ({status => 404, status_text => 'Not Found', headers => []}); # XXX
     } else {
-      $self->send_response_headers
-          ($request,
-           {status => 405, status_text => 'Not Allowed', headers => []}); # XXX
-      $self->{transport}->push_write (\qq{<html>...405 Not Allowed (@{[$request->{method}]})</html>
+      $req->send_response_headers
+          ({status => 405, status_text => 'Not Allowed', headers => []}); # XXX
+      $self->{transport}->push_write (\qq{<html>...405 Not Allowed (@{[$req->{method}]})</html>
 });
     }
 
-  $self->_response_done ($request);
+  $self->_response_done ($req);
 } # onrequest
 
 sub ondata ($$) {
@@ -399,24 +429,41 @@ sub onreof ($$) {
   warn "End of request";
 } # onreof
 
-sub send_response_headers ($$$) {
-  my ($self, $request, $response) = @_;
+sub DESTROY ($) {
+  local $@;
+  eval { die };
+  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+      if $@ =~ /during global destruction/;
+} # DESTROY
+
+package Hoge::Request;
+
+sub send_response_headers ($$$;%) {
+  my ($req, $response, %args) = @_;
   # XXX validation
-  unless ($request->{version} == 0.9) {
+  if ($req->{version} == 0.9) {
+    $req->{close_after_response} = 1;
+  } else {
     my $res = sprintf qq{HTTP/1.1 %d %s\x0D\x0A},
         $response->{status},
         $response->{status_text};
     my @header;
     push @header, ['Server', 'Server/1'], ['Date', 'XXX'];
+    if ($args{close} or $req->{close_after_response}) {
+      push @header, ['Connection', 'close'];
+      $req->{close_after_response} = 1;
+    } elsif ($req->{version} == 1.0) {
+      push @header, ['Connection', 'keep-alive'];
+    }
     for (@header, @{$response->{headers}}) {
       $res .= "$_->[0]: $_->[1]\x0D\x0A";
     }
     $res .= "\x0D\x0A";
-    $self->{transport}->push_write (\$res);
+    $req->{transport}->push_write (\$res);
   }
   # XXX
-  if ($request->{method} eq 'HEAD' or
-      ($request->{method} eq 'CONNECT' and
+  if ($req->{method} eq 'HEAD' or
+      ($req->{method} eq 'CONNECT' and
        200 <= $response->{status} and $response->{status} < 300) or
       $response->{status} == 304 or
       (100 <= $response->{status} and $response->{status} < 200)) {
@@ -425,6 +472,13 @@ sub send_response_headers ($$$) {
     
   }
 } # send_response_headers
+
+sub DESTROY ($) {
+  local $@;
+  eval { die };
+  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+      if $@ =~ /during global destruction/;
+} # DESTROY
 
 # XXX CONNECT
 # XXX WS

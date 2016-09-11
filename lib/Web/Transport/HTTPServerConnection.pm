@@ -2,6 +2,7 @@ package Web::Transport::HTTPServerConnection;
 use strict;
 use warnings;
 our $VERSION = '1.0';
+use AnyEvent;
 use Promise;
 use Web::URL;
 use Web::Transport::TCPTransport;
@@ -46,6 +47,20 @@ sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
   });
 } # new_from_...
 
+sub _new_req ($) {
+  my $self = $_[0];
+  my $req = $self->{request} = bless {
+    transport => $self->{transport}, headers => [],
+    # method target version
+  }, __PACKAGE__ . '::Request';
+  my $p1 = Promise->new (sub { $req->{req_done} = $_[0] });
+  my $p2 = Promise->new (sub { $req->{res_done} = $_[0] });
+  Promise->all ([$p1, $p2])->then (sub {
+    $self->_done ($req, $_[0]->[0] || $_[0]->[1] || {});
+  });
+  return $req;
+} # _new_req
+
 sub _ondata ($$) {
   my ($self, $inref) = @_;
   while (1) {
@@ -70,65 +85,55 @@ sub _ondata ($$) {
       $self->{rbuf} .= $$inref;
       if ($self->{rbuf} =~ s/\A([^\x0A]{0,8191})\x0A//) {
         my $line = $1;
+        my $req = $self->_new_req;
         $line =~ s/\x0D\z//;
-        return $self->_fatal (bless {
-          transport => $self->{transport},
-          version => 0.9, method => 'GET',
-          write_closed_ref => \($self->{write_closed}),
-        }, 'Web::Transport::HTTPServerConnection::Request') if $line =~ /[\x00\x0D]/;
-        my $method;
-        my $version;
+        if ($line =~ /[\x00\x0D]/) {
+          $req->{version} = 0.9;
+          $req->{method} = 'GET';
+          return $self->_fatal ($req);
+        }
         if ($line =~ s{\x20+(H[^\x20]*)\z}{}) {
-          $version = $1;
+          my $version = $1;
           if ($version =~ m{\AHTTP/1\.([0-9]+)\z}) {
-            $version = $1 =~ /[^0]/ ? 1.1 : 1.0;
+            $req->{version} = $1 =~ /[^0]/ ? 1.1 : 1.0;
           } elsif ($version =~ m{\AHTTP/0+1?\.}) {
-            return $self->_fatal (bless {
-              transport => $self->{transport},
-              version => 0.9, method => 'GET',
-              write_closed_ref => \($self->{write_closed}),
-            }, 'Web::Transport::HTTPServerConnection::Request');
+            $req->{version} = 0.9;
+            $req->{method} = 'GET';
+            return $self->_fatal ($req);
           } elsif ($version =~ m{\AHTTP/[0-9]+\.[0-9]+\z}) {
-            $version = 1.1;
+            $req->{version} = 1.1;
           } else {
-            return $self->_fatal (bless {
-              transport => $self->{transport},
-              version => 0.9, method => 'GET',
-              write_closed_ref => \($self->{write_closed}),
-            }, 'Web::Transport::HTTPServerConnection::Request');
+            $req->{version} = 0.9;
+            $req->{method} = 'GET';
+            return $self->_fatal ($req);
           }
+        } else { # no version
+          $req->{version} = 0.9;
         }
         if ($line =~ s{\A([^\x20]+)\x20+}{}) {
-          $method = $1;
+          $req->{method} = $1;
+        } else { # no method
+          $req->{method} = 'GET';
+          return $self->_fatal ($req);
         }
-        return $self->_fatal (bless {
-          transport => $self->{transport},
-          version => 0.9, method => 'GET',
-          write_closed_ref => \($self->{write_closed}),
-        }, 'Web::Transport::HTTPServerConnection::Request') unless defined $method;
-        my $req = $self->{request} = bless {
-          transport => $self->{transport},
-          version => $version, method => $method,
-          target => $line, headers => [],
-          write_closed_ref => \($self->{write_closed}),
-        }, 'Web::Transport::HTTPServerConnection::Request';
-        my $p1 = Promise->new (sub { $self->{request}->{req_done} = $_[0] });
-        my $p2 = Promise->new (sub { $self->{request}->{res_done} = $_[0] });
-        Promise->all ([$p1, $p2])->then (sub {
-          $self->_done ($req);
-        });
-        if (not defined $version) {
-          $self->{request}->{version} = 0.9;
-          $self->{request}->{close_after_response} = 1;
-          $self->{request}->{method} = 'GET';
-          return $self->_fatal ($self->{request}) unless $method eq 'GET';
-          $self->onrequest ($self->{request});
+        $req->{target} = $line;
+        if ($req->{version} == 0.9) {
+          # XXX if $line is empty
+          $req->{close_after_response} = 1;
+          unless ($req->{method} eq 'GET') {
+            $req->{method} = 'GET';
+            return $self->_fatal ($req);
+          }
+          AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
         } else { # 1.0 / 1.1
           return $self->_fatal ($req) unless length $line;
           $self->{state} = 'before request header';
         }
       } elsif (8192 <= length $self->{rbuf}) {
-        return $self->_414;
+        my $req = $self->_new_req;
+        $req->{version} = 0.9;
+        $req->{method} = 'GET';
+        return $self->_414 ($req);
       } else {
         return;
       }
@@ -153,10 +158,11 @@ sub _ondata ($$) {
             $self->{request}->{headers}->[-1]->[1] .= " " . $line;
           }
         } elsif ($line eq '') { # end of headers
+          my $req = $self->{request};
           my @length;
           my @host;
           my @con;
-          for (@{$self->{request}->{headers}}) {
+          for (@{$req->{headers}}) {
             $_->[1] =~ s/[\x09\x20]+\z//;
             my $n = $_->[0];
             $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive
@@ -167,9 +173,9 @@ sub _ondata ($$) {
             } elsif ($n eq 'connection') {
               push @con, $_->[1];
             } elsif ($n eq 'transfer-encoding') {
-              return $self->_411 ($self->{request});
+              return $self->_411 ($req);
             }
-          }
+          } # headers
 
           ## Host:
           if (@host == 1) {
@@ -178,13 +184,13 @@ sub _ondata ($$) {
                 not $url->path eq '/' or
                 defined $url->query or
                 defined $url->{fragment}) { # XXX
-              return $self->_fatal ($self->{request});
+              return $self->_fatal ($req);
             }
           } elsif (@host) { # multiple Host:
-            return $self->_fatal ($self->{request});
+            return $self->_fatal ($req);
           } else { # no Host:
             if ($self->{request}->{version} == 1.1) {
-              return $self->_fatal ($self->{request});
+              return $self->_fatal ($req);
             }
           }
 
@@ -192,31 +198,35 @@ sub _ondata ($$) {
           my $con = join ',', '', @con, '';
           $con =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
           if ($con =~ /,[\x09\x20]*close[\x09\x20]*,/) {
-            $self->{request}->{close_after_response} = 1;
-          } elsif ($self->{request}->{version} == 1.0) {
+            $req->{close_after_response} = 1;
+          } elsif ($req->{version} == 1.0) {
             unless ($con =~ /,[\x09\x20]*keep-alive[\x09\x20]*,/) {
-              $self->{request}->{close_after_response} = 1;
+              $req->{close_after_response} = 1;
             }
           }
 
           ## Content-Length:
           if (@length == 1 and $length[0] =~ /\A[0-9]+\z/) {
             my $l = 0+$length[0];
-            $self->{request}->{body_length} = $l;
+            $req->{body_length} = $l;
             $self->{unread_length} = $l;
-            $self->onrequest ($self->{request});
+            AE::postpone {
+              $self->{cb}->($self, 'requestheaders', $req);
+              $self->{cb}->($self, 'datastart');
+            };
             if ($l == 0) {
-              $self->_request_done ($self->{request});
+              AE::postpone { $self->{cb}->($self, 'dataend') };
+              $self->_request_done ($req);
             } else {
               $self->{state} = 'request body';
             }
           } elsif (@length) {
-            return $self->_fatal ($self->{request});
+            return $self->_fatal ($req);
           } else {
-            $self->onrequest ($self->{request});
-            $self->_request_done ($self->{request});
+            AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
+            $self->_request_done ($req);
           }
-        } else {
+        } else { # broken line
           return $self->_fatal ($self->{request});
         }
       } elsif (8192 <= length $self->{rbuf}) {
@@ -225,23 +235,33 @@ sub _ondata ($$) {
         return;
       }
     } elsif ($self->{state} eq 'request body') {
+      my $ref = $inref;
       if (length $self->{rbuf}) {
-        $inref = \($self->{rbuf} . $$inref);
+        $ref = \($self->{rbuf} . $$inref); # string copy!
         $self->{rbuf} = '';
       }
-      my $in_length = length $$inref;
-      if ($self->{unread_length} == $in_length) {
-        $self->ondata ($$inref);
-        $self->onreof ({});
+      my $in_length = length $$ref;
+      if (not $in_length) {
+        return;
+      } elsif ($self->{unread_length} == $in_length) {
+        AE::postpone {
+          $self->{cb}->($self, 'data', $$ref);
+          $self->{cb}->($self, 'dataend');
+        };
         $self->_request_done ($self->{request});
-      } elsif ($self->{unread_length} < $in_length) {
+      } elsif ($self->{unread_length} < $in_length) { # has redundant data
         $self->{request}->{incomplete} = 1;
         $self->{request}->{close_after_response} = 1;
-        $self->ondata (substr ($$inref, 0, $self->{unread_length}));
-        $self->onreof ({});
+        AE::postpone {
+          $self->{cb}->($self, 'data', substr ($$ref, 0, $self->{unread_length}));
+          $self->{cb}->($self, 'dataend');
+        };
         $self->_request_done ($self->{request});
+        return;
       } else { # unread_length > $in_length
-        $self->ondata ($$inref);
+        AE::postpone {
+          $self->{cb}->($self, 'data', $$ref);
+        };
         $self->{unread_length} -= $in_length;
         return;
       }
@@ -258,10 +278,10 @@ sub _oneof ($$) {
   my ($self, $exit) = @_;
   if ($self->{state} eq 'initial' or
       $self->{state} eq 'before request-line') {
-    return $self->_fatal (bless {
-      transport => $self->{transport}, version => 0.9, method => 'GET',
-      write_closed_ref => \($self->{write_closed}),
-    }, 'Web::Transport::HTTPServerConnection::Request');
+    my $req = $self->_new_req;
+    $req->{version} = 0.9;
+    $req->{method} = 'GET';
+    return $self->_fatal ($req);
   } elsif ($self->{state} eq 'before request header') {
     $self->{request}->{close_after_response} = 1;
     return $self->_fatal ($self->{request});
@@ -269,14 +289,15 @@ sub _oneof ($$) {
     # $self->{unread_length} > 0
     $self->{request}->{close_after_response} = 1;
     $self->{request}->{incomplete} = 1;
-    $self->onreof ($exit->{failed} ? $exit : {failed => 1, message => "Connection closed"});
-    $self->_request_done ($self->{request});
+    AE::postpone {
+      $self->{cb}->($self, 'dataend');
+    };
+    $self->_request_done ($self->{request}, $exit->{failed} ? $exit : {failed => 1, message => "Connection closed"});
   } elsif ($self->{state} eq 'after request') {
     return $self->_fatal (bless {
       transport => $self->{transport},
       version => 0.9, method => 'GET',
       close_after_response => 1,
-      write_closed_ref => \($self->{write_closed}),
     }) if length $self->{rbuf};
     $self->_response_done (undef);
   } elsif ($self->{state} eq 'end') {
@@ -286,18 +307,22 @@ sub _oneof ($$) {
   }
 } # _oneof
 
-sub _request_done ($$) {
-  my ($self, $req) = @_;
+sub _request_done ($$;$) {
+  my ($self, $req, $exit) = @_;
   delete $self->{request};
   delete $self->{unread_length};
-  $self->{state} = 'after request';
+  if (defined $req and $req->{close_after_response}) {
+    $self->{state} = 'end';
+  } else {
+    $self->{state} = 'after request';
+  }
   if (defined $req and defined $req->{req_done}) {
-    $req->{req_done}->();
+    $req->{req_done}->($exit);
   }
 } # _request_done
 
-sub _response_done ($$) {
-  my ($self, $req) = @_;
+sub _response_done ($$;$) {
+  my ($self, $req, $exit) = @_;
   if (not defined $req or
       delete $req->{close_after_response}) {
     $self->{transport}->push_shutdown
@@ -306,18 +331,21 @@ sub _response_done ($$) {
     $self->{state} = 'end';
   }
   if (defined $req and defined $req->{res_done}) {
-    $req->{res_done}->();
+    $req->{res_done}->($exit);
   }
 } # _response_done
 
-sub _done ($$) {
-  my ($self, $req) = @_;
+sub _done ($$$) {
+  my ($self, $req, $exit) = @_;
   if (delete $req->{close_after_response}) {
     $self->{transport}->push_shutdown
         unless $self->{write_closed};
     $self->{write_closed} = 1;
     $self->{state} = 'end';
   }
+  AE::postpone {
+    $self->{cb}->($self, 'complete', $exit);
+  };
 } # _done
 
 sub _send_error ($$$$) {
@@ -354,62 +382,15 @@ sub _411 ($$) {
   return $self->_response_done ($req);
 } # _411
 
-sub _414 ($) {
-  my ($self) = @_;
-  my $req = bless {
-    version => 1.1, method => 'GET', transport => $self->{transport},
-  }, 'Web::Transport::HTTPServerConnection::Request';
+sub _414 ($$) {
+  my ($self, $req) = @_;
+  $req->{version} = 1.1;
+  $req->{method} = 'GET';
   $self->_request_done ($req);
   $self->_send_error ($req, 414, 'Request-URI Too Large')
       unless $self->{write_closed};
   return $self->_response_done ($req);
 } # _414
-
-#XXX
-sub onrequest ($$) {
-  my ($self, $req) = @_;
-  if ($req->{target} =~ m{^/}) {
-    #
-  } elsif ($req->{target} =~ m{^[A-Za-z][A-Za-z0-9.+-]+://}) {
-    #
-  } else {
-    return $self->_fatal ($req);
-  }
-
-    if ($req->{target} eq '/end') {
-      $req->send_response_headers
-          ({status => 200, status_text => 'OK', headers => []}); # XXX
-      $self->{transport}->push_write (\qq{<html>200 Goodbye!\x0D\x0A\x0D\x0A</html>
-});
-      AE::postpone { exit };
-    } elsif ($self->{write_closed}) {
-      #
-    } elsif ($req->{method} eq 'GET' or
-             $req->{method} eq 'POST') {
-      $req->send_response_headers
-          ({status => 404, status_text => 'Not Found', headers => []}, close => 0); # XXX
-      $self->{transport}->push_write (\qq{<html>...404 Not Found\x0D\x0A\x0D\x0A</html>
-});
-    } elsif ($req->{method} eq 'HEAD') {
-      $req->send_response_headers
-          ({status => 404, status_text => 'Not Found', headers => []}); # XXX
-    } else {
-      $req->send_response_headers
-          ({status => 405, status_text => 'Not Allowed', headers => []}); # XXX
-      $self->{transport}->push_write (\qq{<html>...405 Not Allowed (@{[$req->{method}]})</html>
-});
-    }
-
-  $self->_response_done ($req);
-} # onrequest
-
-sub ondata ($$) {
-  warn "Server received [[$_[1]]]";
-} # ondata
-
-sub onreof ($$) {
-  warn "End of request";
-} # onreof
 
 sub DESTROY ($) {
   local $@;

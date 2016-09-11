@@ -63,6 +63,6 @@ CRLF
 "Transfer-Encoding: chunked"CRLF
 CRLF
 #result
-{{411header}}{{eof}}
+{{411header}}\x0D\x0A{{eof}}
 #result-apache
-{{400header}}{{eof}}
+{{400header}}\x0D\x0A{{eof}}

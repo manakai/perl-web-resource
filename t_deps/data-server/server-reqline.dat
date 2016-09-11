@@ -99,3 +99,14 @@ CRLF
 {{400body}}{{eof}}
 #result-apache
 {{404nohosth}}{{eof}}
+
+#name
+space in target
+#input
+"GET /ho ge/ HTTP/1.0"CRLF
+"Host:"
+hostport
+CRLF
+CRLF
+#result
+{{404h}}{{eof}}

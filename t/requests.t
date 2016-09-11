@@ -12,7 +12,7 @@ use Web::Transport::TCPTransport;
 use Web::Transport::H1CONNECTTransport;
 use Web::Transport::TLSTransport;
 use Web::Transport::UNIXDomainSocketTransport;
-use Web::Transport::HTTPConnection;
+use Web::Transport::HTTPClientConnection;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
 
@@ -94,7 +94,7 @@ test {
   my $c = shift;
   my $tcp = Web::Transport::TCPTransport->new
       (host => Web::Host->parse_string ('127.0.53.53'), port => rand);
-  my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+  my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
   my $p = $http->send_request_headers ({method => 'GET', target => '/'});
   isa_ok $p, 'Promise';
   $p->then (sub {
@@ -121,7 +121,7 @@ test {
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'});
     })->then (sub {
@@ -156,7 +156,7 @@ test {
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     $http->connect->then (sub {
       my $p1 = $http->send_request_headers ({method => 'GET', target => '/'});
       my $p = $http->send_request_headers ({method => 'GET', target => '/'});
@@ -191,7 +191,7 @@ test {
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     $http->connect->then (sub {
       my @p;
       for my $subtest (
@@ -232,7 +232,7 @@ test {
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -267,7 +267,7 @@ test {
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -306,7 +306,7 @@ test {
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -345,7 +345,7 @@ test {
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -394,7 +394,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -437,7 +437,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -486,7 +486,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -535,7 +535,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
     my @p;
     $http->onevent (sub {
@@ -601,7 +601,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -652,7 +652,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -697,7 +697,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -742,7 +742,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -787,7 +787,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -839,7 +839,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -891,7 +891,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -934,7 +934,7 @@ CRLF
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -978,7 +978,7 @@ CRLF
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1027,7 +1027,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     my $pong = 0;
     $http->onevent (sub {
@@ -1076,7 +1076,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1121,7 +1121,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1166,7 +1166,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1218,7 +1218,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1270,7 +1270,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1322,7 +1322,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $ping = 0;
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1369,7 +1369,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
     $http->connect->then (sub {
       return $http->send_ping;
@@ -1406,7 +1406,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     my $received = '';
     my @ev;
@@ -1455,7 +1455,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     my $received = '';
     my @ev;
@@ -1512,7 +1512,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     my $received = '';
     my @ev;
@@ -1561,7 +1561,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
     my $x;
     my $p = Promise->new (sub { $x = $_[0] });
@@ -1609,7 +1609,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $received = '';
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1648,7 +1648,7 @@ close
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'headers') {
@@ -1688,7 +1688,7 @@ CRLF
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1724,7 +1724,7 @@ CRLF
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1767,7 +1767,7 @@ CRLF
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1811,7 +1811,7 @@ CRLF
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1853,7 +1853,7 @@ CRLF
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
     });
@@ -1889,7 +1889,7 @@ CRLF
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -1936,7 +1936,7 @@ CRLF
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
-    my $proxy = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $proxy = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $connect = Web::Transport::H1CONNECTTransport->new
         (http => $proxy, target => 'hoge.test');
     my $tls = Web::Transport::TLSTransport->new
@@ -1944,7 +1944,7 @@ CRLF
          sni_host_name => Web::Host->parse_string ('hoge.test'),
          si_host_name => Web::Host->parse_string (Test::Certificates->cert_name),
          ca_file => Test::Certificates->ca_path ('cert.pem'));
-    my $http = Web::Transport::HTTPConnection->new (transport => $tls);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tls);
     my $d = '';
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
@@ -1977,7 +1977,7 @@ test {
   {
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ('127.0.53.53'), port => int rand);
-    my $proxy = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $proxy = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $connect = Web::Transport::H1CONNECTTransport->new
         (http => $proxy, target => 'hoge.test');
     my $tls = Web::Transport::TLSTransport->new
@@ -1985,7 +1985,7 @@ test {
          sni_host_name => Web::Host->parse_string ('hoge.test'),
          si_host_name => Web::Host->parse_string (Test::Certificates->cert_name),
          ca_file => Test::Certificates->ca_path ('cert.pem'));
-    my $http = Web::Transport::HTTPConnection->new (transport => $tls);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $tls);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -2011,10 +2011,10 @@ test {
   {
     my $tcp = Web::Transport::TCPTransport->new
         (host => Web::Host->parse_string ('127.0.53.53'), port => int rand);
-    my $proxy = Web::Transport::HTTPConnection->new (transport => $tcp);
+    my $proxy = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $connect = Web::Transport::H1CONNECTTransport->new
         (http => $proxy, target => 'hoge.test');
-    my $http = Web::Transport::HTTPConnection->new (transport => $connect);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $connect);
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;
       if ($type eq 'data') {
@@ -2047,7 +2047,7 @@ CRLF
     my $server = $_[0]->recv;
     my $unix = Web::Transport::UNIXDomainSocketTransport->new
         (path => $server->{port});
-    my $http = Web::Transport::HTTPConnection->new (transport => $unix);
+    my $http = Web::Transport::HTTPClientConnection->new (transport => $unix);
     my $d = '';
     $http->onevent (sub {
       my ($http, $req, $type, $data) = @_;

@@ -6,7 +6,7 @@ use AnyEvent;
 use Promise;
 use Web::Transport::TCPTransport;
 use Web::Transport::TLSTransport;
-use Web::Transport::HTTPConnection;
+use Web::Transport::HTTPClientConnection;
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Scheme qw(get_default_port);
 
@@ -90,7 +90,8 @@ my $proxy_to_transport = sub {
       }
       if ($url_record->scheme eq 'https') {
         # XXX HTTP version
-        my $http = Web::Transport::HTTPConnection->new (transport => $transport);
+        my $http = Web::Transport::HTTPClientConnection->new
+            (transport => $transport);
         require Web::Transport::H1CONNECTTransport;
         $transport = Web::Transport::H1CONNECTTransport->new
             (http => $http,
@@ -208,7 +209,8 @@ sub connect ($%) {
           not $url_record->scheme eq 'ftp') {
         die "Bad URL scheme |@{[$url_record->scheme]}|\n";
       }
-      $self->{http} = Web::Transport::HTTPConnection->new (transport => $_[0]);
+      $self->{http} = Web::Transport::HTTPClientConnection->new
+          (transport => $_[0]);
       return $self->{http}->connect;
     })->catch (sub {
       delete $self->{connect_promise};

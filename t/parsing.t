@@ -11,7 +11,7 @@ use JSON::PS;
 use Web::Host;
 use Web::Transport::TCPTransport;
 use Web::Transport::TLSTransport;
-use Web::Transport::HTTPConnection;
+use Web::Transport::HTTPClientConnection;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
 use Test::Certificates;
@@ -152,7 +152,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           );
         }
 
-        my $http = Web::Transport::HTTPConnection->new
+        my $http = Web::Transport::HTTPClientConnection->new
             (transport => $transport);
         my $test_type = $test->{'test-type'}->[1]->[0] || '';
         
@@ -261,7 +261,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   $transport = Web::Transport::TCPTransport->new
                       (host => Web::Host->parse_string ($server->{addr}),
                        port => $server->{port});
-                  $http = Web::Transport::HTTPConnection->new
+                  $http = Web::Transport::HTTPClientConnection->new
                       (transport => $transport);
                   $http->onevent ($onev);
                   return $http->connect;

@@ -137,24 +137,23 @@ sub _ondata ($$) {
         $line =~ s/\x0D\z//;
         return $self->_fatal ($self->{request}->{version})
             if $line =~ /[\x00\x0D]/;
-        if ($line =~ s/\A([^:]+):[\x20]*//) { # XXX
+        if ($line =~ s/\A([^\x09\x20:][^:]*):[\x09\x20]*//) {
           my $name = $1;
-          $line =~ s/\A[\x20]+//;
           push @{$self->{request}->{headers}}, [$name, $line];
-        } elsif ($line =~ /\A[\x09\x20]/ and @{$self->{request}->{headers}}) {
+        } elsif ($line =~ s/\A[\x09\x20]+// and @{$self->{request}->{headers}}) {
           if ((length $self->{request}->{headers}->[-1]->[0]) + 1 +
-              (length $self->{request}->{headers}->[-1]->[1]) + 2 +
+              (length $self->{request}->{headers}->[-1]->[1]) + 1 +
               (length $line) + 2 > 8192) {
             return $self->_fatal ($self->{request}->{version});
           } else {
-            $self->{request}->{headers}->[-1]->[1] .= "\x0D\x0A" . $line;
+            $self->{request}->{headers}->[-1]->[1] .= " " . $line;
           }
         } elsif ($line eq '') { # end of headers
           my @length;
           my @host;
           my @con;
           for (@{$self->{request}->{headers}}) {
-            $_->[1] =~ s/\x20+\z//;
+            $_->[1] =~ s/[\x09\x20]+\z//;
             my $n = $_->[0];
             $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive
             if ($n eq 'content-length') {

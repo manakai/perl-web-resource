@@ -126,6 +126,8 @@ CRLF
 #result
 {{404h}}{{eof}}
 
+#name
+0x0D in header name
 #input
 "GET /404 HTTP/1.0"CRLF
 "ab\x0D:x"CRLF
@@ -135,7 +137,11 @@ CRLF
 CRLF
 #result
 {{400h}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
 
+#name
+0x0D in header value
 #input
 "GET /404 HTTP/1.0"CRLF
 "ab:\x0Dx"CRLF
@@ -145,7 +151,11 @@ CRLF
 CRLF
 #result
 {{400h}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
 
+#name
+0x0D in header value
 #input
 "GET /404 HTTP/1.0"CRLF
 "ab:ab\x0Dx"CRLF
@@ -155,6 +165,8 @@ CRLF
 CRLF
 #result
 {{400h}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
 
 #name
 0x00 in header value
@@ -168,6 +180,8 @@ CRLF
 #result
 {{400h}}{{eof}}
 
+#name
+0x0D in header value
 #input
 "GET /404 HTTP/1.0"CRLF
 "ab:ab\x0Dx"LF
@@ -177,6 +191,8 @@ CRLF
 CRLF
 #result
 {{400h}}{{eof}}
+#result-apache
+{{404h}}{{eof}}
 
 #name
 header value (Content-Length) 1
@@ -207,7 +223,7 @@ receive "</html>"
 {{404h}}{{404nohostbody}}{{eof}}
 
 #name
-header value (Content-Length)
+header value (Content-Length) \x09length
 #input
 "GET /404 HTTP/1.1\x0D\x0Ahost:"
 hostport
@@ -218,7 +234,7 @@ CRLF
 receive "</html>"
 "GET /404"CRLF
 #result
-{{400h}}{{eof}}
+{{404h}}{{404nohostbody}}{{eof}}
 #result-nginx
 {{411h}}{{eof}}
 #result-apache
@@ -236,14 +252,14 @@ CRLF
 receive "</html>"
 "GET /404"CRLF
 #result
-{{400h}}{{eof}}
+{{404h}}{{404nohostbody}}{{eof}}
 #result-nginx
 {{411h}}{{eof}}
 #result-apache
 {{404h}}{{404nohostbody}}{{eof}}
 
 #name
-header value (Content-Length)
+header value (Content-Length) \x0C5
 #input
 "GET /404 HTTP/1.1\x0D\x0Ahost:"
 hostport
@@ -295,7 +311,7 @@ receive "</html>"
 {{411h}}{{eof}}
 
 #name
-header value (Content-Length)
+header value (Content-Length) 5\x0D\x0A\x20
 #input
 "GET /404 HTTP/1.1\x0D\x0Ahost:"
 hostport
@@ -307,12 +323,14 @@ CRLF
 receive "</html>"
 "GET /404"CRLF
 #result
-{{400h}}{{eof}}
+{{404h}}{{404nohostbody}}{{eof}}
 #result-nginx
 {{404h}}{{400body}}{{eof}}
+#result-apache
+{{400h}}{{eof}}
 
 #name
-header value (Content-Length)
+header value (Content-Length) 5\x0D\x0A\x09
 #input
 "GET /404 HTTP/1.1\x0D\x0Ahost:"
 hostport
@@ -324,9 +342,11 @@ CRLF
 receive "</html>"
 "GET /404"CRLF
 #result
-{{400h}}{{eof}}
+{{404h}}{{404nohostbody}}{{eof}}
 #result-nginx
 {{404h}}{{400body}}{{eof}}
+#result-apache
+{{400h}}{{eof}}
 
 #name
 header value (Host) 1
@@ -404,3 +424,49 @@ close
 {{404h}}{{eof}}
 #result-nginx
 {{eof}}
+#result-apache
+{{400h}}{{eof}}
+
+#name
+continue with :
+#input
+"GET /404 HTTP/1.0"CRLF
+"foo:bar\x0D\x0A a:b"CRLF
+"host:"
+hostport
+CRLF
+CRLF
+#result
+{{404h}}{{eof}}
+
+#input
+timeout 2
+"GET /404 HTTP/1.0"CRLF
+"foo:bar"CRLF
+" a:b"CRLF
+"host:"
+hostport
+CRLF
+CRLF
+#result
+{{404h}}{{eof}}
+#result-nginx
+{{timeout}}{{eof}}
+#result-apache
+{{timeout}}{{eof}}
+
+#input
+timeout 2
+"GET /404 HTTP/1.0"CRLF
+" a:b"CRLF
+"foo:bar"CRLF
+"host:"
+hostport
+CRLF
+CRLF
+#result
+{{400h}}{{eof}}
+#result-nginx
+{{timeout}}{{eof}}
+#result-apache
+{{timeout}}{{eof}}

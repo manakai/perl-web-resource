@@ -134,6 +134,8 @@ sub _ondata ($$) {
       $self->{rbuf} .= $$inref;
       if ($self->{rbuf} =~ s/\A([^\x0A]{0,8191})\x0A//) {
         my $line = $1;
+        return $self->_fatal ($self->{request}->{version})
+            if @{$self->{request}->{headers}} == 100;
         $line =~ s/\x0D\z//;
         return $self->_fatal ($self->{request}->{version})
             if $line =~ /[\x00\x0D]/;

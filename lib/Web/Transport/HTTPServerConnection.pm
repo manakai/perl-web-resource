@@ -448,6 +448,7 @@ sub DESTROY ($) {
 # XXX WS
 # XXX leaking
 # XXX reset
+# XXX sketch/server.pl
 
 1;
 

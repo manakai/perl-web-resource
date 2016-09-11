@@ -1,7 +1,7 @@
 use strict;
 use warnings;
 use Path::Tiny;
-use lib glob path (__FILE__)->parent->parent->parent->child ('t_deps/modules/*/lib');
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Web::URL;
 use Web::Transport::ConnectionClient;
 use Test::X1;
@@ -99,3 +99,12 @@ test {
 } n => 5, name => 'no Content-Length, no body';
 
 run_tests;
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

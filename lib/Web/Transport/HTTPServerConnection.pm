@@ -209,23 +209,33 @@ sub _ondata ($$) {
           ## Content-Length:
           if (@length == 1 and $length[0] =~ /\A[0-9]+\z/) {
             my $l = 0+$length[0];
-            $req->{body_length} = $l;
-            $self->{unread_length} = $l;
             AE::postpone {
               $self->{cb}->($self, 'requestheaders', $req);
               $self->{cb}->($self, 'datastart');
             };
-            if ($l == 0) {
+            if ($req->{method} eq 'CONNECT') {
+              $self->{state} = 'request body';
+            } elsif ($l == 0) {
               AE::postpone { $self->{cb}->($self, 'dataend') };
               $self->_request_done ($req);
             } else {
+              $req->{body_length} = $l;
+              $self->{unread_length} = $l;
               $self->{state} = 'request body';
             }
           } elsif (@length) {
             return $self->_fatal ($req);
           } else {
-            AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
-            $self->_request_done ($req);
+            if ($req->{method} eq 'CONNECT') {
+              AE::postpone {
+                $self->{cb}->($self, 'requestheaders', $req);
+                $self->{cb}->($self, 'datastart');
+              };
+              $self->{state} = 'request body';
+            } else {
+              AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
+              $self->_request_done ($req);
+            }
           }
         } else { # broken line
           return $self->_fatal ($self->{request});
@@ -241,12 +251,20 @@ sub _ondata ($$) {
         $ref = \($self->{rbuf} . $$inref); # string copy!
         $self->{rbuf} = '';
       }
+
+      if (not defined $self->{unread_length}) { # CONNECT data
+        AE::postpone {
+          $self->{cb}->($self, 'data', $self->{request}, $$ref);
+        };
+        return;
+      }
+
       my $in_length = length $$ref;
       if (not $in_length) {
         return;
       } elsif ($self->{unread_length} == $in_length) {
         AE::postpone {
-          $self->{cb}->($self, 'data', $$ref);
+          $self->{cb}->($self, 'data', $self->{request}, $$ref);
           $self->{cb}->($self, 'dataend');
         };
         $self->_request_done ($self->{request});
@@ -254,14 +272,14 @@ sub _ondata ($$) {
         $self->{request}->{incomplete} = 1;
         $self->{request}->{close_after_response} = 1;
         AE::postpone {
-          $self->{cb}->($self, 'data', substr ($$ref, 0, $self->{unread_length}));
+          $self->{cb}->($self, 'data', $self->{request}, substr ($$ref, 0, $self->{unread_length}));
           $self->{cb}->($self, 'dataend');
         };
         $self->_request_done ($self->{request});
         return;
       } else { # unread_length > $in_length
         AE::postpone {
-          $self->{cb}->($self, 'data', $$ref);
+          $self->{cb}->($self, 'data', $self->{request}, $$ref);
         };
         $self->{unread_length} -= $in_length;
         return;
@@ -287,13 +305,15 @@ sub _oneof ($$) {
     $self->{request}->{close_after_response} = 1;
     return $self->_fatal ($self->{request});
   } elsif ($self->{state} eq 'request body') {
-    # $self->{unread_length} > 0
     $self->{request}->{close_after_response} = 1;
-    $self->{request}->{incomplete} = 1;
-    AE::postpone {
-      $self->{cb}->($self, 'dataend');
-    };
-    $self->_request_done ($self->{request}, $exit->{failed} ? $exit : {failed => 1, message => "Connection closed"});
+    if (defined $self->{unread_length}) {
+      # $self->{unread_length} > 0
+      $self->{request}->{incomplete} = 1;
+      $exit = {failed => 1, message => 'Connection closed'}
+          unless $exit->{failed};
+    }
+    AE::postpone { $self->{cb}->($self, 'dataend') };
+    $self->_request_done ($self->{request}, $exit);
   } elsif ($self->{state} eq 'after request') {
     if (length $self->{rbuf}) {
       my $req = $self->_new_req;
@@ -353,8 +373,7 @@ sub _send_error ($$$$) {
       ({status => $status, status_text => $status_text,
         headers => [
           ['Content-Type' => 'text/html; charset=utf-8'],
-          ['Content-Length' => length $res],
-        ]}, close => 1);
+        ]}, close => 1, content_length => length $res);
   $self->{transport}->push_write (\$res)
       unless $req->{method} eq 'HEAD';
 } # _send_error
@@ -401,6 +420,7 @@ sub send_response_headers ($$$;%) {
   # XXX validation
   $req->{close_after_response} = 1 if $args{close} or $req->{version} == 0.9;
   my $done = 0;
+  my $connect = 0;
   if ($req->{method} eq 'HEAD' or
       $response->{status} == 304) {
     ## No response body by definition
@@ -408,9 +428,13 @@ sub send_response_headers ($$$;%) {
       $req->{write_length} = 0+$args{content_length};
     }
     $done = 1;
-  } elsif (($req->{method} eq 'CONNECT' and
-            200 <= $response->{status} and $response->{status} < 300) or
-           (100 <= $response->{status} and $response->{status} < 200)) {
+  } elsif ($req->{method} eq 'CONNECT' and
+           200 <= $response->{status} and $response->{status} < 300) {
+    ## No response body by definition but switched to the tunnel mode
+    croak "|content_length| not allowed" if defined $args{content_length};
+    $req->{write_mode} = 'raw';
+    $connect = 1;
+  } elsif (100 <= $response->{status} and $response->{status} < 200) {
     ## No response body by definition
     croak "|content_length| not allowed" if defined $args{content_length};
     $done = 1;
@@ -437,7 +461,7 @@ sub send_response_headers ($$$;%) {
         $response->{status_text};
     my @header;
     push @header, ['Server', 'Server/1'], ['Date', 'XXX'];
-    if ($req->{close_after_response}) {
+    if ($req->{close_after_response} and not $connect) {
       push @header, ['Connection', 'close'];
     } elsif ($req->{version} == 1.0) {
       push @header, ['Connection', 'keep-alive'];
@@ -490,30 +514,29 @@ sub send_response_data ($$) {
 
 sub close_response ($;$) {
   my ($req, $exit) = @_;
-  if (defined $req->{connection}) {
-    if (defined $req->{write_length} and
-        $req->{write_length} > 0) {
-      carp sprintf "Truncated end of sent data (%d more bytes expected)",
-          $req->{write_length};
-      $req->{close_after_response} = 1;
-    }
-    if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
-      # XXX trailer headers
-      $req->{connection}->{transport}->push_write (\"0\x0A");
-    }
-    if (delete $req->{close_after_response}) {
-      $req->{connection}->{transport}->push_shutdown
-          unless $req->{connection}->{write_closed};
-      $req->{connection}->{write_closed} = 1;
-      $req->{connection}->{state} = 'end';
-    }
-    if (defined $req->{res_done}) {
-      (delete $req->{res_done})->($exit);
-    }
-    delete $req->{connection};
-    delete $req->{write_mode};
-    delete $req->{write_length};
+  return unless defined $req->{connection};
+  if (defined $req->{write_length} and $req->{write_length} > 0) {
+    carp sprintf "Truncated end of sent data (%d more bytes expected)",
+        $req->{write_length};
+    $req->{close_after_response} = 1;
   }
+  $req->{close_after_response} = 1 if $req->{method} eq 'CONNECT';
+  if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
+    # XXX trailer headers
+    $req->{connection}->{transport}->push_write (\"0\x0A");
+  }
+  if (delete $req->{close_after_response}) {
+    $req->{connection}->{transport}->push_shutdown
+        unless $req->{connection}->{write_closed};
+    $req->{connection}->{write_closed} = 1;
+    $req->{connection}->{state} = 'end';
+  }
+  if (defined $req->{res_done}) {
+    (delete $req->{res_done})->($exit);
+  }
+  delete $req->{connection};
+  delete $req->{write_mode};
+  delete $req->{write_length};
 } # _response_done
 
 sub DESTROY ($) {
@@ -523,7 +546,6 @@ sub DESTROY ($) {
       if $@ =~ /during global destruction/;
 } # DESTROY
 
-# XXX CONNECT
 # XXX WS
 # XXX leaking
 # XXX reset

@@ -47,16 +47,17 @@ my $HandleRequestHeaders = {};
   $Origin = Web::URL->parse_string ("http://$host:$port");
 
   my $cb = sub {
-    my $self = $_[0];
-    my $type = $_[1];
+    my ($self, $type, $req) = @_;
     if ($type eq 'requestheaders') {
-      my $req = $_[2];
       my $handler = $HandleRequestHeaders->{$req->{target}};
       if (defined $handler) {
+        $req->{body} = '';
         $handler->($self, $req);
       } else {
         die "No handler for |$req->{target}|";
       }
+    } elsif ($type eq 'data') {
+      $req->{body} .= $_[3];
     }
   }; # $cb
 
@@ -837,6 +838,130 @@ abcxyz\z};
     undef $c;
   });
 } n => 1, name => 'HTTP/1.0 response with data without Content-Length';
+
+test {
+  my $c = shift;
+  $HandleRequestHeaders->{'/hoge28'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga28'],
+        ]});
+    $req->send_response_data (\'abc');
+    $req->send_response_data (\'');
+    $req->send_response_data (\'xyz');
+    $req->close_response;
+  };
+
+  rawtcp (qq{CONNECT /hoge28 HTTP/1.0\x0D\x0Aconnection:keep-alive\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
+Connection: keep-alive\x0D
+Hoge: Fuga28\x0D
+\x0D
+abcxyz\z};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'CONNECT HTTP/1.0';
+
+test {
+  my $c = shift;
+  $HandleRequestHeaders->{'/hoge29'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga29'],
+        ]});
+    $req->send_response_data (\'abc');
+    $req->send_response_data (\'');
+    $req->send_response_data (\'xyz');
+    $req->close_response;
+  };
+
+  rawtcp (qq{CONNECT /hoge29 HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
+Hoge: Fuga29\x0D
+\x0D
+abcxyz\z};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'CONNECT HTTP/1.1';
+
+test {
+  my $c = shift;
+  my $serverreq;
+  $HandleRequestHeaders->{'/hoge30'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga30'],
+        ]});
+    $req->send_response_data (\'abc');
+    $req->send_response_data (\'');
+    $req->send_response_data (\'xyz');
+    $req->close_response;
+    $serverreq = $req;
+  };
+
+  rawtcp (qq{CONNECT /hoge30 HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0Acontent-length:3\x0D\x0A\x0D\x0Aabcabc})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
+Hoge: Fuga30\x0D
+\x0D
+abcxyz\z};
+      is $serverreq->{body}, 'abcabc';
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'CONNECT HTTP/1.1';
+
+test {
+  my $c = shift;
+  my $serverreq;
+  $HandleRequestHeaders->{'/hoge31'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga31'],
+        ]});
+    $req->send_response_data (\'abc');
+    $req->send_response_data (\'');
+    $req->send_response_data (\'xyz');
+    $req->close_response;
+    $serverreq = $req;
+  };
+
+  rawtcp (qq{CONNECT /hoge31 HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0Acontent-length:3ab\x0D\x0A\x0D\x0Aabcabc})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request[\s\S]*
+Connection: close\x0D
+Content-Length: 102\x0D
+Content-Type: text/html; charset=utf-8\x0D
+\x0D
+<!DOCTYPE html><html>
+<head><title>400 Bad Request</title></head>
+<body>400 Bad Request</body></html>
+\z};
+      is $serverreq->{body}, undef;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'CONNECT HTTP/1.1 bad Content-Length';
 
 run_tests;
 

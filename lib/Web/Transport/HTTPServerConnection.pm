@@ -394,23 +394,50 @@ sub DESTROY ($) {
 } # DESTROY
 
 package Web::Transport::HTTPServerConnection::Request;
+use Carp qw(croak);
 
 sub send_response_headers ($$$;%) {
   my ($req, $response, %args) = @_;
   # XXX validation
-  if ($req->{version} == 0.9) {
-    $req->{close_after_response} = 1;
+  $req->{close_after_response} = 1 if $args{close} or $req->{version} == 0.9;
+  my $done = 0;
+  if ($req->{method} eq 'HEAD' or
+      ($req->{method} eq 'CONNECT' and
+       200 <= $response->{status} and $response->{status} < 300) or
+      $response->{status} == 304 or
+      (100 <= $response->{status} and $response->{status} < 200)) {
+    ## No response body by definition
+    $done = 1;
   } else {
+    if (defined $args{content_length}) {
+      ## If body length is specified
+      $req->{write_mode} = 'raw';
+      $req->{write_length} = 0+$args{content_length};
+      $done = 1 if $req->{write_length} <= 0;
+
+    ## Otherwise, if chunked encoding can be used
+#XXX
+    } else {
+      ## Otherwise, end of the response is the termination of the connection
+      $req->{close_after_response} = 1;
+      $req->{write_mode} = 'raw';
+    }
+  }
+
+  ## Response-line and response headers
+  if ($req->{version} != 0.9) {
     my $res = sprintf qq{HTTP/1.1 %d %s\x0D\x0A},
         $response->{status},
         $response->{status_text};
     my @header;
     push @header, ['Server', 'Server/1'], ['Date', 'XXX'];
-    if ($args{close} or $req->{close_after_response}) {
+    if ($req->{close_after_response}) {
       push @header, ['Connection', 'close'];
-      $req->{close_after_response} = 1;
     } elsif ($req->{version} == 1.0) {
       push @header, ['Connection', 'keep-alive'];
+    }
+    if (defined $req->{write_length}) {
+      push @header, ['Content-Length', $req->{write_length}];
     }
     for (@header, @{$response->{headers}}) {
       $res .= "$_->[0]: $_->[1]\x0D\x0A";
@@ -418,28 +445,52 @@ sub send_response_headers ($$$;%) {
     $res .= "\x0D\x0A";
     $req->{connection}->{transport}->push_write (\$res);
   }
-  # XXX
-  if ($req->{method} eq 'HEAD' or
-      ($req->{method} eq 'CONNECT' and
-       200 <= $response->{status} and $response->{status} < 300) or
-      $response->{status} == 304 or
-      (100 <= $response->{status} and $response->{status} < 200)) {
 
-  } else {
-    
-  }
+  $req->_response_done if $done;
 } # send_response_headers
+
+sub send_response_data ($$) {
+  my ($req, $ref) = @_;
+  # XXX error if utf8
+  if (defined $req->{write_mode} and $req->{write_mode} eq 'raw') {
+    if (defined $req->{write_length}) {
+      if ($req->{write_length} >= length $$ref) {
+        $req->{write_length} -= length $$ref;
+      } else {
+        croak sprintf "Data too long (given %d bytes whereas only %d bytes allowed)",
+            length $$ref, $req->{write_length};
+      }
+    }
+    $req->{connection}->{transport}->push_write ($ref);
+    if (defined $req->{write_length} and $req->{write_length} <= 0) {
+      $req->_response_done;
+    }
+  } else {
+    croak "Not writable for now";
+  }
+} # send_response_data
+
+# XXX close API
 
 sub _response_done ($;$) {
   my ($req, $exit) = @_;
-  if (delete $req->{close_after_response}) {
-    $req->{connection}->{transport}->push_shutdown
-        unless $req->{connection}->{write_closed};
-    $req->{connection}->{write_closed} = 1;
-    $req->{connection}->{state} = 'end';
-  }
-  if (defined $req->{res_done}) {
-    $req->{res_done}->($exit);
+  if (defined $req->{connection}) {
+    if (defined $req->{write_length} and
+        $req->{write_length} > 0) {
+      $req->{close_after_response} = 1;
+    }
+    if (delete $req->{close_after_response}) {
+      $req->{connection}->{transport}->push_shutdown
+          unless $req->{connection}->{write_closed};
+      $req->{connection}->{write_closed} = 1;
+      $req->{connection}->{state} = 'end';
+    }
+    if (defined $req->{res_done}) {
+      (delete $req->{res_done})->($exit);
+    }
+    delete $req->{connection};
+    delete $req->{write_mode};
+    delete $req->{write_length};
   }
 } # _response_done
 

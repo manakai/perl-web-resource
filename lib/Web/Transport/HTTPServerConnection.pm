@@ -160,43 +160,37 @@ sub _ondata ($$) {
           }
         } elsif ($line eq '') { # end of headers
           my $req = $self->{request};
-          my @length;
-          my @host;
-          my @con;
+          my %headers;
           for (@{$req->{headers}}) {
             $_->[1] =~ s/[\x09\x20]+\z//;
             my $n = $_->[0];
             $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-            if ($n eq 'content-length') {
-              push @length, $_->[1];
-            } elsif ($n eq 'host') {
-              push @host, $_->[1];
-            } elsif ($n eq 'connection') {
-              push @con, $_->[1];
-            } elsif ($n eq 'transfer-encoding') {
-              return $self->_411 ($req);
-            }
+            $_->[2] = $n;
+            push @{$headers{$n} ||= []}, $_->[1];
           } # headers
 
+          # XXX check request-target
+
           ## Host:
-          if (@host == 1) {
-            my $url = Web::URL->parse_string ("https://$host[0]/");
+          if (@{$headers{host} or []} == 1) {
+            my $url = Web::URL->parse_string ("https://$headers{host}->[0]/");
             if (not defined $url or
                 not $url->path eq '/' or
                 defined $url->query or
                 defined $url->{fragment}) { # XXX
               return $self->_fatal ($req);
             }
-          } elsif (@host) { # multiple Host:
+          } elsif (@{$headers{host} or []}) { # multiple Host:
             return $self->_fatal ($req);
           } else { # no Host:
             if ($self->{request}->{version} == 1.1) {
               return $self->_fatal ($req);
             }
           }
+          # XXX Host: == request_url->hostport
 
           ## Connection:
-          my $con = join ',', '', @con, '';
+          my $con = join ',', '', @{$headers{connection} or []}, '';
           $con =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
           if ($con =~ /,[\x09\x20]*close[\x09\x20]*,/) {
             $req->{close_after_response} = 1;
@@ -206,9 +200,58 @@ sub _ondata ($$) {
             }
           }
 
+          ## Upgrade: websocket
+          if (@{$headers{upgrade} or []} == 1) {
+            WS_OK: {
+              my $status = 400;
+              WS_CHECK: {
+                last WS_CHECK unless $req->{method} eq 'GET';
+                last WS_CHECK unless $req->{version} == 1.1;
+                # XXX request-url->scheme eq 'http' or 'https'
+                my $upgrade = $headers{upgrade}->[0];
+                $upgrade =~ tr/A-Z/a-z/; ## ASCII case-insensitive;
+                last WS_CHECK unless $upgrade eq 'websocket';
+                last WS_CHECK unless $con =~ /,[\x09\x20]*upgrade[\x09\x20]*,/;
+
+                last WS_CHECK unless @{$headers{'sec-websocket-key'} or []} == 1;
+                $req->{ws_key} = $headers{'sec-websocket-key'}->[0];
+                ## 16 bytes (unencoded) = 3*5+1 = 4*5+4 (encoded)
+                last WS_CHECK unless $req->{ws_key} =~ m{\A[A-Za-z0-9+/]{22}==\z};
+
+                last WS_CHECK unless @{$headers{'sec-websocket-version'} or []} == 1;
+                my $ver = $headers{'sec-websocket-version'}->[0];
+                unless ($ver eq '13') {
+                  $status = 426;
+                  last WS_CHECK;
+                }
+
+                $self->{ws_protos} = [grep { length $_ } split /[\x09\x20]*,[\x09\x20]*/, join ',', '', @{$headers{'sec-websocket-protocol'} or []}, ''];
+
+                # XXX
+                #my $exts = [grep { length $_ } split /[\x09\x20]*,[\x09\x20]*/, join ',', '', @{$headers{'sec-websocket-extensions'} or []}, ''];
+
+                last WS_OK;
+              } # WS_CHECK
+
+              if ($status == 426) {
+                return $self->_426 ($req);
+              } else {
+                return $self->_fatal ($req);
+              }
+            } # WS_OK
+          } elsif (@{$headers{upgrade} or []}) {
+            return $self->_fatal ($req);
+          }
+
+          ## Transfer-Encoding:
+          if (@{$headers{'transfer-encoding'} or []}) {
+            return $self->_411 ($req);
+          }
+
           ## Content-Length:
-          if (@length == 1 and $length[0] =~ /\A[0-9]+\z/) {
-            my $l = 0+$length[0];
+          if (@{$headers{'content-length'} or []} == 1 and
+              $headers{'content-length'}->[0] =~ /\A[0-9]+\z/) {
+            my $l = 0+$headers{'content-length'}->[0];
             AE::postpone {
               $self->{cb}->($self, 'requestheaders', $req);
               $self->{cb}->($self, 'datastart');
@@ -223,7 +266,7 @@ sub _ondata ($$) {
               $self->{unread_length} = $l;
               $self->{state} = 'request body';
             }
-          } elsif (@length) {
+          } elsif (@{$headers{'content-length'} or []}) {
             return $self->_fatal ($req);
           } else {
             if ($req->{method} eq 'CONNECT') {
@@ -362,8 +405,8 @@ sub _done ($$$) {
   };
 } # _done
 
-sub _send_error ($$$$) {
-  my ($self, $req, $status, $status_text) = @_;
+sub _send_error ($$$$;$) {
+  my ($self, $req, $status, $status_text, $headers) = @_;
   my $res = qq{<!DOCTYPE html><html>
 <head><title>$status $status_text</title></head>
 <body>$status $status_text};
@@ -372,10 +415,10 @@ sub _send_error ($$$$) {
   $req->send_response_headers
       ({status => $status, status_text => $status_text,
         headers => [
+          @{$headers or []},
           ['Content-Type' => 'text/html; charset=utf-8'],
         ]}, close => 1, content_length => length $res);
-  $self->{transport}->push_write (\$res)
-      unless $req->{method} eq 'HEAD';
+  $req->send_response_data (\$res) unless $req->{method} eq 'HEAD';
 } # _send_error
 
 sub _fatal ($$) {
@@ -405,6 +448,16 @@ sub _414 ($$) {
   $req->close_response;
 } # _414
 
+sub _426 ($$) {
+  my ($self, $req) = @_;
+  $self->_request_done ($req);
+  $self->_send_error ($req, 426, 'Upgrade Required', [
+    ['Upgrade', 'websocket'],
+    ['Sec-WebSocket-Version', '13'],
+  ]) unless $self->{write_closed};
+  $req->close_response;
+} # _426
+
 sub DESTROY ($) {
   local $@;
   eval { die };
@@ -414,6 +467,8 @@ sub DESTROY ($) {
 
 package Web::Transport::HTTPServerConnection::Request;
 use Carp qw(carp croak);
+use Digest::SHA qw(sha1);
+use MIME::Base64 qw(encode_base64);
 
 sub send_response_headers ($$$;%) {
   my ($req, $response, %args) = @_;
@@ -421,6 +476,7 @@ sub send_response_headers ($$$;%) {
   $req->{close_after_response} = 1 if $args{close} or $req->{version} == 0.9;
   my $done = 0;
   my $connect = 0;
+  my $ws = 0;
   if ($req->{method} eq 'HEAD' or
       $response->{status} == 304) {
     ## No response body by definition
@@ -437,6 +493,12 @@ sub send_response_headers ($$$;%) {
   } elsif (100 <= $response->{status} and $response->{status} < 200) {
     ## No response body by definition
     croak "|content_length| not allowed" if defined $args{content_length};
+    if (defined $req->{ws_key} and $response->{status} == 101) {
+      $ws = 1;
+      $req->{write_mode} = 'ws';
+    } else {
+      croak "1xx response not supported";
+    }
     $done = 1;
   } else {
     if (defined $args{content_length}) {
@@ -461,16 +523,25 @@ sub send_response_headers ($$$;%) {
         $response->{status_text};
     my @header;
     push @header, ['Server', 'Server/1'], ['Date', 'XXX'];
-    if ($req->{close_after_response} and not $connect) {
-      push @header, ['Connection', 'close'];
-    } elsif ($req->{version} == 1.0) {
-      push @header, ['Connection', 'keep-alive'];
-    }
-    if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
-      push @header, ['Transfer-Encoding', 'chunked'];
-    }
-    if (defined $req->{write_length}) {
-      push @header, ['Content-Length', $req->{write_length}];
+    if ($ws) {
+      push @header,
+          ['Upgrade', 'websocket'],
+          ['Connection', 'Upgrade'],
+          ['Sec-WebSocket-Accept', encode_base64 sha1 ($req->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')];
+      # XXX Sec-WebSocket-Protocol
+      # XXX Sec-WebSocket-Extensions
+    } else {
+      if ($req->{close_after_response} and not $connect) {
+        push @header, ['Connection', 'close'];
+      } elsif ($req->{version} == 1.0) {
+        push @header, ['Connection', 'keep-alive'];
+      }
+      if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
+        push @header, ['Transfer-Encoding', 'chunked'];
+      }
+      if (defined $req->{write_length}) {
+        push @header, ['Content-Length', $req->{write_length}];
+      }
     }
     for (@header, @{$response->{headers}}) {
       $res .= "$_->[0]: $_->[1]\x0D\x0A";
@@ -507,6 +578,9 @@ sub send_response_data ($$) {
     if (defined $req->{write_length} and $req->{write_length} <= 0) {
       $req->close_response;
     }
+  } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'ws') {
+#XXX
+
   } else {
     croak "Not writable for now";
   }
@@ -524,6 +598,9 @@ sub close_response ($;$) {
   if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
     # XXX trailer headers
     $req->{connection}->{transport}->push_write (\"0\x0A");
+  } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'ws') {
+    #XXX
+
   }
   if (delete $req->{close_after_response}) {
     $req->{connection}->{transport}->push_shutdown
@@ -546,7 +623,6 @@ sub DESTROY ($) {
       if $@ =~ /during global destruction/;
 } # DESTROY
 
-# XXX WS
 # XXX leaking
 # XXX reset
 # XXX sketch/server.pl

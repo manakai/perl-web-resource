@@ -3,8 +3,9 @@ use warnings;
 use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Web::URL;
-use Web::Transport::ConnectionClient;
 use Web::Transport::TCPTransport;
+use Web::Transport::ConnectionClient;
+use Web::Transport::WSClient;
 use Test::X1;
 use Test::More;
 
@@ -38,6 +39,7 @@ use Test::More;
 }
 
 my $Origin;
+my $WSOrigin;
 my $HandleRequestHeaders = {};
 {
   use AnyEvent::Socket;
@@ -45,6 +47,7 @@ my $HandleRequestHeaders = {};
   my $host = '127.0.0.1';
   my $port = find_listenable_port;
   $Origin = Web::URL->parse_string ("http://$host:$port");
+  $WSOrigin = Web::URL->parse_string ("ws://$host:$port");
 
   my $cb = sub {
     my ($self, $type, $req) = @_;
@@ -962,6 +965,73 @@ Content-Type: text/html; charset=utf-8\x0D
     undef $c;
   });
 } n => 2, name => 'CONNECT HTTP/1.1 bad Content-Length';
+
+test {
+  my $c = shift;
+  my $serverreq;
+  $HandleRequestHeaders->{'/hoge32'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 200, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga32'],
+        ]});
+    $req->send_response_data (\'abc');
+    $req->send_response_data (\'');
+    $req->send_response_data (\'xyz');
+    $req->close_response;
+    $serverreq = $req;
+  };
+
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (q</hoge32>, $WSOrigin),
+    cb => sub {
+      test {
+        ok 0;
+      } $c;
+    },
+  )->then (sub {
+    test {
+      is $serverreq->{body}, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'WS not handshake-able endpoint';
+
+test {
+  my $c = shift;
+  my $serverreq;
+  $HandleRequestHeaders->{'/hoge33'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga33'],
+        ]}, ws => 1);
+    $req->close_response;
+    $serverreq = $req;
+  };
+
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (q</hoge33>, $WSOrigin),
+    cb => sub {
+      test {
+        ok 0;
+      } $c;
+    },
+  )->then (sub {
+    test {
+      is $serverreq->{body}, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'WS handshaked';
+
+# XXX CONNECT request-target
+# XXX  CONNECT closing
+# XXX CONNECT content_length
+# XXX non-WS 1xx
+# XXX WS handshake bad requests
 
 run_tests;
 

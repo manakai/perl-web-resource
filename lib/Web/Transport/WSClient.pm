@@ -66,6 +66,8 @@ sub new ($%) {
           $in_ws = 1;
           return $cb->($self, undef, undef);
         }
+      } else {
+        return $self->{client}->abort (message => "WebSocket handshake failed");
       }
     })->then (sub {
       my ($response, $result) = @{$_[0]};

@@ -3884,11 +3884,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'testfontstream' => {},
                                             'tex' => {},
                                             'texinfo' => {},
-                                            'text' => {
-                                                        'related' => {
-                                                                       'application/octet-stream' => {}
-                                                                     }
-                                                      },
+                                            'text' => {},
                                             'tga' => {
                                                        'related' => {
                                                                       'image/x-targa' => {}
@@ -4867,6 +4863,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'iana_intended_usage' => 'common',
                                                               'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.cybank'
                                                             },
+                                            'vnd.d2l.coursepackage1p0+zip' => {
+                                                                                'iana' => 'permanent',
+                                                                                'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.d2l.coursepackage1p0+zip'
+                                                                              },
                                             'vnd.dart' => {
                                                             'compressible' => 1,
                                                             'iana' => 'permanent',

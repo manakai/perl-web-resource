@@ -22,10 +22,6 @@
 	path = modules/web-encodings
 	url = git://github.com/manakai/perl-web-encodings
 	track = master
-[submodule "modules/charclass"]
-	path = modules/charclass
-	url = git://github.com/wakaba/perl-charclass
-	track = master
 [submodule "modules/web-datetime"]
 	path = modules/web-datetime
 	url = git://github.com/manakai/perl-web-datetime

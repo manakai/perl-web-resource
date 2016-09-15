@@ -142,6 +142,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga3'],
         ]});
+    $req->send_response_data (\'');
     $req->send_response_data (\'abcde3');
     $req->close_response;
   };
@@ -153,7 +154,8 @@ test {
       is $res->status, 201;
       is $res->status_text, 'OK';
       is $res->header ('Hoge'), 'Fuga3';
-      is $res->header ('Connection'), 'close';
+      is $res->header ('Connection'), undef;
+      is $res->header ('Transfer-Encoding'), 'chunked';
       is $res->body_bytes, 'abcde3';
     } $c;
   }, sub {
@@ -166,7 +168,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 5, name => 'no Content-Length, with body, no explicit close=>1';
+} n => 6, name => 'no Content-Length, with body, no explicit close=>1', timeout => 120;
 
 test {
   my $c = shift;
@@ -237,7 +239,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
     } $c;
-    return $http->request (path => ['hoge6']);
+    return $http->request (path => ['hoge6'], headers => {connection => 'close'});
   })->then (sub {
     my $res = $_[0];
     test {
@@ -726,6 +728,115 @@ test {
     undef $c;
   });
 } n => 6, name => 'send utf8 data';
+
+test {
+  my $c = shift;
+  my $x;
+  $HandleRequestHeaders->{'/hoge25'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 304, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga25'],
+        ]}, content_length => 5);
+    eval {
+      $req->send_response_data (\'abcde');
+    };
+    $x = $@;
+    $req->close_response;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => ['hoge25'])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 304;
+      is $res->status_text, 'OK';
+      is $res->header ('Hoge'), 'Fuga25';
+      is $res->header ('Connection'), undef;
+      is $res->header ('Content-Length'), '5';
+      is $res->body_bytes, '';
+      like $x, qr{^Not writable for now at .+ line @{[__LINE__-16]}};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 7, name => '304 with Content-Length';
+
+test {
+  my $c = shift;
+  my $x;
+  $HandleRequestHeaders->{'/hoge26'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 304, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga26'],
+        ]}, content_length => 0);
+    eval {
+      $req->send_response_data (\'abcde');
+    };
+    $x = $@;
+    $req->close_response;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => ['hoge26'])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 304;
+      is $res->status_text, 'OK';
+      is $res->header ('Hoge'), 'Fuga26';
+      is $res->header ('Connection'), undef;
+      is $res->header ('Content-Length'), '0';
+      is $res->body_bytes, '';
+      like $x, qr{^Not writable for now at .+ line @{[__LINE__-16]}};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 7, name => '304 with Content-Length=0';
+
+test {
+  my $c = shift;
+  $HandleRequestHeaders->{'/hoge27'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga27'],
+        ]});
+    $req->send_response_data (\'abc');
+    $req->send_response_data (\'');
+    $req->send_response_data (\'xyz');
+    $req->close_response;
+  };
+
+  rawtcp (qq{GET /hoge27 HTTP/1.0\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
+Connection: close\x0D
+Hoge: Fuga27\x0D
+\x0D
+abcxyz\z};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'HTTP/1.0 response with data without Content-Length';
 
 run_tests;
 

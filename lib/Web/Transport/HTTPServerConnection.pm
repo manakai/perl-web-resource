@@ -365,7 +365,7 @@ sub _fatal ($$) {
   $self->{state} = 'end';
   $self->{rbuf} = '';
   $self->_send_error ($req, 400, 'Bad Request') unless $self->{write_closed};
-  $req->_response_done;
+  $req->close_response;
 } # _fatal
 
 sub _411 ($$) {
@@ -373,7 +373,7 @@ sub _411 ($$) {
   $self->_request_done ($req);
   $self->_send_error ($req, 411, 'Length Required')
       unless $self->{write_closed};
-  $req->_response_done;
+  $req->close_response;
 } # _411
 
 sub _414 ($$) {
@@ -383,7 +383,7 @@ sub _414 ($$) {
   $self->_request_done ($req);
   $self->_send_error ($req, 414, 'Request-URI Too Large')
       unless $self->{write_closed};
-  $req->_response_done;
+  $req->close_response;
 } # _414
 
 sub DESTROY ($) {
@@ -402,11 +402,17 @@ sub send_response_headers ($$$;%) {
   $req->{close_after_response} = 1 if $args{close} or $req->{version} == 0.9;
   my $done = 0;
   if ($req->{method} eq 'HEAD' or
-      ($req->{method} eq 'CONNECT' and
-       200 <= $response->{status} and $response->{status} < 300) or
-      $response->{status} == 304 or
-      (100 <= $response->{status} and $response->{status} < 200)) {
+      $response->{status} == 304) {
     ## No response body by definition
+    if (defined $args{content_length}) {
+      $req->{write_length} = 0+$args{content_length};
+    }
+    $done = 1;
+  } elsif (($req->{method} eq 'CONNECT' and
+            200 <= $response->{status} and $response->{status} < 300) or
+           (100 <= $response->{status} and $response->{status} < 200)) {
+    ## No response body by definition
+    croak "|content_length| not allowed" if defined $args{content_length};
     $done = 1;
   } else {
     if (defined $args{content_length}) {
@@ -414,9 +420,9 @@ sub send_response_headers ($$$;%) {
       $req->{write_mode} = 'raw';
       $req->{write_length} = 0+$args{content_length};
       $done = 1 if $req->{write_length} <= 0;
-
-    ## Otherwise, if chunked encoding can be used
-#XXX
+    } elsif ($req->{version} == 1.1) {
+      ## Otherwise, if chunked encoding can be used
+      $req->{write_mode} = 'chunked';
     } else {
       ## Otherwise, end of the response is the termination of the connection
       $req->{close_after_response} = 1;
@@ -436,6 +442,9 @@ sub send_response_headers ($$$;%) {
     } elsif ($req->{version} == 1.0) {
       push @header, ['Connection', 'keep-alive'];
     }
+    if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
+      push @header, ['Transfer-Encoding', 'chunked'];
+    }
     if (defined $req->{write_length}) {
       push @header, ['Content-Length', $req->{write_length}];
     }
@@ -446,13 +455,22 @@ sub send_response_headers ($$$;%) {
     $req->{connection}->{transport}->push_write (\$res);
   }
 
-  $req->_response_done if $done;
+  if ($done) {
+    delete $req->{write_length};
+    $req->close_response;
+  }
 } # send_response_headers
 
 sub send_response_data ($$) {
   my ($req, $ref) = @_;
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
-  if (defined $req->{write_mode} and $req->{write_mode} eq 'raw') {
+  if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
+    if (length $$ref) {
+      $req->{connection}->{transport}->push_write (\sprintf "%X\x0D\x0A", length $$ref);
+      $req->{connection}->{transport}->push_write ($ref);
+      $req->{connection}->{transport}->push_write (\"\x0A");
+    }
+  } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'raw') {
     if (defined $req->{write_length}) {
       if ($req->{write_length} >= length $$ref) {
         $req->{write_length} -= length $$ref;
@@ -463,21 +481,14 @@ sub send_response_data ($$) {
     }
     $req->{connection}->{transport}->push_write ($ref);
     if (defined $req->{write_length} and $req->{write_length} <= 0) {
-      $req->_response_done;
+      $req->close_response;
     }
   } else {
     croak "Not writable for now";
   }
 } # send_response_data
 
-sub close_response ($;%) {
-  my ($req) = @_;
-  # XXX trailer headers
-
-  $req->_response_done;
-} # close_response
-
-sub _response_done ($;$) {
+sub close_response ($;$) {
   my ($req, $exit) = @_;
   if (defined $req->{connection}) {
     if (defined $req->{write_length} and
@@ -485,6 +496,10 @@ sub _response_done ($;$) {
       carp sprintf "Truncated end of sent data (%d more bytes expected)",
           $req->{write_length};
       $req->{close_after_response} = 1;
+    }
+    if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
+      # XXX trailer headers
+      $req->{connection}->{transport}->push_write (\"0\x0A");
     }
     if (delete $req->{close_after_response}) {
       $req->{connection}->{transport}->push_shutdown

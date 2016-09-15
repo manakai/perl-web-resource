@@ -394,7 +394,7 @@ sub DESTROY ($) {
 } # DESTROY
 
 package Web::Transport::HTTPServerConnection::Request;
-use Carp qw(croak);
+use Carp qw(carp croak);
 
 sub send_response_headers ($$$;%) {
   my ($req, $response, %args) = @_;
@@ -451,7 +451,7 @@ sub send_response_headers ($$$;%) {
 
 sub send_response_data ($$) {
   my ($req, $ref) = @_;
-  # XXX error if utf8
+  croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   if (defined $req->{write_mode} and $req->{write_mode} eq 'raw') {
     if (defined $req->{write_length}) {
       if ($req->{write_length} >= length $$ref) {
@@ -470,13 +470,20 @@ sub send_response_data ($$) {
   }
 } # send_response_data
 
-# XXX close API
+sub close_response ($;%) {
+  my ($req) = @_;
+  # XXX trailer headers
+
+  $req->_response_done;
+} # close_response
 
 sub _response_done ($;$) {
   my ($req, $exit) = @_;
   if (defined $req->{connection}) {
     if (defined $req->{write_length} and
         $req->{write_length} > 0) {
+      carp sprintf "Truncated end of sent data (%d more bytes expected)",
+          $req->{write_length};
       $req->{close_after_response} = 1;
     }
     if (delete $req->{close_after_response}) {

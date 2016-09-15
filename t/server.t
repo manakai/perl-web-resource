@@ -4,6 +4,7 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Web::URL;
 use Web::Transport::ConnectionClient;
+use Web::Transport::TCPTransport;
 use Test::X1;
 use Test::More;
 
@@ -73,7 +74,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga'],
         ]}, close => 1);
-    $req->_response_done;
+    $req->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -107,7 +108,8 @@ test {
           ['Hoge', 'Fuga2'],
         ]}, close => 1);
     $req->send_response_data (\'abcde');
-    $req->_response_done;
+    $req->close_response;
+    $req->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -141,7 +143,7 @@ test {
           ['Hoge', 'Fuga3'],
         ]});
     $req->send_response_data (\'abcde3');
-    $req->_response_done;
+    $req->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -179,7 +181,7 @@ test {
       $req->send_response_data (\'abcde4');
     };
     $x = $@;
-    $req->_response_done;
+    $req->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -213,7 +215,7 @@ test {
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga5'],
         ]});
-    $req->_response_done;
+    $req->close_response;
   };
   $HandleRequestHeaders->{'/hoge6'} = sub {
     my ($self, $req) = @_;
@@ -222,7 +224,7 @@ test {
           ['Hoge', 'Fuga6'],
         ]});
     $req->send_response_data (\'abcde6');
-    $req->_response_done;
+    $req->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -270,7 +272,7 @@ test {
       $req->send_response_data (\'abcde7');
     };
     $x = $@;
-    $req->_response_done;
+    $req->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -306,6 +308,7 @@ test {
           ['Hoge', 'Fuga8'],
         ]}, content_length => 12);
     $req->send_response_data (\'abcde8');
+    $req->send_response_data (\'');
     $req->send_response_data (\'abcde9');
     eval {
       $req->send_response_data (\'abcde10');
@@ -476,7 +479,7 @@ test {
           ['Hoge', 'Fuga17'],
         ]}, content_length => 10);
     $req->send_response_data (\'abc17');
-    $req->_response_done;
+    $req->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -485,15 +488,6 @@ test {
     test {
       ok $res->is_network_error;
       is $res->network_error_message, 'Connection truncated';
-
-      # XXX
-      #is $res->status, 201;
-      #is $res->status_text, 'OK';
-      #is $res->header ('Hoge'), 'Fuga16';
-      #is $res->header ('Connection'), undef;
-      #is $res->header ('Content-Length'), '10';
-      #is $res->body_bytes, 'abc17';
-      #ok $res->incomplete;
     } $c;
   }, sub {
     test {
@@ -507,6 +501,231 @@ test {
   });
 } n => 2, name => 'closed before data is sent enough';
 
+sub rawtcp ($) {
+  my $input = $_[0];
+  my $tcp = Web::Transport::TCPTransport->new (host => $Origin->host, port => $Origin->port);
+  my $data = '';
+  my $p = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        $tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      return $tcp->push_write (\$input);
+    });
+  });
+  return $p;
+} # rawtcp
+
+test {
+  my $c = shift;
+  $HandleRequestHeaders->{'/hoge18'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga18'],
+        ]}, content_length => 5);
+    $req->send_response_data (\'abc18');
+  };
+
+  rawtcp (qq{GET /hoge18\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      is $data, q{abc18};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'HTTP/0.9 response with data';
+
+test {
+  my $c = shift;
+  $HandleRequestHeaders->{'/hoge19'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga19'],
+        ]});
+    $req->send_response_data (\'abc19');
+    $req->close_response;
+  };
+
+  rawtcp (qq{GET /hoge19\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      is $data, q{abc19};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'HTTP/0.9 response with data, without length';
+
+test {
+  my $c = shift;
+  $HandleRequestHeaders->{'/hoge20'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga19'],
+        ]});
+    $req->send_response_data (\'abc19');
+    $req->close_response;
+  };
+
+  rawtcp (qq{HEAD /hoge20\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      is $data, q{<!DOCTYPE html><html>
+<head><title>400 Bad Request</title></head>
+<body>400 Bad Request</body></html>
+};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'HTTP/0.9 HEAD request';
+
+test {
+  my $c = shift;
+  $HandleRequestHeaders->{'/hoge21'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga21'],
+        ]});
+    $req->send_response_data (\'abc21');
+    $req->send_response_data (\'abc');
+    $req->send_response_data (\'xyz');
+    $req->close_response;
+  };
+
+  rawtcp (qq{GET /hoge21\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      is $data, q{abc21abcxyz};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'HTTP/0.9 response with data';
+
+test {
+  my $c = shift;
+  $HandleRequestHeaders->{'/hoge22'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga22'],
+        ]}, content_length => 10);
+    $req->send_response_data (\'abc22');
+    $req->close_response;
+  };
+
+  rawtcp (qq{GET /hoge22 HTTP/1.0\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
+Connection: close\x0D
+Content-Length: 10\x0D
+Hoge: Fuga22\x0D
+\x0D
+abc22\z};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'HTTP/1.0 early closure';
+
+test {
+  my $c = shift;
+  my $x;
+  $HandleRequestHeaders->{'/hoge23'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga23'],
+        ]}, close => 1);
+    $req->send_response_data (\'abc23');
+    $req->close_response;
+    eval {
+      $req->send_response_data (\'xyz');
+    };
+    $x = $@;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => ['hoge23'])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 201;
+      is $res->status_text, 'OK';
+      is $res->header ('Hoge'), 'Fuga23';
+      is $res->header ('Connection'), 'close';
+      is $res->body_bytes, 'abc23';
+      like $x, qr{^Not writable for now at .+ line @{[__LINE__-14]}};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'send after close not allowed';
+
+test {
+  my $c = shift;
+  my $x;
+  $HandleRequestHeaders->{'/hoge24'} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga24'],
+        ]}, content_length => 12);
+    $req->send_response_data (\'abcd24');
+    eval {
+      $req->send_response_data (\"\x{5000}");
+    };
+    $req->send_response_data (\'abcdee');
+    $x = $@;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => ['hoge24'])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 201;
+      is $res->status_text, 'OK';
+      is $res->header ('Hoge'), 'Fuga24';
+      is $res->header ('Connection'), undef;
+      is $res->body_bytes, 'abcd24abcdee';
+      like $x, qr{^Data is utf8-flagged at .+ line @{[__LINE__-15]}};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'send utf8 data';
 
 run_tests;
 

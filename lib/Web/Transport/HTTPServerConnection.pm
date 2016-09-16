@@ -51,6 +51,7 @@ sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
 sub _new_req ($) {
   my $self = $_[0];
   my $req = $self->{request} = bless {
+    is_server => 1,
     connection => $self, headers => [],
     # method target version
   }, __PACKAGE__ . '::Request';
@@ -252,16 +253,29 @@ sub _ondata ($$) {
           if (@{$headers{'content-length'} or []} == 1 and
               $headers{'content-length'}->[0] =~ /\A[0-9]+\z/) {
             my $l = 0+$headers{'content-length'}->[0];
-            AE::postpone {
-              $self->{cb}->($self, 'requestheaders', $req);
-              $self->{cb}->($self, 'datastart');
-            };
             if ($req->{method} eq 'CONNECT') {
+              AE::postpone {
+                $self->{cb}->($self, 'requestheaders', $req);
+                $self->{cb}->($self, 'datastart');
+              };
               $self->{state} = 'request body';
             } elsif ($l == 0) {
-              AE::postpone { $self->{cb}->($self, 'dataend') };
-              $self->_request_done ($req);
+              AE::postpone {
+                $self->{cb}->($self, 'requestheaders', $req);
+                $self->{cb}->($self, 'datastart');
+                $self->{cb}->($self, 'dataend');
+              };
+              if (defined $req->{ws_key}) {
+                $self->{state} = 'ws handshaking';
+                $self->{request}->{close_after_response} = 1;
+              } else {
+                $self->_request_done ($req);
+              }
             } else {
+              AE::postpone {
+                $self->{cb}->($self, 'requestheaders', $req);
+                $self->{cb}->($self, 'datastart');
+              };
               $req->{body_length} = $l;
               $self->{unread_length} = $l;
               $self->{state} = 'request body';
@@ -275,6 +289,10 @@ sub _ondata ($$) {
                 $self->{cb}->($self, 'datastart');
               };
               $self->{state} = 'request body';
+            } elsif (defined $req->{ws_key}) {
+              AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
+              $self->{state} = 'ws handshaking';
+              $self->{request}->{close_after_response} = 1;
             } else {
               AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
               $self->_request_done ($req);
@@ -310,7 +328,12 @@ sub _ondata ($$) {
           $self->{cb}->($self, 'data', $self->{request}, $$ref);
           $self->{cb}->($self, 'dataend');
         };
-        $self->_request_done ($self->{request});
+        if (defined $self->{request}->{ws_key}) {
+          $self->{state} = 'ws handshaking';
+          $self->{request}->{close_after_response} = 1;
+        } else {
+          $self->_request_done ($self->{request});
+        }
       } elsif ($self->{unread_length} < $in_length) { # has redundant data
         $self->{request}->{incomplete} = 1;
         $self->{request}->{close_after_response} = 1;
@@ -318,7 +341,12 @@ sub _ondata ($$) {
           $self->{cb}->($self, 'data', $self->{request}, substr ($$ref, 0, $self->{unread_length}));
           $self->{cb}->($self, 'dataend');
         };
-        $self->_request_done ($self->{request});
+        if (defined $self->{request}->{ws_key}) {
+          $self->{state} = 'ws handshaking';
+          $self->{request}->{close_after_response} = 1;
+        } else {
+          $self->_request_done ($self->{request});
+        }
         return;
       } else { # unread_length > $in_length
         AE::postpone {
@@ -327,6 +355,13 @@ sub _ondata ($$) {
         $self->{unread_length} -= $in_length;
         return;
       }
+    } elsif ($self->{state} eq 'before ws frame' or
+             $self->{state} eq 'ws data' or
+             $self->{state} eq 'ws terminating') {
+      return $self->{request}->_ws_received ($inref);
+    } elsif ($self->{state} eq 'ws handshaking') {
+      return unless length $$inref;
+      return $self->_fatal ($self->{request});
     } elsif ($self->{state} eq 'end') {
       return;
     } else {
@@ -357,6 +392,13 @@ sub _oneof ($$) {
     }
     AE::postpone { $self->{cb}->($self, 'dataend') };
     $self->_request_done ($self->{request}, $exit);
+  } elsif ($self->{state} eq 'before ws frame' or
+           $self->{state} eq 'ws data' or
+           $self->{state} eq 'ws terminating') {
+    $self->{exit} = $exit; # XXX
+    return $self->{request}->_ws_received_eof (\'');
+  } elsif ($self->{state} eq 'ws handshaking') {
+    return $self->_fatal ($self->{request});
   } elsif ($self->{state} eq 'after request') {
     if (length $self->{rbuf}) {
       my $req = $self->_new_req;
@@ -401,7 +443,10 @@ sub _done ($$$) {
     $self->{state} = 'end';
   }
   AE::postpone {
-    $self->{cb}->($self, 'complete', $exit);
+    $self->{cb}->($self, 'complete', $exit)
+
+if $self->{cb}  # XXX
+;
   };
 } # _done
 
@@ -466,9 +511,13 @@ sub DESTROY ($) {
 } # DESTROY
 
 package Web::Transport::HTTPServerConnection::Request;
+use Web::Transport::HTTPStream;
+push our @ISA, qw(Web::Transport::HTTPStream);
 use Carp qw(carp croak);
 use Digest::SHA qw(sha1);
 use MIME::Base64 qw(encode_base64);
+
+use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
 sub send_response_headers ($$$;%) {
   my ($req, $response, %args) = @_;
@@ -496,10 +545,11 @@ sub send_response_headers ($$$;%) {
     if (defined $req->{ws_key} and $response->{status} == 101) {
       $ws = 1;
       $req->{write_mode} = 'ws';
+      $req->{ws_state} = 'OPEN';
+      $req->{connection}->{state} = 'before ws frame';
     } else {
       croak "1xx response not supported";
     }
-    $done = 1;
   } else {
     if (defined $args{content_length}) {
       ## If body length is specified
@@ -527,7 +577,7 @@ sub send_response_headers ($$$;%) {
       push @header,
           ['Upgrade', 'websocket'],
           ['Connection', 'Upgrade'],
-          ['Sec-WebSocket-Accept', encode_base64 sha1 ($req->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')];
+          ['Sec-WebSocket-Accept', encode_base64 sha1 ($req->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), ''];
       # XXX Sec-WebSocket-Protocol
       # XXX Sec-WebSocket-Extensions
     } else {
@@ -579,6 +629,8 @@ sub send_response_data ($$) {
       $req->close_response;
     }
   } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'ws') {
+    croak "Not writable for now"
+        unless $req->{ws_state} eq 'OPEN';
 #XXX
 
   } else {
@@ -586,8 +638,8 @@ sub send_response_data ($$) {
   }
 } # send_response_data
 
-sub close_response ($;$) {
-  my ($req, $exit) = @_;
+sub close_response ($;%) {
+  my ($req, %args) = @_;
   return unless defined $req->{connection};
   if (defined $req->{write_length} and $req->{write_length} > 0) {
     carp sprintf "Truncated end of sent data (%d more bytes expected)",
@@ -601,6 +653,45 @@ sub close_response ($;$) {
   } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'ws') {
     #XXX
 
+    my $self = $req;
+  if (defined $args{status} and $args{status} > 0xFFFF) {
+    return Promise->reject ("Bad status");
+  }
+  if (defined $args{reason}) {
+    return Promise->reject ("Reason is utf8-flagged")
+        if utf8::is_utf8 $args{reason};
+    return Promise->reject ("Reason is too long")
+        if 0x7D < length $args{reason};
+  }
+
+  if (defined $self->{ws_state} and
+      ($self->{ws_state} eq 'OPEN' or
+       $self->{ws_state} eq 'CONNECTING')) {
+    my $data = '';
+    if (defined $args{status}) {
+      $data = pack 'n', $args{status};
+      $data .= $args{reason} if defined $args{reason};
+    }
+    my $mask = '';
+    my $frame = pack ('CC', 0b10000000 | 8, 0 | length $data) . $mask . $data;
+    if ($self->{ws_state} eq 'CONNECTING') {
+      $self->{pending_frame} = $frame;
+      $self->{pending_frame_info} = [$args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}] if DEBUG;
+    } else {
+      $self->_ws_debug ('S', $args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}) if DEBUG;
+      $req->{connection}->{transport}->push_write (\$frame);
+      $self->{ws_state} = 'CLOSING';
+      $self->{timer} = AE::timer 20, 0, sub {
+        warn "$self->{request}->{id}: WS timeout (20)\n" if DEBUG;
+        # XXX set exit ?
+        #$self->_next;
+        delete $self->{timer};
+      };
+      #XXX$self->_ev ('closing');
+    }
+  }
+
+
   }
   if (delete $req->{close_after_response}) {
     $req->{connection}->{transport}->push_shutdown
@@ -609,12 +700,12 @@ sub close_response ($;$) {
     $req->{connection}->{state} = 'end';
   }
   if (defined $req->{res_done}) {
-    (delete $req->{res_done})->($exit);
+    (delete $req->{res_done})->({});
   }
   delete $req->{connection};
   delete $req->{write_mode};
   delete $req->{write_length};
-} # _response_done
+} # close_response
 
 sub DESTROY ($) {
   local $@;

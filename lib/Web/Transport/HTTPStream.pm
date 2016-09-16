@@ -38,6 +38,7 @@ sub _ws_received ($;%) {
     if ($self->{state} eq 'before ws frame') {
       my $rlength = length $$ref;
       last WS if $rlength < 2;
+
       my $b1 = ord substr $$ref, 0, 1;
       my $b2 = ord substr $$ref, 1, 1;
       my $fin = $b1 & 0b10000000;
@@ -78,13 +79,18 @@ sub _ws_received ($;%) {
       if ($mask) {
         last WS unless $rlength >= pos ($$ref) + 4;
         $self->{ws_decode_mask_key} = substr $$ref, pos ($$ref), 4;
+        $self->{ws_read_length} = 0;
         pos ($$ref) += 4;
-        # XXX if client,
-        $ws_failed = 'Masked frame from server';
-        last WS;
+        unless ($self->{is_server}) {
+          $ws_failed = 'Masked frame from server';
+          last WS;
+        }
       } else {
         delete $self->{ws_decode_mask_key};
-        # XXX error if server
+        if ($self->{is_server}) {
+          $ws_failed = 'WebSocket Protocol Error';
+          last WS;
+        }
       }
       $self->_ws_debug ('R', '',
                         FIN => !!$fin,
@@ -129,8 +135,15 @@ sub _ws_received ($;%) {
     if ($self->{state} eq 'ws data') {
       if ($self->{unread_length} > 0 and
           length ($$ref) >= $self->{unread_length}) {
-        # XXX xor if ws_decode_mask_key
-        push @{$self->{ws_frame}->[1]}, substr $$ref, 0, $self->{unread_length};
+        if (defined $self->{ws_decode_mask_key}) {
+          push @{$self->{ws_frame}->[1]}, substr $$ref, 0, $self->{unread_length};
+          for (0..((length $self->{ws_frame}->[1])-1)) {
+            substr ($self->{ws_frame}->[1], $_, 1) = substr ($self->{ws_frame}->[1], $_, 1) ^ substr ($self->{ws_decode_mask_key}, ($self->{ws_read_length} + $_) % 4, 1);
+          }
+          $self->{ws_read_length} += length $self->{ws_frame}->[1];
+        } else {
+          push @{$self->{ws_frame}->[1]}, substr $$ref, 0, $self->{unread_length};
+        }
         #if (DEBUG > 1 or
         #    (DEBUG and $self->{ws_frame}->[0] >= 8)) {
         if (DEBUG and $self->{ws_frame}->[0] == 8) {
@@ -172,26 +185,36 @@ sub _ws_received ($;%) {
           unless ($self->{ws_state} eq 'CLOSING') {
             $self->{ws_state} = 'CLOSING';
             $self->_ev ('closing');
-            my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
-            for (0..((length $data)-1)) {
-              substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+            my $mask = '';
+            my $masked = 0;
+            unless ($self->{is_server}) {
+              $masked = 0b10000000;
+              $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+              for (0..((length $data)-1)) {
+                substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+              }
             }
             $self->_ws_debug ('S', defined $reason ? $reason : '',
-                              FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $status) if DEBUG;
+                              FIN => 1, opcode => 8, mask => $mask,
+                              length => length $data, status => $status)
+                if DEBUG;
             $self->{transport}->push_write
-                (\(pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
+                (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
                    $mask . $data));
           }
           $self->{state} = 'ws terminating';
           $self->{exit} = {status => defined $status ? $status : 1005,
                            reason => defined $reason ? $reason : '',
                            ws => 1, cleanly => 1};
-          # if server, $self->_next;
-          $self->{timer} = AE::timer 1, 0, sub {
-            warn "$self->{request}->{id}: WS timeout (1)\n" if DEBUG;
-            delete $self->{timer};
+          if ($self->{is_server}) {
             $self->_next;
-          };
+          } else {
+            $self->{timer} = AE::timer 1, 0, sub { # XXX
+              warn "$self->{request}->{id}: WS timeout (1)\n" if DEBUG;
+              delete $self->{timer};
+              $self->_next;
+            };
+          }
           return;
         } elsif ($self->{ws_frame}->[0] <= 2) { # 0, 1, 2
           if ($self->{ws_frame}->[2]) { # FIN
@@ -218,13 +241,19 @@ sub _ws_received ($;%) {
           }
         } elsif ($self->{ws_frame}->[0] == 9) {
           my $data = join '', @{$self->{ws_frame}->[1]};
-          my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
-          for (0..((length $data)-1)) {
-            substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+          my $mask = '';
+          my $masked = 0;
+          unless ($self->{is_server}) {
+            $masked = 0b10000000;
+            $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+            for (0..((length $data)-1)) {
+              substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+            }
           }
-          $self->_ws_debug ('S', $data, FIN => 1, opcode => 10, mask => $mask, length => length $data) if DEBUG;
+          $self->_ws_debug ('S', $data, FIN => 1, opcode => 10, mask => $mask,
+                            length => length $data) if DEBUG;
           $self->{transport}->push_write
-              (\(pack ('CC', 0b10000000 | 10, 0b10000000 | length $data) .
+              (\(pack ('CC', 0b10000000 | 10, $masked | length $data) .
                  $mask . $data));
           $self->_ev ('ping', $data, 0);
         } elsif ($self->{ws_frame}->[0] == 10) {
@@ -242,16 +271,23 @@ sub _ws_received ($;%) {
     $ws_failed = 'WebSocket Protocol Error' unless length $ws_failed;
     $ws_failed = '' if $ws_failed eq '-';
     $self->{exit} = {ws => 1, failed => 1, status => 1002, reason => $ws_failed};
-    my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
     my $data = pack 'n', $self->{exit}->{status};
     $data .= $self->{exit}->{reason};
-    for (0..((length $data)-1)) {
-      substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+    my $mask = '';
+    my $masked = 0;
+    unless ($self->{is_server}) {
+      $masked = 0b10000000;
+      $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+      for (0..((length $data)-1)) {
+        substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+      }
     }
     # length $data must be < 126
-    $self->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $self->{exit}->{status}) if DEBUG;
+    $self->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8,
+                      mask => $mask, length => length $data,
+                      status => $self->{exit}->{status}) if DEBUG;
     $self->{transport}->push_write
-        (\(pack ('CC', 0b10000000 | 8, 0b10000000 | length $data) .
+        (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
            $mask . $data));
     $self->{state} = 'ws terminating';
     $self->{no_new_request} = 1;
@@ -301,8 +337,15 @@ sub send_text_header ($$) {
       if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
          (defined $self->{request_body_length} and $self->{request_body_length} > 0);
 
-  $self->{ws_encode_mask_key} =
-  my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+  my $mask = '';
+  my $masked = 0;
+  unless ($self->{is_server}) {
+    $masked = 0b10000000;
+    $self->{ws_encode_mask_key} = $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+  } else {
+    delete $self->{ws_encode_mask_key};
+  }
+
   $self->{ws_sent_length} = 0;
   $self->{request_body_length} = $length;
 
@@ -315,9 +358,10 @@ sub send_text_header ($$) {
     $length0 = 0x7E;
     $len = pack 'Q>', $length;
   }
-  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 1, mask => $mask, length => $length) if DEBUG;
+  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 1, mask => $mask,
+                    length => $length) if DEBUG;
   $self->{transport}->push_write
-      (\(pack ('CC', 0b10000000 | 1, 0b10000000 | $length0) .
+      (\(pack ('CC', 0b10000000 | 1, $masked | $length0) .
          $len . $mask));
 } # send_text_header
 
@@ -329,8 +373,15 @@ sub send_binary_header ($$) {
       if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
          (defined $self->{request_body_length} and $self->{request_body_length} > 0);
 
-  $self->{ws_encode_mask_key} =
-  my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+  my $mask = '';
+  my $masked = 0;
+  unless ($self->{is_server}) {
+    $masked = 0b10000000;
+    $self->{ws_encode_mask_key} = $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+  } else {
+    delete $self->{ws_encode_mask_key};
+  }
+
   $self->{ws_sent_length} = 0;
   $self->{request_body_length} = $length;
 
@@ -345,7 +396,7 @@ sub send_binary_header ($$) {
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask, length => $length) if DEBUG;
   $self->{transport}->push_write
-      (\(pack ('CC', 0b10000000 | 2, 0b10000000 | $length0) .
+      (\(pack ('CC', 0b10000000 | 2, $masked | $length0) .
          $len . $mask));
 } # send_binary_header
 
@@ -358,14 +409,20 @@ sub send_ping ($;%) {
       if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
          (defined $self->{request_body_length} and $self->{request_body_length} > 0);
 
-  my $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+  my $mask = '';
+  my $masked = 0;
+  unless ($self->{is_server}) {
+    $masked = 0b10000000;
+    $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+  }
   for (0..((length $args{data})-1)) {
     substr ($args{data}, $_, 1) = substr ($args{data}, $_, 1) ^ substr ($mask, $_ % 4, 1);
   }
   my $opcode = $args{pong} ? 10 : 9;
-  $self->_ws_debug ('S', $args{data}, FIN => 1, opcode => $opcode, mask => $mask, length => length $args{data}) if DEBUG;
+  $self->_ws_debug ('S', $args{data}, FIN => 1, opcode => $opcode,
+                    mask => $mask, length => length $args{data}) if DEBUG;
   $self->{transport}->push_write
-      (\(pack ('CC', 0b10000000 | $opcode, 0b10000000 | length $args{data}) .
+      (\(pack ('CC', 0b10000000 | $opcode, $masked | length $args{data}) .
          $mask . $args{data}));
 } # send_ping
 
@@ -391,7 +448,8 @@ sub _ws_debug ($$$%) {
           ($args{RSV1} ? 'R1' : ()),
           ($args{RSV2} ? 'R2' : ()),
           ($args{RSV3} ? 'R3' : ()),
-          (defined $args{mask} ? sprintf 'mask=%02X%02X%02X%02X',
+          (defined $args{mask} && length $args{mask}
+               ? sprintf 'mask=%02X%02X%02X%02X',
                                      unpack 'CCCC', $args{mask} : ())),
       $args{length};
   if ($args{opcode} == 8 and defined $args{status}) {

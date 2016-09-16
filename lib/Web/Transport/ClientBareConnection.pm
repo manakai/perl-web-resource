@@ -291,7 +291,7 @@ sub request ($$$$$$$) {
           headers => $headers}, ws => $is_ws)->then (sub {
       return [$response, $result];
     });
-    if (defined $body_ref) {
+    if (defined $body_ref and length $$body_ref) {
       $self->{http}->send_data ($body_ref);
     }
     return $p;

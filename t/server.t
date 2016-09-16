@@ -1006,8 +1006,8 @@ test {
     $req->send_response_headers
         ({status => 101, status_text => 'OK', headers => [
           ['Hoge', 'Fuga33'],
-        ]}, ws => 1);
-    $req->close_response;
+        ]});
+    $req->close_response (status => 5678);
     $serverreq = $req;
   };
 
@@ -1015,23 +1015,535 @@ test {
     url => Web::URL->parse_string (q</hoge33>, $WSOrigin),
     cb => sub {
       test {
-        ok 0;
+        ok 1;
       } $c;
     },
   )->then (sub {
+    my $res = $_[0];
     test {
       is $serverreq->{body}, '';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, '';
     } $c;
     done $c;
     undef $c;
   });
-} n => 1, name => 'WS handshaked';
+} n => 6, name => 'WS handshaked';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0);
+    $req->close_response;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket',
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok ! $invoked;
+      is $res->status, 400;
+      is $res->status_text, 'Bad Request';
+      is $res->header ('Connection'), 'close';
+      is $res->header ('Content-Type'), 'text/html; charset=utf-8';
+      is $res->body_bytes, q{<!DOCTYPE html><html>
+<head><title>400 Bad Request</title></head>
+<body>400 Bad Request</body></html>
+};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshake error - Upgrade: websocket only';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0);
+    $req->close_response;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket',
+    Connection => 'upgrade',
+    'Sec-WebSocket-Version' => 13,
+    'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF==',
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok $invoked;
+      is $res->status, 201;
+      is $res->status_text, 'OK';
+      is $res->header ('Connection'), 'close';
+      is $res->body_bytes, q{};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'WS handshake - not handshake response';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0);
+    $req->close_response;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket',
+    Connection => 'upgrade',
+    'Sec-WebSocket-Version' => 13,
+    'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF==',
+    'Content-Length' => 42,
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok $invoked;
+      is $res->status, 201;
+      is $res->status_text, 'OK';
+      is $res->header ('Connection'), undef;
+      is $res->body_bytes, q{};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'WS handshake with Content-Length - not handshake response (no request body, timeout)', timeout => 120;
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  my $serverreq;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0, close => 1);
+    $req->close_response;
+    $serverreq = $req;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket',
+    Connection => 'upgrade',
+    'Sec-WebSocket-Version' => 13,
+    'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF==',
+  }, body => "x" x 42)->then (sub {
+    my $res = $_[0];
+    test {
+      ok $invoked;
+      is $res->status, 201;
+      is $res->status_text, 'OK';
+      is $res->header ('Connection'), 'close';
+      is $res->body_bytes, q{};
+      is $serverreq->{body}, q{x} x 42;
+    } $c;
+  }, sub {
+    my $error = $_[0];
+    test {
+      is $error, undef, 'exception';
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshake with Content-Length - not handshake response', timeout => 120;
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  my $serverreq;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0, close => 1);
+    $req->close_response;
+    $serverreq = $req;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket',
+    Connection => 'upgrade',
+    'Sec-WebSocket-Version' => 13,
+    'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF==',
+  }, body => "")->then (sub {
+    my $res = $_[0];
+    test {
+      ok $invoked;
+      is $res->status, 201;
+      is $res->status_text, 'OK';
+      is $res->header ('Connection'), 'close';
+      is $res->body_bytes, q{};
+      is $serverreq->{body}, q{};
+    } $c;
+  }, sub {
+    my $error = $_[0];
+    test {
+      is $error, undef, 'exception';
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshake with Content-Length:0 - not handshake response', timeout => 120;
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0);
+    $req->close_response;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket',
+    Connection => 'upgrade',
+    'Sec-WebSocket-Version' => 14,
+    'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF==',
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok ! $invoked;
+      is $res->status, 426;
+      is $res->status_text, 'Upgrade Required';
+      is $res->header ('Connection'), 'close';
+      is $res->header ('Upgrade'), 'websocket';
+      is $res->header ('Sec-WebSocket-Version'), '13';
+      is $res->header ('Content-Type'), 'text/html; charset=utf-8';
+      is $res->body_bytes, q{<!DOCTYPE html><html>
+<head><title>426 Upgrade Required</title></head>
+<body>426 Upgrade Required</body></html>
+};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 8, name => 'WS handshake error - Bad version';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0);
+    $req->close_response;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket',
+    Connection => 'upgrade',
+    'Sec-WebSocket-Version' => 13,
+    'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF',
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok ! $invoked;
+      is $res->status, 400;
+      is $res->status_text, 'Bad Request';
+      is $res->header ('Connection'), 'close';
+      is $res->header ('Content-Type'), 'text/html; charset=utf-8';
+      is $res->body_bytes, q{<!DOCTYPE html><html>
+<head><title>400 Bad Request</title></head>
+<body>400 Bad Request</body></html>
+};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshake error - Bad key';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0);
+    $req->close_response;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket2',
+    Connection => 'upgrade',
+    'Sec-WebSocket-Version' => 13,
+    'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF==',
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok ! $invoked;
+      is $res->status, 400;
+      is $res->status_text, 'Bad Request';
+      is $res->header ('Connection'), 'close';
+      is $res->header ('Content-Type'), 'text/html; charset=utf-8';
+      is $res->body_bytes, q{<!DOCTYPE html><html>
+<head><title>400 Bad Request</title></head>
+<body>400 Bad Request</body></html>
+};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshake error - Bad upgrade';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0);
+    $req->close_response;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket',
+    'Sec-WebSocket-Version' => 13,
+    'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF==',
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok ! $invoked;
+      is $res->status, 400;
+      is $res->status_text, 'Bad Request';
+      is $res->header ('Connection'), 'close';
+      is $res->header ('Content-Type'), 'text/html; charset=utf-8';
+      is $res->body_bytes, q{<!DOCTYPE html><html>
+<head><title>400 Bad Request</title></head>
+<body>400 Bad Request</body></html>
+};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshake error - No connection:upgrade';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0);
+    $req->close_response;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket',
+    Connection => 'upgrade',
+    'Sec-WebSocket-Version' => 13,
+    'Sec-WebSocket-Key' => ['abcdef1234567890ABCDEF==','abcdef1234567890ABCDEF=='],
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok ! $invoked;
+      is $res->status, 400;
+      is $res->status_text, 'Bad Request';
+      is $res->header ('Connection'), 'close';
+      is $res->header ('Content-Type'), 'text/html; charset=utf-8';
+      is $res->body_bytes, q{<!DOCTYPE html><html>
+<head><title>400 Bad Request</title></head>
+<body>400 Bad Request</body></html>
+};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshake error - multiple keys';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0);
+    $req->close_response;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket',
+    Connection => 'upgrade',
+    'Sec-WebSocket-Version' => 13,
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok ! $invoked;
+      is $res->status, 400;
+      is $res->status_text, 'Bad Request';
+      is $res->header ('Connection'), 'close';
+      is $res->header ('Content-Type'), 'text/html; charset=utf-8';
+      is $res->body_bytes, q{<!DOCTYPE html><html>
+<head><title>400 Bad Request</title></head>
+<body>400 Bad Request</body></html>
+};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshake error - no key';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0);
+    $req->close_response;
+    $invoked = 1;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path], headers => {
+    Upgrade => 'websocket',
+    Connection => 'upgrade',
+    'Sec-WebSocket-Version' => 13,
+    'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF==',
+    'Content-Length' => '43abx',
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok ! $invoked;
+      is $res->status, 400;
+      is $res->status_text, 'Bad Request';
+      is $res->header ('Connection'), 'close';
+      is $res->header ('Content-Type'), 'text/html; charset=utf-8';
+      is $res->body_bytes, q{<!DOCTYPE html><html>
+<head><title>400 Bad Request</title></head>
+<body>400 Bad Request</body></html>
+};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshake error - Bad Content-Length';
 
 # XXX CONNECT request-target
 # XXX  CONNECT closing
 # XXX CONNECT content_length
 # XXX non-WS 1xx
-# XXX WS handshake bad requests
+# XXX WS tests
 
 run_tests;
 

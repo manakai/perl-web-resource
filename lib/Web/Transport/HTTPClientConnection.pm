@@ -15,8 +15,10 @@ use Promise;
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
-*_e4d = *Web::Transport::HTTPStream::_e4d;
-*_e4d_t = *Web::Transport::HTTPStream::_e4d_t;
+BEGIN {
+  *_e4d = \&Web::Transport::HTTPStream::_e4d;
+  *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
+}
 
 sub new ($%) {
   my $self = bless {id => '',

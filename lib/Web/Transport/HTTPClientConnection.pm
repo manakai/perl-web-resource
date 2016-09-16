@@ -585,7 +585,7 @@ sub _next ($) {
     delete $self->{request};
     delete $self->{response};
     delete $self->{request_state};
-    delete $self->{request_body_length};
+    delete $self->{to_be_sent_length};
     if ($self->{no_new_request}) {
       my $transport = $self->{transport};
       $transport->push_shutdown unless $transport->write_to_be_closed;
@@ -778,7 +778,7 @@ sub send_request_headers ($$;%) {
       $url =~ /[\x09\x20]\z/) {
     croak "Bad |target|: |$url|";
   }
-  $self->{request_body_length} = 0;
+  $self->{to_be_sent_length} = 0;
   for (@{$req->{headers} or []}) {
     croak "Bad header name |$_->[0]|"
         unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
@@ -787,7 +787,7 @@ sub send_request_headers ($$;%) {
     my $n = $_->[0];
     $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
     if ($n eq 'content-length') {
-      $self->{request_body_length} = $_->[1]; # XXX
+      $self->{to_be_sent_length} = $_->[1]; # XXX
       # XXX throw if multiple length?
     }
   }
@@ -840,7 +840,7 @@ sub send_request_headers ($$;%) {
   }
   $self->{request_state} = 'sending headers';
   $self->{transport}->push_write (\$header);
-  if ($self->{request_body_length} <= 0) {
+  if ($self->{to_be_sent_length} <= 0) {
     $self->{transport}->push_promise->then (sub { # XXX can fail
       $self->{request_state} = 'sent';
       $self->_ev ('requestsent');
@@ -861,15 +861,15 @@ sub send_request_headers ($$;%) {
 
 sub send_data ($$;%) {
   my ($self, $ref, %args) = @_;
-  my $is_body = (defined $self->{request_body_length} and
-                 $self->{request_body_length} > 0);
+  my $is_body = (defined $self->{to_be_sent_length} and
+                 $self->{to_be_sent_length} > 0);
   my $is_tunnel = (defined $self->{state} and
                    ($self->{state} eq 'tunnel' or
                     $self->{state} eq 'tunnel sending'));
   croak "Bad state"
       if not $is_body and not $is_tunnel;
   croak "Data too large"
-      if $is_body and $self->{request_body_length} < length $$ref;
+      if $is_body and $self->{to_be_sent_length} < length $$ref;
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   return unless length $$ref;
 
@@ -887,14 +887,14 @@ sub send_data ($$;%) {
       push @data, substr ($$ref, $_, 1) ^ substr ($mask, ($o+$_) % 4, 1);
     }
     $self->{ws_sent_length} += length $$ref;
-    $self->{request_body_length} -= length $$ref;
+    $self->{to_be_sent_length} -= length $$ref;
     $self->{transport}->push_write (\join '', @data);
   } else {
     $self->{transport}->push_write ($ref);
 
     if ($is_body) {
-      $self->{request_body_length} -= length $$ref;
-      if ($self->{request_body_length} <= 0) {
+      $self->{to_be_sent_length} -= length $$ref;
+      if ($self->{to_be_sent_length} <= 0) {
         $self->{transport}->push_promise->then (sub {
           $self->{request_state} = 'sent';
           $self->_ev ('requestsent');
@@ -912,8 +912,8 @@ sub close ($;%) {
   }
   if (defined $self->{request_state} or
       (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN')) {
-    if (defined $self->{request_body_length} and
-        $self->{request_body_length} > 0) {
+    if (defined $self->{to_be_sent_length} and
+        $self->{to_be_sent_length} > 0) {
       return Promise->reject ("Body is not sent");
     }
   }
@@ -981,7 +981,7 @@ sub abort ($;%) {
 
   $self->{no_new_request} = 1;
   $self->{request_state} = 'sent';
-  delete $self->{request_body_length};
+  delete $self->{to_be_sent_length};
   $self->{transport}->abort (%args);
 
   return $self->{closed};

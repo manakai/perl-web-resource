@@ -7,13 +7,14 @@ use Promise;
 use Web::URL;
 use Web::Transport::TCPTransport;
 
+use constant DEBUG => $ENV{WEBSERVER_DEBUG} || 0;
 our $ReadTimeout ||= 60;
 
 sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
   my ($class, $fh, $client_host, $client_port, $cb) = @_;
 
   my $transport = Web::Transport::TCPTransport->new (fh => $fh);
-  my $self = bless {transport => $transport,
+  my $self = bless {transport => $transport, id => $transport->id, req_id => 0,
                     rbuf => '', state => 'initial',
                     cb => $cb}, $class;
   my $read_timer;
@@ -51,10 +52,12 @@ sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
 sub _new_req ($) {
   my $self = $_[0];
   my $req = $self->{request} = bless {
-    is_server => 1,
+    is_server => 1, DEBUG => DEBUG,
     connection => $self, headers => [],
+    id => $self->{id} . '.' . ++$self->{req_id},
     # method target version
   }, __PACKAGE__ . '::Request';
+  $req->{request}->{id} = $req->{id}; # for compat with HTTPStream
   my $p1 = Promise->new (sub { $req->{req_done} = $_[0] });
   my $p2 = Promise->new (sub { $req->{res_done} = $_[0] });
   Promise->all ([$p1, $p2])->then (sub {
@@ -513,8 +516,6 @@ use Carp qw(carp croak);
 use Digest::SHA qw(sha1);
 use MIME::Base64 qw(encode_base64);
 
-use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
-
 sub send_response_headers ($$$;%) {
   my ($req, $response, %args) = @_;
   # XXX validation
@@ -674,13 +675,18 @@ sub close_response ($;%) {
     my $frame = pack ('CC', 0b10000000 | 8, 0 | length $data) . $mask . $data;
     if ($self->{ws_state} eq 'CONNECTING') {
       $self->{pending_frame} = $frame;
-      $self->{pending_frame_info} = [$args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}] if DEBUG;
+      $self->{pending_frame_info} = [$args{reason}, FIN => 1, opcode => 8,
+                                     mask => $mask, length => length $data,
+                                     status => $args{status}]
+          if $self->{DEBUG};
     } else {
-      $self->_ws_debug ('S', $args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}) if DEBUG;
+      $self->_ws_debug ('S', $args{reason}, FIN => 1, opcode => 8,
+                        mask => $mask, length => length $data,
+                        status => $args{status}) if $self->{DEBUG};
       $req->{connection}->{transport}->push_write (\$frame);
       $self->{ws_state} = 'CLOSING';
       $self->{timer} = AE::timer 20, 0, sub {
-        warn "$self->{request}->{id}: WS timeout (20)\n" if DEBUG;
+        warn "$self->{request}->{id}: WS timeout (20)\n" if $self->{DEBUG};
         # XXX set exit ?
         #$self->_next;
         delete $self->{timer};
@@ -713,13 +719,13 @@ BEGIN {
 sub _ev ($$;$$) {
   my $self = shift;
   my $req = $self; #XXX
-  if (DEBUG) {
+  if ($self->{DEBUG}) {
     warn "$req->{id}: $_[0] @{[scalar gmtime]}\n";
-    if ($_[0] eq 'data' and DEBUG > 1) {
+    if ($_[0] eq 'data' and $self->{DEBUG} > 1) {
       for (split /\x0D?\x0A/, $_[1], -1) {
         warn "$req->{id}: R: @{[_e4d $_]}\n";
       }
-    } elsif ($_[0] eq 'text' and DEBUG > 1) {
+    } elsif ($_[0] eq 'text' and $self->{DEBUG} > 1) {
       for (split /\x0D?\x0A/, $_[1], -1) {
         warn "$req->{id}: R: @{[_e4d_t $_]}\n";
       }
@@ -732,7 +738,7 @@ sub _ev ($$;$$) {
           warn "$req->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
         }
       }
-      warn "$req->{id}: + WS established\n" if DEBUG and $_[2];
+      warn "$req->{id}: + WS established\n" if $self->{DEBUG} and $_[2];
     } elsif ($_[0] eq 'complete') {
       my $err = join ' ',
           $_[1]->{reset} ? 'reset' : (),

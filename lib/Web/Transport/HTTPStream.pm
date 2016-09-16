@@ -7,7 +7,6 @@ use AnyEvent;
 use Encode qw(decode); # XXX
 use Web::Encoding;
 
-use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 sub MAX_BYTES () { 2**31-1 }
 
 sub _e4d ($) {
@@ -99,7 +98,7 @@ sub _ws_received ($;%) {
                         RSV3 => !!($b1 & 0b00010000),
                         opcode => $opcode,
                         mask => $self->{ws_decode_mask_key},
-                        length => $self->{unread_length}) if DEBUG;
+                        length => $self->{unread_length}) if $self->{DEBUG};
       if (not $fin and ($opcode == 8 or $opcode == 9 or $opcode == 10)) {
         $ws_failed = '';
         last WS;
@@ -144,9 +143,9 @@ sub _ws_received ($;%) {
         } else {
           push @{$self->{ws_frame}->[1]}, substr $$ref, 0, $self->{unread_length};
         }
-        #if (DEBUG > 1 or
-        #    (DEBUG and $self->{ws_frame}->[0] >= 8)) {
-        if (DEBUG and $self->{ws_frame}->[0] == 8) {
+        #if ($self->{DEBUG} > 1 or
+        #    ($self->{DEBUG} and $self->{ws_frame}->[0] >= 8)) {
+        if ($self->{DEBUG} and $self->{ws_frame}->[0] == 8) {
           if ($self->{ws_frame}->[0] == 8 and
               $self->{unread_length} > 1) {
             warn sprintf "$self->{request}->{id}: R: status=%d %s\n",
@@ -197,7 +196,7 @@ sub _ws_received ($;%) {
             $self->_ws_debug ('S', defined $reason ? $reason : '',
                               FIN => 1, opcode => 8, mask => $mask,
                               length => length $data, status => $status)
-                if DEBUG;
+                if $self->{DEBUG};
             ($self->{transport} || $self->{connection}->{transport})->push_write
                 (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
                    $mask . $data));
@@ -210,7 +209,7 @@ sub _ws_received ($;%) {
             $self->_next;
           } else {
             $self->{timer} = AE::timer 1, 0, sub { # XXX
-              warn "$self->{request}->{id}: WS timeout (1)\n" if DEBUG;
+              warn "$self->{request}->{id}: WS timeout (1)\n" if $self->{DEBUG};
               delete $self->{timer};
               $self->_next;
             };
@@ -248,7 +247,7 @@ sub _ws_received ($;%) {
             $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
           }
           $self->_ws_debug ('S', $data, FIN => 1, opcode => 10, mask => $mask,
-                            length => length $data) if DEBUG;
+                            length => length $data) if $self->{DEBUG};
           unless ($self->{is_server}) {
             for (0..((length $data)-1)) {
               substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
@@ -287,7 +286,7 @@ sub _ws_received ($;%) {
     # length $data must be < 126
     $self->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8,
                       mask => $mask, length => length $data,
-                      status => $self->{exit}->{status}) if DEBUG;
+                      status => $self->{exit}->{status}) if $self->{DEBUG};
     ($self->{transport} || $self->{connection}->{transport})->push_write
         (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
            $mask . $data));
@@ -337,7 +336,7 @@ sub send_text_header ($$) {
   croak "Data too large" if MAX_BYTES < $length; # spec limit 2**63
   croak "Bad state"
       if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
-         (defined $self->{request_body_length} and $self->{request_body_length} > 0);
+         (defined $self->{to_be_sent_length} and $self->{to_be_sent_length} > 0);
 
   my $mask = '';
   my $masked = 0;
@@ -349,7 +348,7 @@ sub send_text_header ($$) {
   }
 
   $self->{ws_sent_length} = 0;
-  $self->{request_body_length} = $length;
+  $self->{to_be_sent_length} = $length;
 
   my $length0 = $length;
   my $len = '';
@@ -361,7 +360,7 @@ sub send_text_header ($$) {
     $len = pack 'Q>', $length;
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 1, mask => $mask,
-                    length => $length) if DEBUG;
+                    length => $length) if $self->{DEBUG};
   ($self->{transport} || $self->{connection}->{transport})->push_write
       (\(pack ('CC', 0b10000000 | 1, $masked | $length0) .
          $len . $mask));
@@ -373,7 +372,7 @@ sub send_binary_header ($$) {
   croak "Data too large" if MAX_BYTES < $length; # spec limit 2**63
   croak "Bad state"
       if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
-         (defined $self->{request_body_length} and $self->{request_body_length} > 0);
+         (defined $self->{to_be_sent_length} and $self->{to_be_sent_length} > 0);
 
   my $mask = '';
   my $masked = 0;
@@ -385,7 +384,7 @@ sub send_binary_header ($$) {
   }
 
   $self->{ws_sent_length} = 0;
-  $self->{request_body_length} = $length;
+  $self->{to_be_sent_length} = $length;
 
   my $length0 = $length;
   my $len = '';
@@ -396,7 +395,8 @@ sub send_binary_header ($$) {
     $length0 = 0x7E;
     $len = pack 'Q>', $length;
   }
-  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask, length => $length) if DEBUG;
+  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask,
+                    length => $length) if $self->{DEBUG};
   ($self->{transport} || $self->{connection}->{transport})->push_write
       (\(pack ('CC', 0b10000000 | 2, $masked | $length0) .
          $len . $mask));
@@ -409,7 +409,7 @@ sub send_ping ($;%) {
   croak "Data too large" if 0x7D < length $args{data}; # spec limit 2**63
   croak "Bad state"
       if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
-         (defined $self->{request_body_length} and $self->{request_body_length} > 0);
+         (defined $self->{to_be_sent_length} and $self->{to_be_sent_length} > 0);
 
   my $mask = '';
   my $masked = 0;
@@ -419,7 +419,8 @@ sub send_ping ($;%) {
   }
   my $opcode = $args{pong} ? 10 : 9;
   $self->_ws_debug ('S', $args{data}, FIN => 1, opcode => $opcode,
-                    mask => $mask, length => length $args{data}) if DEBUG;
+                    mask => $mask, length => length $args{data})
+      if $self->{DEBUG};
   unless ($self->{is_server}) {
     for (0..((length $args{data})-1)) {
       substr ($args{data}, $_, 1) = substr ($args{data}, $_, 1) ^ substr ($mask, $_ % 4, 1);
@@ -458,7 +459,7 @@ sub _ws_debug ($$$%) {
       $args{length};
   if ($args{opcode} == 8 and defined $args{status}) {
     warn "$id: S: status=$args{status} @{[_e4d $_[2]]}\n";
-  } elsif ((DEBUG > 1 or $args{opcode} >= 8) and length $_[2]) {
+  } elsif (($self->{DEBUG} > 1 or $args{opcode} >= 8) and length $_[2]) {
     warn "$id: S: @{[_e4d $_[2]]}\n";
   }
 } # _ws_debug

@@ -57,7 +57,6 @@ sub _new_req ($) {
     id => $self->{id} . '.' . ++$self->{req_id},
     # method target version
   }, __PACKAGE__ . '::Request';
-  $req->{request}->{id} = $req->{id}; # for compat with HTTPStream
   my $p1 = Promise->new (sub { $req->{req_done} = $_[0] });
   my $p2 = Promise->new (sub { $req->{res_done} = $_[0] });
   Promise->all ([$p1, $p2])->then (sub {
@@ -637,6 +636,7 @@ sub send_response_data ($$) {
   }
 } # send_response_data
 
+# XXX rename as close?
 sub close_response ($;%) {
   my ($req, %args) = @_;
   return unless defined $req->{connection};
@@ -649,54 +649,16 @@ sub close_response ($;%) {
   if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
     # XXX trailer headers
     $req->{connection}->{transport}->push_write (\"0\x0A");
+    $req->_next;
   } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'ws') {
-    #XXX
-
-    my $self = $req;
-  if (defined $args{status} and $args{status} > 0xFFFF) {
-    return Promise->reject ("Bad status");
+    $req->close (%args);
+  } else {
+    $req->_next;
   }
-  if (defined $args{reason}) {
-    return Promise->reject ("Reason is utf8-flagged")
-        if utf8::is_utf8 $args{reason};
-    return Promise->reject ("Reason is too long")
-        if 0x7D < length $args{reason};
-  }
+} # close_response
 
-  if (defined $self->{ws_state} and
-      ($self->{ws_state} eq 'OPEN' or
-       $self->{ws_state} eq 'CONNECTING')) {
-    my $data = '';
-    if (defined $args{status}) {
-      $data = pack 'n', $args{status};
-      $data .= $args{reason} if defined $args{reason};
-    }
-    my $mask = '';
-    my $frame = pack ('CC', 0b10000000 | 8, 0 | length $data) . $mask . $data;
-    if ($self->{ws_state} eq 'CONNECTING') {
-      $self->{pending_frame} = $frame;
-      $self->{pending_frame_info} = [$args{reason}, FIN => 1, opcode => 8,
-                                     mask => $mask, length => length $data,
-                                     status => $args{status}]
-          if $self->{DEBUG};
-    } else {
-      $self->_ws_debug ('S', $args{reason}, FIN => 1, opcode => 8,
-                        mask => $mask, length => length $data,
-                        status => $args{status}) if $self->{DEBUG};
-      $req->{connection}->{transport}->push_write (\$frame);
-      $self->{ws_state} = 'CLOSING';
-      $self->{timer} = AE::timer 20, 0, sub {
-        warn "$self->{request}->{id}: WS timeout (20)\n" if $self->{DEBUG};
-        # XXX set exit ?
-        #$self->_next;
-        delete $self->{timer};
-      };
-      #XXX$self->_ev ('closing');
-    }
-  }
-
-
-  }
+sub _next ($) {
+  my $req = $_[0];
   if (delete $req->{close_after_response}) {
     $req->{connection}->{transport}->push_shutdown
         unless $req->{connection}->{write_closed};
@@ -709,7 +671,7 @@ sub close_response ($;%) {
   delete $req->{connection};
   delete $req->{write_mode};
   delete $req->{write_length};
-} # close_response
+} # _next
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;

@@ -4,6 +4,7 @@ use warnings;
 our $VERSION = '1.0';
 use Carp qw(croak);
 use AnyEvent;
+use Promise;
 use Encode qw(decode); # XXX
 use Web::Encoding;
 
@@ -146,13 +147,14 @@ sub _ws_received ($;%) {
         #if ($self->{DEBUG} > 1 or
         #    ($self->{DEBUG} and $self->{ws_frame}->[0] >= 8)) {
         if ($self->{DEBUG} and $self->{ws_frame}->[0] == 8) {
+          my $id = defined $self->{request} ? $self->{request}->{id} : $self->{id};
           if ($self->{ws_frame}->[0] == 8 and
               $self->{unread_length} > 1) {
-            warn sprintf "$self->{request}->{id}: R: status=%d %s\n",
+            warn sprintf "$id: R: status=%d %s\n",
                 unpack ('n', substr $$ref, 0, 2),
                 _e4d substr ($$ref, 2, $self->{unread_length});
           } else {
-            warn sprintf "$self->{request}->{id}: R: %s\n",
+            warn sprintf "$id: R: %s\n",
                 _e4d substr ($$ref, 0, $self->{unread_length});
           }
         }
@@ -208,8 +210,11 @@ sub _ws_received ($;%) {
           if ($self->{is_server}) {
             $self->_next;
           } else {
-            $self->{timer} = AE::timer 1, 0, sub { # XXX
-              warn "$self->{request}->{id}: WS timeout (1)\n" if $self->{DEBUG};
+            $self->{timer} = AE::timer 1, 0, sub { # XXX spec
+              if ($self->{DEBUG}) {
+                my $id = defined $self->{request} ? $self->{request}->{id} : $self->{id};
+                warn "$id: WS timeout (1)\n";
+              }
               delete $self->{timer};
               $self->_next;
             };
@@ -431,12 +436,94 @@ sub send_ping ($;%) {
          $mask . $args{data}));
 } # send_ping
 
+sub close ($;%) {
+  my ($self, %args) = @_;
+  if (not defined $self->{state}) {
+    return Promise->reject ("Connection has not been established");
+  }
+  if (defined $self->{request_state} or
+      (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN')) {
+    if (defined $self->{to_be_sent_length} and
+        $self->{to_be_sent_length} > 0) {
+      return Promise->reject ("Body is not sent");
+    }
+  }
+
+  if (defined $args{status} and $args{status} > 0xFFFF) {
+    return Promise->reject ("Bad status");
+  }
+  if (defined $args{reason}) {
+    return Promise->reject ("Reason is utf8-flagged")
+        if utf8::is_utf8 $args{reason};
+    return Promise->reject ("Reason is too long")
+        if 0x7D < length $args{reason};
+  }
+
+  if (defined $self->{ws_state} and
+      ($self->{ws_state} eq 'OPEN' or
+       $self->{ws_state} eq 'CONNECTING')) {
+    my $masked = 0;
+    my $mask = '';
+    unless ($self->{is_server}) {
+      $masked = 0b10000000;
+      $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+    }
+    my $data = '';
+    my $frame_info = $self->{DEBUG} ? [$args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}] : undef;
+    if (defined $args{status}) {
+      $data = pack 'n', $args{status};
+      $data .= $args{reason} if defined $args{reason};
+      unless ($self->{is_server}) {
+        for (0..((length $data)-1)) {
+          substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
+        }
+      }
+    }
+    my $frame = pack ('CC', 0b10000000 | 8, $masked | length $data) .
+        $mask . $data;
+    if ($self->{ws_state} eq 'CONNECTING') {
+      $self->{pending_frame} = $frame;
+      $self->{pending_frame_info} = $frame_info if $self->{DEBUG};
+    } else {
+      $self->_ws_debug ('S', @$frame_info) if $self->{DEBUG};
+      ($self->{transport} || $self->{connection}->{transport})->push_write (\$frame);
+      $self->{ws_state} = 'CLOSING';
+      $self->{timer} = AE::timer 20, 0, sub {
+        if ($self->{DEBUG}) {
+          my $id = defined $self->{request} ? $self->{request}->{id} : $self->{id};
+          warn "$id: WS timeout (20)\n";
+        }
+        # XXX set exit ?
+        $self->_next;
+        delete $self->{timer};
+      };
+      $self->_ev ('closing');
+    }
+  } elsif ($self->{is_server}) {
+    $self->_next;
+    return;
+  }
+
+  $self->{no_new_request} = 1;
+  if ($self->{state} eq 'initial' or
+      $self->{state} eq 'waiting' or
+      $self->{state} eq 'tunnel' or
+      $self->{state} eq 'tunnel sending') {
+    $self->{transport}->push_shutdown
+        unless $self->{transport}->write_to_be_closed;
+    $self->{state} = 'tunnel receiving' if $self->{state} eq 'tunnel';
+  }
+
+  ## Client only (for now)
+  return $self->{closed};
+} # close
+
 sub _ws_debug ($$$%) {
   my $self = $_[0];
   my $side = $_[1];
   my %args = @_[3..$#_];
 
-  my $id = $self->{request}->{id};
+  my $id = defined $self->{request} ? $self->{request}->{id} : $self->{id};
   warn sprintf "$id: %s: WS %s L=%d\n",
       $side,
       (join ' ',

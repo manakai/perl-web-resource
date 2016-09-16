@@ -137,8 +137,8 @@ sub _ws_received ($;%) {
           length ($$ref) >= $self->{unread_length}) {
         if (defined $self->{ws_decode_mask_key}) {
           push @{$self->{ws_frame}->[1]}, substr $$ref, 0, $self->{unread_length};
-          for (0..((length $self->{ws_frame}->[1])-1)) {
-            substr ($self->{ws_frame}->[1], $_, 1) = substr ($self->{ws_frame}->[1], $_, 1) ^ substr ($self->{ws_decode_mask_key}, ($self->{ws_read_length} + $_) % 4, 1);
+          for (0..((length $self->{ws_frame}->[1]->[-1])-1)) {
+            substr ($self->{ws_frame}->[1]->[-1], $_, 1) = substr ($self->{ws_frame}->[1]->[-1], $_, 1) ^ substr ($self->{ws_decode_mask_key}, ($self->{ws_read_length} + $_) % 4, 1);
           }
           $self->{ws_read_length} += length $self->{ws_frame}->[1];
         } else {
@@ -198,7 +198,7 @@ sub _ws_received ($;%) {
                               FIN => 1, opcode => 8, mask => $mask,
                               length => length $data, status => $status)
                 if DEBUG;
-            $self->{transport}->push_write
+            ($self->{transport} || $self->{connection}->{transport})->push_write
                 (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
                    $mask . $data));
           }
@@ -246,16 +246,18 @@ sub _ws_received ($;%) {
           unless ($self->{is_server}) {
             $masked = 0b10000000;
             $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+          }
+          $self->_ws_debug ('S', $data, FIN => 1, opcode => 10, mask => $mask,
+                            length => length $data) if DEBUG;
+          unless ($self->{is_server}) {
             for (0..((length $data)-1)) {
               substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
             }
           }
-          $self->_ws_debug ('S', $data, FIN => 1, opcode => 10, mask => $mask,
-                            length => length $data) if DEBUG;
-          $self->{transport}->push_write
+          ($self->{transport} || $self->{connection}->{transport})->push_write
               (\(pack ('CC', 0b10000000 | 10, $masked | length $data) .
                  $mask . $data));
-          $self->_ev ('ping', $data, 0);
+          $self->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 0);
         } elsif ($self->{ws_frame}->[0] == 10) {
           $self->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 1);
         } # frame type
@@ -286,7 +288,7 @@ sub _ws_received ($;%) {
     $self->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8,
                       mask => $mask, length => length $data,
                       status => $self->{exit}->{status}) if DEBUG;
-    $self->{transport}->push_write
+    ($self->{transport} || $self->{connection}->{transport})->push_write
         (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
            $mask . $data));
     $self->{state} = 'ws terminating';
@@ -360,7 +362,7 @@ sub send_text_header ($$) {
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 1, mask => $mask,
                     length => $length) if DEBUG;
-  $self->{transport}->push_write
+  ($self->{transport} || $self->{connection}->{transport})->push_write
       (\(pack ('CC', 0b10000000 | 1, $masked | $length0) .
          $len . $mask));
 } # send_text_header
@@ -395,7 +397,7 @@ sub send_binary_header ($$) {
     $len = pack 'Q>', $length;
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask, length => $length) if DEBUG;
-  $self->{transport}->push_write
+  ($self->{transport} || $self->{connection}->{transport})->push_write
       (\(pack ('CC', 0b10000000 | 2, $masked | $length0) .
          $len . $mask));
 } # send_binary_header
@@ -415,13 +417,15 @@ sub send_ping ($;%) {
     $masked = 0b10000000;
     $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
   }
-  for (0..((length $args{data})-1)) {
-    substr ($args{data}, $_, 1) = substr ($args{data}, $_, 1) ^ substr ($mask, $_ % 4, 1);
-  }
   my $opcode = $args{pong} ? 10 : 9;
   $self->_ws_debug ('S', $args{data}, FIN => 1, opcode => $opcode,
                     mask => $mask, length => length $args{data}) if DEBUG;
-  $self->{transport}->push_write
+  unless ($self->{is_server}) {
+    for (0..((length $args{data})-1)) {
+      substr ($args{data}, $_, 1) = substr ($args{data}, $_, 1) ^ substr ($mask, $_ % 4, 1);
+    }
+  }
+  ($self->{transport} || $self->{connection}->{transport})->push_write
       (\(pack ('CC', 0b10000000 | $opcode, $masked | length $args{data}) .
          $mask . $args{data}));
 } # send_ping

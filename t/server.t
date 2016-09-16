@@ -61,6 +61,11 @@ my $HandleRequestHeaders = {};
       }
     } elsif ($type eq 'data') {
       $req->{body} .= $_[3];
+    } elsif ($type eq 'text') {
+      $req->{text} .= $_[3];
+    } elsif ($type eq 'dataend' or $type eq 'textend' or
+             $type eq 'ping') {
+      $req->{$type}->($_[3], $_[4]) if $req->{$type};
     }
   }; # $cb
 
@@ -1539,11 +1544,188 @@ test {
   });
 } n => 6, name => 'WS handshake error - Bad Content-Length';
 
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->send_binary_header (5);
+    $req->send_response_data (\"abcde");
+    $serverreq = $req;
+    $req->{dataend} = sub {
+      if ($req->{body} =~ /stuvw/) {
+        $req->close_response (status => 5678);
+      }
+    };
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      if (defined $data) {
+        $received .= $data;
+      } else {
+        $received .= '(end)';
+      }
+      if ($received =~ /abcde/) {
+        $client->send_binary ('stuvw');
+      }
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      is $serverreq->{body}, 'stuvw';
+      is $received, '(end)abcde(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshaked and data (binary)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->send_text_header (5);
+    $req->send_response_data (\"abcde");
+    $serverreq = $req;
+    $req->{textend} = sub {
+      if ($req->{text} =~ /stuvw/) {
+        $req->close_response (status => 5678, reason => 'abc');
+      }
+    };
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      if ($is_text) {
+        if (defined $data) {
+          $received .= $data;
+        } else {
+          $received .= '(end)';
+        }
+      }
+      if ($received =~ /abcde/) {
+        $client->send_text ('stuvw');
+      }
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      is $serverreq->{text}, 'stuvw';
+      is $received, 'abcde(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, 'abc';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshaked and data (text)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->send_ping (data => "abbba");
+    $serverreq = $req;
+    $req->{ping} = sub {
+      if ($_[1]) {
+        $req->close_response (status => 5678, reason => $_[0]);
+      }
+    };
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= (defined $data ? $data : '(end)');
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      is $serverreq->{body}, '';
+      is $serverreq->{text}, undef;
+      is $received, '(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, 'abbba';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 7, name => 'WS ping';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $serverreq = $req;
+    $req->{ping} = sub {
+      unless ($_[1]) {
+        $req->close_response (status => 5678, reason => $_[0]);
+      }
+    };
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= (defined $data ? $data : '(end)');
+      $client->{client}->{http}->send_ping (data => "abbba");
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      is $serverreq->{body}, '';
+      is $serverreq->{text}, undef;
+      is $received, '(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, 'abbba';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 7, name => 'WS ping';
+
 # XXX CONNECT request-target
 # XXX  CONNECT closing
 # XXX CONNECT content_length
 # XXX non-WS 1xx
 # XXX WS tests
+# XXX request timeout vs CONNECT / WS
 
 run_tests;
 

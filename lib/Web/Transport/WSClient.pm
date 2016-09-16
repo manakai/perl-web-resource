@@ -61,7 +61,11 @@ sub new ($%) {
     return $self->{client}->request ('GET', $url_record, $header_list, undef, $args{superreload}, 'ws', sub {
       if ($_[1]->{ws_connection_established}) {
         if (defined $_[3]) {
-          return $cb->($self, $_[2], $_[3]);
+          if ($_[3] eq 'closing') {
+            $self->{ws_closing} = 1;
+          } else { # text or binary
+            return $cb->($self, $_[2], $_[3]);
+          }
         } else {
           $in_ws = 1;
           return $cb->($self, undef, undef);
@@ -88,10 +92,17 @@ sub new ($%) {
   });
 } # new
 
+# XXX test and documentation
+sub can_send ($) {
+  my $self = $_[0];
+  return (defined $self->{client} && !defined $self->{closed_promise} && !$self->{ws_closing});
+} # can_send
+
 sub send_binary ($$) {
   my $self = $_[0];
   croak "Bad state"
-      if not defined $self->{client} or defined $self->{closed_promise};
+      if not defined $self->{client} or defined $self->{closed_promise} or
+         $self->{ws_closing};
   croak "Data is utf8-flagged"
       if utf8::is_utf8 ($_[1]);
   my $http = $self->{client}->{http};
@@ -99,13 +110,15 @@ sub send_binary ($$) {
   $http->send_data (\($_[1]));
 } # send_binary
 
+# XXX test
 sub send_text ($$) {
   my $self = $_[0];
   croak "Bad state"
-      if not defined $self->{client} or defined $self->{closed_promise};
+      if not defined $self->{client} or defined $self->{closed_promise} or
+         $self->{ws_closing};
   my $http = $self->{client}->{http};
   my $text = encode_web_utf8 $_[1];
-  $http->send_binary_header (length $text);
+  $http->send_text_header (length $text);
   $http->send_data (\$text);
 } # send_text
 

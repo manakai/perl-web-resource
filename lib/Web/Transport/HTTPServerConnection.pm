@@ -355,9 +355,7 @@ sub _ondata ($$) {
         $self->{unread_length} -= $in_length;
         return;
       }
-    } elsif ($self->{state} eq 'before ws frame' or
-             $self->{state} eq 'ws data' or
-             $self->{state} eq 'ws terminating') {
+    } elsif ($self->{state} eq 'ws') {
       return $self->{request}->_ws_received ($inref);
     } elsif ($self->{state} eq 'ws handshaking') {
       return unless length $$inref;
@@ -392,10 +390,8 @@ sub _oneof ($$) {
     }
     AE::postpone { $self->{cb}->($self, 'dataend') };
     $self->_request_done ($self->{request}, $exit);
-  } elsif ($self->{state} eq 'before ws frame' or
-           $self->{state} eq 'ws data' or
-           $self->{state} eq 'ws terminating') {
-    $self->{exit} = $exit; # XXX
+  } elsif ($self->{state} eq 'ws') {
+    $self->{request}->{exit} = $exit; # XXX
     return $self->{request}->_ws_received_eof (\'');
   } elsif ($self->{state} eq 'ws handshaking') {
     return $self->_fatal ($self->{request});
@@ -546,7 +542,8 @@ sub send_response_headers ($$$;%) {
       $ws = 1;
       $req->{write_mode} = 'ws';
       $req->{ws_state} = 'OPEN';
-      $req->{connection}->{state} = 'before ws frame';
+      $req->{connection}->{state} = 'ws';
+      $req->{state} = 'before ws frame';
     } else {
       croak "1xx response not supported";
     }
@@ -632,6 +629,7 @@ sub send_response_data ($$) {
     croak "Not writable for now"
         unless $req->{ws_state} eq 'OPEN';
 #XXX
+    $req->{connection}->{transport}->push_write ($ref);
 
   } else {
     croak "Not writable for now";
@@ -706,6 +704,63 @@ sub close_response ($;%) {
   delete $req->{write_mode};
   delete $req->{write_length};
 } # close_response
+
+BEGIN {
+  *_e4d = \&Web::Transport::HTTPStream::_e4d;
+  *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
+}
+
+sub _ev ($$;$$) {
+  my $self = shift;
+  my $req = $self; #XXX
+  if (DEBUG) {
+    warn "$req->{id}: $_[0] @{[scalar gmtime]}\n";
+    if ($_[0] eq 'data' and DEBUG > 1) {
+      for (split /\x0D?\x0A/, $_[1], -1) {
+        warn "$req->{id}: R: @{[_e4d $_]}\n";
+      }
+    } elsif ($_[0] eq 'text' and DEBUG > 1) {
+      for (split /\x0D?\x0A/, $_[1], -1) {
+        warn "$req->{id}: R: @{[_e4d_t $_]}\n";
+      }
+    } elsif ($_[0] eq 'headers') {
+      if ($_[1]->{version} eq '0.9') {
+        warn "$req->{id}: R: HTTP/0.9\n";
+      } else {
+        warn "$req->{id}: R: HTTP/$_[1]->{version} $_[1]->{status} $_[1]->{reason}\n";
+        for (@{$_[1]->{headers}}) {
+          warn "$req->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
+        }
+      }
+      warn "$req->{id}: + WS established\n" if DEBUG and $_[2];
+    } elsif ($_[0] eq 'complete') {
+      my $err = join ' ',
+          $_[1]->{reset} ? 'reset' : (),
+          $self->{response}->{incomplete} ? 'incomplete' : (),
+          $_[1]->{failed} ? 'failed' : (),
+          $_[1]->{cleanly} ? 'cleanly' : (),
+          $_[1]->{can_retry} ? 'retryable' : (),
+          defined $_[1]->{errno} ? 'errno=' . $_[1]->{errno} : (),
+          defined $_[1]->{message} ? 'message=' . $_[1]->{message} : (),
+          defined $_[1]->{status} ? 'status=' . $_[1]->{status} : (),
+          defined $_[1]->{reason} ? 'reason=' . $_[1]->{reason} : ();
+      warn "$req->{id}: + @{[_e4d $err]}\n" if length $err;
+    } elsif ($_[0] eq 'ping') {
+      if ($_[2]) {
+        warn "$req->{id}: R: pong data=@{[_e4d $_[1]]}\n";
+      } else {
+        warn "$req->{id}: R: data=@{[_e4d $_[1]]}\n";
+      }
+    }
+  }
+  if ($_[0] eq 'complete') {
+    #XXX (delete $self->{request_done})->();
+  }
+  # XXX
+  my $type = shift @_;
+  $self->{connection}->{cb}->($self, $type, $req, @_)
+      if defined $self->{connection};
+} # _ev
 
 sub DESTROY ($) {
   local $@;

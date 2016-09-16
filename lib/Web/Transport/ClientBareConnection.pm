@@ -284,7 +284,9 @@ sub request ($$$$$$$) {
           $response->{ws_connection_established} = $_[4];
           Promise->resolve->then (sub { return $cb->($http, $response, '', undef) });
         }
-      }
+      } elsif ($type eq 'closing') {
+        $cb->($http, $response, undef, 'closing'); # sync!
+      } # $type
     });
     my $p = $self->{http}->send_request_headers
         ({method => $method, target => encode_web_utf8 ($target),

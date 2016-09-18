@@ -1208,6 +1208,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'gcwin' => {},
                                             'gdiff' => {},
                                             'geo+json' => {
+                                                            'compressible' => 1,
                                                             'iana' => 'permanent',
                                                             'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/geo+json'
                                                           },
@@ -3884,7 +3885,11 @@ $Web::MIME::_TypeDefs::Type = {
                                             'testfontstream' => {},
                                             'tex' => {},
                                             'texinfo' => {},
-                                            'text' => {},
+                                            'text' => {
+                                                        'related' => {
+                                                                       'application/octet-stream' => {}
+                                                                     }
+                                                      },
                                             'tga' => {
                                                        'related' => {
                                                                       'image/x-targa' => {}
@@ -7505,6 +7510,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                      'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.ncd.reference'
                                                                    },
                                             'vnd.nearst.inv+json' => {
+                                                                       'compressible' => 1,
                                                                        'iana' => 'permanent',
                                                                        'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.nearst.inv+json'
                                                                      },
@@ -8132,6 +8138,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                 'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.oma.group-usage-list+xml'
                                                                               },
                                             'vnd.oma.lwm2m+json' => {
+                                                                      'compressible' => 1,
                                                                       'iana' => 'permanent',
                                                                       'iana_intended_usage' => 'limited use',
                                                                       'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.oma.lwm2m+json'
@@ -16504,9 +16511,15 @@ $Web::MIME::_TypeDefs::Type = {
                                       'mp1' => {},
                                       'mp2' => {},
                                       'mp3' => {
+                                                 'compressible' => 0,
                                                  'plugin' => 1,
                                                  'related' => {
-                                                                'audio/mpeg' => {}
+                                                                'audio/mpeg' => {},
+                                                                'audio/mpeg3' => {},
+                                                                'audio/x-mpeg-3' => {},
+                                                                'audio/x-mpeg3' => {},
+                                                                'video/mpeg' => {},
+                                                                'video/x-mpeg' => {}
                                                               }
                                                },
                                       'mp4' => {
@@ -16589,6 +16602,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'mpeg3' => {
                                                    'plugin' => 1,
                                                    'related' => {
+                                                                  'audio/mp3' => {},
                                                                   'audio/mpeg' => {},
                                                                   'audio/x-mpeg-3' => {},
                                                                   'audio/x-mpeg3' => {},
@@ -17473,6 +17487,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                     },
                                       'x-mpeg-3' => {
                                                       'related' => {
+                                                                     'audio/mp3' => {},
                                                                      'audio/mpeg' => {},
                                                                      'audio/mpeg3' => {},
                                                                      'audio/x-mpeg3' => {},
@@ -17484,6 +17499,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-mpeg3' => {
                                                      'plugin' => 1,
                                                      'related' => {
+                                                                    'audio/mp3' => {},
                                                                     'audio/mpeg' => {},
                                                                     'audio/mpeg3' => {},
                                                                     'audio/x-mpeg-3' => {},
@@ -20226,6 +20242,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                   'plugin' => 1
                                                 },
                                       'gltf+json' => {
+                                                       'compressible' => 1,
                                                        'iana' => 'permanent',
                                                        'iana_template_url' => 'https://www.iana.org/assignments/media-types/model/gltf+json'
                                                      },
@@ -23547,6 +23564,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  'application/vnd.xilinx.trace.internal' => {},
                                                                  'application/xml-dtd' => {},
                                                                  'audio/mod' => {},
+                                                                 'audio/mp3' => {},
                                                                  'audio/mpeg' => {},
                                                                  'audio/mpeg3' => {},
                                                                  'audio/vnd.nortel.vbk' => {},
@@ -24099,6 +24117,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-mpeg' => {
                                                     'plugin' => 1,
                                                     'related' => {
+                                                                   'audio/mp3' => {},
                                                                    'audio/mpeg' => {},
                                                                    'audio/mpeg3' => {},
                                                                    'audio/x-mp2' => {},

@@ -13,10 +13,10 @@ $Web::Transport::HTTPServerConnection::ReadTimeout = $ENV{SERVER_READ_TIMEOUT}
 my $cb = sub {
   my $self = $_[0];
   my $type = $_[1];
-  if ($type eq 'open') {
+  if ($type eq 'openconnection') {
     my $data = $_[2];
     warn "> Connection opened (Client: $data->{client_ip_addr}:$data->{client_port})\n";
-  } elsif ($type eq 'close') {
+  } elsif ($type eq 'closeconnection') {
     warn "> Connection closed\n";
   } elsif ($type eq 'requestheaders') {
     my $req = $_[2];

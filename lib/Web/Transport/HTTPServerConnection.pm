@@ -32,19 +32,16 @@ sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
     } elsif ($type eq 'writeeof') {
       $self->{write_closed} = 1;
     } elsif ($type eq 'close') {
-      AE::postpone {
-        $self->{cb}->($self, 'close');
-        delete $self->{cb};
-      };
+      $self->{cb}->($self, 'closeconnection'); # XXX
+      delete $self->{cb};
     }
   })->then (sub {
     #warn "Established";
     #warn scalar gmtime;
     $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
-    AE::postpone {
-      $self->{cb}->($self, 'open', {client_ip_addr => $client_host,
-                                    client_port => $client_port});
-    };
+    $self->{cb}->($self, 'openconnection',
+                  {client_ip_addr => $client_host,
+                   client_port => $client_port});
   });
 } # new_from_...
 
@@ -52,7 +49,8 @@ sub _new_req ($) {
   my $self = $_[0];
   my $req = $self->{request} = bless {
     is_server => 1, DEBUG => DEBUG,
-    connection => $self, headers => [],
+    connection => $self, cb => $self->{cb},
+    headers => [],
     id => $self->{id} . '.' . ++$self->{req_id},
     # method target version
   }, __PACKAGE__ . '::Request';
@@ -197,9 +195,7 @@ sub _ondata ($$) {
       }
 
       if (not defined $self->{unread_length}) { # CONNECT data
-        AE::postpone {
-          $self->{cb}->($self, 'data', $self->{request}, $$ref);
-        };
+        $self->{request}->_ev ('data', $$ref);
         return;
       }
 
@@ -207,35 +203,30 @@ sub _ondata ($$) {
       if (not $in_length) {
         return;
       } elsif ($self->{unread_length} == $in_length) {
-        AE::postpone {
-          $self->{cb}->($self, 'data', $self->{request}, $$ref);
-          $self->{cb}->($self, 'dataend');
-        };
         if (defined $self->{request}->{ws_key}) {
           $self->{state} = 'ws handshaking';
           $self->{request}->{close_after_response} = 1;
-        } else {
+        }
+        $self->{request}->_ev ('data', $$ref);
+        $self->{request}->_ev ('dataend');
+        unless (defined $self->{request}->{ws_key}) {
           $self->_request_done ($self->{request});
         }
       } elsif ($self->{unread_length} < $in_length) { # has redundant data
         $self->{request}->{incomplete} = 1;
         $self->{request}->{close_after_response} = 1;
-        AE::postpone {
-          $self->{cb}->($self, 'data', $self->{request}, substr ($$ref, 0, $self->{unread_length}));
-          $self->{cb}->($self, 'dataend');
-        };
         if (defined $self->{request}->{ws_key}) {
           $self->{state} = 'ws handshaking';
-          $self->{request}->{close_after_response} = 1;
-        } else {
+        }
+        $self->{request}->_ev ('data', substr ($$ref, 0, $self->{unread_length}));
+        $self->{request}->_ev ('dataend');
+        unless (defined $self->{request}->{ws_key}) {
           $self->_request_done ($self->{request});
         }
         return;
       } else { # unread_length > $in_length
-        AE::postpone {
-          $self->{cb}->($self, 'data', $self->{request}, $$ref);
-        };
         $self->{unread_length} -= $in_length;
+        $self->{request}->_ev ('data', $$ref);
         return;
       }
     } elsif ($self->{state} eq 'ws') {
@@ -271,7 +262,7 @@ sub _oneof ($$) {
       $exit = {failed => 1, message => 'Connection closed'}
           unless $exit->{failed};
     }
-    AE::postpone { $self->{cb}->($self, 'dataend') };
+    $self->{request}->_ev ('dataend');
     $self->_request_done ($self->{request}, $exit);
   } elsif ($self->{state} eq 'ws') {
     $self->{request}->{exit} = $exit; # XXX
@@ -497,56 +488,48 @@ sub _request_headers ($) {
             return 0;
           }
 
-          ## Content-Length:
-          if (@{$headers{'content-length'} or []} == 1 and
-              $headers{'content-length'}->[0] =~ /\A[0-9]+\z/) {
-            my $l = 0+$headers{'content-length'}->[0];
-            if ($req->{method} eq 'CONNECT') {
-              AE::postpone {
-                $self->{cb}->($self, 'requestheaders', $req);
-                $self->{cb}->($self, 'datastart');
-              };
-              $self->{state} = 'request body';
-            } elsif ($l == 0) {
-              AE::postpone {
-                $self->{cb}->($self, 'requestheaders', $req);
-                $self->{cb}->($self, 'datastart');
-                $self->{cb}->($self, 'dataend');
-              };
-              if (defined $req->{ws_key}) {
-                $self->{state} = 'ws handshaking';
-                $self->{request}->{close_after_response} = 1;
-              } else {
-                $self->_request_done ($req);
-              }
-            } else {
-              AE::postpone {
-                $self->{cb}->($self, 'requestheaders', $req);
-                $self->{cb}->($self, 'datastart');
-              };
-              $req->{body_length} = $l;
-              $self->{unread_length} = $l;
-              $self->{state} = 'request body';
-            }
-          } elsif (@{$headers{'content-length'} or []}) {
-            $self->_fatal ($req);
-            return 0;
-          } else {
-            if ($req->{method} eq 'CONNECT') {
-              AE::postpone {
-                $self->{cb}->($self, 'requestheaders', $req);
-                $self->{cb}->($self, 'datastart');
-              };
-              $self->{state} = 'request body';
-            } elsif (defined $req->{ws_key}) {
-              AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
-              $self->{state} = 'ws handshaking';
-              $self->{request}->{close_after_response} = 1;
-            } else {
-              AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
-              $self->_request_done ($req);
-            }
-          }
+  $self->{state} = 'request body' if $req->{method} eq 'CONNECT';
+
+  ## Content-Length:
+  if (@{$headers{'content-length'} or []} == 1 and
+      $headers{'content-length'}->[0] =~ /\A[0-9]+\z/) {
+    my $l = 0+$headers{'content-length'}->[0];
+    if ($req->{method} eq 'CONNECT') {
+      $req->_ev ('requestheaders');
+      $req->_ev ('datastart');
+    } elsif ($l == 0) {
+      if (defined $req->{ws_key}) {
+        $self->{state} = 'ws handshaking';
+        $self->{request}->{close_after_response} = 1;
+      }
+      $req->_ev ('requestheaders');
+      $req->_ev ('datastart');
+      $req->_ev ('dataend');
+      unless (defined $req->{ws_key}) {
+        $self->_request_done ($req);
+      }
+    } else {
+      $req->{body_length} = $l;
+      $self->{unread_length} = $l;
+      $self->{state} = 'request body';
+      $req->_ev ('requestheaders');
+      $req->_ev ('datastart');
+    }
+  } elsif (@{$headers{'content-length'} or []}) { # multiple headers
+    $self->_fatal ($req);
+    return 0;
+  } else { # no header
+    if (defined $req->{ws_key}) {
+      $self->{state} = 'ws handshaking';
+      $self->{request}->{close_after_response} = 1;
+    }
+    $req->_ev ('requestheaders');
+    if ($req->{method} eq 'CONNECT') {
+      $req->_ev ('datastart');
+    } elsif (not defined $req->{ws_key}) {
+      $self->_request_done ($req);
+    }
+  }
 
   return 1;
 } # _request_headers
@@ -563,7 +546,7 @@ sub _request_done ($$;$) {
     $self->{state} = 'after request';
   }
   if (defined $req->{req_done}) {
-    $req->{req_done}->($exit);
+    (delete $req->{req_done})->($exit);
   }
 } # _request_done
 
@@ -577,12 +560,8 @@ sub _done ($$$) {
   }
   delete $self->{disable_timer};
   $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
-  AE::postpone {
-    $self->{cb}->($self, 'complete', $exit)
-
-if $self->{cb}  # XXX
-;
-  };
+  $req->_ev ('complete', $exit);
+  delete $req->{connection};
 } # _done
 
 sub _timeout ($) {
@@ -812,7 +791,6 @@ sub _next ($) {
   if (defined $req->{res_done}) {
     (delete $req->{res_done})->({});
   }
-  delete $req->{connection};
   delete $req->{write_mode};
   delete $req->{to_be_sent_length};
 } # _next
@@ -870,8 +848,8 @@ sub _ev ($$;$$) {
   }
   # XXX
   my $type = shift @_;
-  $self->{connection}->{cb}->($self, $type, $req, @_)
-      if defined $self->{connection};
+  $self->{cb}->($self, $type, $req, @_);
+  delete $self->{cb} if $type eq 'complete';
 } # _ev
 
 sub DESTROY ($) {

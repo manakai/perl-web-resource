@@ -2147,7 +2147,7 @@ test {
   my $received = '';
   my $client = Web::Transport::ConnectionClient->new_from_url ($url);
   my $http = Web::Transport::ClientBareConnection->new_from_url ($url);
-  $http->parent_id ('x');
+  $http->parent_id ('L' . __LINE__);
   $http->proxy_manager ($client->proxy_manager);
   $http->resolver ($client->resolver);
   $http->request ('CONNECT', $url, [], undef, 0, 0, sub {

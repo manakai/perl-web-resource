@@ -17,18 +17,17 @@ sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
   my $self = bless {transport => $transport, id => $transport->id, req_id => 0,
                     rbuf => '', state => 'initial',
                     cb => $cb}, $class;
-  my $read_timer;
-  my $onreadtimeout = sub {
-    undef $read_timer;
-    $transport->abort (message => "Read timeout ($ReadTimeout)");
-  };
   my $p = $transport->start (sub {
     my ($transport, $type) = @_;
     if ($type eq 'readdata') {
-      $read_timer = AE::timer $ReadTimeout, 0, $onreadtimeout;
+      if ($self->{disable_timer}) {
+        delete $self->{timer};
+      } else {
+        $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
+      }
       $self->_ondata ($_[2]);
     } elsif ($type eq 'readeof') {
-      undef $read_timer;
+      delete $self->{timer};
       $self->_oneof ($_[2]);
     } elsif ($type eq 'writeeof') {
       $self->{write_closed} = 1;
@@ -41,7 +40,7 @@ sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
   })->then (sub {
     #warn "Established";
     #warn scalar gmtime;
-    $read_timer = AE::timer $ReadTimeout, 0, $onreadtimeout;
+    $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
     AE::postpone {
       $self->{cb}->($self, 'open', {client_ip_addr => $client_host,
                                     client_port => $client_port});
@@ -420,6 +419,8 @@ sub _oneof ($$) {
 
 sub _request_done ($$;$) {
   my ($self, $req, $exit) = @_;
+  delete $self->{timer};
+  $self->{disable_timer} = 1;
   delete $self->{request};
   delete $self->{unread_length};
   if ($req->{close_after_response}) {
@@ -440,6 +441,8 @@ sub _done ($$$) {
     $self->{write_closed} = 1;
     $self->{state} = 'end';
   }
+  delete $self->{disable_timer};
+  $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
   AE::postpone {
     $self->{cb}->($self, 'complete', $exit)
 
@@ -447,6 +450,12 @@ if $self->{cb}  # XXX
 ;
   };
 } # _done
+
+sub _timeout ($) {
+  my $self = $_[0];
+  delete $self->{timer};
+  $self->{transport}->abort (message => "Read timeout ($ReadTimeout)");
+} # _timeout
 
 sub _send_error ($$$$;$) {
   my ($self, $req, $status, $status_text, $headers) = @_;

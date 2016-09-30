@@ -9,6 +9,8 @@ use Web::Transport::WSClient;
 use Test::X1;
 use Test::More;
 
+$Web::Transport::HTTPServerConnection::ReadTimeout = 10;
+
 {
   use Socket;
   my $EphemeralStart = 1024;
@@ -364,8 +366,8 @@ test {
     eval {
       $req->send_response_data (\'abcde12');
     };
-    $req->send_response_data (\'abcd13');
     $x = $@;
+    $req->send_response_data (\'abcd13');
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -713,8 +715,8 @@ test {
     eval {
       $req->send_response_data (\"\x{5000}");
     };
-    $req->send_response_data (\'abcdee');
     $x = $@;
+    $req->send_response_data (\'abcdee');
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1565,6 +1567,7 @@ test {
   };
 
   my $received = '';
+  my $sent = 0;
   Web::Transport::WSClient->new (
     url => Web::URL->parse_string (qq</$path>, $WSOrigin),
     cb => sub {
@@ -1574,8 +1577,9 @@ test {
       } else {
         $received .= '(end)';
       }
-      if ($received =~ /abcde/) {
+      if ($received =~ /abcde/ and not $sent) {
         $client->send_binary ('stuvw');
+        $sent = 1;
       }
     },
   )->then (sub {
@@ -1612,6 +1616,7 @@ test {
   };
 
   my $received = '';
+  my $sent = 0;
   Web::Transport::WSClient->new (
     url => Web::URL->parse_string (qq</$path>, $WSOrigin),
     cb => sub {
@@ -1623,8 +1628,9 @@ test {
           $received .= '(end)';
         }
       }
-      if ($received =~ /abcde/) {
+      if ($received =~ /abcde/ and not $sent) {
         $client->send_text ('stuvw');
+        $sent = 1;
       }
     },
   )->then (sub {
@@ -2326,7 +2332,6 @@ test {
 
 
 # XXX CONNECT request-target
-# XXX request timeout vs CONNECT / WS
 
 run_tests;
 

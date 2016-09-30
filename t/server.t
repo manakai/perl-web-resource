@@ -858,7 +858,7 @@ abcxyz\z};
 
 test {
   my $c = shift;
-  $HandleRequestHeaders->{'/hoge28'} = sub {
+  $HandleRequestHeaders->{'hoge28'} = sub {
     my ($self, $req) = @_;
     $req->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
@@ -870,7 +870,7 @@ test {
     $req->close_response;
   };
 
-  rawtcp (qq{CONNECT /hoge28 HTTP/1.0\x0D\x0Aconnection:keep-alive\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+  rawtcp (qq{CONNECT hoge28 HTTP/1.0\x0D\x0Aconnection:keep-alive\x0D\x0AHost: hoge28\x0D\x0A\x0D\x0A})->then (sub {
     my $data = $_[0];
     test {
       like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
@@ -887,7 +887,7 @@ abcxyz\z};
 
 test {
   my $c = shift;
-  $HandleRequestHeaders->{'/hoge29'} = sub {
+  $HandleRequestHeaders->{'hoge29'} = sub {
     my ($self, $req) = @_;
     $req->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
@@ -899,7 +899,7 @@ test {
     $req->close_response;
   };
 
-  rawtcp (qq{CONNECT /hoge29 HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+  rawtcp (qq{CONNECT hoge29 HTTP/1.1\x0D\x0AHost: hoge29\x0D\x0A\x0D\x0A})->then (sub {
     my $data = $_[0];
     test {
       like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
@@ -916,7 +916,7 @@ abcxyz\z};
 test {
   my $c = shift;
   my $serverreq;
-  $HandleRequestHeaders->{'/hoge30'} = sub {
+  $HandleRequestHeaders->{'hoge30'} = sub {
     my ($self, $req) = @_;
     $req->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
@@ -929,7 +929,7 @@ test {
     $serverreq = $req;
   };
 
-  rawtcp (qq{CONNECT /hoge30 HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0Acontent-length:3\x0D\x0A\x0D\x0Aabcabc})->then (sub {
+  rawtcp (qq{CONNECT hoge30 HTTP/1.1\x0D\x0AHost: hoge30\x0D\x0Acontent-length:3\x0D\x0A\x0D\x0Aabcabc})->then (sub {
     my $data = $_[0];
     test {
       like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
@@ -2110,11 +2110,26 @@ test {
   });
 } n => 5, name => 'WS data bad state';
 
+{
+  package TestURLForCONNECT;
+  push our @ISA, qw(Web::URL);
+
+  sub hostport ($) {
+    my $p = $_[0]->path;
+    $p =~ s{^/}{};
+    return $p;
+  } # hostport
+
+  sub pathquery ($) {
+    return $_[0]->hostport;
+  } # pathquery
+}
+
 test {
   my $c = shift;
   my $path = rand;
   my $serverreq;
-  $HandleRequestHeaders->{"/$path"} = sub {
+  $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     $req->send_response_headers
         ({status => 200, status_text => 'Switched!'});
@@ -2127,7 +2142,8 @@ test {
     };
   };
 
-  my $url = Web::URL->parse_string ("/$path", $Origin);
+  my $url = Web::URL->parse_string ("/$path.test", $Origin);
+  bless $url, 'TestURLForCONNECT';
   my $received = '';
   my $client = Web::Transport::ConnectionClient->new_from_url ($url);
   my $http = Web::Transport::ClientBareConnection->new_from_url ($url);
@@ -2173,7 +2189,7 @@ test {
   my $c = shift;
   my $path = rand;
   my $serverreq;
-  $HandleRequestHeaders->{"/$path"} = sub {
+  $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     $req->send_response_headers
         ({status => 200, status_text => 'Switched!'});
@@ -2186,7 +2202,8 @@ test {
     };
   };
 
-  my $url = Web::URL->parse_string ("/$path", $Origin);
+  my $url = Web::URL->parse_string ("/$path.test", $Origin);
+  bless $url, 'TestURLForCONNECT';
   my $received = '';
   my $client = Web::Transport::ConnectionClient->new_from_url ($url);
   my $http = Web::Transport::ClientBareConnection->new_from_url ($url);
@@ -2228,7 +2245,7 @@ test {
   my $c = shift;
   my $path = rand;
   my $serverreq;
-  $HandleRequestHeaders->{"/$path"} = sub {
+  $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     $req->send_response_headers
         ({status => 200, status_text => 'Switched!',
@@ -2242,7 +2259,8 @@ test {
     };
   };
 
-  my $url = Web::URL->parse_string ("/$path", $Origin);
+  my $url = Web::URL->parse_string ("/$path.test", $Origin);
+  bless $url, 'TestURLForCONNECT';
   my $received = '';
   my $client = Web::Transport::ConnectionClient->new_from_url ($url);
   my $http = Web::Transport::ClientBareConnection->new_from_url ($url);

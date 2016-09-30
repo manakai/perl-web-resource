@@ -482,51 +482,38 @@ sub _request_headers ($) {
             return 0;
           }
 
-          ## Transfer-Encoding:
-          if (@{$headers{'transfer-encoding'} or []}) {
-            $self->_411 ($req);
-            return 0;
-          }
+  ## Transfer-Encoding:
+  if (@{$headers{'transfer-encoding'} or []}) {
+    $self->_411 ($req);
+    return 0;
+  }
 
   $self->{state} = 'request body' if $req->{method} eq 'CONNECT';
 
   ## Content-Length:
+  my $l = 0;
   if (@{$headers{'content-length'} or []} == 1 and
       $headers{'content-length'}->[0] =~ /\A[0-9]+\z/) {
-    my $l = 0+$headers{'content-length'}->[0];
-    if ($req->{method} eq 'CONNECT') {
-      $req->_ev ('requestheaders');
-      $req->_ev ('datastart');
-    } elsif ($l == 0) {
-      if (defined $req->{ws_key}) {
-        $self->{state} = 'ws handshaking';
-        $self->{request}->{close_after_response} = 1;
-      }
-      $req->_ev ('requestheaders');
-      $req->_ev ('datastart');
-      $req->_ev ('dataend');
-      unless (defined $req->{ws_key}) {
-        $self->_request_done ($req);
-      }
-    } else {
-      $req->{body_length} = $l;
-      $self->{unread_length} = $l;
-      $self->{state} = 'request body';
-      $req->_ev ('requestheaders');
-      $req->_ev ('datastart');
-    }
-  } elsif (@{$headers{'content-length'} or []}) { # multiple headers
+    $l = 0+$headers{'content-length'}->[0] unless $req->{method} eq 'CONNECT';
+  } elsif (@{$headers{'content-length'} or []}) { # multiple headers or broken
     $self->_fatal ($req);
     return 0;
-  } else { # no header
+  }
+  if ($l == 0) {
     if (defined $req->{ws_key}) {
       $self->{state} = 'ws handshaking';
       $self->{request}->{close_after_response} = 1;
     }
-    $req->_ev ('requestheaders');
-    if ($req->{method} eq 'CONNECT') {
-      $req->_ev ('datastart');
-    } elsif (not defined $req->{ws_key}) {
+  } else {
+    $req->{body_length} = $l;
+    $self->{unread_length} = $l;
+    $self->{state} = 'request body';
+  }
+  $req->_ev ('requestheaders');
+  $req->_ev ('datastart');
+  if ($l == 0 and not $req->{method} eq 'CONNECT') {
+    $req->_ev ('dataend');
+    unless (defined $req->{ws_key}) {
       $self->_request_done ($req);
     }
   }

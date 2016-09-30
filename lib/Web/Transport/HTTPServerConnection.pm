@@ -110,24 +110,43 @@ sub _ondata ($$) {
             $req->{method} = 'GET';
             return $self->_fatal ($req);
           }
-        } else { # no version
-          $req->{version} = 0.9;
-        }
-        if ($line =~ s{\A([^\x20]+)\x20+}{}) {
-          $req->{method} = $1;
-        } else { # no method
-          $req->{method} = 'GET';
-          return $self->_fatal ($req);
-        }
-        $req->{target} = $line;
-        if ($req->{version} == 0.9) {
-          # XXX if $line is empty
-          $req->{close_after_response} = 1;
-          unless ($req->{method} eq 'GET') {
+          if ($line =~ s{\A([^\x20]+)\x20+}{}) {
+            $req->{method} = $1;
+          } else { # no method
             $req->{method} = 'GET';
             return $self->_fatal ($req);
           }
-          AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
+        } else { # no version
+          $req->{version} = 0.9;
+          $req->{method} = 'GET';
+          unless ($line =~ s{\AGET\x20+}{}) {
+            return $self->_fatal ($req);
+          }
+        }
+        $req->{target} = $line;
+        if ($req->{target} =~ m{\A/}) {
+          if ($req->{method} eq 'CONNECT') {
+            return $self->_fatal ($req);
+          } else {
+            #
+          }
+        } elsif ($req->{target} =~ m{^[A-Za-z][A-Za-z0-9.+-]+://}) {
+          if ($req->{method} eq 'CONNECT') {
+            return $self->_fatal ($req);
+          } else {
+            #
+          }
+        } else {
+          if ($req->{method} eq 'OPTIONS' and $req->{target} eq '*') {
+            #
+          } elsif ($req->{method} eq 'CONNECT' and length $req->{target}) {
+            #
+          } else {
+            return $self->_fatal ($req);
+          }
+        }
+        if ($req->{version} == 0.9) {
+          $self->_request_headers or return;
         } else { # 1.0 / 1.1
           return $self->_fatal ($req) unless length $line;
           $self->{state} = 'before request header';
@@ -161,144 +180,7 @@ sub _ondata ($$) {
             $self->{request}->{headers}->[-1]->[1] .= " " . $line;
           }
         } elsif ($line eq '') { # end of headers
-          my $req = $self->{request};
-          my %headers;
-          for (@{$req->{headers}}) {
-            $_->[1] =~ s/[\x09\x20]+\z//;
-            my $n = $_->[0];
-            $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-            $_->[2] = $n;
-            push @{$headers{$n} ||= []}, $_->[1];
-          } # headers
-
-          # XXX check request-target
-
-          ## Host:
-          if (@{$headers{host} or []} == 1) {
-            my $url = Web::URL->parse_string ("https://$headers{host}->[0]/");
-            if (not defined $url or
-                not $url->path eq '/' or
-                defined $url->query or
-                defined $url->{fragment}) { # XXX
-              return $self->_fatal ($req);
-            }
-          } elsif (@{$headers{host} or []}) { # multiple Host:
-            return $self->_fatal ($req);
-          } else { # no Host:
-            if ($self->{request}->{version} == 1.1) {
-              return $self->_fatal ($req);
-            }
-          }
-          # XXX Host: == request_url->hostport
-
-          ## Connection:
-          my $con = join ',', '', @{$headers{connection} or []}, '';
-          $con =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
-          if ($con =~ /,[\x09\x20]*close[\x09\x20]*,/) {
-            $req->{close_after_response} = 1;
-          } elsif ($req->{version} == 1.0) {
-            unless ($con =~ /,[\x09\x20]*keep-alive[\x09\x20]*,/) {
-              $req->{close_after_response} = 1;
-            }
-          }
-
-          ## Upgrade: websocket
-          if (@{$headers{upgrade} or []} == 1) {
-            WS_OK: {
-              my $status = 400;
-              WS_CHECK: {
-                last WS_CHECK unless $req->{method} eq 'GET';
-                last WS_CHECK unless $req->{version} == 1.1;
-                # XXX request-url->scheme eq 'http' or 'https'
-                my $upgrade = $headers{upgrade}->[0];
-                $upgrade =~ tr/A-Z/a-z/; ## ASCII case-insensitive;
-                last WS_CHECK unless $upgrade eq 'websocket';
-                last WS_CHECK unless $con =~ /,[\x09\x20]*upgrade[\x09\x20]*,/;
-
-                last WS_CHECK unless @{$headers{'sec-websocket-key'} or []} == 1;
-                $req->{ws_key} = $headers{'sec-websocket-key'}->[0];
-                ## 16 bytes (unencoded) = 3*5+1 = 4*5+4 (encoded)
-                last WS_CHECK unless $req->{ws_key} =~ m{\A[A-Za-z0-9+/]{22}==\z};
-
-                last WS_CHECK unless @{$headers{'sec-websocket-version'} or []} == 1;
-                my $ver = $headers{'sec-websocket-version'}->[0];
-                unless ($ver eq '13') {
-                  $status = 426;
-                  last WS_CHECK;
-                }
-
-                $self->{ws_protos} = [grep { length $_ } split /[\x09\x20]*,[\x09\x20]*/, join ',', '', @{$headers{'sec-websocket-protocol'} or []}, ''];
-
-                # XXX
-                #my $exts = [grep { length $_ } split /[\x09\x20]*,[\x09\x20]*/, join ',', '', @{$headers{'sec-websocket-extensions'} or []}, ''];
-
-                last WS_OK;
-              } # WS_CHECK
-
-              if ($status == 426) {
-                return $self->_426 ($req);
-              } else {
-                return $self->_fatal ($req);
-              }
-            } # WS_OK
-          } elsif (@{$headers{upgrade} or []}) {
-            return $self->_fatal ($req);
-          }
-
-          ## Transfer-Encoding:
-          if (@{$headers{'transfer-encoding'} or []}) {
-            return $self->_411 ($req);
-          }
-
-          ## Content-Length:
-          if (@{$headers{'content-length'} or []} == 1 and
-              $headers{'content-length'}->[0] =~ /\A[0-9]+\z/) {
-            my $l = 0+$headers{'content-length'}->[0];
-            if ($req->{method} eq 'CONNECT') {
-              AE::postpone {
-                $self->{cb}->($self, 'requestheaders', $req);
-                $self->{cb}->($self, 'datastart');
-              };
-              $self->{state} = 'request body';
-            } elsif ($l == 0) {
-              AE::postpone {
-                $self->{cb}->($self, 'requestheaders', $req);
-                $self->{cb}->($self, 'datastart');
-                $self->{cb}->($self, 'dataend');
-              };
-              if (defined $req->{ws_key}) {
-                $self->{state} = 'ws handshaking';
-                $self->{request}->{close_after_response} = 1;
-              } else {
-                $self->_request_done ($req);
-              }
-            } else {
-              AE::postpone {
-                $self->{cb}->($self, 'requestheaders', $req);
-                $self->{cb}->($self, 'datastart');
-              };
-              $req->{body_length} = $l;
-              $self->{unread_length} = $l;
-              $self->{state} = 'request body';
-            }
-          } elsif (@{$headers{'content-length'} or []}) {
-            return $self->_fatal ($req);
-          } else {
-            if ($req->{method} eq 'CONNECT') {
-              AE::postpone {
-                $self->{cb}->($self, 'requestheaders', $req);
-                $self->{cb}->($self, 'datastart');
-              };
-              $self->{state} = 'request body';
-            } elsif (defined $req->{ws_key}) {
-              AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
-              $self->{state} = 'ws handshaking';
-              $self->{request}->{close_after_response} = 1;
-            } else {
-              AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
-              $self->_request_done ($req);
-            }
-          }
+          $self->_request_headers or return;
         } else { # broken line
           return $self->_fatal ($self->{request});
         }
@@ -416,6 +298,258 @@ sub _oneof ($$) {
     die "Bad state |$self->{state}|";
   }
 } # _oneof
+
+sub _request_headers ($) {
+  my $self = $_[0];
+  my $req = $self->{request};
+
+  my %headers;
+  for (@{$req->{headers}}) {
+    $_->[1] =~ s/[\x09\x20]+\z//;
+    my $n = $_->[0];
+    $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+    $_->[2] = $n;
+    push @{$headers{$n} ||= []}, $_->[1];
+  } # headers
+
+  ## Host:
+  my $host;
+  if (@{$headers{host} or []} == 1) {
+    $host = $headers{host}->[0];
+    $host =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
+  } elsif (@{$headers{host} or []}) { # multiple Host:
+    $self->_fatal ($req);
+    return 0;
+  } else { # no Host:
+    if ($req->{version} == 1.1) {
+      $self->_fatal ($req);
+      return 0;
+    }
+  }
+
+  ## Request-target and Host:
+  my $target_url;
+  my $host_url;
+  if ($req->{method} eq 'CONNECT') {
+    if (defined $host) {
+      $host_url = Web::URL->parse_string ("http://$host/");
+      if (not defined $host_url or
+          not $host_url->path eq '/' or
+          defined $host_url->query or
+          defined $host_url->{fragment}) { # XXX
+        $self->_fatal ($req);
+        return 0;
+      }
+    }
+
+    my $target = $req->{target};
+    $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
+    $target_url = Web::URL->parse_string ("http://$target/");
+    if (not defined $target_url or
+        not $target_url->path eq '/' or
+        defined $target_url->query or
+        defined $target_url->{fragment}) { # XXX
+      $self->_fatal ($req);
+      return 0;
+    }
+  } elsif ($req->{target} eq '*') {
+    my $scheme = 'http'; # XXX
+    if (defined $host) {
+      $host_url = Web::URL->parse_string ("$scheme://$host/");
+      if (not defined $host_url or
+          not $host_url->path eq '/' or
+          defined $host_url->query or
+          defined $host_url->{fragment}) { # XXX
+        $self->_fatal ($req);
+        return 0;
+      }
+      $target_url = $host_url;
+    } else {
+      $target_url = $host_url = Web::URL->parse_string ("$scheme://0");
+    }
+  } elsif ($req->{target} =~ m{\A/}) {
+    if (defined $host) {
+      my $scheme = 'http'; # XXX
+      $host_url = Web::URL->parse_string ("$scheme://$host/");
+      if (not defined $host_url or
+          not $host_url->path eq '/' or
+          defined $host_url->query or
+          defined $host_url->{fragment}) { # XXX
+        $self->_fatal ($req);
+        return 0;
+      }
+    }
+
+    my $target = $req->{target};
+    $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
+    if (defined $host_url) {
+      $target_url = Web::URL->parse_string ($host_url->get_origin->to_ascii . $target);
+    } else {
+      my $scheme = 'http'; # XXX
+      $target_url = Web::URL->parse_string ("$scheme://0" . $target);
+    }
+    if (not defined $target_url or
+        not defined $target_url->host) {
+      $self->_fatal ($req);
+      return 0;
+    }
+  } else { # absolute URL
+    my $target = $req->{target};
+    $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
+    $target_url = Web::URL->parse_string ($target);
+    if (not defined $target_url or
+        not defined $target_url->host) {
+      $self->_fatal ($req);
+      return 0;
+    }
+
+    if (defined $host) {
+      my $scheme = $target_url->scheme;
+      $host_url = Web::URL->parse_string ("$scheme://$host/");
+      if (not defined $host_url or
+          not $host_url->path eq '/' or
+          defined $host_url->query or
+          defined $host_url->{fragment}) { # XXX
+        $self->_fatal ($req);
+        return 0;
+      }
+    }
+  }
+  if (defined $host_url and defined $target_url) {
+    unless ($host_url->host->equals ($target_url->host)) {
+              $self->_fatal ($req);
+              return 0;
+            }
+            my $host_port = $host_url->port;
+            my $target_port = $target_url->port;
+            if (defined $host_port and defined $target_port and $host_port eq $target_port) {
+              #
+            } elsif (not defined $host_port and not defined $target_port) {
+              #
+            } else {
+              $self->_fatal ($req);
+              return 0;
+            }
+          }
+  # XXX SNI host
+  $req->{target_url} = $target_url;
+  delete $req->{target};
+
+  ## Connection:
+  my $con = join ',', '', @{$headers{connection} or []}, '';
+  $con =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
+  if ($con =~ /,[\x09\x20]*close[\x09\x20]*,/) {
+    $req->{close_after_response} = 1;
+  } elsif ($req->{version} != 1.1) {
+    unless ($con =~ /,[\x09\x20]*keep-alive[\x09\x20]*,/) {
+      $req->{close_after_response} = 1;
+    }
+  }
+
+          ## Upgrade: websocket
+          if (@{$headers{upgrade} or []} == 1) {
+            WS_OK: {
+              my $status = 400;
+              WS_CHECK: {
+                last WS_CHECK unless $req->{method} eq 'GET';
+                last WS_CHECK unless $req->{version} == 1.1;
+                # XXX request-url->scheme eq 'http' or 'https'
+                my $upgrade = $headers{upgrade}->[0];
+                $upgrade =~ tr/A-Z/a-z/; ## ASCII case-insensitive;
+                last WS_CHECK unless $upgrade eq 'websocket';
+                last WS_CHECK unless $con =~ /,[\x09\x20]*upgrade[\x09\x20]*,/;
+
+                last WS_CHECK unless @{$headers{'sec-websocket-key'} or []} == 1;
+                $req->{ws_key} = $headers{'sec-websocket-key'}->[0];
+                ## 16 bytes (unencoded) = 3*5+1 = 4*5+4 (encoded)
+                last WS_CHECK unless $req->{ws_key} =~ m{\A[A-Za-z0-9+/]{22}==\z};
+
+                last WS_CHECK unless @{$headers{'sec-websocket-version'} or []} == 1;
+                my $ver = $headers{'sec-websocket-version'}->[0];
+                unless ($ver eq '13') {
+                  $status = 426;
+                  last WS_CHECK;
+                }
+
+                $self->{ws_protos} = [grep { length $_ } split /[\x09\x20]*,[\x09\x20]*/, join ',', '', @{$headers{'sec-websocket-protocol'} or []}, ''];
+
+                # XXX
+                #my $exts = [grep { length $_ } split /[\x09\x20]*,[\x09\x20]*/, join ',', '', @{$headers{'sec-websocket-extensions'} or []}, ''];
+
+                last WS_OK;
+              } # WS_CHECK
+
+              if ($status == 426) {
+                $self->_426 ($req);
+              } else {
+                $self->_fatal ($req);
+              }
+              return 0;
+            } # WS_OK
+          } elsif (@{$headers{upgrade} or []}) {
+            $self->_fatal ($req);
+            return 0;
+          }
+
+          ## Transfer-Encoding:
+          if (@{$headers{'transfer-encoding'} or []}) {
+            $self->_411 ($req);
+            return 0;
+          }
+
+          ## Content-Length:
+          if (@{$headers{'content-length'} or []} == 1 and
+              $headers{'content-length'}->[0] =~ /\A[0-9]+\z/) {
+            my $l = 0+$headers{'content-length'}->[0];
+            if ($req->{method} eq 'CONNECT') {
+              AE::postpone {
+                $self->{cb}->($self, 'requestheaders', $req);
+                $self->{cb}->($self, 'datastart');
+              };
+              $self->{state} = 'request body';
+            } elsif ($l == 0) {
+              AE::postpone {
+                $self->{cb}->($self, 'requestheaders', $req);
+                $self->{cb}->($self, 'datastart');
+                $self->{cb}->($self, 'dataend');
+              };
+              if (defined $req->{ws_key}) {
+                $self->{state} = 'ws handshaking';
+                $self->{request}->{close_after_response} = 1;
+              } else {
+                $self->_request_done ($req);
+              }
+            } else {
+              AE::postpone {
+                $self->{cb}->($self, 'requestheaders', $req);
+                $self->{cb}->($self, 'datastart');
+              };
+              $req->{body_length} = $l;
+              $self->{unread_length} = $l;
+              $self->{state} = 'request body';
+            }
+          } elsif (@{$headers{'content-length'} or []}) {
+            $self->_fatal ($req);
+            return 0;
+          } else {
+            if ($req->{method} eq 'CONNECT') {
+              AE::postpone {
+                $self->{cb}->($self, 'requestheaders', $req);
+                $self->{cb}->($self, 'datastart');
+              };
+              $self->{state} = 'request body';
+            } elsif (defined $req->{ws_key}) {
+              AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
+              $self->{state} = 'ws handshaking';
+              $self->{request}->{close_after_response} = 1;
+            } else {
+              AE::postpone { $self->{cb}->($self, 'requestheaders', $req) };
+              $self->_request_done ($req);
+            }
+          }
+
+  return 1;
+} # _request_headers
 
 sub _request_done ($$;$) {
   my ($self, $req, $exit) = @_;
@@ -646,7 +780,6 @@ sub send_response_data ($$) {
   }
 } # send_response_data
 
-# XXX rename as close?
 sub close_response ($;%) {
   my ($req, %args) = @_;
   return unless defined $req->{connection};

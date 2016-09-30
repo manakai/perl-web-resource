@@ -54,10 +54,15 @@ my $HandleRequestHeaders = {};
   my $cb = sub {
     my ($self, $type, $req) = @_;
     if ($type eq 'requestheaders') {
-      my $handler = $HandleRequestHeaders->{$req->{target}};
+      my $handler = $HandleRequestHeaders->{$req->{target_url}->path} ||
+                    $HandleRequestHeaders->{$req->{target_url}->hostport};
       if (defined $handler) {
         $req->{body} = '';
         $handler->($self, $req);
+      } elsif ($req->{target_url}->path eq '/') {
+        $req->send_response_headers
+            ({status => 404, status_text => 'Not Found (/)'}, close => 1);
+        $req->close_response;
       } else {
         die "No handler for |$req->{target}|";
       }
@@ -2330,8 +2335,912 @@ test {
   });
 } n => 5, name => '1xx response';
 
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1, content_length => 0);
+  };
 
-# XXX CONNECT request-target
+  rawtcp (qq{GET /$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'request-target GET origin-path';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\'ok!');
+    $req->close_response;
+  };
+
+  rawtcp (qq{GET /$path\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      is $data, q{ok!};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'request-target GET origin-path HTTP/0.9';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+  };
+
+  rawtcp (qq{GET http://@{[$Origin->hostport]}/$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'request-target GET absolute-path';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\'ok!');
+    $req->close_response;
+  };
+
+  rawtcp (qq{GET http://foo/$path\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      is $data, q{ok!};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'request-target GET absolute-path HTTP/0.9';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET @{[$Origin->hostport]} HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET authority-path';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET * HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET asterisk-path';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET http://hoge$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET absolute-path, Host: mismatch';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET mailto://@{[$Origin->hostport]}/$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET bad absolute-path';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET https://@{[$Origin->hostport]}/$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET https: URL scheme';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET https://foobar/$path HTTP/1.1\x0D\x0AHost: foobar\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET https: URL scheme';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET https://foobar/$path HTTP/1.1\x0D\x0AHost: foobar:443\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET https: URL scheme';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET ftp://foobar/$path HTTP/1.1\x0D\x0AHost: foobar\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET ftp: URL scheme';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET ftp://foobar:21/$path HTTP/1.1\x0D\x0AHost: foobar\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET ftp: URL scheme';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET ftp://foobar:80/$path HTTP/1.1\x0D\x0AHost: foobar\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET ftp: URL scheme';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET http://foobar:21/$path HTTP/1.1\x0D\x0AHost: foobar:021\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET http: URL scheme';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET bad://foobar:21/$path HTTP/1.1\x0D\x0AHost: foobar:21\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET bad: URL scheme';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET javascript://foobar/$path HTTP/1.1\x0D\x0AHost: foobar\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET javascript: URL scheme';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"//$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET //$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET //path';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path%80%FE%AC%FE"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET /$path\x80\xFE\xAC\xFE HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET non-ASCII';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path%80%FE%AC%FE"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET http://@{[$Origin->hostport]}/$path\x80\xFE\xAC\xFE HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET non-ASCII';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET /$path#abcde HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET fragment';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{OPTIONS  /$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target OPTIONS';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{OPTIONS http://@{[$Origin->hostport]}/$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target OPTIONS';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{OPTIONS $path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target OPTIONS';
+
+test {
+  my $c = shift;
+  rawtcp (qq{OPTIONS * HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 404 Not Found \(/\)};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'request-target OPTIONS';
+
+test {
+  my $c = shift;
+  rawtcp (qq{CONNECT * HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'request-target CONNECT';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"$path.test"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{CONNECT $path.test HTTP/1.1\x0D\x0AHost: $path.test\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target CONNECT';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"$path.test"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{CONNECT $path.test HTTP/1.1\x0D\x0AHost: $path.test2\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target CONNECT';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path.test"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{CONNECT /$path.test HTTP/1.1\x0D\x0AHost: /$path.test\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target CONNECT';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path.test"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{CONNECT http://$path.test HTTP/1.1\x0D\x0AHost: $path.test\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target CONNECT';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"$path.test"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->send_response_data (\($req->{target_url}->stringify));
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{CONNECT $path.test:80 HTTP/1.1\x0D\x0AHost: $path.test\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target CONNECT';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"$path.xn--4gq.test"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{CONNECT $path.\xE4\xB8\x80.test HTTP/1.1\x0D\x0AHost: $path.xn--4gq.test\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target CONNECT';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"$path.xn--4gq.test"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{CONNECT $path.xn--4gq.test HTTP/1.1\x0D\x0AHost: $path.\xE4\xB8\x80.test\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target CONNECT';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"$path.test"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{CONNECT $path.test HTTP/1.0\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target CONNECT, no Host: (HTTP/1.0)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"$path.test"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{CONNECT $path.test HTTP/1.1\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target CONNECT, no Host: (HTTP/1.1)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path.test"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET /$path.test HTTP/1.0\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+      is $invoked, 1;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET, no Host: (HTTP/1.0)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path.test"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 201, status_text => 'o'}, close => 1);
+    $req->close_response;
+    $invoked++;
+  };
+
+  rawtcp (qq{GET /$path.test HTTP/1.1\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target GET, no Host: (HTTP/1.1)';
+
+test {
+  my $c = shift;
+  rawtcp (qq{GET  HTTP/1.1\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'request-target empty (HTTP/1.1)';
+
+test {
+  my $c = shift;
+  rawtcp (qq{GET  \x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{<!DOCTYPE html><html>.+400 Bad Request}s;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'request-target empty (HTTP/0.9)';
 
 run_tests;
 

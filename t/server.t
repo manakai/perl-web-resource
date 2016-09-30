@@ -2269,9 +2269,63 @@ test {
   });
 } n => 4, name => 'CONNECT data with broken Content-Length (response)';
 
+test {
+  my $c = shift;
+  my $serverreq;
+  my $error;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    eval {
+      $req->send_response_headers
+          ({status => 101, status_text => 'Switched!'});
+    };
+    $req->send_response_headers
+        ({status => 200, status_text => 'O.K.'});
+    $error = $@;
+    $req->send_response_data (\"abcde");
+    $req->close_response;
+    $serverreq = $req;
+  };
+
+  my $url = Web::URL->parse_string ("/$path", $Origin);
+  my $received = '';
+  my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+  my $http = Web::Transport::ClientBareConnection->new_from_url ($url);
+  $http->parent_id ('x');
+  $http->proxy_manager ($client->proxy_manager);
+  $http->resolver ($client->resolver);
+  $http->request ('GET', $url, [], undef, 0, 0, sub {
+    if (defined $_[2]) {
+      $received .= $_[2];
+    } else {
+      $received .= '(end)';
+      $http->close;
+    }
+  })->then (sub {
+    my ($res, $result) = @{$_[0]};
+    test {
+      like $error, qr{^1xx response not supported at @{[__FILE__]} line @{[__LINE__-28]}};
+      is $serverreq->{body}, '';
+      is $received, 'abcde(end)';
+      ok ! $result->{failed};
+      is $result->{message}, undef;
+    } $c;
+  })->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error, undef, "No error";
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => '1xx response';
+
 
 # XXX CONNECT request-target
-# XXX non-WS 1xx
 # XXX request timeout vs CONNECT / WS
 
 run_tests;

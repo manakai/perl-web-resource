@@ -650,7 +650,7 @@ sub close_response ($;%) {
     $req->{close_after_response} = 1 if $req->{method} eq 'CONNECT';
     if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
       # XXX trailer headers
-      $req->{connection}->{transport}->push_write (\"0\x0A");
+      $req->{connection}->{transport}->push_write (\"0\x0D\x0A\x0D\x0A");
       $req->_next;
     } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'ws') {
       $req->close (%args);

@@ -666,7 +666,6 @@ sub _next ($) {
     $req->{connection}->{transport}->push_shutdown
         unless $req->{connection}->{write_closed};
     $req->{connection}->{write_closed} = 1;
-    $req->{connection}->{state} = 'end';
   }
   if (defined $req->{res_done}) {
     (delete $req->{res_done})->({});

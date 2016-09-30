@@ -61,6 +61,7 @@ my $HandleRequestHeaders = {};
       }
     } elsif ($type eq 'data') {
       $req->{body} .= $_[3];
+      $req->{ondata}->($_[3], $_[4]) if $req->{ondata};
     } elsif ($type eq 'text') {
       $req->{text} .= $_[3];
     } elsif ($type eq 'dataend' or $type eq 'textend' or
@@ -2098,13 +2099,179 @@ test {
   });
 } n => 5, name => 'WS data bad state';
 
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 200, status_text => 'Switched!'});
+    $req->send_response_data (\"abcde");
+    $serverreq = $req;
+    $req->{ondata} = sub {
+      if ($req->{body} =~ /stuvw/) {
+        $req->close_response (status => 5678, reason => 'abc');
+      }
+    };
+  };
+
+  my $url = Web::URL->parse_string ("/$path", $Origin);
+  my $received = '';
+  my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+  my $http = Web::Transport::ClientBareConnection->new_from_url ($url);
+  $http->parent_id ('x');
+  $http->proxy_manager ($client->proxy_manager);
+  $http->resolver ($client->resolver);
+  $http->request ('CONNECT', $url, [], undef, 0, 0, sub {
+    if (defined $_[2]) {
+      $received .= $_[2];
+      if ($received =~ /abcde/) {
+        $http->{http}->send_data (\'stuvw');
+      }
+    } else {
+      $received .= '(end)';
+      $http->{http}->send_data (\'abc');
+      my $timer; $timer = AE::timer 1, 0, sub {
+        undef $timer;
+        $http->close;
+      };
+    }
+  })->then (sub {
+    my ($res, $result) = @{$_[0]};
+    test {
+      is $serverreq->{body}, 'stuvwabc';
+      is $received, 'abcde(end)';
+      ok ! $result->{failed};
+      is $result->{message}, undef;
+    } $c;
+  })->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error, undef, "No error";
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'CONNECT data';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 200, status_text => 'Switched!'});
+    $req->send_response_data (\"abcde");
+    $serverreq = $req;
+    $req->{ondata} = sub {
+      if ($req->{body} =~ /stuvw/) {
+        $req->close_response (status => 5678, reason => 'abc');
+      }
+    };
+  };
+
+  my $url = Web::URL->parse_string ("/$path", $Origin);
+  my $received = '';
+  my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+  my $http = Web::Transport::ClientBareConnection->new_from_url ($url);
+  $http->parent_id ('x');
+  $http->proxy_manager ($client->proxy_manager);
+  $http->resolver ($client->resolver);
+  $http->request ('CONNECT', $url, [['Content-Length', '9']], undef, 0, 0, sub {
+    if (defined $_[2]) {
+      $received .= $_[2];
+      if ($received =~ /abcde/) {
+        $http->{http}->send_data (\'stuvw');
+      }
+    } else {
+      $received .= '(end)';
+      $http->close;
+    }
+  })->then (sub {
+    my ($res, $result) = @{$_[0]};
+    test {
+      is $serverreq->{body}, 'stuvw';
+      is $received, 'abcde(end)';
+      ok ! $result->{failed};
+      is $result->{message}, undef;
+    } $c;
+  })->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error, undef, "No error";
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'CONNECT data with broken Content-Length (request)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 200, status_text => 'Switched!',
+          headers => [['Content-Length', '12']]});
+    $req->send_response_data (\"abcde");
+    $serverreq = $req;
+    $req->{ondata} = sub {
+      if ($req->{body} =~ /stuvw/) {
+        $req->close_response (status => 5678, reason => 'abc');
+      }
+    };
+  };
+
+  my $url = Web::URL->parse_string ("/$path", $Origin);
+  my $received = '';
+  my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+  my $http = Web::Transport::ClientBareConnection->new_from_url ($url);
+  $http->parent_id ('x');
+  $http->proxy_manager ($client->proxy_manager);
+  $http->resolver ($client->resolver);
+  $http->request ('CONNECT', $url, [], undef, 0, 0, sub {
+    if (defined $_[2]) {
+      $received .= $_[2];
+      if ($received =~ /abcde/) {
+        $http->{http}->send_data (\'stuvw');
+      }
+    } else {
+      $received .= '(end)';
+      $http->close;
+    }
+  })->then (sub {
+    my ($res, $result) = @{$_[0]};
+    test {
+      is $serverreq->{body}, 'stuvw';
+      is $received, 'abcde(end)';
+      ok ! $result->{failed};
+      is $result->{message}, undef;
+    } $c;
+  })->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error, undef, "No error";
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'CONNECT data with broken Content-Length (response)';
 
 
 # XXX CONNECT request-target
-# XXX  CONNECT closing
-# XXX CONNECT content_length
 # XXX non-WS 1xx
-# XXX WS tests
 # XXX request timeout vs CONNECT / WS
 
 run_tests;

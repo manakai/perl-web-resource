@@ -786,7 +786,7 @@ sub send_request_headers ($$;%) {
         unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
     my $n = $_->[0];
     $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
-    if ($n eq 'content-length') {
+    if ($n eq 'content-length' and not $req->{method} eq 'CONNECT') {
       $self->{to_be_sent_length} = $_->[1]; # XXX
       # XXX throw if multiple length?
     }

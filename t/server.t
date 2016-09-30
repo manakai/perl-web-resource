@@ -483,7 +483,8 @@ test {
 
 test {
   my $c = shift;
-  $HandleRequestHeaders->{'/hoge17'} = sub {
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $req->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
@@ -494,7 +495,7 @@ test {
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
-  $http->request (path => ['hoge17'])->then (sub {
+  $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
       ok $res->is_network_error;
@@ -1719,6 +1720,385 @@ test {
     undef $c;
   });
 } n => 7, name => 'WS ping';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->send_binary_header (5);
+    eval {
+      $req->send_response_data (\"abcdef");
+    };
+    $error = $@;
+    $req->send_response_data (\"12345");
+    $req->close_response (status => 5678);
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= defined $data ? $data : '(end)';
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Data too long \(given 6 bytes whereas only 5 bytes allowed\) at @{[__FILE__]} line @{[__LINE__-17]}};
+      is $received, '(end)12345(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS data bad length';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->send_text_header (5);
+    eval {
+      $req->send_response_data (\"abcdef");
+    };
+    $error = $@;
+    $req->send_response_data (\"12345");
+    $req->close_response (status => 5678);
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= defined $data ? $data : '(end)';
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Data too long \(given 6 bytes whereas only 5 bytes allowed\) at @{[__FILE__]} line @{[__LINE__-17]}};
+      is $received, '(end)12345(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS data bad length';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->send_text_header (5);
+    $req->send_response_data (\"123");
+    eval {
+      $req->send_response_data (\"abcdef");
+    };
+    $error = $@;
+    $req->send_response_data (\"45");
+    $req->close_response (status => 5678);
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= defined $data ? $data : '(end)';
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Data too long \(given 6 bytes whereas only 2 bytes allowed\) at @{[__FILE__]} line @{[__LINE__-17]}};
+      is $received, '(end)12345(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS data bad length';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->send_text_header (0);
+    eval {
+      $req->send_response_data (\"abcdef");
+    };
+    $error = $@;
+    $req->close_response (status => 5678);
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= defined $data ? $data : '(end)';
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Not writable for now at @{[__FILE__]} line @{[__LINE__-16]}};
+      is $received, '(end)(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS data bad length';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    eval {
+      $req->send_response_data (\"abcdef");
+    };
+    $req->send_text_header (1);
+    $req->send_response_data (\"1");
+    $error = $@;
+    $req->close_response (status => 5678);
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= defined $data ? $data : '(end)';
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Not writable for now at @{[__FILE__]} line @{[__LINE__-18]}};
+      is $received, '(end)1(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS data bad length';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->send_binary_header (5);
+    $req->send_response_data (\"123");
+    eval {
+      $req->send_text_header (4);
+    };
+    $req->send_response_data (\"45");
+    $error = $@;
+    $req->close_response (status => 5678);
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= defined $data ? $data : '(end)';
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Bad state at @{[__FILE__]} line @{[__LINE__-17]}};
+      is $received, '(end)12345(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS data bad length';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->send_binary_header (5);
+    $req->send_response_data (\"123");
+    eval {
+      $req->send_binary_header (4);
+    };
+    $req->send_response_data (\"45");
+    $error = $@;
+    $req->close_response (status => 5678);
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= defined $data ? $data : '(end)';
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Bad state at @{[__FILE__]} line @{[__LINE__-17]}};
+      is $received, '(end)12345(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS data bad length';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->send_binary_header (5);
+    $req->send_response_data (\"123");
+    $req->close_response (status => 4056);
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= defined $data ? $data : '(end)';
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      is $received, '(end)';
+      ok ! $res->is_network_error;
+      ok ! $res->ws_closed_cleanly;
+      is $res->ws_code, 1006;
+      is $res->ws_reason, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'WS data bad length';
+
+test {
+  my $c = shift;
+  my $error;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->close_response (status => 4056);
+    eval {
+      $req->send_binary_header (5);
+    };
+    $error = $@;
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= defined $data ? $data : '(end)';
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Bad state at @{[__FILE__]} line @{[__LINE__-15]}};
+      is $received, '(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 4056;
+      is $res->ws_reason, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS data bad state';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $req->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $req->close_response (status => 4056);
+    $req->close_response (status => 5678);
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      $received .= defined $data ? $data : '(end)';
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      is $received, '(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 4056;
+      is $res->ws_reason, '';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'WS data bad state';
+
+
 
 # XXX CONNECT request-target
 # XXX  CONNECT closing

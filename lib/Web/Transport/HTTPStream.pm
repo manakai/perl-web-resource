@@ -545,7 +545,7 @@ sub _ws_debug ($$$%) {
                                      unpack 'CCCC', $args{mask} : ())),
       $args{length};
   if ($args{opcode} == 8 and defined $args{status}) {
-    warn "$id: S: status=$args{status} @{[_e4d $_[2]]}\n";
+    warn "$id: S: status=$args{status} |@{[_e4d (defined $_[2] ? $_[2] : '')]}|\n";
   } elsif (($self->{DEBUG} > 1 or $args{opcode} >= 8) and length $_[2]) {
     warn "$id: S: @{[_e4d $_[2]]}\n";
   }

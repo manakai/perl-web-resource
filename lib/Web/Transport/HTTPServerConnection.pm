@@ -526,7 +526,7 @@ sub send_response_headers ($$$;%) {
       $response->{status} == 304) {
     ## No response body by definition
     if (defined $args{content_length}) {
-      $req->{write_length} = 0+$args{content_length};
+      $req->{to_be_sent_length} = 0+$args{content_length};
     }
     $done = 1;
   } elsif ($req->{method} eq 'CONNECT' and
@@ -551,8 +551,8 @@ sub send_response_headers ($$$;%) {
     if (defined $args{content_length}) {
       ## If body length is specified
       $req->{write_mode} = 'raw';
-      $req->{write_length} = 0+$args{content_length};
-      $done = 1 if $req->{write_length} <= 0;
+      $req->{to_be_sent_length} = 0+$args{content_length};
+      $done = 1 if $req->{to_be_sent_length} <= 0;
     } elsif ($req->{version} == 1.1) {
       ## Otherwise, if chunked encoding can be used
       $req->{write_mode} = 'chunked';
@@ -586,8 +586,8 @@ sub send_response_headers ($$$;%) {
       if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
         push @header, ['Transfer-Encoding', 'chunked'];
       }
-      if (defined $req->{write_length}) {
-        push @header, ['Content-Length', $req->{write_length}];
+      if (defined $req->{to_be_sent_length}) {
+        push @header, ['Content-Length', $req->{to_be_sent_length}];
       }
     }
     for (@header, @{$response->{headers}}) {
@@ -598,7 +598,7 @@ sub send_response_headers ($$$;%) {
   }
 
   if ($done) {
-    delete $req->{write_length};
+    delete $req->{to_be_sent_length};
     $req->close_response;
   }
 } # send_response_headers
@@ -606,31 +606,32 @@ sub send_response_headers ($$$;%) {
 sub send_response_data ($$) {
   my ($req, $ref) = @_;
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
-  if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
+  my $wm = $req->{write_mode} || '';
+  if ($wm eq 'chunked') {
     if (length $$ref) {
       $req->{connection}->{transport}->push_write (\sprintf "%X\x0D\x0A", length $$ref);
       $req->{connection}->{transport}->push_write ($ref);
       $req->{connection}->{transport}->push_write (\"\x0A");
     }
-  } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'raw') {
-    if (defined $req->{write_length}) {
-      if ($req->{write_length} >= length $$ref) {
-        $req->{write_length} -= length $$ref;
+  } elsif ($wm eq 'raw' or $wm eq 'ws') {
+    croak "Not writable for now"
+        if $wm eq 'ws' and
+            (not $req->{ws_state} eq 'OPEN' or
+             not defined $req->{to_be_sent_length} or
+             $req->{to_be_sent_length} <= 0);
+    if (defined $req->{to_be_sent_length}) {
+      if ($req->{to_be_sent_length} >= length $$ref) {
+        $req->{to_be_sent_length} -= length $$ref;
       } else {
         croak sprintf "Data too long (given %d bytes whereas only %d bytes allowed)",
-            length $$ref, $req->{write_length};
+            length $$ref, $req->{to_be_sent_length};
       }
     }
     $req->{connection}->{transport}->push_write ($ref);
-    if (defined $req->{write_length} and $req->{write_length} <= 0) {
+    if ($wm eq 'raw' and
+        defined $req->{to_be_sent_length} and $req->{to_be_sent_length} <= 0) {
       $req->close_response;
     }
-  } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'ws') {
-    croak "Not writable for now"
-        unless $req->{ws_state} eq 'OPEN';
-#XXX
-    $req->{connection}->{transport}->push_write ($ref);
-
   } else {
     croak "Not writable for now";
   }
@@ -640,20 +641,22 @@ sub send_response_data ($$) {
 sub close_response ($;%) {
   my ($req, %args) = @_;
   return unless defined $req->{connection};
-  if (defined $req->{write_length} and $req->{write_length} > 0) {
+  if (defined $req->{to_be_sent_length} and $req->{to_be_sent_length} > 0) {
     carp sprintf "Truncated end of sent data (%d more bytes expected)",
-        $req->{write_length};
+        $req->{to_be_sent_length};
     $req->{close_after_response} = 1;
-  }
-  $req->{close_after_response} = 1 if $req->{method} eq 'CONNECT';
-  if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
-    # XXX trailer headers
-    $req->{connection}->{transport}->push_write (\"0\x0A");
     $req->_next;
-  } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'ws') {
-    $req->close (%args);
   } else {
-    $req->_next;
+    $req->{close_after_response} = 1 if $req->{method} eq 'CONNECT';
+    if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
+      # XXX trailer headers
+      $req->{connection}->{transport}->push_write (\"0\x0A");
+      $req->_next;
+    } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'ws') {
+      $req->close (%args);
+    } else {
+      $req->_next;
+    }
   }
 } # close_response
 
@@ -670,7 +673,7 @@ sub _next ($) {
   }
   delete $req->{connection};
   delete $req->{write_mode};
-  delete $req->{write_length};
+  delete $req->{to_be_sent_length};
 } # _next
 
 BEGIN {

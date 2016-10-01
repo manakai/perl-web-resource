@@ -76,7 +76,7 @@ sub _new_stream ($) {
   my $p1 = Promise->new (sub { $req->{req_done} = $_[0] });
   my $p2 = Promise->new (sub { $req->{res_done} = $_[0] });
   Promise->all ([$p1, $p2])->then (sub {
-    $req->_done ($_[0]->[0] || $_[0]->[1] || {});
+    $req->_both_done ($_[0]->[0] || $_[0]->[1] || {});
     $self->_con_ev ('endstream', $req);
   });
   $req->{cb} = $self->_con_ev ('startstream', $req);
@@ -176,7 +176,7 @@ sub _ondata ($$) {
         my $stream = $self->_new_stream;
         $stream->{request}->{method} = 'GET';
         $stream->{request}->{version} = 1.1;
-        $stream->_request_done;
+        $stream->_receive_done;
         $stream->_send_error (414, 'Request-URI Too Large')
             unless $self->{write_closed};
         $stream->close_response;
@@ -239,7 +239,7 @@ sub _ondata ($$) {
         $self->{stream}->_ev ('data', $$ref);
         $self->{stream}->_ev ('dataend');
         unless (defined $self->{stream}->{ws_key}) {
-          $self->{stream}->_request_done;
+          $self->{stream}->_receive_done;
         }
       } elsif ($self->{unread_length} < $in_length) { # has redundant data
         $self->{stream}->{incomplete} = 1;
@@ -250,7 +250,7 @@ sub _ondata ($$) {
         $self->{stream}->_ev ('data', substr ($$ref, 0, $self->{unread_length}));
         $self->{stream}->_ev ('dataend');
         unless (defined $self->{stream}->{ws_key}) {
-          $self->{stream}->_request_done;
+          $self->{stream}->_receive_done;
         }
         return;
       } else { # unread_length > $in_length
@@ -294,7 +294,7 @@ sub _oneof ($$) {
           unless $exit->{failed};
     }
     $self->{stream}->_ev ('dataend');
-    $self->{stream}->_request_done ($exit);
+    $self->{stream}->_receive_done ($exit);
   } elsif ($self->{state} eq 'before ws frame' or
            $self->{state} eq 'ws data' or
            $self->{state} eq 'ws terminating') {
@@ -505,7 +505,7 @@ sub _request_headers ($) {
       } # WS_CHECK
 
       if ($status == 426) {
-        $stream->_request_done;
+        $stream->_receive_done;
         $stream->_send_error (426, 'Upgrade Required', [
           ['Upgrade', 'websocket'],
           ['Sec-WebSocket-Version', '13'],
@@ -523,7 +523,7 @@ sub _request_headers ($) {
 
   ## Transfer-Encoding:
   if (@{$headers{'transfer-encoding'} or []}) {
-    $stream->_request_done;
+    $stream->_receive_done;
     $stream->_send_error (411, 'Length Required') unless $self->{write_closed};
     $stream->close_response;
     return 0;
@@ -556,7 +556,7 @@ sub _request_headers ($) {
   if ($l == 0 and not $stream->{request}->{method} eq 'CONNECT') {
     $stream->_ev ('dataend');
     unless (defined $stream->{ws_key}) {
-      $stream->_request_done;
+      $stream->_receive_done;
     }
   }
 
@@ -724,18 +724,18 @@ sub close_response ($;%) {
     carp sprintf "Truncated end of sent data (%d more bytes expected)",
         $stream->{to_be_sent_length};
     $stream->{close_after_response} = 1;
-    $stream->_next;
+    $stream->_send_done;
   } else {
     $stream->{close_after_response} = 1
         if $stream->{request}->{method} eq 'CONNECT';
     if (defined $stream->{write_mode} and $stream->{write_mode} eq 'chunked') {
       # XXX trailer headers
       $stream->{connection}->{transport}->push_write (\"0\x0D\x0A\x0D\x0A");
-      $stream->_next;
+      $stream->_send_done;
     } elsif (defined $stream->{write_mode} and $stream->{write_mode} eq 'ws') {
       $stream->close (%args);
     } else {
-      $stream->_next;
+      $stream->_send_done;
     }
   }
 } # close_response
@@ -760,14 +760,28 @@ sub _send_error ($$$;$) {
 sub _fatal ($) {
   my ($req) = @_;
   my $con = $req->{connection};
-  $req->_request_done;
+  $req->_receive_done;
   $con->{state} = 'end';
   $con->{rbuf} = '';
   $req->_send_error (400, 'Bad Request') unless $con->{write_closed};
   $req->close_response;
 } # _fatal
 
-sub _request_done ($;$) {
+sub _send_done ($) {
+  my $req = $_[0];
+  if (delete $req->{close_after_response}) {
+    $req->{connection}->{transport}->push_shutdown
+        unless $req->{connection}->{write_closed};
+    $req->{connection}->{write_closed} = 1;
+  }
+  if (defined $req->{res_done}) {
+    (delete $req->{res_done})->({});
+  }
+  delete $req->{write_mode};
+  delete $req->{to_be_sent_length};
+} # _send_done
+
+sub _receive_done ($;$) {
   my ($req, $exit) = @_;
   my $con = $req->{connection};
   delete $con->{timer};
@@ -783,23 +797,9 @@ sub _request_done ($;$) {
   if (defined $req->{req_done}) {
     (delete $req->{req_done})->($exit);
   }
-} # _request_done
+} # _receive_done
 
-sub _next ($) {
-  my $req = $_[0];
-  if (delete $req->{close_after_response}) {
-    $req->{connection}->{transport}->push_shutdown
-        unless $req->{connection}->{write_closed};
-    $req->{connection}->{write_closed} = 1;
-  }
-  if (defined $req->{res_done}) {
-    (delete $req->{res_done})->({});
-  }
-  delete $req->{write_mode};
-  delete $req->{to_be_sent_length};
-} # _next
-
-sub _done ($$) {
+sub _both_done ($$) {
   my ($req, $exit) = @_;
   my $con = $req->{connection};
   if (delete $req->{close_after_response}) {
@@ -811,7 +811,7 @@ sub _done ($$) {
   $con->{timer} = AE::timer $ReadTimeout, 0, sub { $con->_timeout };
   $req->_ev ('complete', $exit);
   delete $req->{connection};
-} # _done
+} # _both_done
 
 sub DESTROY ($) {
   local $@;

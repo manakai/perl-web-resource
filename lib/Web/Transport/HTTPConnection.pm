@@ -209,7 +209,7 @@ sub _ws_received ($;%) {
                            reason => defined $reason ? $reason : '',
                            ws => 1, cleanly => 1};
           if ($self->{is_server}) {
-            $stream->_next;
+            $stream->_receive_done;
           } else {
             $self->{ws_timer} = AE::timer 1, 0, sub { # XXX spec
               if ($self->{DEBUG}) {
@@ -217,7 +217,7 @@ sub _ws_received ($;%) {
                 warn "$id: WS timeout (1)\n";
               }
               delete $self->{ws_timer};
-              $stream->_next;
+              $stream->_receive_done;
             };
           }
           return;
@@ -299,7 +299,7 @@ sub _ws_received ($;%) {
     $self->{state} = 'ws terminating';
     $self->{no_new_request} = 1;
     $self->{request_state} = 'sent';
-    $stream->_next;
+    $stream->_receive_done;
     return;
   }
   if ($self->{state} eq 'ws terminating') {
@@ -334,7 +334,7 @@ sub _ws_received_eof ($;%) {
   $self->{no_new_request} = 1;
   $self->{request_state} = 'sent';
   my $stream = $self->{is_server} ? $self->{stream} : $self;
-  $stream->_next;
+  $stream->_receive_done;
 } # _ws_received_eof
 
 sub _con_ev ($$) {
@@ -549,13 +549,13 @@ sub close ($;%) {
           warn "$id: WS timeout (20)\n";
         }
         # XXX set exit ?
-        $self->_next;
+        $self->_receive_done;
         delete $con->{ws_timer};
       };
       $self->_ev ('closing');
     }
   } elsif ($self->{is_server}) {
-    $self->_next;
+    $self->_receive_done;
     return;
   }
 

@@ -68,7 +68,7 @@ sub _process_rbuf ($$;%) {
         $self->{request_state} = 'sent';
         $self->{exit} = {failed => 1,
                          message => "HTTP/0.9 response to non-GET request"};
-        $self->_next;
+        $self->_receive_done;
         return;
       } else {
         $self->_ev ('headers', $self->{response});
@@ -84,7 +84,7 @@ sub _process_rbuf ($$;%) {
       $self->{request_state} = 'sent';
       $self->{exit} = {failed => 1,
                        message => "Header section too large"};
-      $self->_next;
+      $self->_receive_done;
       return;
     } elsif ($$ref =~ s/^(.*?)\x0A\x0D?\x0A//s or
              ($args{eof} and $$ref =~ s/\A(.*)\z//s and
@@ -175,7 +175,7 @@ sub _process_rbuf ($$;%) {
         $self->{request_state} = 'sent';
         $self->{exit} = {failed => 1,
                          message => "Inconsistent content-length values"};
-        $self->_next;
+        $self->_receive_done;
         return;
       } elsif (1 == keys %length) {
         my $length = each %length;
@@ -188,7 +188,7 @@ sub _process_rbuf ($$;%) {
           $self->{request_state} = 'sent';
           $self->{exit} = {failed => 1,
                            message => "Inconsistent content-length values"};
-          $self->_next;
+          $self->_receive_done;
           return;
         }
       }
@@ -250,7 +250,7 @@ sub _process_rbuf ($$;%) {
           $self->{exit} = {ws => 1, failed => 1, status => 1006, reason => ''};
           $self->{no_new_request} = 1;
           $self->{request_state} = 'sent';
-          $self->_next;
+          $self->_receive_done;
           return;
         } else {
           $self->{ws_state} = 'OPEN';
@@ -264,7 +264,7 @@ sub _process_rbuf ($$;%) {
             $self->{ws_timer} = AE::timer 20, 0, sub {
               warn "$self->{request}->{id}: WS timeout (20)\n" if DEBUG;
               delete $self->{ws_timer};
-              $self->_next;
+              $self->_receive_done;
             };
           }
         }
@@ -276,7 +276,7 @@ sub _process_rbuf ($$;%) {
           $self->{request_state} = 'sent';
           $self->{exit} = {failed => 1,
                            message => "1xx response to CONNECT or WS"};
-          $self->_next;
+          $self->_receive_done;
           return;
         } else {
           #push @{$res->{'1xxes'} ||= []}, {
@@ -347,7 +347,7 @@ sub _process_rbuf ($$;%) {
         $self->{no_new_request} = 1 unless $keep_alive;
 
         $self->{exit} = {};
-        $self->_next;
+        $self->_receive_done;
       }
     } else {
       $self->_ev ('data', $$ref)
@@ -365,7 +365,7 @@ sub _process_rbuf ($$;%) {
       $self->{request_state} = 'sent';
       $self->_ev ('dataend', {});
       $self->{exit} = {};
-      $self->_next;
+      $self->_receive_done;
       return;
     }
   }
@@ -382,7 +382,7 @@ sub _process_rbuf ($$;%) {
         $self->{request_state} = 'sent';
         $self->_ev ('dataend', {});
         $self->{exit} = {};
-        $self->_next;
+        $self->_receive_done;
         return;
       }
       if ($n == 0) {
@@ -431,7 +431,7 @@ sub _process_rbuf ($$;%) {
         $self->{request_state} = 'sent';
         $self->_ev ('dataend', {});
         $self->{exit} = {};
-        $self->_next;
+        $self->_receive_done;
         return;
       }
     }
@@ -442,7 +442,7 @@ sub _process_rbuf ($$;%) {
       $self->{no_new_request} = 1;
       $self->{request_state} = 'sent';
       $self->{exit} = {};
-      $self->_next;
+      $self->_receive_done;
       return;
     } elsif ($$ref =~ s/^(.*?)\x0A\x0D?\x0A//s) {
       my $connection = '';
@@ -459,7 +459,7 @@ sub _process_rbuf ($$;%) {
         }
       }
       $self->{exit} = {};
-      $self->_next;
+      $self->_receive_done;
       return;
     }
   }
@@ -563,43 +563,8 @@ sub _process_rbuf_eof ($$;%) {
 
   $self->{no_new_request} = 1;
   $self->{request_state} = 'sent';
-  $self->_next;
+  $self->_receive_done;
 } # _process_rbuf_eof
-
-sub _next ($) {
-  my $self = $_[0];
-  return if $self->{state} eq 'stopped';
-
-  delete $self->{timer};
-  delete $self->{ws_timer};
-  if (defined $self->{request_state} and
-      ($self->{request_state} eq 'sending headers' or
-       $self->{request_state} eq 'sending body')) {
-    $self->{state} = 'sending';
-  } else {
-    if (defined $self->{request} and
-        defined $self->{request_state} and
-        $self->{request_state} eq 'sent') {
-      $self->_ev ('complete', $self->{exit});
-    }
-    my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
-    delete $self->{request};
-    delete $self->{response};
-    delete $self->{request_state};
-    delete $self->{to_be_sent_length};
-    if ($self->{no_new_request}) {
-      my $transport = $self->{transport};
-      $transport->push_shutdown unless $transport->write_to_be_closed;
-      $self->{timer} = AE::timer 1, 0, sub {
-        $transport->abort;
-      };
-      $self->{state} = 'stopped';
-    } else {
-      $self->{state} = 'waiting';
-      $self->{response_received} = 0;
-    }
-  }
-} # _next
 
 sub debug_handshake_done ($$$) {
   my ($self, $ok, $info) = @_;
@@ -720,7 +685,7 @@ sub connect ($) {
           $self->{no_new_request} = 1;
           $self->{request_state} = 'sent';
           $self->{exit} = {failed => 1, reset => 1};
-          $self->_next;
+          $self->_receive_done;
         } else {
           $self->_process_rbuf ($self->{rbuf}, eof => 1);
           $self->_process_rbuf_eof
@@ -846,9 +811,7 @@ sub send_request_headers ($$;%) {
   $self->{transport}->push_write (\$header);
   if ($self->{to_be_sent_length} <= 0) {
     $self->{transport}->push_promise->then (sub { # XXX can fail
-      $self->{request_state} = 'sent';
-      $self->_ev ('requestsent');
-      $self->_next if $self->{state} eq 'sending';
+      $self->_send_done; # XXX $self->{stream}
     });
   } else {
     $self->{transport}->push_promise->then (sub {
@@ -897,9 +860,7 @@ sub send_data ($$;%) {
       $self->{to_be_sent_length} -= length $$ref;
       if ($self->{to_be_sent_length} <= 0) {
         $self->{transport}->push_promise->then (sub {
-          $self->{request_state} = 'sent';
-          $self->_ev ('requestsent');
-          $self->_next if $self->{state} eq 'sending';
+          $self->_send_done; # XXX $self->{stream}
         });
       }
     } # $is_body
@@ -919,6 +880,56 @@ sub abort ($;%) {
 
   return $self->{closed};
 } # abort
+
+# XXX ::Stream::
+sub _send_done ($) {
+  my $stream = my $con = $_[0];
+  $stream->{request_state} = 'sent';
+  $stream->_ev ('requestsent');
+  $stream->_both_done if $con->{state} eq 'sending';
+} # _send_done
+
+# XXX ::Stream::
+sub _receive_done ($) {
+  my $self = $_[0];
+  return if $self->{state} eq 'stopped';
+
+  delete $self->{timer};
+  delete $self->{ws_timer};
+  if (defined $self->{request_state} and
+      ($self->{request_state} eq 'sending headers' or
+       $self->{request_state} eq 'sending body')) {
+    $self->{state} = 'sending';
+  } else {
+    $self->_both_done;
+  }
+} # _receive_Done
+
+# XXX ::Stream::
+sub _both_done ($) {
+  my $self = $_[0];
+  if (defined $self->{request} and
+      defined $self->{request_state} and
+      $self->{request_state} eq 'sent') {
+    $self->_ev ('complete', $self->{exit});
+  }
+  my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
+  delete $self->{request};
+  delete $self->{response};
+  delete $self->{request_state};
+  delete $self->{to_be_sent_length};
+  if ($self->{no_new_request}) {
+    my $transport = $self->{transport};
+    $transport->push_shutdown unless $transport->write_to_be_closed;
+    $self->{timer} = AE::timer 1, 0, sub {
+      $transport->abort;
+    };
+    $self->{state} = 'stopped';
+  } else {
+    $self->{state} = 'waiting';
+    $self->{response_received} = 0;
+  }
+} # _both_done
 
 1;
 

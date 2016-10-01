@@ -247,7 +247,7 @@ sub request ($$$$$$$) {
 
     my $response;
     my $result;
-    $self->{http}->onevent (sub {
+    my $onevent = sub {
       my $http = $_[0];
       my $type = $_[2];
       if ($type eq 'data' or $type eq 'text') {
@@ -287,10 +287,10 @@ sub request ($$$$$$$) {
       } elsif ($type eq 'closing') {
         $cb->($http, $response, undef, 'closing'); # sync!
       } # $type
-    });
+    }; # $onevent
     my $p = $self->{http}->send_request_headers
         ({method => $method, target => encode_web_utf8 ($target),
-          headers => $headers}, ws => $is_ws)->then (sub {
+          headers => $headers}, ws => $is_ws, cb => $onevent)->then (sub {
       return [$response, $result];
     });
     if (defined $body_ref and length $$body_ref) {

@@ -838,6 +838,10 @@ sub send_request_headers ($$;%) {
       warn "$req->{id}: S: @{[_e4d $_]}\n";
     }
   }
+  my $cb = $args{cb} || sub { };
+  $self->{transport}->push_promise->then (sub {
+    $self->{cb} = $cb;
+  });
   $self->{request_state} = 'sending headers';
   $self->{transport}->push_write (\$header);
   if ($self->{to_be_sent_length} <= 0) {
@@ -919,13 +923,6 @@ sub abort ($;%) {
   return $self->{closed};
 } # abort
 
-sub onevent ($;$) {
-  if (@_ > 1) {
-    $_[0]->{onevent} = $_[1];
-  }
-  return $_[0]->{onevent} ||= sub { };
-} # onevent
-
 sub _ev ($$;$$) {
   my $self = shift;
   my $req = $self->{request};
@@ -969,10 +966,11 @@ sub _ev ($$;$$) {
       }
     }
   }
+  $self->{cb}->($self, $req, @_);
   if ($_[0] eq 'complete') {
     (delete $self->{request_done})->();
+    delete $self->{cb};
   }
-  $self->onevent->($self, $req, @_);
 } # _ev
 
 sub DESTROY ($) {

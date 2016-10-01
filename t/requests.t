@@ -234,12 +234,11 @@ test {
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      $error = $data if $type eq 'complete';
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'});
+      return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        $error = $data if $type eq 'complete';
+      });
     })->then (sub {
       test {
         ok not $error->{can_retry};
@@ -269,14 +268,16 @@ test {
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      $error = $data if $type eq 'complete';
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'});
+      return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        $error = $data if $type eq 'complete';
+      });
     })->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'});
+      return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        $error = $data if $type eq 'complete';
+      });
     })->then (sub {
       test {
         ok $error->{can_retry};
@@ -307,11 +308,6 @@ test {
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $error;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      $error = $data->{reason} if $type eq 'complete';
-    });
     $http->connect->then (sub {
       $http->$tbmethod (3);
       $http->send_data (\'abc');
@@ -347,12 +343,11 @@ test {
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      $error = $data->{reason} if $type eq 'complete';
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        $error = $data->{reason} if $type eq 'complete';
+      });
     })->then (sub {
       $http->$tbmethod (3);
       $http->send_data (\'abc');
@@ -396,16 +391,15 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->$tbmethod (3);
-        $http->send_data (\'abc');
-        $sent++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->$tbmethod (3);
+          $http->send_data (\'abc');
+          $sent++;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -439,22 +433,21 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->$tbmethod (2);
-        eval {
-          $http->send_data (\'abc');
-        } or do {
-          test {
-            like $@, qr{^Data too large};
-          } $c;
-          $error++;
-        }
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->$tbmethod (2);
+          eval {
+            $http->send_data (\'abc');
+          } or do {
+            test {
+              like $@, qr{^Data too large};
+            } $c;
+            $error++;
+          }
+        }
+      });
     })->then (sub{
       test {
         is $error, 1;
@@ -488,22 +481,21 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->$tbmethod (2);
-        eval {
-          $http->send_data (\"\x{100}");
-        } or do {
-          test {
-            like $@, qr{^Data is utf8-flagged};
-          } $c;
-          $error++;
-        }
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->$tbmethod (2);
+          eval {
+            $http->send_data (\"\x{100}");
+          } or do {
+            test {
+              like $@, qr{^Data is utf8-flagged};
+            } $c;
+            $error++;
+          }
+        }
+      });
     })->then (sub{
       test {
         is $error, 1;
@@ -538,31 +530,30 @@ close
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
     my @p;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->$tbmethod (3);
-        $http->send_data (\'ab');
-        for my $code (
-          sub { $http->send_text_header (4); },
-          sub { $http->send_binary_header (4); },
-          sub { $http->send_ping },
-          sub { $http->send_ping (pong => 1) },
-          sub { $http->close },
-        ) {
-          push @p,
-          Promise->resolve->then ($code)->then (sub { test { ok 0 } $c }, sub {
-            my $err = $_[0];
-            test {
-              like $err, qr{^(?:Bad state|Body is not sent)};
-            } $c;
-            $error++;
-          });
-        }
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->$tbmethod (3);
+          $http->send_data (\'ab');
+          for my $code (
+            sub { $http->send_text_header (4); },
+            sub { $http->send_binary_header (4); },
+            sub { $http->send_ping },
+            sub { $http->send_ping (pong => 1) },
+            sub { $http->close },
+          ) {
+            push @p,
+            Promise->resolve->then ($code)->then (sub { test { ok 0 } $c }, sub {
+              my $err = $_[0];
+              test {
+                like $err, qr{^(?:Bad state|Body is not sent)};
+              } $c;
+              $error++;
+            });
+          }
+        }
+      });
     })->then (sub{
       test {
         is $error, 5;
@@ -603,19 +594,18 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->$tbmethod (0);
-        $http->$tbmethod (3);
-        $http->send_data (\'a');
-        $http->send_data (\'bc');
-        $http->$tbmethod (0);
-        $sent++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->$tbmethod (0);
+          $http->$tbmethod (3);
+          $http->send_data (\'a');
+          $http->send_data (\'bc');
+          $http->$tbmethod (0);
+          $sent++;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -654,15 +644,14 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->close;
-        $sent++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->close;
+          $sent++;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -699,15 +688,14 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->close (status => 1234);
-        $sent++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->close (status => 1234);
+          $sent++;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -744,15 +732,14 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->close (status => 1234, reason => 'av c');
-        $sent++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->close (status => 1234, reason => 'av c');
+          $sent++;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -789,22 +776,21 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->close (status => 0x10000, reason => 'av c')->then (sub {
-          test { ok 0 } $c;
-        }, sub {
-          my $err = $_[0];
-          test {
-            like $err, qr{^Bad status};
-          } $c;
-        })->then (sub { return $http->close });
-        $sent++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->close (status => 0x10000, reason => 'av c')->then (sub {
+            test { ok 0 } $c;
+          }, sub {
+            my $err = $_[0];
+            test {
+              like $err, qr{^Bad status};
+            } $c;
+          })->then (sub { return $http->close });
+          $sent++;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -841,22 +827,21 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->close (status => 1234, reason => "\x{105}")->then (sub {
-          test { ok 0 } $c;
-        }, sub {
-          my $err = $_[0];
-          test {
-            like $err, qr{^Reason is utf8-flagged};
-          } $c;
-        })->then (sub { return $http->close });
-        $sent++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->close (status => 1234, reason => "\x{105}")->then (sub {
+            test { ok 0 } $c;
+          }, sub {
+            my $err = $_[0];
+            test {
+              like $err, qr{^Reason is utf8-flagged};
+            } $c;
+          })->then (sub { return $http->close });
+          $sent++;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -893,22 +878,21 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->close (status => 1234, reason => 'x' x 126)->then (sub {
-          test { ok 0 } $c;
-        }, sub {
-          my $err = $_[0];
-          test {
-            like $err, qr{^Reason is too long};
-          } $c;
-        })->then (sub { return $http->close });
-        $sent++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->close (status => 1234, reason => 'x' x 126)->then (sub {
+            test { ok 0 } $c;
+          }, sub {
+            my $err = $_[0];
+            test {
+              like $err, qr{^Reason is too long};
+            } $c;
+          })->then (sub { return $http->close });
+          $sent++;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -936,17 +920,16 @@ CRLF
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        AE::postpone {
-          $http->abort;
-          $sent++;
-        };
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'});
+      return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          AE::postpone {
+            $http->abort;
+            $sent++;
+          };
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1, "abort called";
@@ -980,17 +963,16 @@ CRLF
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        AE::postpone {
-          $http->abort;
-          $sent++;
-        };
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          AE::postpone {
+            $http->abort;
+            $sent++;
+          };
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1, "abort called";
@@ -1030,17 +1012,16 @@ close
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
     my $pong = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->send_ping;
-        $sent++;
-      } elsif ($type eq 'ping') {
-        $pong++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->send_ping;
+          $sent++;
+        } elsif ($type eq 'ping') {
+          $pong++;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -1078,15 +1059,14 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->send_ping (pong => 1);
-        $sent++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->send_ping (pong => 1);
+          $sent++;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -1123,15 +1103,14 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $sent = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->send_ping (data => "ab c");
-        $sent++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->send_ping (data => "ab c");
+          $sent++;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -1168,22 +1147,21 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        eval {
-          $http->send_ping (data => "ab c\x{500}");
-        } or do {
-          test {
-            like $@, qr{^Data is utf8-flagged};
-            $error++;
-          } $c;
-        };
-        $http->close;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          eval {
+            $http->send_ping (data => "ab c\x{500}");
+          } or do {
+            test {
+              like $@, qr{^Data is utf8-flagged};
+              $error++;
+            } $c;
+          };
+          $http->close;
+        }
+      });
     })->then (sub{
       test {
         is $error, 1;
@@ -1220,22 +1198,21 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        eval {
-          $http->send_ping (data => 'x' x 126);
-        } or do {
-          test {
-            like $@, qr{^Data too large};
-            $error++;
-          } $c;
-        };
-        $http->close;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          eval {
+            $http->send_ping (data => 'x' x 126);
+          } or do {
+            test {
+              like $@, qr{^Data too large};
+              $error++;
+            } $c;
+          };
+          $http->close;
+        }
+      });
     })->then (sub{
       test {
         is $error, 1;
@@ -1272,24 +1249,23 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $error = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->close->then (sub {
-          $http->send_ping (data => 'x');
-        })->then (sub {
-          test { ok 0 } $c;
-        }, sub {
-          my $err = $_[0];
-          test {
-            like $err, qr{^Bad state}, 'error text';
-            $error++;
-          } $c;
-        });
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->close->then (sub {
+            $http->send_ping (data => 'x');
+          })->then (sub {
+            test { ok 0 } $c;
+          }, sub {
+            my $err = $_[0];
+            test {
+              like $err, qr{^Bad state}, 'error text';
+              $error++;
+            } $c;
+          });
+        }
+      });
     })->then (sub{
       return $http->close;
     })->then (sub {
@@ -1324,16 +1300,15 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $ping = 0;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $http->close;
-      } elsif ($type eq 'ping') {
-        $ping++;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $http->close;
+        } elsif ($type eq 'ping') {
+          $ping++;
+        }
+      });
     })->then (sub{
       return $http->close;
     })->then (sub {
@@ -1410,23 +1385,22 @@ close
     my $sent = 0;
     my $received = '';
     my @ev;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      push @ev, $type if $type eq 'complete';
-      if ($type eq 'headers') {
-        AE::postpone {
-          test {
-            $http->send_data (\'abc');
-            $http->close;
-            $sent++;
-          } $c;
-        };
-      } elsif ($type eq 'data') {
-        $received .= $data;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        push @ev, $type if $type eq 'complete';
+        if ($type eq 'headers') {
+          AE::postpone {
+            test {
+              $http->send_data (\'abc');
+              $http->close;
+              $sent++;
+            } $c;
+          };
+        } elsif ($type eq 'data') {
+          $received .= $data;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -1459,31 +1433,30 @@ close
     my $sent = 0;
     my $received = '';
     my @ev;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      push @ev, $type if $type eq 'complete';
-      if ($type eq 'headers') {
-        AE::postpone {
-          test {
-            eval {
-              $http->send_data (\"\x{5000}");
-            };
-            like $@, qr{^Data is utf8-flagged};
-          } $c;
-        };
-        AE::postpone {
-          test {
-            $http->send_data (\'abc');
-            $http->close;
-            $sent++;
-          } $c;
-        };
-      } elsif ($type eq 'data') {
-        $received .= $data;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        push @ev, $type if $type eq 'complete';
+        if ($type eq 'headers') {
+          AE::postpone {
+            test {
+              eval {
+                $http->send_data (\"\x{5000}");
+              };
+              like $@, qr{^Data is utf8-flagged};
+            } $c;
+          };
+          AE::postpone {
+            test {
+              $http->send_data (\'abc');
+              $http->close;
+              $sent++;
+            } $c;
+          };
+        } elsif ($type eq 'data') {
+          $received .= $data;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -1516,23 +1489,22 @@ close
     my $sent = 0;
     my $received = '';
     my @ev;
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      push @ev, $type if $type eq 'complete';
-      if ($type eq 'headers') {
-        AE::postpone {
-          test {
-            $http->send_data (\'');
-            $http->close;
-            $sent++;
-          } $c;
-        };
-      } elsif ($type eq 'data') {
-        $received .= $data;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        push @ev, $type if $type eq 'complete';
+        if ($type eq 'headers') {
+          AE::postpone {
+            test {
+              $http->send_data (\'');
+              $http->close;
+              $sent++;
+            } $c;
+          };
+        } elsif ($type eq 'data') {
+          $received .= $data;
+        }
+      });
     })->then (sub{
       test {
         is $sent, 1;
@@ -1565,26 +1537,25 @@ close
     my $error = 0;
     my $x;
     my $p = Promise->new (sub { $x = $_[0] });
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        AE::postpone {
-          $http->close->then (sub {
-            $http->send_data (\'abc');
-          })->then (sub {
-            test { ok 0 } $c;
-          }, sub {
-            my $err = $_[0];
-            test {
-              like $err, qr{^Bad state};
-              $x->();
-            } $c;
-          });
-        };
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          AE::postpone {
+            $http->close->then (sub {
+              $http->send_data (\'abc');
+            })->then (sub {
+              test { ok 0 } $c;
+            }, sub {
+              my $err = $_[0];
+              test {
+                like $err, qr{^Bad state};
+                $x->();
+              } $c;
+            });
+          };
+        }
+      });
     })->then (sub{
       return $p;
     })->then (sub {
@@ -1611,19 +1582,18 @@ close
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     my $received = '';
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        $received .= '(headers)';
-        AE::postpone {
-          $http->close;
-        };
-      } elsif ($type eq 'data') {
-        $received .= $data;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          $received .= '(headers)';
+          AE::postpone {
+            $http->close;
+          };
+        } elsif ($type eq 'data') {
+          $received .= $data;
+        }
+      });
     })->then (sub{
       test {
         is $received, '(headers)xyz';
@@ -1649,20 +1619,19 @@ close
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'headers') {
-        my $timer; $timer = AE::timer 1, 0, sub {
-          $http->send_data (\'abc');
-          AE::postpone {
-            $http->close;
-          };
-          undef $timer;
-        };
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'});
+      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'headers') {
+          my $timer; $timer = AE::timer 1, 0, sub {
+            $http->send_data (\'abc');
+            AE::postpone {
+              $http->close;
+            };
+            undef $timer;
+          };
+        }
+      });
     })->then (sub{
       test {
         ok 1;
@@ -1689,17 +1658,17 @@ CRLF
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'data') {
-        test {
-          is $data, 'OK';
-        } $c;
-      }
-    });
     $http->connect->then (sub {
-      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
-                                    headers => [['Content-Length' => 4]]});
+      my $p = $http->send_request_headers
+          ({method => 'GET', target => 'test',
+            headers => [['Content-Length' => 4]]}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'data') {
+          test {
+            is $data, 'OK';
+          } $c;
+        }
+      });
       $http->send_data (\"hoge");
       return $p;
     })->then (sub {
@@ -1725,17 +1694,18 @@ CRLF
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'data') {
-        test {
-          ok 0;
-        } $c;
-      }
-    });
     $http->connect->then (sub {
-      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
-                                    headers => [['Content-Length' => 4]]});
+      my $p = $http->send_request_headers
+          ({method => 'GET', target => 'test',
+            headers => [['Content-Length' => 4]]},
+           cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'data') {
+          test {
+            ok 0;
+          } $c;
+        }
+      });
       test {
         eval {
           $http->send_data (\"hoge!");
@@ -1768,17 +1738,17 @@ CRLF
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'data') {
-        test {
-          ok 0;
-        } $c;
-      }
-    });
     $http->connect->then (sub {
-      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
-                                    headers => [['Content-Length' => 4]]});
+      my $p = $http->send_request_headers
+          ({method => 'GET', target => 'test',
+            headers => [['Content-Length' => 4]]}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'data') {
+          test {
+            ok 0;
+          } $c;
+        }
+      });
       $http->send_data (\"ho");
       test {
         eval {
@@ -1812,17 +1782,17 @@ CRLF
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'data') {
-        test {
-          ok 0;
-        } $c;
-      }
-    });
     $http->connect->then (sub {
-      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
-                                    headers => [['Content-Length' => 0]]});
+      my $p = $http->send_request_headers
+          ({method => 'GET', target => 'test',
+            headers => [['Content-Length' => 0]]}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'data') {
+          test {
+            ok 0;
+          } $c;
+        }
+      });
       test {
         eval {
           $http->send_data (\"hoge");
@@ -1854,12 +1824,11 @@ CRLF
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-    });
     $http->connect->then (sub {
-      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
-                                    headers => [['Content-Length' => 4]]});
+      my $p = $http->send_request_headers
+          ({method => 'GET', target => 'test',
+            headers => [['Content-Length' => 4]]},
+           cb => sub {});
       return $http->close->catch (sub {
         my $err = $_[0];
         test {
@@ -1890,17 +1859,18 @@ CRLF
         (host => Web::Host->parse_string ($server->{addr}),
          port => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'data') {
-        test {
-          ok 0;
-        } $c;
-      }
-    });
     $http->connect->then (sub {
-      my $p = $http->send_request_headers ({method => 'GET', target => 'test',
-                                    headers => [['Content-Length' => 4]]});
+      my $p = $http->send_request_headers
+          ({method => 'GET', target => 'test',
+            headers => [['Content-Length' => 4]]},
+           cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'data') {
+          test {
+            ok 0;
+          } $c;
+        }
+      });
       test {
         eval {
           $http->send_data (\"ge\x{500}");
@@ -1946,15 +1916,14 @@ CRLF
          ca_file => Test::Certificates->ca_path ('cert.pem'));
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tls);
     my $d = '';
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'data') {
-        $d .= $data;
-      }
-    });
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET',
-                                           target => '/test'});
+                                           target => '/test'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'data') {
+          $d .= $data;
+        }
+      });
     })->then (sub {
       test {
         is $d, 'abc';
@@ -1986,14 +1955,9 @@ test {
          si_host_name => Web::Host->parse_string (Test::Certificates->cert_name),
          ca_file => Test::Certificates->ca_path ('cert.pem'));
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tls);
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'data') {
-      }
-    });
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET',
-                                           target => '/test'});
+                                           target => '/test'}, cb => sub { });
     })->then (sub { test { ok 0 } $c }, sub {
       test {
         ok 1;
@@ -2015,14 +1979,9 @@ test {
     my $connect = Web::Transport::H1CONNECTTransport->new
         (http => $proxy, target => 'hoge.test');
     my $http = Web::Transport::HTTPClientConnection->new (transport => $connect);
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'data') {
-      }
-    });
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET',
-                                           target => '/test'});
+                                           target => '/test'}, cb => sub { });
     })->then (sub { test { ok 0 } $c }, sub {
       test {
         ok 1;
@@ -2049,14 +2008,13 @@ CRLF
         (path => $server->{port});
     my $http = Web::Transport::HTTPClientConnection->new (transport => $unix);
     my $d = '';
-    $http->onevent (sub {
-      my ($http, $req, $type, $data) = @_;
-      if ($type eq 'data') {
-        $d .= $data;
-      }
-    });
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'});
+      return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
+        my ($http, $req, $type, $data) = @_;
+        if ($type eq 'data') {
+          $d .= $data;
+        }
+      });
     })->then (sub {
       test {
         is $d, 'xyz';

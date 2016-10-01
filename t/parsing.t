@@ -212,7 +212,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             $req->{_ok}->();
           }
         }; # $onev
-        $http->onevent ($onev);
 
         my $next_req_id = 1;
         my $get_req = sub {
@@ -240,7 +239,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               ws => 1,
             );
             $http->send_request_headers
-                ($req, ws => 1, ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}]);
+                ($req,
+                 ws => 1,
+                 ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}],
+                 cb => $onev);
             return $req->{done}->then (sub {
               return $req_results->{$req->{id}};
             });
@@ -263,13 +265,12 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                        port => $server->{port});
                   $http = Web::Transport::HTTPClientConnection->new
                       (transport => $transport);
-                  $http->onevent ($onev);
                   return $http->connect;
                 })->then (sub {
                   return $try->();
                 });
               }
-              $http->send_request_headers ($req);
+              $http->send_request_headers ($req, cb => $onev);
               $http->send_data (\('x' x (1024*1024))) if $test_type eq 'largerequest-second';
               if ($req->{method} eq 'CONNECT') {
                 $req->{tunnel}->then (sub {
@@ -310,7 +311,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               target => _a $test->{url}->[1]->[0],
               headers => [['Content-Length' => $test_type eq 'largerequest' ? 1024*1024 : 0]],
             );
-            $http->send_request_headers ($req);
+            $http->send_request_headers ($req, cb => $onev);
             if ($test_type eq 'largerequest') {
               $http->send_data (\('x' x 1024)) for 1..1024;
             }

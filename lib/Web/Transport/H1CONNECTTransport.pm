@@ -33,7 +33,7 @@ sub start ($$) {
   push @{$req->{headers}}, ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36']; # XXX
 
   # XXX headers
-  $self->{http}->onevent (sub {
+  my $onevent = sub {
     my $type = $_[2];
     if ($type eq 'data' and $self->{started}) {
       my $data = $_[3];
@@ -76,9 +76,9 @@ sub start ($$) {
         delete $self->{http};
       });
     }
-  });
+  }; # $onevent
   $self->{http}->connect->then (sub {
-    return $self->{http}->send_request_headers ($req);
+    return $self->{http}->send_request_headers ($req, cb => $onevent);
   })->catch (sub {
     $ng->($_[0]);
     delete $self->{cb} unless $self->{started};

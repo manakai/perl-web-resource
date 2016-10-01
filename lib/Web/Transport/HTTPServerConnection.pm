@@ -830,13 +830,13 @@ sub _ev ($$;$$) {
       }
     }
   }
-  if ($_[0] eq 'complete') {
-    #XXX (delete $self->{request_done})->();
-  }
   # XXX
   my $type = shift @_;
   $self->{cb}->($self, $type, $req, @_);
-  delete $self->{cb} if $type eq 'complete';
+  if ($type eq 'complete') {
+    #XXX (delete $self->{request_done})->();
+    delete $self->{cb};
+  }
 } # _ev
 
 sub DESTROY ($) {

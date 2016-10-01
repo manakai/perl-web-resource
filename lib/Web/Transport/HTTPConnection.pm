@@ -3,6 +3,43 @@ use strict;
 use warnings;
 our $VERSION = '1.0';
 
+sub type ($) { return 'HTTP' }
+sub transport ($) { $_[0]->{transport} }
+
+sub _con_ev ($$) {
+  my ($self, $type) = @_;
+  if ($self->{DEBUG}) {
+    my $id = $self->{transport}->id;
+    if ($type eq 'openconnection') {
+      my $data = $_[2];
+      my $host = $data->{remote_host}->to_ascii;
+      warn "$id: $type remote=$host:$data->{remote_port}\n";
+    } elsif ($type eq 'startstream') {
+      my $req = $_[2];
+      warn "$id: ========== @{[ref $self]}\n";
+      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
+    } elsif ($type eq 'endstream') {
+      my $req = $_[2];
+      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
+      warn "$id: ========== @{[ref $self]}\n";
+    } else {
+      warn "$id: $type @{[scalar gmtime]}\n";
+    }
+  }
+  $self->{con_cb}->(@_);
+  # XXX |closeconnection| should be fired after all |endstream|s
+#XXX  delete $self->{con_cb} if $type eq 'closeconnection';
+} # _con_ev
+
+sub DESTROY ($) {
+  $_[0]->abort if $_[0]->{is_server} and defined $_[0]->{transport};
+
+  local $@;
+  eval { die };
+  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+      if $@ =~ /during global destruction/;
+} # DESTROY
+
 package Web::Transport::HTTPConnection::Stream;
 use Carp qw(croak);
 use AnyEvent;

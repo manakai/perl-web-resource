@@ -46,15 +46,12 @@ sub request_id ($) {
   }
 } # request_id
 
-sub type ($) { return 'HTTP' }
 sub layered_type ($) {
   if (defined $_[0]->{args}) {
     return $_[0]->type . '/' . $_[0]->{args}->{transport}->layered_type;
   }
   return $_[0]->type . '/' . $_[0]->{transport}->layered_type;
 } # layered_type
-
-sub transport ($) { $_[0]->{transport} }
 
 sub _process_rbuf ($$;%) {
   my ($self, $ref, %args) = @_;
@@ -921,34 +918,6 @@ sub abort ($;%) {
 
   return $self->{closed};
 } # abort
-
-sub _con_ev ($$) {
-  my ($self, $type) = @_;
-  if (DEBUG) {
-    my $id = $self->{transport}->id;
-    if ($type eq 'startstream') {
-      my $req = $_[2];
-      warn "$id: ========== @{[ref $self]}\n";
-      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
-    } elsif ($type eq 'endstream') {
-      my $req = $_[2];
-      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
-      warn "$id: ========== @{[ref $self]}\n";
-    } else {
-      warn "$id: $type @{[scalar gmtime]}\n";
-    }
-  }
-  $self->{con_cb}->(@_);
-} # _con_ev
-
-sub DESTROY ($) {
-  $_[0]->abort if defined $_[0]->{transport};
-
-  local $@;
-  eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
-      if $@ =~ /during global destruction/;
-} # DESTROY
 
 1;
 

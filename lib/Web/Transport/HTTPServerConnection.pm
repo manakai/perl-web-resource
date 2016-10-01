@@ -13,8 +13,9 @@ our $ReadTimeout ||= 60;
 
 sub new ($%) {
   my ($class, %args) = @_;
-  my $self = bless {transport => $args{transport},
+  my $self = bless {DEBUG => DEBUG, is_server => 1,
                     id => $args{transport}->id, req_id => 0,
+                    transport => $args{transport},
                     rbuf => '', state => 'initial',
                     con_cb => $args{cb}}, $class;
   my $p = $args{transport}->start (sub {
@@ -563,38 +564,6 @@ sub _timeout ($) {
   delete $self->{timer};
   $self->{transport}->abort (message => "Read timeout ($ReadTimeout)");
 } # _timeout
-
-sub _con_ev ($$) {
-  my ($self, $type) = @_;
-  if (DEBUG) {
-    my $id = $self->{transport}->id;
-    if ($type eq 'openconnection') {
-      my $data = $_[2];
-      my $host = $data->{remote_host}->to_ascii;
-      warn "$id: $type remote=$host:$data->{remote_port}\n";
-    } elsif ($type eq 'startstream') {
-      my $req = $_[2];
-      warn "$id: ========== @{[ref $self]}\n";
-      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
-    } elsif ($type eq 'endstream') {
-      my $req = $_[2];
-      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
-      warn "$id: ========== @{[ref $self]}\n";
-    } else {
-      warn "$id: $type @{[scalar gmtime]}\n";
-    }
-  }
-  $self->{con_cb}->(@_);
-  # XXX |closeconnection| should be fired after all |endstream|s
-#XXX  delete $self->{con_cb} if $type eq 'closeconnection';
-} # _con_ev
-
-sub DESTROY ($) {
-  local $@;
-  eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
-      if $@ =~ /during global destruction/;
-} # DESTROY
 
 package Web::Transport::HTTPServerConnection::Stream;
 push our @ISA, qw(Web::Transport::HTTPConnection::Stream);

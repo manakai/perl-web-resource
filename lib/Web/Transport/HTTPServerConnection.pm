@@ -5,6 +5,8 @@ our $VERSION = '1.0';
 use Web::Transport::HTTPConnection;
 push our @ISA, qw(Web::Transport::HTTPConnection);
 use AnyEvent;
+use Promise;
+use Promised::Flow;
 use Web::URL;
 
 use constant DEBUG => $ENV{WEBSERVER_DEBUG} || 0;
@@ -17,7 +19,11 @@ sub new ($%) {
                     transport => $args{transport},
                     rbuf => '', state => 'initial',
                     con_cb => $args{cb}}, $class;
-  my $p = $args{transport}->start (sub {
+  my $closed;
+  my $close_p = Promise->new (sub { $closed = $_[0] });
+  $self->{closed} = promised_cleanup {
+    delete $self->{timer};
+  } $args{transport}->start (sub {
     my ($transport, $type) = @_;
     if ($type eq 'readdata') {
       if ($self->{disable_timer}) {
@@ -50,14 +56,18 @@ sub new ($%) {
       }
       $self->{write_closed} = 1;
     } elsif ($type eq 'close') {
-      $self->_con_ev ('closeconnection');
+      $closed->();
     }
   })->then (sub {
     $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
     $self->_con_ev ('openconnection',
                     {remote_host => $args{remote_host},
                      remote_port => $args{remote_port}});
+    return $close_p;
+  })->then (sub {
+    $self->_con_ev ('closeconnection');
   });
+  return $self;
 } # new
 
 sub _new_stream ($) {
@@ -563,6 +573,17 @@ sub _timeout ($) {
   $self->{transport}->abort (message => "Read timeout ($ReadTimeout)");
 } # _timeout
 
+sub closed ($) {
+  return $_[0]->{closed};
+} # closed
+
+sub abort ($) {
+  my ($self, %args) = @_;
+  $self->{write_closed} = 1;
+  $self->{transport}->abort (%args);
+  return $self->{closed};
+} # abort
+
 package Web::Transport::HTTPServerConnection::Stream;
 push our @ISA, qw(Web::Transport::HTTPConnection::Stream);
 use Carp qw(carp croak);
@@ -820,9 +841,12 @@ sub DESTROY ($) {
       if $@ =~ /during global destruction/;
 } # DESTROY
 
-# XXX leaking
+# XXX no complete if no request data
 # XXX reset
-# XXX sketch/server.pl
+# XXX abort tests
+# XXX UNIX socket server
+# XXX HTTPS server
+# XXX server-side API
 
 1;
 

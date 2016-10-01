@@ -31,13 +31,6 @@ sub new ($%) {
   return $self;
 } # new_from_cb
 
-sub id ($) {
-  if (defined $_[0]->{args}) {
-    return $_[0]->{args}->{transport}->id;
-  }
-  return $_[0]->{id};
-} # id
-
 sub request_id ($) {
   if (defined $_[0]->{request}) {
     return $_[0]->id . '.' . $_[0]->{req_id};
@@ -45,13 +38,6 @@ sub request_id ($) {
     return undef;
   }
 } # request_id
-
-sub layered_type ($) {
-  if (defined $_[0]->{args}) {
-    return $_[0]->type . '/' . $_[0]->{args}->{transport}->layered_type;
-  }
-  return $_[0]->type . '/' . $_[0]->{transport}->layered_type;
-} # layered_type
 
 sub _process_rbuf ($$;%) {
   my ($self, $ref, %args) = @_;
@@ -885,7 +871,7 @@ sub abort ($;%) {
 sub _send_done ($) {
   my $stream = my $con = $_[0];
   $stream->{request_state} = 'sent';
-  $stream->_ev ('requestsent');
+  $stream->_ev ('requestsent') unless defined $con->{ws_state};
   $stream->_both_done if $con->{state} eq 'sending';
 } # _send_done
 

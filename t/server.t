@@ -9,8 +9,11 @@ use Web::Transport::ConnectionClient;
 use Web::Transport::WSClient;
 use Test::X1;
 use Test::More;
+use AnyEvent;
+use Promised::Flow;
 
 $Web::Transport::HTTPServerConnection::ReadTimeout = 10;
+my $GlobalCV = AE::cv;
 
 {
   use Socket;
@@ -76,23 +79,26 @@ my $HandleRequestHeaders = {};
     } elsif ($type eq 'dataend' or $type eq 'textend' or
              $type eq 'ping') {
       $self->{$type}->($_[2], $_[3]) if $self->{$type};
+    } elsif ($type eq 'complete') {
+      delete $self->{$_} for qw(ondata dataend textend ping);
     }
   }; # $cb
 
   my $con_cb = sub {
     my ($self, $type) = @_;
     if ($type eq 'startstream') {
-      my $req = $_[2];
       return $cb;
     }
   }; # $con_cb
 
   our $server = tcp_server $host, $port, sub {
-    Web::Transport::HTTPServerConnection->new
+    my $con = Web::Transport::HTTPServerConnection->new
         (transport => Web::Transport::TCPTransport->new (fh => $_[0]),
          remote_host => Web::Host->parse_string ($_[1]),
          remote_port => $_[2],
          cb => $con_cb);
+    $GlobalCV->begin;
+    promised_cleanup { $GlobalCV->end } $con->closed;
   };
 }
 
@@ -1136,7 +1142,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 5, name => 'WS handshake - not handshake response';
+} n => 5, name => 'WS handshake - not handshake response 3';
 
 test {
   my $c = shift;
@@ -1219,7 +1225,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 6, name => 'WS handshake with Content-Length - not handshake response', timeout => 120;
+} n => 6, name => 'WS handshake with Content-Length - not handshake response 2', timeout => 120;
 
 test {
   my $c = shift;
@@ -1262,7 +1268,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 6, name => 'WS handshake with Content-Length:0 - not handshake response', timeout => 120;
+} n => 6, name => 'WS handshake with Content-Length:0 - not handshake response 1', timeout => 120;
 
 test {
   my $c = shift;
@@ -3273,7 +3279,11 @@ test {
   });
 } n => 1, name => 'request-target empty (HTTP/0.9)';
 
+$GlobalCV->begin;
 run_tests;
+$GlobalCV->end;
+$HandleRequestHeaders = {};
+$GlobalCV->recv;
 
 =head1 LICENSE
 

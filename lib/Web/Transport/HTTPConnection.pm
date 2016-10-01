@@ -3,10 +3,25 @@ use strict;
 use warnings;
 our $VERSION = '1.0';
 use AnyEvent;
+use Web::Encoding;
 use Encode qw(decode); # XXX
+
+sub id ($) {
+  if (defined $_[0]->{args}) {
+    return $_[0]->{args}->{transport}->id;
+  }
+  return $_[0]->{id};
+} # id
 
 sub type ($) { return 'HTTP' }
 sub transport ($) { $_[0]->{transport} }
+
+sub layered_type ($) {
+  if (defined $_[0]->{args}) {
+    return $_[0]->type . '/' . $_[0]->{args}->{transport}->layered_type;
+  }
+  return $_[0]->type . '/' . $_[0]->{transport}->layered_type;
+} # layered_type
 
 sub MAX_BYTES () { 2**31-1 }
 
@@ -208,6 +223,7 @@ sub _ws_received ($;%) {
           $self->{exit} = {status => defined $status ? $status : 1005,
                            reason => defined $reason ? $reason : '',
                            ws => 1, cleanly => 1};
+          $stream->_send_done;
           if ($self->{is_server}) {
             $stream->_receive_done;
           } else {
@@ -298,7 +314,7 @@ sub _ws_received ($;%) {
            $mask . $data));
     $self->{state} = 'ws terminating';
     $self->{no_new_request} = 1;
-    $self->{request_state} = 'sent';
+    $stream->_send_done;
     $stream->_receive_done;
     return;
   }
@@ -343,8 +359,15 @@ sub _con_ev ($$) {
     my $id = $self->{transport}->id;
     if ($type eq 'openconnection') {
       my $data = $_[2];
-      my $host = $data->{remote_host}->to_ascii;
-      warn "$id: $type remote=$host:$data->{remote_port}\n";
+      if (defined $data->{remote_host}) {
+        my $host = $data->{remote_host}->to_ascii;
+        warn "$id: $type remote=$host:$data->{remote_port}\n";
+      } elsif (defined $data->{local_host}) {
+        my $host = $data->{local_host}->to_ascii;
+        warn "$id: $type remote=$host:$data->{local_port}\n";
+      } else {
+        warn "$id: $type\n";
+      }
     } elsif ($type eq 'startstream') {
       my $req = $_[2];
       warn "$id: ========== @{[ref $self]}\n";
@@ -549,8 +572,8 @@ sub close ($;%) {
           warn "$id: WS timeout (20)\n";
         }
         # XXX set exit ?
-        $self->_receive_done;
         delete $con->{ws_timer};
+        $self->_receive_done;
       };
       $self->_ev ('closing');
     }

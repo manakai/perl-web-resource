@@ -5,19 +5,17 @@ our $VERSION = '1.0';
 use AnyEvent;
 use Promise;
 use Web::URL;
-use Web::Transport::TCPTransport;
 
 use constant DEBUG => $ENV{WEBSERVER_DEBUG} || 0;
 our $ReadTimeout ||= 60;
 
-sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
-  my ($class, $fh, $client_host, $client_port, $cb) = @_;
-
-  my $transport = Web::Transport::TCPTransport->new (fh => $fh);
-  my $self = bless {transport => $transport, id => $transport->id, req_id => 0,
+sub new ($%) {
+  my ($class, %args) = @_;
+  my $self = bless {transport => $args{transport},
+                    id => $args{transport}->id, req_id => 0,
                     rbuf => '', state => 'initial',
-                    cb => $cb}, $class;
-  my $p = $transport->start (sub {
+                    con_cb => $args{cb}}, $class;
+  my $p = $args{transport}->start (sub {
     my ($transport, $type) = @_;
     if ($type eq 'readdata') {
       if ($self->{disable_timer}) {
@@ -27,38 +25,55 @@ sub new_from_fh_and_host_and_port_and_cb ($$$$$) {
       }
       $self->_ondata ($_[2]);
     } elsif ($type eq 'readeof') {
+      my $data = $_[2];
+      if (DEBUG) {
+        my $id = $transport->id;
+        if (defined $data->{message}) {
+          warn "$id: R: EOF ($data->{message})\n";
+        } else {
+          warn "$id: R: EOF\n";
+        }
+      }
       delete $self->{timer};
       $self->_oneof ($_[2]);
     } elsif ($type eq 'writeeof') {
+      if (DEBUG) {
+        my $data = $_[2];
+        my $id = $transport->id;
+        if (defined $data->{message}) {
+          warn "$id: S: EOF ($data->{message})\n";
+        } else {
+          warn "$id: S: EOF\n";
+        }
+      }
       $self->{write_closed} = 1;
     } elsif ($type eq 'close') {
-      $self->{cb}->($self, 'closeconnection'); # XXX
-      delete $self->{cb};
+      $self->_con_ev ('closeconnection');
     }
   })->then (sub {
-    #warn "Established";
-    #warn scalar gmtime;
     $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
-    $self->{cb}->($self, 'openconnection',
-                  {client_ip_addr => $client_host,
-                   client_port => $client_port});
+    $self->_con_ev ('openconnection',
+                    {remote_host => $args{remote_host},
+                     remote_port => $args{remote_port}});
   });
-} # new_from_...
+} # new
 
 sub _new_req ($) {
   my $self = $_[0];
   my $req = $self->{request} = bless {
     is_server => 1, DEBUG => DEBUG,
-    connection => $self, cb => $self->{cb},
+    connection => $self,
     headers => [],
     id => $self->{id} . '.' . ++$self->{req_id},
-    # method target version
-  }, __PACKAGE__ . '::Request';
+    # method target version cb
+  }, __PACKAGE__ . '::Stream';
   my $p1 = Promise->new (sub { $req->{req_done} = $_[0] });
   my $p2 = Promise->new (sub { $req->{res_done} = $_[0] });
   Promise->all ([$p1, $p2])->then (sub {
     $self->_done ($req, $_[0]->[0] || $_[0]->[1] || {});
+    $self->_con_ev ('endstream', $req);
   });
+  $req->{cb} = $self->_con_ev ('startstream', $req);
   return $req;
 } # _new_req
 
@@ -509,7 +524,7 @@ sub _request_headers ($) {
     $self->{unread_length} = $l;
     $self->{state} = 'request body';
   }
-  $req->_ev ('requestheaders');
+  $req->_ev ('headers');
   $req->_ev ('datastart');
   if ($l == 0 and not $req->{method} eq 'CONNECT') {
     $req->_ev ('dataend');
@@ -610,6 +625,31 @@ sub _426 ($$) {
   $req->close_response;
 } # _426
 
+sub _con_ev ($$) {
+  my ($self, $type) = @_;
+  if (DEBUG) {
+    my $id = $self->{transport}->id;
+    if ($type eq 'openconnection') {
+      my $data = $_[2];
+      my $host = $data->{remote_host}->to_ascii;
+      warn "$id: $type remote=$host:$data->{remote_port}\n";
+    } elsif ($type eq 'startstream') {
+      my $req = $_[2];
+      warn "$id: ========== @{[ref $self]}\n";
+      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
+    } elsif ($type eq 'endstream') {
+      my $req = $_[2];
+      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
+      warn "$id: ========== @{[ref $self]}\n";
+    } else {
+      warn "$id: $type @{[scalar gmtime]}\n";
+    }
+  }
+  $self->{con_cb}->(@_);
+  # XXX |closeconnection| should be fired after all |endstream|s
+#XXX  delete $self->{con_cb} if $type eq 'closeconnection';
+} # _con_ev
+
 sub DESTROY ($) {
   local $@;
   eval { die };
@@ -617,12 +657,17 @@ sub DESTROY ($) {
       if $@ =~ /during global destruction/;
 } # DESTROY
 
-package Web::Transport::HTTPServerConnection::Request;
+package Web::Transport::HTTPServerConnection::Stream;
 use Web::Transport::HTTPStream;
 push our @ISA, qw(Web::Transport::HTTPStream);
 use Carp qw(carp croak);
 use Digest::SHA qw(sha1);
 use MIME::Base64 qw(encode_base64);
+
+BEGIN {
+  *_e4d = \&Web::Transport::HTTPStream::_e4d;
+  *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
+}
 
 sub send_response_headers ($$$;%) {
   my ($req, $response, %args) = @_;
@@ -673,6 +718,9 @@ sub send_response_headers ($$$;%) {
   }
 
   ## Response-line and response headers
+  if ($req->{DEBUG}) {
+    warn "$req->{id}: Sending response headers... @{[scalar gmtime]}\n";
+  }
   if ($req->{version} != 0.9) {
     my $res = sprintf qq{HTTP/1.1 %d %s\x0D\x0A},
         $response->{status},
@@ -703,6 +751,11 @@ sub send_response_headers ($$$;%) {
       $res .= "$_->[0]: $_->[1]\x0D\x0A";
     }
     $res .= "\x0D\x0A";
+    if ($req->{DEBUG}) {
+      for (split /\x0A/, $res) {
+        warn "$req->{id}: S: @{[_e4d $_]}\n";
+      }
+    }
     $req->{connection}->{transport}->push_write (\$res);
   }
 
@@ -716,11 +769,16 @@ sub send_response_data ($$) {
   my ($req, $ref) = @_;
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   my $wm = $req->{write_mode} || '';
+  if ($req->{DEBUG} > 1) {
+    for (split /\x0A/, $$ref, -1) {
+      warn "$req->{id}: S: @{[_e4d $_]}\n";
+    }
+  }
   if ($wm eq 'chunked') {
     if (length $$ref) {
       $req->{connection}->{transport}->push_write (\sprintf "%X\x0D\x0A", length $$ref);
       $req->{connection}->{transport}->push_write ($ref);
-      $req->{connection}->{transport}->push_write (\"\x0A");
+      $req->{connection}->{transport}->push_write (\"\x0D\x0A");
     }
   } elsif ($wm eq 'raw' or $wm eq 'ws') {
     croak "Not writable for now"
@@ -801,13 +859,18 @@ sub _ev ($$;$$) {
         warn "$req->{id}: R: @{[_e4d_t $_]}\n";
       }
     } elsif ($_[0] eq 'headers') {
-      if ($_[1]->{version} eq '0.9') {
-        warn "$req->{id}: R: HTTP/0.9\n";
-      } else {
-        warn "$req->{id}: R: HTTP/$_[1]->{version} $_[1]->{status} $_[1]->{reason}\n";
-        for (@{$_[1]->{headers}}) {
-          warn "$req->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
+      if (defined $_[1]->{status}) { # response
+        if ($_[1]->{version} eq '0.9') {
+          warn "$req->{id}: R: HTTP/0.9\n";
+        } else {
+          warn "$req->{id}: R: HTTP/$_[1]->{version} $_[1]->{status} $_[1]->{reason}\n";
         }
+      } else { # request
+        my $url = $req->{target_url}->stringify;
+        warn "$req->{id}: R: $req->{method} $url HTTP/$req->{version}\n";
+      }
+      for (@{$req->{headers}}) {
+        warn "$req->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
       }
       warn "$req->{id}: + WS established\n" if $self->{DEBUG} and $_[2];
     } elsif ($_[0] eq 'complete') {

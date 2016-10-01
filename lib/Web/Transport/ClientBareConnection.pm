@@ -210,7 +210,7 @@ sub connect ($%) {
         die "Bad URL scheme |@{[$url_record->scheme]}|\n";
       }
       $self->{http} = Web::Transport::HTTPClientConnection->new
-          (transport => $_[0]);
+          (transport => $_[0], cb => sub { });
       return $self->{http}->connect;
     })->catch (sub {
       delete $self->{connect_promise};

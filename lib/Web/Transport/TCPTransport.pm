@@ -7,8 +7,9 @@ use Carp qw(croak);
 use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE);
 use AnyEvent::Util qw(WSAEWOULDBLOCK);
-use AnyEvent::Socket qw(tcp_connect format_address);
+use AnyEvent::Socket qw(tcp_connect);
 use Promise;
+use Web::Host;
 
 ## Note that this class is also used as the base of the
 ## |Web::Transport::UNIXDomainSocket| class.
@@ -23,7 +24,7 @@ sub new ($%) {
     croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
   }
   croak "Bad |id|" if defined $args->{id} and utf8::is_utf8 ($args->{id});
-  $self->{id} = (defined $args->{id} ? $args->{id} : int rand 100000);
+  $self->{id} = (defined $args->{id} ? $args->{id} : $$ . '.' . ++$Web::Transport::NextID);
   return $self;
 } # new
 
@@ -48,7 +49,8 @@ sub start ($$) {
   })->then (sub {
     $self->{fh} = $_[0];
     my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $self->{fh};
-    my $info = {local_host => format_address $h, local_port => $p};
+    my $info = {local_host => Web::Host->new_from_packed_addr ($h),
+                local_port => $p};
     AnyEvent::Util::fh_nonblocking $self->{fh}, 1;
 
     ## Applied to TCP only (not applied to Unix domain socket)

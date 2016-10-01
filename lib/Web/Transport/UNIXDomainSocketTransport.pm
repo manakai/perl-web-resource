@@ -14,7 +14,7 @@ sub new ($%) {
   $args->{port} = delete $args->{path};
   croak "No |file_name| specified" unless defined $args->{port};
   croak "Bad |id|" if defined $args->{id} and utf8::is_utf8 ($args->{id});
-  $self->{id} = (defined $args->{id} ? $args->{id} : int rand 100000);
+  $self->{id} = (defined $args->{id} ? $args->{id} : $$ . '.' . ++$Web::Transport::NextID);
   return $self;
 } # new
 

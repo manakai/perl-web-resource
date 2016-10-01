@@ -2,6 +2,7 @@ use strict;
 use warnings;
 use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
+use Web::Host;
 use Web::URL;
 use Web::Transport::TCPTransport;
 use Web::Transport::ConnectionClient;
@@ -53,7 +54,7 @@ my $HandleRequestHeaders = {};
 
   my $cb = sub {
     my ($self, $type, $req) = @_;
-    if ($type eq 'requestheaders') {
+    if ($type eq 'headers') {
       my $handler = $HandleRequestHeaders->{$req->{target_url}->path} ||
                     $HandleRequestHeaders->{$req->{target_url}->hostport};
       if (defined $handler) {
@@ -77,9 +78,20 @@ my $HandleRequestHeaders = {};
     }
   }; # $cb
 
+  my $con_cb = sub {
+    my ($self, $type) = @_;
+    if ($type eq 'startstream') {
+      my $req = $_[2];
+      return $cb;
+    }
+  }; # $con_cb
+
   our $server = tcp_server $host, $port, sub {
-    Web::Transport::HTTPServerConnection->new_from_fh_and_host_and_port_and_cb
-        ($_[0], $_[1], $_[2], $cb);
+    Web::Transport::HTTPServerConnection->new
+        (transport => Web::Transport::TCPTransport->new (fh => $_[0]),
+         remote_host => Web::Host->parse_string ($_[1]),
+         remote_port => $_[2],
+         cb => $con_cb);
   };
 }
 

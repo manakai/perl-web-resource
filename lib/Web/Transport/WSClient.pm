@@ -30,7 +30,7 @@ sub new ($%) {
     $url_record = Web::URL->parse_string
         (($url_record->scheme eq 'wss' ? 'https' : 'http') . '://' . $url_record->hostport . $url_record->pathquery);
 
-    my $self = bless {parent_id => (int rand 100000)}, $class;
+    my $self = bless {parent_id => ($$ . '.' . ++$Web::Transport::NextID)}, $class;
 
     $args{proxy_manager} ||= do {
       require Web::Transport::ENVProxyManager;

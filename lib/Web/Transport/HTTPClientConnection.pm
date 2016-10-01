@@ -25,8 +25,9 @@ sub new ($%) {
                     req_id => 0,
                     rbuf => \(my $x = '')}, shift;
   $self->{args} = {@_};
+  $self->{con_cb} = delete $self->{args}->{cb};
   return $self;
-} # new
+} # new_from_cb
 
 sub id ($) {
   if (defined $_[0]->{args}) {
@@ -609,7 +610,8 @@ sub debug_handshake_done ($$$) {
 
   if ($self->{transport}->type eq 'TCP') {
     my $data = $info->{transport_data};
-    warn "$id: + Local: $data->{local_host}:$data->{local_port}\n";
+    my $host = $data->{local_host}->to_ascii;
+    warn "$id: + Local: $host:$data->{local_port}\n";
   }
 
   if ($self->{transport}->type eq 'TLS') {
@@ -617,7 +619,8 @@ sub debug_handshake_done ($$$) {
 
     if ($data->{parent_transport_type} eq 'TCP') {
       my $data = $data->{parent_transport_data};
-      warn "$id: + TCP Local: $data->{local_host}:$data->{local_port}\n";
+      my $host = $data->{local_host}->to_ascii;
+      warn "$id: + TCP Local: $host:$data->{local_port}\n";
     }
 
     if (defined $data->{tls_protocol}) {
@@ -687,6 +690,9 @@ sub connect ($) {
   my $onclosed;
   my $closed = Promise->new (sub { $onclosed = $_[0] });
   $self->{closed} = $closed;
+  $closed->then (sub {
+    $self->_con_ev ('closeconnection');
+  });
 
   if (DEBUG) {
     my $id = $self->{transport}->id;
@@ -729,8 +735,8 @@ sub connect ($) {
         }
       }
     } elsif ($type eq 'writeeof') {
-      my $data = $_[2];
       if (DEBUG) {
+        my $data = $_[2];
         my $id = $self->{transport}->id;
         if (defined $data->{message}) {
           warn "$id: S: EOF ($data->{message})\n";
@@ -743,17 +749,14 @@ sub connect ($) {
         $self->_ev ('complete', {});
       }
     } elsif ($type eq 'close') {
-      if (DEBUG) {
-        my $id = $self->{transport}->id;
-        warn "$id: Connection closed @{[scalar gmtime]}\n";
-      }
       $onclosed->();
     }
   })->then (sub {
-    debug_handshake_done $self, 1, {transport_data => $_[0]} if DEBUG;
+    debug_handshake_done $self, 1, {transport_data => $_[0]} if DEBUG; # XXX integrate with _con_ev
+    $self->_con_ev ('openconnection', $_[0]);
   }, sub {
     my $error = $_[0];
-    debug_handshake_done $self, 0, $error if DEBUG;
+    debug_handshake_done $self, 0, $error if DEBUG; # XXX integrate with _con_ev
     $self->{transport}->abort;
     $onclosed->();
     die $error;
@@ -805,10 +808,7 @@ sub send_request_headers ($$;%) {
   }
 
   $self->{id} = $req->{id} = $self->{transport}->id . '.' . ++$self->{req_id};
-  if (DEBUG) {
-    warn "$req->{id}: ========== $$ @{[__PACKAGE__]}\n";
-    warn "$req->{id}: @{[scalar gmtime]}\n";
-  }
+  $self->_con_ev ('startstream', $req);
 
   $self->{request} = $req;
   $self->{response} = {status => 200, reason => 'OK', version => '0.9',
@@ -855,12 +855,9 @@ sub send_request_headers ($$;%) {
       $self->{request_state} = 'sending body';
     });
   }
-  if (DEBUG) {
-    $req_done = $req_done->then (sub {
-      warn "$req->{id}: ==========\n";
-    });
-  }
-  return $req_done;
+  return $req_done->then (sub {
+    $self->_con_ev ('endstream', $req);
+  });
 } # send_request_headers
 
 sub send_data ($$;%) {
@@ -972,6 +969,25 @@ sub _ev ($$;$$) {
     delete $self->{cb};
   }
 } # _ev
+
+sub _con_ev ($$) {
+  my ($self, $type) = @_;
+  if (DEBUG) {
+    my $id = $self->{transport}->id;
+    if ($type eq 'startstream') {
+      my $req = $_[2];
+      warn "$id: ========== @{[ref $self]}\n";
+      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
+    } elsif ($type eq 'endstream') {
+      my $req = $_[2];
+      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
+      warn "$id: ========== @{[ref $self]}\n";
+    } else {
+      warn "$id: $type @{[scalar gmtime]}\n";
+    }
+  }
+  $self->{con_cb}->(@_);
+} # _con_ev
 
 sub DESTROY ($) {
   $_[0]->abort if defined $_[0]->{transport};

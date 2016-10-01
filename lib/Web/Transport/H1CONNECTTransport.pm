@@ -34,9 +34,9 @@ sub start ($$) {
 
   # XXX headers
   my $onevent = sub {
-    my $type = $_[2];
+    my $type = $_[1];
     if ($type eq 'data' and $self->{started}) {
-      my $data = $_[3];
+      my $data = $_[2]; # string copy!
       AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
     } elsif ($type eq 'dataend' and $self->{started}) {
       unless ($self->{read_closed}) {
@@ -44,7 +44,7 @@ sub start ($$) {
         AE::postpone { $self->{cb}->($self, 'readeof', {}) };
       }
     } elsif ($type eq 'headers') {
-      my $res = $_[3];
+      my $res = $_[2];
       if ($res->{status} == 200) {
         $ok->({response => $res});
         $self->{started} = 1;
@@ -52,7 +52,7 @@ sub start ($$) {
         $ng->({response => $res});
       }
     } elsif ($type eq 'complete') {
-      my $exit = $_[3];
+      my $exit = $_[2];
       if ($exit->{failed}) {
         if ($self->{started}) {
           unless ($self->{read_closed}) {

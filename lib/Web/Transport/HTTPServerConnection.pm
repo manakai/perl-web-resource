@@ -524,7 +524,7 @@ sub _request_headers ($) {
     $self->{unread_length} = $l;
     $self->{state} = 'request body';
   }
-  $req->_ev ('headers');
+  $req->_ev ('headers', $req);
   $req->_ev ('datastart');
   if ($l == 0 and not $req->{method} eq 'CONNECT') {
     $req->_ev ('dataend');
@@ -839,68 +839,6 @@ sub _next ($) {
   delete $req->{write_mode};
   delete $req->{to_be_sent_length};
 } # _next
-
-BEGIN {
-  *_e4d = \&Web::Transport::HTTPStream::_e4d;
-  *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
-}
-
-sub _ev ($$;$$) {
-  my $self = shift;
-  my $req = $self; #XXX
-  if ($self->{DEBUG}) {
-    warn "$req->{id}: $_[0] @{[scalar gmtime]}\n";
-    if ($_[0] eq 'data' and $self->{DEBUG} > 1) {
-      for (split /\x0D?\x0A/, $_[1], -1) {
-        warn "$req->{id}: R: @{[_e4d $_]}\n";
-      }
-    } elsif ($_[0] eq 'text' and $self->{DEBUG} > 1) {
-      for (split /\x0D?\x0A/, $_[1], -1) {
-        warn "$req->{id}: R: @{[_e4d_t $_]}\n";
-      }
-    } elsif ($_[0] eq 'headers') {
-      if (defined $_[1]->{status}) { # response
-        if ($_[1]->{version} eq '0.9') {
-          warn "$req->{id}: R: HTTP/0.9\n";
-        } else {
-          warn "$req->{id}: R: HTTP/$_[1]->{version} $_[1]->{status} $_[1]->{reason}\n";
-        }
-      } else { # request
-        my $url = $req->{target_url}->stringify;
-        warn "$req->{id}: R: $req->{method} $url HTTP/$req->{version}\n";
-      }
-      for (@{$req->{headers}}) {
-        warn "$req->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
-      }
-      warn "$req->{id}: + WS established\n" if $self->{DEBUG} and $_[2];
-    } elsif ($_[0] eq 'complete') {
-      my $err = join ' ',
-          $_[1]->{reset} ? 'reset' : (),
-          $self->{response}->{incomplete} ? 'incomplete' : (),
-          $_[1]->{failed} ? 'failed' : (),
-          $_[1]->{cleanly} ? 'cleanly' : (),
-          $_[1]->{can_retry} ? 'retryable' : (),
-          defined $_[1]->{errno} ? 'errno=' . $_[1]->{errno} : (),
-          defined $_[1]->{message} ? 'message=' . $_[1]->{message} : (),
-          defined $_[1]->{status} ? 'status=' . $_[1]->{status} : (),
-          defined $_[1]->{reason} ? 'reason=' . $_[1]->{reason} : ();
-      warn "$req->{id}: + @{[_e4d $err]}\n" if length $err;
-    } elsif ($_[0] eq 'ping') {
-      if ($_[2]) {
-        warn "$req->{id}: R: pong data=@{[_e4d $_[1]]}\n";
-      } else {
-        warn "$req->{id}: R: data=@{[_e4d $_[1]]}\n";
-      }
-    }
-  }
-  # XXX
-  my $type = shift @_;
-  $self->{cb}->($self, $type, $req, @_);
-  if ($type eq 'complete') {
-    #XXX (delete $self->{request_done})->();
-    delete $self->{cb};
-  }
-} # _ev
 
 sub DESTROY ($) {
   local $@;

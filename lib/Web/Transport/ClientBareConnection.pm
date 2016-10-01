@@ -249,10 +249,10 @@ sub request ($$$$$$$) {
     my $result;
     my $onevent = sub {
       my $http = $_[0];
-      my $type = $_[2];
+      my $type = $_[1];
       if ($type eq 'data' or $type eq 'text') {
         if (not defined $result) {
-          my $v = $_[3]; # buffer copy!
+          my $v = $_[2]; # buffer copy!
           Promise->resolve->then (sub { return $cb->($http, $response, $v, $type eq 'text') });
         }
       } elsif ($type eq 'dataend' or $type eq 'textend') {
@@ -260,15 +260,15 @@ sub request ($$$$$$$) {
           Promise->resolve->then (sub { return $cb->($http, $response, undef, $type eq 'textend') });
         }
       } elsif ($type eq 'complete') {
-        my $exit = $_[3];
+        my $exit = $_[2];
         if ($exit->{failed}) {
           $response = undef;
         }
         $result ||= $exit;
         undef $timer;
       } elsif ($type eq 'headers') {
-        my $transport = $_[0]->transport;
-        my $res = $_[3];
+        my $transport = $http->transport;
+        my $res = $_[2];
         if ($transport->request_mode ne 'HTTP proxy' and
             $res->{status} == 407) {
           $response = undef;
@@ -281,7 +281,7 @@ sub request ($$$$$$$) {
           }
         }
         if (not defined $result) {
-          $response->{ws_connection_established} = $_[4];
+          $response->{ws_connection_established} = $_[3];
           Promise->resolve->then (sub { return $cb->($http, $response, '', undef) });
         }
       } elsif ($type eq 'closing') {

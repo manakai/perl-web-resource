@@ -551,6 +551,65 @@ sub _ws_debug ($$$%) {
   }
 } # _ws_debug
 
+sub _ev ($$;$$) {
+  my $self = shift;
+  my $type = shift;
+  my $req = $self->{is_server} ? $self : $self->{request};
+  if ($self->{DEBUG}) {
+    warn "$req->{id}: $type @{[scalar gmtime]}\n";
+    if ($type eq 'data' and $self->{DEBUG} > 1) {
+      for (split /\x0D?\x0A/, $_[0], -1) {
+        warn "$req->{id}: R: @{[_e4d $_]}\n";
+      }
+    } elsif ($type eq 'text' and $self->{DEBUG} > 1) {
+      for (split /\x0D?\x0A/, $_[0], -1) {
+        warn "$req->{id}: R: @{[_e4d_t $_]}\n";
+      }
+    } elsif ($type eq 'headers') {
+      my $obj = $_[0];
+      if (defined $obj->{status}) { # response
+        if ($obj->{version} eq '0.9') {
+          warn "$req->{id}: R: HTTP/0.9\n";
+        } else {
+          warn "$req->{id}: R: HTTP/$obj->{version} $obj->{status} $obj->{reason}\n";
+        }
+      } else { # request
+        my $url = $obj->{target_url}->stringify;
+        warn "$req->{id}: R: $obj->{method} $url HTTP/$obj->{version}\n";
+      }
+      for (@{$obj->{headers}}) {
+        warn "$req->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
+      }
+      warn "$req->{id}: + WS established\n" if $_[1];
+    } elsif ($type eq 'complete') {
+      my $err = join ' ',
+          $_[0]->{reset} ? 'reset' : (),
+          $self->{response}->{incomplete} ? 'incomplete' : (),
+          $_[0]->{failed} ? 'failed' : (),
+          $_[0]->{cleanly} ? 'cleanly' : (),
+          $_[0]->{can_retry} ? 'retryable' : (),
+          defined $_[0]->{errno} ? 'errno=' . $_[0]->{errno} : (),
+          defined $_[0]->{message} ? 'message=' . $_[0]->{message} : (),
+          defined $_[0]->{status} ? 'status=' . $_[0]->{status} : (),
+          defined $_[0]->{reason} ? 'reason=' . $_[0]->{reason} : ();
+      warn "$req->{id}: + @{[_e4d $err]}\n" if length $err;
+    } elsif ($type eq 'ping') {
+      if ($_[1]) {
+        warn "$req->{id}: R: pong data=@{[_e4d $_[0]]}\n";
+      } else {
+        warn "$req->{id}: R: data=@{[_e4d $_[0]]}\n";
+      }
+    }
+  }
+  $self->{cb}->($self, $type, @_);
+  if ($type eq 'complete') {
+    unless ($self->{is_server}) {
+      (delete $self->{request_done})->();
+    }
+    delete $self->{cb};
+  }
+} # _ev
+
 1;
 
 =head1 LICENSE

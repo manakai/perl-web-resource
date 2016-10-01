@@ -53,28 +53,29 @@ my $HandleRequestHeaders = {};
   $WSOrigin = Web::URL->parse_string ("ws://$host:$port");
 
   my $cb = sub {
-    my ($self, $type, $req) = @_;
+    my ($self, $type) = @_;
     if ($type eq 'headers') {
+      my $req = $_[2];
       my $handler = $HandleRequestHeaders->{$req->{target_url}->path} ||
                     $HandleRequestHeaders->{$req->{target_url}->hostport};
       if (defined $handler) {
-        $req->{body} = '';
+        $self->{body} = '';
         $handler->($self, $req);
       } elsif ($req->{target_url}->path eq '/') {
-        $req->send_response_headers
+        $self->send_response_headers
             ({status => 404, status_text => 'Not Found (/)'}, close => 1);
-        $req->close_response;
+        $self->close_response;
       } else {
         die "No handler for |$req->{target}|";
       }
     } elsif ($type eq 'data') {
-      $req->{body} .= $_[3];
-      $req->{ondata}->($_[3], $_[4]) if $req->{ondata};
+      $self->{body} .= $_[2];
+      $self->{ondata}->($_[2], $_[3]) if $self->{ondata};
     } elsif ($type eq 'text') {
-      $req->{text} .= $_[3];
+      $self->{text} .= $_[2];
     } elsif ($type eq 'dataend' or $type eq 'textend' or
              $type eq 'ping') {
-      $req->{$type}->($_[3], $_[4]) if $req->{$type};
+      $self->{$type}->($_[2], $_[3]) if $self->{$type};
     }
   }; # $cb
 

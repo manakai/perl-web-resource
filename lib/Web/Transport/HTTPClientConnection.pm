@@ -23,7 +23,8 @@ BEGIN {
 sub new ($%) {
   my $self = bless {id => '',
                     req_id => 0,
-                    rbuf => \(my $x = '')}, shift;
+                    rbuf => \(my $x = ''),
+                    DEBUG => DEBUG}, shift;
   $self->{args} = {@_};
   $self->{con_cb} = delete $self->{args}->{cb};
   return $self;
@@ -919,56 +920,6 @@ sub abort ($;%) {
 
   return $self->{closed};
 } # abort
-
-sub _ev ($$;$$) {
-  my $self = shift;
-  my $req = $self->{request};
-  if (DEBUG) {
-    warn "$req->{id}: $_[0] @{[scalar gmtime]}\n";
-    if ($_[0] eq 'data' and DEBUG > 1) {
-      for (split /\x0D?\x0A/, $_[1], -1) {
-        warn "$req->{id}: R: @{[_e4d $_]}\n";
-      }
-    } elsif ($_[0] eq 'text' and DEBUG > 1) {
-      for (split /\x0D?\x0A/, $_[1], -1) {
-        warn "$req->{id}: R: @{[_e4d_t $_]}\n";
-      }
-    } elsif ($_[0] eq 'headers') {
-      if ($_[1]->{version} eq '0.9') {
-        warn "$req->{id}: R: HTTP/0.9\n";
-      } else {
-        warn "$req->{id}: R: HTTP/$_[1]->{version} $_[1]->{status} $_[1]->{reason}\n";
-        for (@{$_[1]->{headers}}) {
-          warn "$req->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
-        }
-      }
-      warn "$req->{id}: + WS established\n" if DEBUG and $_[2];
-    } elsif ($_[0] eq 'complete') {
-      my $err = join ' ',
-          $_[1]->{reset} ? 'reset' : (),
-          $self->{response}->{incomplete} ? 'incomplete' : (),
-          $_[1]->{failed} ? 'failed' : (),
-          $_[1]->{cleanly} ? 'cleanly' : (),
-          $_[1]->{can_retry} ? 'retryable' : (),
-          defined $_[1]->{errno} ? 'errno=' . $_[1]->{errno} : (),
-          defined $_[1]->{message} ? 'message=' . $_[1]->{message} : (),
-          defined $_[1]->{status} ? 'status=' . $_[1]->{status} : (),
-          defined $_[1]->{reason} ? 'reason=' . $_[1]->{reason} : ();
-      warn "$req->{id}: + @{[_e4d $err]}\n" if length $err;
-    } elsif ($_[0] eq 'ping') {
-      if ($_[2]) {
-        warn "$req->{id}: R: pong data=@{[_e4d $_[1]]}\n";
-      } else {
-        warn "$req->{id}: R: data=@{[_e4d $_[1]]}\n";
-      }
-    }
-  }
-  $self->{cb}->($self, $req, @_);
-  if ($_[0] eq 'complete') {
-    (delete $self->{request_done})->();
-    delete $self->{cb};
-  }
-} # _ev
 
 sub _con_ev ($$) {
   my ($self, $type) = @_;

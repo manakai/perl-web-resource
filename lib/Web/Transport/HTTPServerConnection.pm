@@ -70,7 +70,7 @@ sub _new_req ($) {
   my $p1 = Promise->new (sub { $req->{req_done} = $_[0] });
   my $p2 = Promise->new (sub { $req->{res_done} = $_[0] });
   Promise->all ([$p1, $p2])->then (sub {
-    $self->_done ($req, $_[0]->[0] || $_[0]->[1] || {});
+    $req->_done ($_[0]->[0] || $_[0]->[1] || {});
     $self->_con_ev ('endstream', $req);
   });
   $req->{cb} = $self->_con_ev ('startstream', $req);
@@ -106,7 +106,7 @@ sub _ondata ($$) {
         if ($line =~ /[\x00\x0D]/) {
           $req->{version} = 0.9;
           $req->{method} = 'GET';
-          return $self->_fatal ($req);
+          return $req->_fatal;
         }
         if ($line =~ s{\x20+(H[^\x20]*)\z}{}) {
           my $version = $1;
@@ -115,37 +115,37 @@ sub _ondata ($$) {
           } elsif ($version =~ m{\AHTTP/0+1?\.}) {
             $req->{version} = 0.9;
             $req->{method} = 'GET';
-            return $self->_fatal ($req);
+            return $req->_fatal;
           } elsif ($version =~ m{\AHTTP/[0-9]+\.[0-9]+\z}) {
             $req->{version} = 1.1;
           } else {
             $req->{version} = 0.9;
             $req->{method} = 'GET';
-            return $self->_fatal ($req);
+            return $req->_fatal;
           }
           if ($line =~ s{\A([^\x20]+)\x20+}{}) {
             $req->{method} = $1;
           } else { # no method
             $req->{method} = 'GET';
-            return $self->_fatal ($req);
+            return $req->_fatal;
           }
         } else { # no version
           $req->{version} = 0.9;
           $req->{method} = 'GET';
           unless ($line =~ s{\AGET\x20+}{}) {
-            return $self->_fatal ($req);
+            return $req->_fatal;
           }
         }
         $req->{target} = $line;
         if ($req->{target} =~ m{\A/}) {
           if ($req->{method} eq 'CONNECT') {
-            return $self->_fatal ($req);
+            return $req->_fatal;
           } else {
             #
           }
         } elsif ($req->{target} =~ m{^[A-Za-z][A-Za-z0-9.+-]+://}) {
           if ($req->{method} eq 'CONNECT') {
-            return $self->_fatal ($req);
+            return $req->_fatal;
           } else {
             #
           }
@@ -155,20 +155,24 @@ sub _ondata ($$) {
           } elsif ($req->{method} eq 'CONNECT' and length $req->{target}) {
             #
           } else {
-            return $self->_fatal ($req);
+            return $req->_fatal;
           }
         }
         if ($req->{version} == 0.9) {
           $self->_request_headers or return;
         } else { # 1.0 / 1.1
-          return $self->_fatal ($req) unless length $line;
+          return $req->_fatal unless length $line;
           $self->{state} = 'before request header';
         }
       } elsif (8192 <= length $self->{rbuf}) {
         my $req = $self->_new_req;
-        $req->{version} = 0.9;
         $req->{method} = 'GET';
-        return $self->_414 ($req);
+        $req->{version} = 1.1;
+        $req->_request_done;
+        $req->_send_error (414, 'Request-URI Too Large')
+            unless $self->{write_closed};
+        $req->close_response;
+        return;
       } else {
         return;
       }
@@ -176,10 +180,10 @@ sub _ondata ($$) {
       $self->{rbuf} .= $$inref;
       if ($self->{rbuf} =~ s/\A([^\x0A]{0,8191})\x0A//) {
         my $line = $1;
-        return $self->_fatal ($self->{request})
+        return $self->{request}->_fatal
             if @{$self->{request}->{headers}} == 100;
         $line =~ s/\x0D\z//;
-        return $self->_fatal ($self->{request})
+        return $self->{request}->_fatal
             if $line =~ /[\x00\x0D]/;
         if ($line =~ s/\A([^\x09\x20:][^:]*):[\x09\x20]*//) {
           my $name = $1;
@@ -188,17 +192,17 @@ sub _ondata ($$) {
           if ((length $self->{request}->{headers}->[-1]->[0]) + 1 +
               (length $self->{request}->{headers}->[-1]->[1]) + 1 +
               (length $line) + 2 > 8192) {
-            return $self->_fatal ($self->{request});
+            return $self->{request}->_fatal;
           } else {
             $self->{request}->{headers}->[-1]->[1] .= " " . $line;
           }
         } elsif ($line eq '') { # end of headers
           $self->_request_headers or return;
         } else { # broken line
-          return $self->_fatal ($self->{request});
+          return $self->{request}->_fatal;
         }
       } elsif (8192 <= length $self->{rbuf}) {
-        return $self->_fatal ($self->{request});
+        return $self->{request}->_fatal;
       } else {
         return;
       }
@@ -225,7 +229,7 @@ sub _ondata ($$) {
         $self->{request}->_ev ('data', $$ref);
         $self->{request}->_ev ('dataend');
         unless (defined $self->{request}->{ws_key}) {
-          $self->_request_done ($self->{request});
+          $self->{request}->_request_done;
         }
       } elsif ($self->{unread_length} < $in_length) { # has redundant data
         $self->{request}->{incomplete} = 1;
@@ -236,7 +240,7 @@ sub _ondata ($$) {
         $self->{request}->_ev ('data', substr ($$ref, 0, $self->{unread_length}));
         $self->{request}->_ev ('dataend');
         unless (defined $self->{request}->{ws_key}) {
-          $self->_request_done ($self->{request});
+          $self->{request}->_request_done;
         }
         return;
       } else { # unread_length > $in_length
@@ -248,7 +252,7 @@ sub _ondata ($$) {
       return $self->{request}->_ws_received ($inref);
     } elsif ($self->{state} eq 'ws handshaking') {
       return unless length $$inref;
-      return $self->_fatal ($self->{request});
+      return $self->{request}->_fatal;
     } elsif ($self->{state} eq 'end') {
       return;
     } else {
@@ -265,10 +269,10 @@ sub _oneof ($$) {
     my $req = $self->_new_req;
     $req->{version} = 0.9;
     $req->{method} = 'GET';
-    return $self->_fatal ($req);
+    return $req->_fatal;
   } elsif ($self->{state} eq 'before request header') {
     $self->{request}->{close_after_response} = 1;
-    return $self->_fatal ($self->{request});
+    return $self->{request}->_fatal;
   } elsif ($self->{state} eq 'request body') {
     $self->{request}->{close_after_response} = 1;
     if (defined $self->{unread_length}) {
@@ -278,18 +282,18 @@ sub _oneof ($$) {
           unless $exit->{failed};
     }
     $self->{request}->_ev ('dataend');
-    $self->_request_done ($self->{request}, $exit);
+    $self->{request}->_request_done ($exit);
   } elsif ($self->{state} eq 'ws') {
     $self->{request}->{exit} = $exit; # XXX
     return $self->{request}->_ws_received_eof (\'');
   } elsif ($self->{state} eq 'ws handshaking') {
-    return $self->_fatal ($self->{request});
+    return $self->{request}->_fatal;
   } elsif ($self->{state} eq 'after request') {
     if (length $self->{rbuf}) {
       my $req = $self->_new_req;
       $req->{version} = 0.9;
       $req->{method} = 'GET';
-      return $self->_fatal ($req);
+      return $req->_fatal;
     }
 
     $self->{transport}->push_shutdown
@@ -324,11 +328,11 @@ sub _request_headers ($) {
     $host = $headers{host}->[0];
     $host =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
   } elsif (@{$headers{host} or []}) { # multiple Host:
-    $self->_fatal ($req);
+    $req->_fatal;
     return 0;
   } else { # no Host:
     if ($req->{version} == 1.1) {
-      $self->_fatal ($req);
+      $req->_fatal;
       return 0;
     }
   }
@@ -343,7 +347,7 @@ sub _request_headers ($) {
           not $host_url->path eq '/' or
           defined $host_url->query or
           defined $host_url->{fragment}) { # XXX
-        $self->_fatal ($req);
+        $req->_fatal;
         return 0;
       }
     }
@@ -355,7 +359,7 @@ sub _request_headers ($) {
         not $target_url->path eq '/' or
         defined $target_url->query or
         defined $target_url->{fragment}) { # XXX
-      $self->_fatal ($req);
+      $req->_fatal;
       return 0;
     }
   } elsif ($req->{target} eq '*') {
@@ -366,7 +370,7 @@ sub _request_headers ($) {
           not $host_url->path eq '/' or
           defined $host_url->query or
           defined $host_url->{fragment}) { # XXX
-        $self->_fatal ($req);
+        $req->_fatal;
         return 0;
       }
       $target_url = $host_url;
@@ -381,7 +385,7 @@ sub _request_headers ($) {
           not $host_url->path eq '/' or
           defined $host_url->query or
           defined $host_url->{fragment}) { # XXX
-        $self->_fatal ($req);
+        $req->_fatal;
         return 0;
       }
     }
@@ -396,7 +400,7 @@ sub _request_headers ($) {
     }
     if (not defined $target_url or
         not defined $target_url->host) {
-      $self->_fatal ($req);
+      $req->_fatal;
       return 0;
     }
   } else { # absolute URL
@@ -405,7 +409,7 @@ sub _request_headers ($) {
     $target_url = Web::URL->parse_string ($target);
     if (not defined $target_url or
         not defined $target_url->host) {
-      $self->_fatal ($req);
+      $req->_fatal;
       return 0;
     }
 
@@ -416,14 +420,14 @@ sub _request_headers ($) {
           not $host_url->path eq '/' or
           defined $host_url->query or
           defined $host_url->{fragment}) { # XXX
-        $self->_fatal ($req);
+        $req->_fatal;
         return 0;
       }
     }
   }
   if (defined $host_url and defined $target_url) {
     unless ($host_url->host->equals ($target_url->host)) {
-              $self->_fatal ($req);
+              $req->_fatal;
               return 0;
             }
             my $host_port = $host_url->port;
@@ -433,7 +437,7 @@ sub _request_headers ($) {
             } elsif (not defined $host_port and not defined $target_port) {
               #
             } else {
-              $self->_fatal ($req);
+              $req->_fatal;
               return 0;
             }
           }
@@ -486,20 +490,27 @@ sub _request_headers ($) {
               } # WS_CHECK
 
               if ($status == 426) {
-                $self->_426 ($req);
+                $req->_request_done;
+                $req->_send_error (426, 'Upgrade Required', [
+                  ['Upgrade', 'websocket'],
+                  ['Sec-WebSocket-Version', '13'],
+                ]) unless $self->{write_closed};
+                $req->close_response;
               } else {
-                $self->_fatal ($req);
+                $req->_fatal;
               }
               return 0;
             } # WS_OK
           } elsif (@{$headers{upgrade} or []}) {
-            $self->_fatal ($req);
+            $req->_fatal;
             return 0;
           }
 
   ## Transfer-Encoding:
   if (@{$headers{'transfer-encoding'} or []}) {
-    $self->_411 ($req);
+    $req->_request_done;
+    $req->_send_error (411, 'Length Required') unless $self->{write_closed};
+    $req->close_response;
     return 0;
   }
 
@@ -511,7 +522,7 @@ sub _request_headers ($) {
       $headers{'content-length'}->[0] =~ /\A[0-9]+\z/) {
     $l = 0+$headers{'content-length'}->[0] unless $req->{method} eq 'CONNECT';
   } elsif (@{$headers{'content-length'} or []}) { # multiple headers or broken
-    $self->_fatal ($req);
+    $req->_fatal;
     return 0;
   }
   if ($l == 0) {
@@ -529,101 +540,18 @@ sub _request_headers ($) {
   if ($l == 0 and not $req->{method} eq 'CONNECT') {
     $req->_ev ('dataend');
     unless (defined $req->{ws_key}) {
-      $self->_request_done ($req);
+      $req->_request_done;
     }
   }
 
   return 1;
 } # _request_headers
 
-sub _request_done ($$;$) {
-  my ($self, $req, $exit) = @_;
-  delete $self->{timer};
-  $self->{disable_timer} = 1;
-  delete $self->{request};
-  delete $self->{unread_length};
-  if ($req->{close_after_response}) {
-    $self->{state} = 'end';
-  } else {
-    $self->{state} = 'after request';
-  }
-  if (defined $req->{req_done}) {
-    (delete $req->{req_done})->($exit);
-  }
-} # _request_done
-
-sub _done ($$$) {
-  my ($self, $req, $exit) = @_;
-  if (delete $req->{close_after_response}) {
-    $self->{transport}->push_shutdown
-        unless $self->{write_closed};
-    $self->{write_closed} = 1;
-    $self->{state} = 'end';
-  }
-  delete $self->{disable_timer};
-  $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
-  $req->_ev ('complete', $exit);
-  delete $req->{connection};
-} # _done
-
 sub _timeout ($) {
   my $self = $_[0];
   delete $self->{timer};
   $self->{transport}->abort (message => "Read timeout ($ReadTimeout)");
 } # _timeout
-
-sub _send_error ($$$$;$) {
-  my ($self, $req, $status, $status_text, $headers) = @_;
-  my $res = qq{<!DOCTYPE html><html>
-<head><title>$status $status_text</title></head>
-<body>$status $status_text};
-  #$res .= Carp::longmess;
-  $res .= qq{</body></html>\x0A};
-  $req->send_response_headers
-      ({status => $status, status_text => $status_text,
-        headers => [
-          @{$headers or []},
-          ['Content-Type' => 'text/html; charset=utf-8'],
-        ]}, close => 1, content_length => length $res);
-  $req->send_response_data (\$res) unless $req->{method} eq 'HEAD';
-} # _send_error
-
-sub _fatal ($$) {
-  my ($self, $req) = @_;
-  $self->_request_done ($req);
-  $self->{state} = 'end';
-  $self->{rbuf} = '';
-  $self->_send_error ($req, 400, 'Bad Request') unless $self->{write_closed};
-  $req->close_response;
-} # _fatal
-
-sub _411 ($$) {
-  my ($self, $req) = @_;
-  $self->_request_done ($req);
-  $self->_send_error ($req, 411, 'Length Required')
-      unless $self->{write_closed};
-  $req->close_response;
-} # _411
-
-sub _414 ($$) {
-  my ($self, $req) = @_;
-  $req->{version} = 1.1;
-  $req->{method} = 'GET';
-  $self->_request_done ($req);
-  $self->_send_error ($req, 414, 'Request-URI Too Large')
-      unless $self->{write_closed};
-  $req->close_response;
-} # _414
-
-sub _426 ($$) {
-  my ($self, $req) = @_;
-  $self->_request_done ($req);
-  $self->_send_error ($req, 426, 'Upgrade Required', [
-    ['Upgrade', 'websocket'],
-    ['Sec-WebSocket-Version', '13'],
-  ]) unless $self->{write_closed};
-  $req->close_response;
-} # _426
 
 sub _con_ev ($$) {
   my ($self, $type) = @_;
@@ -826,6 +754,49 @@ sub close_response ($;%) {
   }
 } # close_response
 
+sub _send_error ($$$;$) {
+  my ($req, $status, $status_text, $headers) = @_;
+  my $res = qq{<!DOCTYPE html><html>
+<head><title>$status $status_text</title></head>
+<body>$status $status_text};
+  #$res .= Carp::longmess;
+  $res .= qq{</body></html>\x0A};
+  $req->send_response_headers
+      ({status => $status, status_text => $status_text,
+        headers => [
+          @{$headers or []},
+          ['Content-Type' => 'text/html; charset=utf-8'],
+        ]}, close => 1, content_length => length $res);
+  $req->send_response_data (\$res) unless $req->{method} eq 'HEAD';
+} # _send_error
+
+sub _fatal ($) {
+  my ($req) = @_;
+  my $con = $req->{connection};
+  $req->_request_done;
+  $con->{state} = 'end';
+  $con->{rbuf} = '';
+  $req->_send_error (400, 'Bad Request') unless $con->{write_closed};
+  $req->close_response;
+} # _fatal
+
+sub _request_done ($;$) {
+  my ($req, $exit) = @_;
+  my $con = $req->{connection};
+  delete $con->{timer};
+  $con->{disable_timer} = 1;
+  delete $con->{request};
+  delete $con->{unread_length};
+  if ($req->{close_after_response}) {
+    $con->{state} = 'end';
+  } else {
+    $con->{state} = 'after request';
+  }
+  if (defined $req->{req_done}) {
+    (delete $req->{req_done})->($exit);
+  }
+} # _request_done
+
 sub _next ($) {
   my $req = $_[0];
   if (delete $req->{close_after_response}) {
@@ -839,6 +810,20 @@ sub _next ($) {
   delete $req->{write_mode};
   delete $req->{to_be_sent_length};
 } # _next
+
+sub _done ($$) {
+  my ($req, $exit) = @_;
+  my $con = $req->{connection};
+  if (delete $req->{close_after_response}) {
+    $con->{transport}->push_shutdown unless $con->{write_closed};
+    $con->{write_closed} = 1;
+    $con->{state} = 'end';
+  }
+  delete $con->{disable_timer};
+  $con->{timer} = AE::timer $ReadTimeout, 0, sub { $con->_timeout };
+  $req->_ev ('complete', $exit);
+  delete $req->{connection};
+} # _done
 
 sub DESTROY ($) {
   local $@;

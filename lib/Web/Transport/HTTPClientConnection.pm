@@ -260,10 +260,10 @@ sub _process_rbuf ($$;%) {
           if (defined $self->{pending_frame}) {
             $self->{ws_state} = 'CLOSING';
             $self->{transport}->push_write (\($self->{pending_frame}));
-            $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if DEBUG;
-            $self->{timer} = AE::timer 20, 0, sub {
+            $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if DEBUG; # XXX $self->{stream}
+            $self->{ws_timer} = AE::timer 20, 0, sub {
               warn "$self->{request}->{id}: WS timeout (20)\n" if DEBUG;
-              delete $self->{timer};
+              delete $self->{ws_timer};
               $self->_next;
             };
           }
@@ -571,6 +571,7 @@ sub _next ($) {
   return if $self->{state} eq 'stopped';
 
   delete $self->{timer};
+  delete $self->{ws_timer};
   if (defined $self->{request_state} and
       ($self->{request_state} eq 'sending headers' or
        $self->{request_state} eq 'sending body')) {

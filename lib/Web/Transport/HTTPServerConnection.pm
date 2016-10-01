@@ -258,8 +258,10 @@ sub _ondata ($$) {
         $self->{stream}->_ev ('data', $$ref);
         return;
       }
-    } elsif ($self->{state} eq 'ws') {
-      return $self->{stream}->_ws_received ($inref);
+    } elsif ($self->{state} eq 'before ws frame' or
+             $self->{state} eq 'ws data' or
+             $self->{state} eq 'ws terminating') {
+      return $self->_ws_received ($inref);
     } elsif ($self->{state} eq 'ws handshaking') {
       return unless length $$inref;
       return $self->{stream}->_fatal;
@@ -293,9 +295,11 @@ sub _oneof ($$) {
     }
     $self->{stream}->_ev ('dataend');
     $self->{stream}->_request_done ($exit);
-  } elsif ($self->{state} eq 'ws') {
-    $self->{stream}->{exit} = $exit; # XXX
-    return $self->{stream}->_ws_received_eof (\'');
+  } elsif ($self->{state} eq 'before ws frame' or
+           $self->{state} eq 'ws data' or
+           $self->{state} eq 'ws terminating') {
+    $self->{exit} = $exit; # XXX
+    return $self->_ws_received_eof (\'');
   } elsif ($self->{state} eq 'ws handshaking') {
     return $self->{stream}->_fatal;
   } elsif ($self->{state} eq 'after request') {
@@ -603,9 +607,8 @@ sub send_response_headers ($$$;%) {
     if (defined $stream->{ws_key} and $response->{status} == 101) {
       $ws = 1;
       $stream->{write_mode} = 'ws';
-      $stream->{ws_state} = 'OPEN';
-      $stream->{connection}->{state} = 'ws';
-      $stream->{state} = 'before ws frame';
+      $stream->{connection}->{ws_state} = 'OPEN';
+      $stream->{connection}->{state} = 'before ws frame';
     } else {
       croak "1xx response not supported";
     }
@@ -692,7 +695,7 @@ sub send_response_data ($$) {
   } elsif ($wm eq 'raw' or $wm eq 'ws') {
     croak "Not writable for now"
         if $wm eq 'ws' and
-            (not $req->{ws_state} eq 'OPEN' or
+            (not $req->{connection}->{ws_state} eq 'OPEN' or
              not defined $req->{to_be_sent_length} or
              $req->{to_be_sent_length} <= 0);
     if (defined $req->{to_be_sent_length}) {
@@ -771,6 +774,7 @@ sub _request_done ($;$) {
   $con->{disable_timer} = 1;
   delete $con->{stream};
   delete $con->{unread_length};
+  delete $con->{ws_timer};
   if ($req->{close_after_response}) {
     $con->{state} = 'end';
   } else {

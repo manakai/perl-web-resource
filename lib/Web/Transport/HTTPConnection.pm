@@ -2,50 +2,11 @@ package Web::Transport::HTTPConnection;
 use strict;
 use warnings;
 our $VERSION = '1.0';
+use AnyEvent;
+use Encode qw(decode); # XXX
 
 sub type ($) { return 'HTTP' }
 sub transport ($) { $_[0]->{transport} }
-
-sub _con_ev ($$) {
-  my ($self, $type) = @_;
-  if ($self->{DEBUG}) {
-    my $id = $self->{transport}->id;
-    if ($type eq 'openconnection') {
-      my $data = $_[2];
-      my $host = $data->{remote_host}->to_ascii;
-      warn "$id: $type remote=$host:$data->{remote_port}\n";
-    } elsif ($type eq 'startstream') {
-      my $req = $_[2];
-      warn "$id: ========== @{[ref $self]}\n";
-      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
-    } elsif ($type eq 'endstream') {
-      my $req = $_[2];
-      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
-      warn "$id: ========== @{[ref $self]}\n";
-    } else {
-      warn "$id: $type @{[scalar gmtime]}\n";
-    }
-  }
-  $self->{con_cb}->(@_);
-  # XXX |closeconnection| should be fired after all |endstream|s
-#XXX  delete $self->{con_cb} if $type eq 'closeconnection';
-} # _con_ev
-
-sub DESTROY ($) {
-  $_[0]->abort if $_[0]->{is_server} and defined $_[0]->{transport};
-
-  local $@;
-  eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
-      if $@ =~ /during global destruction/;
-} # DESTROY
-
-package Web::Transport::HTTPConnection::Stream;
-use Carp qw(croak);
-use AnyEvent;
-use Promise;
-use Encode qw(decode); # XXX
-use Web::Encoding;
 
 sub MAX_BYTES () { 2**31-1 }
 
@@ -72,6 +33,7 @@ sub _e4d_t ($) {
 
 sub _ws_received ($;%) {
   my ($self, $ref, %args) = @_;
+  my $stream = $self->{is_server} ? $self->{stream} : $self;
   my $ws_failed;
   WS: {
     if ($self->{state} eq 'before ws frame') {
@@ -131,7 +93,7 @@ sub _ws_received ($;%) {
           last WS;
         }
       }
-      $self->_ws_debug ('R', '',
+      $stream->_ws_debug ('R', '',
                         FIN => !!$fin,
                         RSV1 => !!($b1 & 0b01000000),
                         RSV2 => !!($b1 & 0b00100000),
@@ -224,7 +186,7 @@ sub _ws_received ($;%) {
           }
           unless ($self->{ws_state} eq 'CLOSING') {
             $self->{ws_state} = 'CLOSING';
-            $self->_ev ('closing');
+            $stream->_ev ('closing');
             my $mask = '';
             my $masked = 0;
             unless ($self->{is_server}) {
@@ -234,11 +196,11 @@ sub _ws_received ($;%) {
                 substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
               }
             }
-            $self->_ws_debug ('S', defined $reason ? $reason : '',
+            $stream->_ws_debug ('S', defined $reason ? $reason : '',
                               FIN => 1, opcode => 8, mask => $mask,
                               length => length $data, status => $status)
                 if $self->{DEBUG};
-            ($self->{transport} || $self->{connection}->{transport})->push_write
+            $self->{transport}->push_write
                 (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
                    $mask . $data));
           }
@@ -247,15 +209,15 @@ sub _ws_received ($;%) {
                            reason => defined $reason ? $reason : '',
                            ws => 1, cleanly => 1};
           if ($self->{is_server}) {
-            $self->_next;
+            $stream->_next;
           } else {
-            $self->{timer} = AE::timer 1, 0, sub { # XXX spec
+            $self->{ws_timer} = AE::timer 1, 0, sub { # XXX spec
               if ($self->{DEBUG}) {
                 my $id = defined $self->{request} ? $self->{request}->{id} : $self->{id};
                 warn "$id: WS timeout (1)\n";
               }
-              delete $self->{timer};
-              $self->_next;
+              delete $self->{ws_timer};
+              $stream->_next;
             };
           }
           return;
@@ -268,17 +230,17 @@ sub _ws_received ($;%) {
                 $ws_failed = 'Invalid UTF-8 in text frame';
                 last WS;
               }
-              $self->_ev ('textstart', {});
+              $stream->_ev ('textstart', {});
               for (@{$self->{ws_frame}->[1]}) {
-                $self->_ev ('text', $_);
+                $stream->_ev ('text', $_);
               }
-              $self->_ev ('textend');
+              $stream->_ev ('textend');
             } else { # binary
-              $self->_ev ('datastart', {});
+              $stream->_ev ('datastart', {});
               for (@{$self->{ws_frame}->[1]}) {
-                $self->_ev ('data', $_);
+                $stream->_ev ('data', $_);
               }
-              $self->_ev ('dataend');
+              $stream->_ev ('dataend');
             }
             delete $self->{ws_data_frame};
           }
@@ -290,19 +252,19 @@ sub _ws_received ($;%) {
             $masked = 0b10000000;
             $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
           }
-          $self->_ws_debug ('S', $data, FIN => 1, opcode => 10, mask => $mask,
+          $stream->_ws_debug ('S', $data, FIN => 1, opcode => 10, mask => $mask,
                             length => length $data) if $self->{DEBUG};
           unless ($self->{is_server}) {
             for (0..((length $data)-1)) {
               substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
             }
           }
-          ($self->{transport} || $self->{connection}->{transport})->push_write
+          $self->{transport}->push_write
               (\(pack ('CC', 0b10000000 | 10, $masked | length $data) .
                  $mask . $data));
-          $self->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 0);
+          $stream->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 0);
         } elsif ($self->{ws_frame}->[0] == 10) {
-          $self->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 1);
+          $stream->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 1);
         } # frame type
         delete $self->{ws_frame};
         delete $self->{ws_decode_mask_key};
@@ -328,16 +290,16 @@ sub _ws_received ($;%) {
       }
     }
     # length $data must be < 126
-    $self->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8,
+    $stream->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8,
                       mask => $mask, length => length $data,
                       status => $self->{exit}->{status}) if $self->{DEBUG};
-    ($self->{transport} || $self->{connection}->{transport})->push_write
+    $self->{transport}->push_write
         (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
            $mask . $data));
     $self->{state} = 'ws terminating';
     $self->{no_new_request} = 1;
     $self->{request_state} = 'sent';
-    $self->_next;
+    $stream->_next;
     return;
   }
   if ($self->{state} eq 'ws terminating') {
@@ -371,16 +333,65 @@ sub _ws_received_eof ($;%) {
   }
   $self->{no_new_request} = 1;
   $self->{request_state} = 'sent';
-  $self->_next;
+  my $stream = $self->{is_server} ? $self->{stream} : $self;
+  $stream->_next;
 } # _ws_received_eof
+
+sub _con_ev ($$) {
+  my ($self, $type) = @_;
+  if ($self->{DEBUG}) {
+    my $id = $self->{transport}->id;
+    if ($type eq 'openconnection') {
+      my $data = $_[2];
+      my $host = $data->{remote_host}->to_ascii;
+      warn "$id: $type remote=$host:$data->{remote_port}\n";
+    } elsif ($type eq 'startstream') {
+      my $req = $_[2];
+      warn "$id: ========== @{[ref $self]}\n";
+      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
+    } elsif ($type eq 'endstream') {
+      my $req = $_[2];
+      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
+      warn "$id: ========== @{[ref $self]}\n";
+    } else {
+      warn "$id: $type @{[scalar gmtime]}\n";
+    }
+  }
+  $self->{con_cb}->(@_);
+  # XXX |closeconnection| should be fired after all |endstream|s
+#XXX  delete $self->{con_cb} if $type eq 'closeconnection';
+} # _con_ev
+
+sub DESTROY ($) {
+  $_[0]->abort if $_[0]->{is_server} and defined $_[0]->{transport};
+
+  local $@;
+  eval { die };
+  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+      if $@ =~ /during global destruction/;
+} # DESTROY
+
+package Web::Transport::HTTPConnection::Stream;
+use Carp qw(croak);
+use AnyEvent;
+use Promise;
+use Web::Encoding;
+
+BEGIN {
+  *_e4d = \&Web::Transport::HTTPConnection::_e4d;
+  *_e4d_t = \&Web::Transport::HTTPConnection::_e4d_t;
+  *MAX_BYTES = \&Web::Transport::HTTPConnection::MAX_BYTES;
+}
 
 sub send_text_header ($$) {
   my ($self, $length) = @_;
   croak "Data is utf8-flagged" if utf8::is_utf8 $_[2];
   croak "Data too large" if MAX_BYTES < $length; # spec limit 2**63
+  my $con = $self->{is_server} ? $self->{connection} : $self;
   croak "Bad state"
-      if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
-         (defined $self->{to_be_sent_length} and $self->{to_be_sent_length} > 0);
+      if not (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') or
+         (defined $self->{to_be_sent_length} and
+          $self->{to_be_sent_length} > 0);
 
   my $mask = '';
   my $masked = 0;
@@ -405,7 +416,7 @@ sub send_text_header ($$) {
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 1, mask => $mask,
                     length => $length) if $self->{DEBUG};
-  ($self->{transport} || $self->{connection}->{transport})->push_write
+  $con->{transport}->push_write
       (\(pack ('CC', 0b10000000 | 1, $masked | $length0) .
          $len . $mask));
 } # send_text_header
@@ -414,9 +425,11 @@ sub send_binary_header ($$) {
   my ($self, $length) = @_;
   croak "Data is utf8-flagged" if utf8::is_utf8 $_[2];
   croak "Data too large" if MAX_BYTES < $length; # spec limit 2**63
+  my $con = $self->{is_server} ? $self->{connection} : $self;
   croak "Bad state"
-      if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
-         (defined $self->{to_be_sent_length} and $self->{to_be_sent_length} > 0);
+      if not (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') or
+         (defined $self->{to_be_sent_length} and
+          $self->{to_be_sent_length} > 0);
 
   my $mask = '';
   my $masked = 0;
@@ -441,7 +454,7 @@ sub send_binary_header ($$) {
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask,
                     length => $length) if $self->{DEBUG};
-  ($self->{transport} || $self->{connection}->{transport})->push_write
+  $con->{transport}->push_write
       (\(pack ('CC', 0b10000000 | 2, $masked | $length0) .
          $len . $mask));
 } # send_binary_header
@@ -451,9 +464,11 @@ sub send_ping ($;%) {
   $args{data} = '' unless defined $args{data};
   croak "Data is utf8-flagged" if utf8::is_utf8 $args{data};
   croak "Data too large" if 0x7D < length $args{data}; # spec limit 2**63
+  my $con = $self->{is_server} ? $self->{connection} : $self;
   croak "Bad state"
-      if not (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN') or
-         (defined $self->{to_be_sent_length} and $self->{to_be_sent_length} > 0);
+      if not (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') or
+         (defined $self->{to_be_sent_length} and
+          $self->{to_be_sent_length} > 0);
 
   my $mask = '';
   my $masked = 0;
@@ -470,18 +485,19 @@ sub send_ping ($;%) {
       substr ($args{data}, $_, 1) = substr ($args{data}, $_, 1) ^ substr ($mask, $_ % 4, 1);
     }
   }
-  ($self->{transport} || $self->{connection}->{transport})->push_write
+  $con->{transport}->push_write
       (\(pack ('CC', 0b10000000 | $opcode, $masked | length $args{data}) .
          $mask . $args{data}));
 } # send_ping
 
 sub close ($;%) {
   my ($self, %args) = @_;
-  if (not defined $self->{state}) {
+  my $con = $self->{is_server} ? $self->{connection} : $self;
+  if (not defined $con->{state}) {
     return Promise->reject ("Connection has not been established");
   }
   if (defined $self->{request_state} or
-      (defined $self->{ws_state} and $self->{ws_state} eq 'OPEN')) {
+      (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN')) {
     if (defined $self->{to_be_sent_length} and
         $self->{to_be_sent_length} > 0) {
       return Promise->reject ("Body is not sent");
@@ -498,9 +514,9 @@ sub close ($;%) {
         if 0x7D < length $args{reason};
   }
 
-  if (defined $self->{ws_state} and
-      ($self->{ws_state} eq 'OPEN' or
-       $self->{ws_state} eq 'CONNECTING')) {
+  if (defined $con->{ws_state} and
+      ($con->{ws_state} eq 'OPEN' or
+       $con->{ws_state} eq 'CONNECTING')) {
     my $masked = 0;
     my $mask = '';
     unless ($self->{is_server}) {
@@ -520,21 +536,21 @@ sub close ($;%) {
     }
     my $frame = pack ('CC', 0b10000000 | 8, $masked | length $data) .
         $mask . $data;
-    if ($self->{ws_state} eq 'CONNECTING') {
-      $self->{pending_frame} = $frame;
-      $self->{pending_frame_info} = $frame_info if $self->{DEBUG};
+    if ($con->{ws_state} eq 'CONNECTING') {
+      $con->{pending_frame} = $frame;
+      $con->{pending_frame_info} = $frame_info if $self->{DEBUG};
     } else {
       $self->_ws_debug ('S', @$frame_info) if $self->{DEBUG};
-      ($self->{transport} || $self->{connection}->{transport})->push_write (\$frame);
-      $self->{ws_state} = 'CLOSING';
-      $self->{timer} = AE::timer 20, 0, sub {
+      $con->{transport}->push_write (\$frame);
+      $con->{ws_state} = 'CLOSING';
+      $con->{ws_timer} = AE::timer 20, 0, sub {
         if ($self->{DEBUG}) {
-          my $id = defined $self->{request} ? $self->{request}->{id} : $self->{id};
+          my $id = $self->{is_server} ? $self->{id} : $self->{request}->{id};
           warn "$id: WS timeout (20)\n";
         }
         # XXX set exit ?
         $self->_next;
-        delete $self->{timer};
+        delete $con->{ws_timer};
       };
       $self->_ev ('closing');
     }
@@ -544,13 +560,13 @@ sub close ($;%) {
   }
 
   $self->{no_new_request} = 1;
-  if ($self->{state} eq 'initial' or
-      $self->{state} eq 'waiting' or
-      $self->{state} eq 'tunnel' or
-      $self->{state} eq 'tunnel sending') {
-    $self->{transport}->push_shutdown
-        unless $self->{transport}->write_to_be_closed;
-    $self->{state} = 'tunnel receiving' if $self->{state} eq 'tunnel';
+  if ($con->{state} eq 'initial' or
+      $con->{state} eq 'waiting' or
+      $con->{state} eq 'tunnel' or
+      $con->{state} eq 'tunnel sending') {
+    $con->{transport}->push_shutdown
+        unless $con->{transport}->write_to_be_closed;
+    $con->{state} = 'tunnel receiving' if $con->{state} eq 'tunnel';
   }
 
   ## Client only (for now)
@@ -562,7 +578,7 @@ sub _ws_debug ($$$%) {
   my $side = $_[1];
   my %args = @_[3..$#_];
 
-  my $id = defined $self->{request} ? $self->{request}->{id} : $self->{id};
+  my $id = $self->{is_server} ? $self->{id} : $self->{request}->{id};
   warn sprintf "$id: %s: WS %s L=%d\n",
       $side,
       (join ' ',

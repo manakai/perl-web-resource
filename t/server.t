@@ -100,11 +100,11 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga'],
         ]}, close => 1);
-    $req->close_response;
+    $self->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -133,13 +133,13 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge2'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga2'],
         ]}, close => 1);
-    $req->send_response_data (\'abcde');
-    $req->close_response;
-    $req->close_response;
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+    $self->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -168,13 +168,13 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge3'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga3'],
         ]});
-    $req->send_response_data (\'');
-    $req->send_response_data (\'abcde3');
-    $req->close_response;
+    $self->send_response_data (\'');
+    $self->send_response_data (\'abcde3');
+    $self->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -205,15 +205,15 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge4'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga4'],
         ]});
     eval {
-      $req->send_response_data (\'abcde4');
+      $self->send_response_data (\'abcde4');
     };
     $x = $@;
-    $req->close_response;
+    $self->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -243,20 +243,20 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge5'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga5'],
         ]});
-    $req->close_response;
+    $self->close_response;
   };
   $HandleRequestHeaders->{'/hoge6'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 200, status_text => 'OK', headers => [
           ['Hoge', 'Fuga6'],
         ]});
-    $req->send_response_data (\'abcde6');
-    $req->close_response;
+    $self->send_response_data (\'abcde6');
+    $self->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -296,15 +296,15 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge7'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 200, status_text => 'OK', headers => [
           ['Hoge', 'Fuga7'],
         ]});
     eval {
-      $req->send_response_data (\'abcde7');
+      $self->send_response_data (\'abcde7');
     };
     $x = $@;
-    $req->close_response;
+    $self->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -335,15 +335,15 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge8'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga8'],
         ]}, content_length => 12);
-    $req->send_response_data (\'abcde8');
-    $req->send_response_data (\'');
-    $req->send_response_data (\'abcde9');
+    $self->send_response_data (\'abcde8');
+    $self->send_response_data (\'');
+    $self->send_response_data (\'abcde9');
     eval {
-      $req->send_response_data (\'abcde10');
+      $self->send_response_data (\'abcde10');
     };
     $x = $@;
   };
@@ -376,16 +376,16 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge11'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga11'],
         ]}, content_length => 12);
-    $req->send_response_data (\'abcd11');
+    $self->send_response_data (\'abcd11');
     eval {
-      $req->send_response_data (\'abcde12');
+      $self->send_response_data (\'abcde12');
     };
     $x = $@;
-    $req->send_response_data (\'abcd13');
+    $self->send_response_data (\'abcd13');
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -415,19 +415,19 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge14'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga14'],
         ]}, content_length => 8);
-    $req->send_response_data (\'abcdef14');
+    $self->send_response_data (\'abcdef14');
   };
   $HandleRequestHeaders->{'/hoge15'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 202, status_text => 'OK', headers => [
           ['Hoge', 'Fuga15'],
         ]}, content_length => 10);
-    $req->send_response_data (\'abcdefgh15');
+    $self->send_response_data (\'abcdefgh15');
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -468,12 +468,12 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge16'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga16'],
         ]}, content_length => 0);
     eval {
-      $req->send_response_data (\'abcde16');
+      $self->send_response_data (\'abcde16');
     };
     $x = $@;
   };
@@ -507,12 +507,12 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga17'],
         ]}, content_length => 10);
-    $req->send_response_data (\'abc17');
-    $req->close_response;
+    $self->send_response_data (\'abc17');
+    $self->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -560,11 +560,11 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge18'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga18'],
         ]}, content_length => 5);
-    $req->send_response_data (\'abc18');
+    $self->send_response_data (\'abc18');
   };
 
   rawtcp (qq{GET /hoge18\x0D\x0A})->then (sub {
@@ -582,12 +582,12 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge19'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga19'],
         ]});
-    $req->send_response_data (\'abc19');
-    $req->close_response;
+    $self->send_response_data (\'abc19');
+    $self->close_response;
   };
 
   rawtcp (qq{GET /hoge19\x0D\x0A})->then (sub {
@@ -605,12 +605,12 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge20'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga19'],
         ]});
-    $req->send_response_data (\'abc19');
-    $req->close_response;
+    $self->send_response_data (\'abc19');
+    $self->close_response;
   };
 
   rawtcp (qq{HEAD /hoge20\x0D\x0A})->then (sub {
@@ -631,14 +631,14 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge21'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga21'],
         ]});
-    $req->send_response_data (\'abc21');
-    $req->send_response_data (\'abc');
-    $req->send_response_data (\'xyz');
-    $req->close_response;
+    $self->send_response_data (\'abc21');
+    $self->send_response_data (\'abc');
+    $self->send_response_data (\'xyz');
+    $self->close_response;
   };
 
   rawtcp (qq{GET /hoge21\x0D\x0A})->then (sub {
@@ -656,12 +656,12 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge22'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga22'],
         ]}, content_length => 10);
-    $req->send_response_data (\'abc22');
-    $req->close_response;
+    $self->send_response_data (\'abc22');
+    $self->close_response;
   };
 
   rawtcp (qq{GET /hoge22 HTTP/1.0\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -685,14 +685,14 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge23'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga23'],
         ]}, close => 1);
-    $req->send_response_data (\'abc23');
-    $req->close_response;
+    $self->send_response_data (\'abc23');
+    $self->close_response;
     eval {
-      $req->send_response_data (\'xyz');
+      $self->send_response_data (\'xyz');
     };
     $x = $@;
   };
@@ -725,16 +725,16 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge24'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga24'],
         ]}, content_length => 12);
-    $req->send_response_data (\'abcd24');
+    $self->send_response_data (\'abcd24');
     eval {
-      $req->send_response_data (\"\x{5000}");
+      $self->send_response_data (\"\x{5000}");
     };
     $x = $@;
-    $req->send_response_data (\'abcdee');
+    $self->send_response_data (\'abcdee');
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -765,15 +765,15 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge25'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga25'],
         ]}, content_length => 5);
     eval {
-      $req->send_response_data (\'abcde');
+      $self->send_response_data (\'abcde');
     };
     $x = $@;
-    $req->close_response;
+    $self->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -805,15 +805,15 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge26'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga26'],
         ]}, content_length => 0);
     eval {
-      $req->send_response_data (\'abcde');
+      $self->send_response_data (\'abcde');
     };
     $x = $@;
-    $req->close_response;
+    $self->close_response;
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -844,14 +844,14 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge27'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga27'],
         ]});
-    $req->send_response_data (\'abc');
-    $req->send_response_data (\'');
-    $req->send_response_data (\'xyz');
-    $req->close_response;
+    $self->send_response_data (\'abc');
+    $self->send_response_data (\'');
+    $self->send_response_data (\'xyz');
+    $self->close_response;
   };
 
   rawtcp (qq{GET /hoge27 HTTP/1.0\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -873,14 +873,14 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'hoge28'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga28'],
         ]});
-    $req->send_response_data (\'abc');
-    $req->send_response_data (\'');
-    $req->send_response_data (\'xyz');
-    $req->close_response;
+    $self->send_response_data (\'abc');
+    $self->send_response_data (\'');
+    $self->send_response_data (\'xyz');
+    $self->close_response;
   };
 
   rawtcp (qq{CONNECT hoge28 HTTP/1.0\x0D\x0Aconnection:keep-alive\x0D\x0AHost: hoge28\x0D\x0A\x0D\x0A})->then (sub {
@@ -902,14 +902,14 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'hoge29'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga29'],
         ]});
-    $req->send_response_data (\'abc');
-    $req->send_response_data (\'');
-    $req->send_response_data (\'xyz');
-    $req->close_response;
+    $self->send_response_data (\'abc');
+    $self->send_response_data (\'');
+    $self->send_response_data (\'xyz');
+    $self->close_response;
   };
 
   rawtcp (qq{CONNECT hoge29 HTTP/1.1\x0D\x0AHost: hoge29\x0D\x0A\x0D\x0A})->then (sub {
@@ -931,15 +931,15 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{'hoge30'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga30'],
         ]});
-    $req->send_response_data (\'abc');
-    $req->send_response_data (\'');
-    $req->send_response_data (\'xyz');
-    $req->close_response;
-    $serverreq = $req;
+    $self->send_response_data (\'abc');
+    $self->send_response_data (\'');
+    $self->send_response_data (\'xyz');
+    $self->close_response;
+    $serverreq = $self;
   };
 
   rawtcp (qq{CONNECT hoge30 HTTP/1.1\x0D\x0AHost: hoge30\x0D\x0Acontent-length:3\x0D\x0A\x0D\x0Aabcabc})->then (sub {
@@ -962,15 +962,15 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{'/hoge31'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga31'],
         ]});
-    $req->send_response_data (\'abc');
-    $req->send_response_data (\'');
-    $req->send_response_data (\'xyz');
-    $req->close_response;
-    $serverreq = $req;
+    $self->send_response_data (\'abc');
+    $self->send_response_data (\'');
+    $self->send_response_data (\'xyz');
+    $self->close_response;
+    $serverreq = $self;
   };
 
   rawtcp (qq{CONNECT /hoge31 HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0Acontent-length:3ab\x0D\x0A\x0D\x0Aabcabc})->then (sub {
@@ -998,15 +998,15 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{'/hoge32'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 200, status_text => 'OK', headers => [
           ['Hoge', 'Fuga32'],
         ]});
-    $req->send_response_data (\'abc');
-    $req->send_response_data (\'');
-    $req->send_response_data (\'xyz');
-    $req->close_response;
-    $serverreq = $req;
+    $self->send_response_data (\'abc');
+    $self->send_response_data (\'');
+    $self->send_response_data (\'xyz');
+    $self->close_response;
+    $serverreq = $self;
   };
 
   Web::Transport::WSClient->new (
@@ -1030,12 +1030,12 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{'/hoge33'} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'OK', headers => [
           ['Hoge', 'Fuga33'],
         ]});
-    $req->close_response (status => 5678);
-    $serverreq = $req;
+    $self->close_response (status => 5678);
+    $serverreq = $self;
   };
 
   Web::Transport::WSClient->new (
@@ -1065,9 +1065,9 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0);
-    $req->close_response;
+    $self->close_response;
     $invoked = 1;
   };
 
@@ -1105,9 +1105,9 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0);
-    $req->close_response;
+    $self->close_response;
     $invoked = 1;
   };
 
@@ -1144,9 +1144,9 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0);
-    $req->close_response;
+    $self->close_response;
     $invoked = 1;
   };
 
@@ -1185,10 +1185,10 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0, close => 1);
-    $req->close_response;
-    $serverreq = $req;
+    $self->close_response;
+    $serverreq = $self;
     $invoked = 1;
   };
 
@@ -1228,10 +1228,10 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0, close => 1);
-    $req->close_response;
-    $serverreq = $req;
+    $self->close_response;
+    $serverreq = $self;
     $invoked = 1;
   };
 
@@ -1270,9 +1270,9 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0);
-    $req->close_response;
+    $self->close_response;
     $invoked = 1;
   };
 
@@ -1315,9 +1315,9 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0);
-    $req->close_response;
+    $self->close_response;
     $invoked = 1;
   };
 
@@ -1358,9 +1358,9 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0);
-    $req->close_response;
+    $self->close_response;
     $invoked = 1;
   };
 
@@ -1401,9 +1401,9 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0);
-    $req->close_response;
+    $self->close_response;
     $invoked = 1;
   };
 
@@ -1443,9 +1443,9 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0);
-    $req->close_response;
+    $self->close_response;
     $invoked = 1;
   };
 
@@ -1486,9 +1486,9 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0);
-    $req->close_response;
+    $self->close_response;
     $invoked = 1;
   };
 
@@ -1528,9 +1528,9 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'OK'}, content_length => 0);
-    $req->close_response;
+    $self->close_response;
     $invoked = 1;
   };
 
@@ -1572,14 +1572,14 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->send_binary_header (5);
-    $req->send_response_data (\"abcde");
-    $serverreq = $req;
-    $req->{dataend} = sub {
-      if ($req->{body} =~ /stuvw/) {
-        $req->close_response (status => 5678);
+    $self->send_binary_header (5);
+    $self->send_response_data (\"abcde");
+    $serverreq = $self;
+    $self->{dataend} = sub {
+      if ($self->{body} =~ /stuvw/) {
+        $self->close_response (status => 5678);
       }
     };
   };
@@ -1621,14 +1621,14 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->send_text_header (5);
-    $req->send_response_data (\"abcde");
-    $serverreq = $req;
-    $req->{textend} = sub {
-      if ($req->{text} =~ /stuvw/) {
-        $req->close_response (status => 5678, reason => 'abc');
+    $self->send_text_header (5);
+    $self->send_response_data (\"abcde");
+    $serverreq = $self;
+    $self->{textend} = sub {
+      if ($self->{text} =~ /stuvw/) {
+        $self->close_response (status => 5678, reason => 'abc');
       }
     };
   };
@@ -1672,13 +1672,13 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->send_ping (data => "abbba");
-    $serverreq = $req;
-    $req->{ping} = sub {
+    $self->send_ping (data => "abbba");
+    $serverreq = $self;
+    $self->{ping} = sub {
       if ($_[1]) {
-        $req->close_response (status => 5678, reason => $_[0]);
+        $self->close_response (status => 5678, reason => $_[0]);
       }
     };
   };
@@ -1712,12 +1712,12 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $serverreq = $req;
-    $req->{ping} = sub {
+    $serverreq = $self;
+    $self->{ping} = sub {
       unless ($_[1]) {
-        $req->close_response (status => 5678, reason => $_[0]);
+        $self->close_response (status => 5678, reason => $_[0]);
       }
     };
   };
@@ -1752,15 +1752,15 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->send_binary_header (5);
+    $self->send_binary_header (5);
     eval {
-      $req->send_response_data (\"abcdef");
+      $self->send_response_data (\"abcdef");
     };
     $error = $@;
-    $req->send_response_data (\"12345");
-    $req->close_response (status => 5678);
+    $self->send_response_data (\"12345");
+    $self->close_response (status => 5678);
   };
 
   my $received = '';
@@ -1791,15 +1791,15 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->send_text_header (5);
+    $self->send_text_header (5);
     eval {
-      $req->send_response_data (\"abcdef");
+      $self->send_response_data (\"abcdef");
     };
     $error = $@;
-    $req->send_response_data (\"12345");
-    $req->close_response (status => 5678);
+    $self->send_response_data (\"12345");
+    $self->close_response (status => 5678);
   };
 
   my $received = '';
@@ -1830,16 +1830,16 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->send_text_header (5);
-    $req->send_response_data (\"123");
+    $self->send_text_header (5);
+    $self->send_response_data (\"123");
     eval {
-      $req->send_response_data (\"abcdef");
+      $self->send_response_data (\"abcdef");
     };
     $error = $@;
-    $req->send_response_data (\"45");
-    $req->close_response (status => 5678);
+    $self->send_response_data (\"45");
+    $self->close_response (status => 5678);
   };
 
   my $received = '';
@@ -1870,14 +1870,14 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->send_text_header (0);
+    $self->send_text_header (0);
     eval {
-      $req->send_response_data (\"abcdef");
+      $self->send_response_data (\"abcdef");
     };
     $error = $@;
-    $req->close_response (status => 5678);
+    $self->close_response (status => 5678);
   };
 
   my $received = '';
@@ -1908,15 +1908,15 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
     eval {
-      $req->send_response_data (\"abcdef");
+      $self->send_response_data (\"abcdef");
     };
-    $req->send_text_header (1);
-    $req->send_response_data (\"1");
+    $self->send_text_header (1);
+    $self->send_response_data (\"1");
     $error = $@;
-    $req->close_response (status => 5678);
+    $self->close_response (status => 5678);
   };
 
   my $received = '';
@@ -1947,16 +1947,16 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->send_binary_header (5);
-    $req->send_response_data (\"123");
+    $self->send_binary_header (5);
+    $self->send_response_data (\"123");
     eval {
-      $req->send_text_header (4);
+      $self->send_text_header (4);
     };
-    $req->send_response_data (\"45");
+    $self->send_response_data (\"45");
     $error = $@;
-    $req->close_response (status => 5678);
+    $self->close_response (status => 5678);
   };
 
   my $received = '';
@@ -1987,16 +1987,16 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->send_binary_header (5);
-    $req->send_response_data (\"123");
+    $self->send_binary_header (5);
+    $self->send_response_data (\"123");
     eval {
-      $req->send_binary_header (4);
+      $self->send_binary_header (4);
     };
-    $req->send_response_data (\"45");
+    $self->send_response_data (\"45");
     $error = $@;
-    $req->close_response (status => 5678);
+    $self->close_response (status => 5678);
   };
 
   my $received = '';
@@ -2026,11 +2026,11 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->send_binary_header (5);
-    $req->send_response_data (\"123");
-    $req->close_response (status => 4056);
+    $self->send_binary_header (5);
+    $self->send_response_data (\"123");
+    $self->close_response (status => 4056);
   };
 
   my $received = '';
@@ -2060,11 +2060,11 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->close_response (status => 4056);
+    $self->close_response (status => 4056);
     eval {
-      $req->send_binary_header (5);
+      $self->send_binary_header (5);
     };
     $error = $@;
   };
@@ -2096,10 +2096,10 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 101, status_text => 'Switched!'});
-    $req->close_response (status => 4056);
-    $req->close_response (status => 5678);
+    $self->close_response (status => 4056);
+    $self->close_response (status => 5678);
   };
 
   my $received = '';
@@ -2144,13 +2144,13 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 200, status_text => 'Switched!'});
-    $req->send_response_data (\"abcde");
-    $serverreq = $req;
-    $req->{ondata} = sub {
-      if ($req->{body} =~ /stuvw/) {
-        $req->close_response (status => 5678, reason => 'abc');
+    $self->send_response_data (\"abcde");
+    $serverreq = $self;
+    $self->{ondata} = sub {
+      if ($self->{body} =~ /stuvw/) {
+        $self->close_response (status => 5678, reason => 'abc');
       }
     };
   };
@@ -2204,13 +2204,13 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 200, status_text => 'Switched!'});
-    $req->send_response_data (\"abcde");
-    $serverreq = $req;
-    $req->{ondata} = sub {
-      if ($req->{body} =~ /stuvw/) {
-        $req->close_response (status => 5678, reason => 'abc');
+    $self->send_response_data (\"abcde");
+    $serverreq = $self;
+    $self->{ondata} = sub {
+      if ($self->{body} =~ /stuvw/) {
+        $self->close_response (status => 5678, reason => 'abc');
       }
     };
   };
@@ -2260,14 +2260,14 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 200, status_text => 'Switched!',
           headers => [['Content-Length', '12']]});
-    $req->send_response_data (\"abcde");
-    $serverreq = $req;
-    $req->{ondata} = sub {
-      if ($req->{body} =~ /stuvw/) {
-        $req->close_response (status => 5678, reason => 'abc');
+    $self->send_response_data (\"abcde");
+    $serverreq = $self;
+    $self->{ondata} = sub {
+      if ($self->{body} =~ /stuvw/) {
+        $self->close_response (status => 5678, reason => 'abc');
       }
     };
   };
@@ -2319,15 +2319,15 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     eval {
-      $req->send_response_headers
+      $self->send_response_headers
           ({status => 101, status_text => 'Switched!'});
     };
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 200, status_text => 'O.K.'});
     $error = $@;
-    $req->send_response_data (\"abcde");
-    $req->close_response;
-    $serverreq = $req;
+    $self->send_response_data (\"abcde");
+    $self->close_response;
+    $serverreq = $self;
   };
 
   my $url = Web::URL->parse_string ("/$path", $Origin);
@@ -2371,7 +2371,7 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1, content_length => 0);
   };
 
@@ -2391,10 +2391,10 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\'ok!');
-    $req->close_response;
+    $self->send_response_data (\'ok!');
+    $self->close_response;
   };
 
   rawtcp (qq{GET /$path\x0D\x0A})->then (sub {
@@ -2413,10 +2413,10 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
   };
 
   rawtcp (qq{GET http://@{[$Origin->hostport]}/$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -2435,10 +2435,10 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\'ok!');
-    $req->close_response;
+    $self->send_response_data (\'ok!');
+    $self->close_response;
   };
 
   rawtcp (qq{GET http://foo/$path\x0D\x0A})->then (sub {
@@ -2458,10 +2458,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2483,10 +2483,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2508,10 +2508,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2533,10 +2533,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2558,10 +2558,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2583,10 +2583,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2608,10 +2608,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2633,10 +2633,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2658,10 +2658,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2683,10 +2683,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2708,10 +2708,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2733,10 +2733,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2758,10 +2758,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2783,10 +2783,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"//$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2808,10 +2808,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path%80%FE%AC%FE"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2833,10 +2833,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path%80%FE%AC%FE"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2858,10 +2858,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2883,10 +2883,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2908,10 +2908,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2933,10 +2933,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -2984,10 +2984,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -3009,10 +3009,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -3034,10 +3034,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -3059,10 +3059,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -3084,10 +3084,10 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->send_response_data (\($req->{target_url}->stringify));
-    $req->close_response;
+    $self->send_response_data (\($req->{target_url}->stringify));
+    $self->close_response;
     $invoked++;
   };
 
@@ -3109,9 +3109,9 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.xn--4gq.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->close_response;
+    $self->close_response;
     $invoked++;
   };
 
@@ -3133,9 +3133,9 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.xn--4gq.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->close_response;
+    $self->close_response;
     $invoked++;
   };
 
@@ -3157,9 +3157,9 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->close_response;
+    $self->close_response;
     $invoked++;
   };
 
@@ -3181,9 +3181,9 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->close_response;
+    $self->close_response;
     $invoked++;
   };
 
@@ -3205,9 +3205,9 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->close_response;
+    $self->close_response;
     $invoked++;
   };
 
@@ -3229,9 +3229,9 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
-    $req->send_response_headers
+    $self->send_response_headers
         ({status => 201, status_text => 'o'}, close => 1);
-    $req->close_response;
+    $self->close_response;
     $invoked++;
   };
 

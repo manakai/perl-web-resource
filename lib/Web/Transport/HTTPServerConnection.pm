@@ -58,14 +58,17 @@ sub new ($%) {
   });
 } # new
 
-sub _new_req ($) {
+sub _new_stream ($) {
   my $self = $_[0];
-  my $req = $self->{request} = bless {
+  my $req = $self->{stream} = bless {
     is_server => 1, DEBUG => DEBUG,
     connection => $self,
-    headers => [],
     id => $self->{id} . '.' . ++$self->{req_id},
-    # method target version cb
+    request => {
+      headers => [],
+      # method target_url version
+    },
+    # cb target
   }, __PACKAGE__ . '::Stream';
   my $p1 = Promise->new (sub { $req->{req_done} = $_[0] });
   my $p2 = Promise->new (sub { $req->{res_done} = $_[0] });
@@ -75,7 +78,7 @@ sub _new_req ($) {
   });
   $req->{cb} = $self->_con_ev ('startstream', $req);
   return $req;
-} # _new_req
+} # _new_stream
 
 sub _ondata ($$) {
   my ($self, $inref) = @_;
@@ -101,108 +104,112 @@ sub _ondata ($$) {
       $self->{rbuf} .= $$inref;
       if ($self->{rbuf} =~ s/\A([^\x0A]{0,8191})\x0A//) {
         my $line = $1;
-        my $req = $self->_new_req;
+        my $stream = $self->_new_stream;
         $line =~ s/\x0D\z//;
         if ($line =~ /[\x00\x0D]/) {
-          $req->{version} = 0.9;
-          $req->{method} = 'GET';
-          return $req->_fatal;
+          $stream->{request}->{version} = 0.9;
+          $stream->{request}->{method} = 'GET';
+          return $stream->_fatal;
         }
         if ($line =~ s{\x20+(H[^\x20]*)\z}{}) {
           my $version = $1;
           if ($version =~ m{\AHTTP/1\.([0-9]+)\z}) {
-            $req->{version} = $1 =~ /[^0]/ ? 1.1 : 1.0;
+            $stream->{request}->{version} = $1 =~ /[^0]/ ? 1.1 : 1.0;
           } elsif ($version =~ m{\AHTTP/0+1?\.}) {
-            $req->{version} = 0.9;
-            $req->{method} = 'GET';
-            return $req->_fatal;
+            $stream->{request}->{version} = 0.9;
+            $stream->{request}->{method} = 'GET';
+            return $stream->_fatal;
           } elsif ($version =~ m{\AHTTP/[0-9]+\.[0-9]+\z}) {
-            $req->{version} = 1.1;
+            $stream->{request}->{version} = 1.1;
           } else {
-            $req->{version} = 0.9;
-            $req->{method} = 'GET';
-            return $req->_fatal;
+            $stream->{request}->{version} = 0.9;
+            $stream->{request}->{method} = 'GET';
+            return $stream->_fatal;
           }
           if ($line =~ s{\A([^\x20]+)\x20+}{}) {
-            $req->{method} = $1;
+            $stream->{request}->{method} = $1;
           } else { # no method
-            $req->{method} = 'GET';
-            return $req->_fatal;
+            $stream->{request}->{method} = 'GET';
+            return $stream->_fatal;
           }
         } else { # no version
-          $req->{version} = 0.9;
-          $req->{method} = 'GET';
+          $stream->{request}->{version} = 0.9;
+          $stream->{request}->{method} = 'GET';
           unless ($line =~ s{\AGET\x20+}{}) {
-            return $req->_fatal;
+            return $stream->_fatal;
           }
         }
-        $req->{target} = $line;
-        if ($req->{target} =~ m{\A/}) {
-          if ($req->{method} eq 'CONNECT') {
-            return $req->_fatal;
+        $stream->{target} = $line;
+        if ($stream->{target} =~ m{\A/}) {
+          if ($stream->{request}->{method} eq 'CONNECT') {
+            return $stream->_fatal;
           } else {
             #
           }
-        } elsif ($req->{target} =~ m{^[A-Za-z][A-Za-z0-9.+-]+://}) {
-          if ($req->{method} eq 'CONNECT') {
-            return $req->_fatal;
+        } elsif ($stream->{target} =~ m{^[A-Za-z][A-Za-z0-9.+-]+://}) {
+          if ($stream->{request}->{method} eq 'CONNECT') {
+            return $stream->_fatal;
           } else {
             #
           }
         } else {
-          if ($req->{method} eq 'OPTIONS' and $req->{target} eq '*') {
+          if ($stream->{request}->{method} eq 'OPTIONS' and
+              $stream->{target} eq '*') {
             #
-          } elsif ($req->{method} eq 'CONNECT' and length $req->{target}) {
+          } elsif ($stream->{request}->{method} eq 'CONNECT' and
+                   length $stream->{target}) {
             #
           } else {
-            return $req->_fatal;
+            return $stream->_fatal;
           }
         }
-        if ($req->{version} == 0.9) {
+        if ($stream->{request}->{version} == 0.9) {
           $self->_request_headers or return;
         } else { # 1.0 / 1.1
-          return $req->_fatal unless length $line;
+          return $stream->_fatal unless length $line;
           $self->{state} = 'before request header';
         }
       } elsif (8192 <= length $self->{rbuf}) {
-        my $req = $self->_new_req;
-        $req->{method} = 'GET';
-        $req->{version} = 1.1;
-        $req->_request_done;
-        $req->_send_error (414, 'Request-URI Too Large')
+        my $stream = $self->_new_stream;
+        $stream->{request}->{method} = 'GET';
+        $stream->{request}->{version} = 1.1;
+        $stream->_request_done;
+        $stream->_send_error (414, 'Request-URI Too Large')
             unless $self->{write_closed};
-        $req->close_response;
+        $stream->close_response;
         return;
       } else {
         return;
       }
     } elsif ($self->{state} eq 'before request header') {
+      my $stream = $self->{stream};
       $self->{rbuf} .= $$inref;
       if ($self->{rbuf} =~ s/\A([^\x0A]{0,8191})\x0A//) {
         my $line = $1;
-        return $self->{request}->_fatal
-            if @{$self->{request}->{headers}} == 100;
+        return $stream->_fatal
+            if @{$stream->{request}->{headers}} == 100;
         $line =~ s/\x0D\z//;
-        return $self->{request}->_fatal
+        return $stream->_fatal
             if $line =~ /[\x00\x0D]/;
         if ($line =~ s/\A([^\x09\x20:][^:]*):[\x09\x20]*//) {
           my $name = $1;
-          push @{$self->{request}->{headers}}, [$name, $line];
-        } elsif ($line =~ s/\A[\x09\x20]+// and @{$self->{request}->{headers}}) {
-          if ((length $self->{request}->{headers}->[-1]->[0]) + 1 +
-              (length $self->{request}->{headers}->[-1]->[1]) + 1 +
+          push @{$stream->{request}->{headers}}, [$name, $line];
+        } elsif ($line =~ s/\A[\x09\x20]+// and
+                 @{$stream->{request}->{headers}}) {
+          if ((length $stream->{request}->{headers}->[-1]->[0]) + 1 +
+              (length $stream->{request}->{headers}->[-1]->[1]) + 1 +
               (length $line) + 2 > 8192) {
-            return $self->{request}->_fatal;
+            return $stream->_fatal;
           } else {
-            $self->{request}->{headers}->[-1]->[1] .= " " . $line;
+            $stream->{request}->{headers}->[-1]->[1] .= " " . $line;
           }
         } elsif ($line eq '') { # end of headers
           $self->_request_headers or return;
         } else { # broken line
-          return $self->{request}->_fatal;
+          return $stream->_fatal;
         }
       } elsif (8192 <= length $self->{rbuf}) {
-        return $self->{request}->_fatal;
+        return $stream->_fatal;
       } else {
         return;
       }
@@ -214,7 +221,7 @@ sub _ondata ($$) {
       }
 
       if (not defined $self->{unread_length}) { # CONNECT data
-        $self->{request}->_ev ('data', $$ref);
+        $self->{stream}->_ev ('data', $$ref);
         return;
       }
 
@@ -222,37 +229,37 @@ sub _ondata ($$) {
       if (not $in_length) {
         return;
       } elsif ($self->{unread_length} == $in_length) {
-        if (defined $self->{request}->{ws_key}) {
+        if (defined $self->{stream}->{ws_key}) {
           $self->{state} = 'ws handshaking';
-          $self->{request}->{close_after_response} = 1;
+          $self->{stream}->{close_after_response} = 1;
         }
-        $self->{request}->_ev ('data', $$ref);
-        $self->{request}->_ev ('dataend');
-        unless (defined $self->{request}->{ws_key}) {
-          $self->{request}->_request_done;
+        $self->{stream}->_ev ('data', $$ref);
+        $self->{stream}->_ev ('dataend');
+        unless (defined $self->{stream}->{ws_key}) {
+          $self->{stream}->_request_done;
         }
       } elsif ($self->{unread_length} < $in_length) { # has redundant data
-        $self->{request}->{incomplete} = 1;
-        $self->{request}->{close_after_response} = 1;
-        if (defined $self->{request}->{ws_key}) {
+        $self->{stream}->{incomplete} = 1;
+        $self->{stream}->{close_after_response} = 1;
+        if (defined $self->{stream}->{ws_key}) {
           $self->{state} = 'ws handshaking';
         }
-        $self->{request}->_ev ('data', substr ($$ref, 0, $self->{unread_length}));
-        $self->{request}->_ev ('dataend');
-        unless (defined $self->{request}->{ws_key}) {
-          $self->{request}->_request_done;
+        $self->{stream}->_ev ('data', substr ($$ref, 0, $self->{unread_length}));
+        $self->{stream}->_ev ('dataend');
+        unless (defined $self->{stream}->{ws_key}) {
+          $self->{stream}->_request_done;
         }
         return;
       } else { # unread_length > $in_length
         $self->{unread_length} -= $in_length;
-        $self->{request}->_ev ('data', $$ref);
+        $self->{stream}->_ev ('data', $$ref);
         return;
       }
     } elsif ($self->{state} eq 'ws') {
-      return $self->{request}->_ws_received ($inref);
+      return $self->{stream}->_ws_received ($inref);
     } elsif ($self->{state} eq 'ws handshaking') {
       return unless length $$inref;
-      return $self->{request}->_fatal;
+      return $self->{stream}->_fatal;
     } elsif ($self->{state} eq 'end') {
       return;
     } else {
@@ -266,43 +273,41 @@ sub _oneof ($$) {
   my ($self, $exit) = @_;
   if ($self->{state} eq 'initial' or
       $self->{state} eq 'before request-line') {
-    my $req = $self->_new_req;
-    $req->{version} = 0.9;
-    $req->{method} = 'GET';
-    return $req->_fatal;
+    my $stream = $self->_new_stream;
+    $stream->{request}->{version} = 0.9;
+    $stream->{request}->{method} = 'GET';
+    return $stream->_fatal;
   } elsif ($self->{state} eq 'before request header') {
-    $self->{request}->{close_after_response} = 1;
-    return $self->{request}->_fatal;
+    $self->{stream}->{close_after_response} = 1;
+    return $self->{stream}->_fatal;
   } elsif ($self->{state} eq 'request body') {
-    $self->{request}->{close_after_response} = 1;
+    $self->{stream}->{close_after_response} = 1;
     if (defined $self->{unread_length}) {
       # $self->{unread_length} > 0
-      $self->{request}->{incomplete} = 1;
+      $self->{stream}->{incomplete} = 1;
       $exit = {failed => 1, message => 'Connection closed'}
           unless $exit->{failed};
     }
-    $self->{request}->_ev ('dataend');
-    $self->{request}->_request_done ($exit);
+    $self->{stream}->_ev ('dataend');
+    $self->{stream}->_request_done ($exit);
   } elsif ($self->{state} eq 'ws') {
-    $self->{request}->{exit} = $exit; # XXX
-    return $self->{request}->_ws_received_eof (\'');
+    $self->{stream}->{exit} = $exit; # XXX
+    return $self->{stream}->_ws_received_eof (\'');
   } elsif ($self->{state} eq 'ws handshaking') {
-    return $self->{request}->_fatal;
+    return $self->{stream}->_fatal;
   } elsif ($self->{state} eq 'after request') {
     if (length $self->{rbuf}) {
-      my $req = $self->_new_req;
-      $req->{version} = 0.9;
-      $req->{method} = 'GET';
-      return $req->_fatal;
+      my $stream = $self->_new_stream;
+      $stream->{request}->{version} = 0.9;
+      $stream->{request}->{method} = 'GET';
+      return $stream->_fatal;
+    } else {
+      $self->{transport}->push_shutdown unless $self->{write_closed};
+      $self->{write_closed} = 1;
+      $self->{state} = 'end';
     }
-
-    $self->{transport}->push_shutdown
-        unless $self->{write_closed};
-    $self->{write_closed} = 1;
-    $self->{state} = 'end';
   } elsif ($self->{state} eq 'end') {
-    $self->{transport}->push_shutdown
-        unless $self->{write_closed};
+    $self->{transport}->push_shutdown unless $self->{write_closed};
     $self->{write_closed} = 1;
   } else {
     die "Bad state |$self->{state}|";
@@ -311,10 +316,10 @@ sub _oneof ($$) {
 
 sub _request_headers ($) {
   my $self = $_[0];
-  my $req = $self->{request};
+  my $stream = $self->{stream};
 
   my %headers;
-  for (@{$req->{headers}}) {
+  for (@{$stream->{request}->{headers}}) {
     $_->[1] =~ s/[\x09\x20]+\z//;
     my $n = $_->[0];
     $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive
@@ -328,11 +333,11 @@ sub _request_headers ($) {
     $host = $headers{host}->[0];
     $host =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
   } elsif (@{$headers{host} or []}) { # multiple Host:
-    $req->_fatal;
+    $stream->_fatal;
     return 0;
   } else { # no Host:
-    if ($req->{version} == 1.1) {
-      $req->_fatal;
+    if ($stream->{request}->{version} == 1.1) {
+      $stream->_fatal;
       return 0;
     }
   }
@@ -340,29 +345,29 @@ sub _request_headers ($) {
   ## Request-target and Host:
   my $target_url;
   my $host_url;
-  if ($req->{method} eq 'CONNECT') {
+  if ($stream->{request}->{method} eq 'CONNECT') {
     if (defined $host) {
       $host_url = Web::URL->parse_string ("http://$host/");
       if (not defined $host_url or
           not $host_url->path eq '/' or
           defined $host_url->query or
           defined $host_url->{fragment}) { # XXX
-        $req->_fatal;
+        $stream->_fatal;
         return 0;
       }
     }
 
-    my $target = $req->{target};
+    my $target = delete $stream->{target};
     $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
     $target_url = Web::URL->parse_string ("http://$target/");
     if (not defined $target_url or
         not $target_url->path eq '/' or
         defined $target_url->query or
         defined $target_url->{fragment}) { # XXX
-      $req->_fatal;
+      $stream->_fatal;
       return 0;
     }
-  } elsif ($req->{target} eq '*') {
+  } elsif ($stream->{target} eq '*') {
     my $scheme = 'http'; # XXX
     if (defined $host) {
       $host_url = Web::URL->parse_string ("$scheme://$host/");
@@ -370,14 +375,15 @@ sub _request_headers ($) {
           not $host_url->path eq '/' or
           defined $host_url->query or
           defined $host_url->{fragment}) { # XXX
-        $req->_fatal;
+        $stream->_fatal;
         return 0;
       }
       $target_url = $host_url;
     } else {
       $target_url = $host_url = Web::URL->parse_string ("$scheme://0");
     }
-  } elsif ($req->{target} =~ m{\A/}) {
+    delete $stream->{target};
+  } elsif ($stream->{target} =~ m{\A/}) {
     if (defined $host) {
       my $scheme = 'http'; # XXX
       $host_url = Web::URL->parse_string ("$scheme://$host/");
@@ -385,12 +391,12 @@ sub _request_headers ($) {
           not $host_url->path eq '/' or
           defined $host_url->query or
           defined $host_url->{fragment}) { # XXX
-        $req->_fatal;
+        $stream->_fatal;
         return 0;
       }
     }
 
-    my $target = $req->{target};
+    my $target = delete $stream->{target};
     $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
     if (defined $host_url) {
       $target_url = Web::URL->parse_string ($host_url->get_origin->to_ascii . $target);
@@ -400,16 +406,16 @@ sub _request_headers ($) {
     }
     if (not defined $target_url or
         not defined $target_url->host) {
-      $req->_fatal;
+      $stream->_fatal;
       return 0;
     }
   } else { # absolute URL
-    my $target = $req->{target};
+    my $target = delete $stream->{target};
     $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
     $target_url = Web::URL->parse_string ($target);
     if (not defined $target_url or
         not defined $target_url->host) {
-      $req->_fatal;
+      $stream->_fatal;
       return 0;
     }
 
@@ -420,127 +426,130 @@ sub _request_headers ($) {
           not $host_url->path eq '/' or
           defined $host_url->query or
           defined $host_url->{fragment}) { # XXX
-        $req->_fatal;
+        $stream->_fatal;
         return 0;
       }
     }
   }
   if (defined $host_url and defined $target_url) {
     unless ($host_url->host->equals ($target_url->host)) {
-              $req->_fatal;
-              return 0;
-            }
-            my $host_port = $host_url->port;
-            my $target_port = $target_url->port;
-            if (defined $host_port and defined $target_port and $host_port eq $target_port) {
-              #
-            } elsif (not defined $host_port and not defined $target_port) {
-              #
-            } else {
-              $req->_fatal;
-              return 0;
-            }
-          }
+      $stream->_fatal;
+      return 0;
+    }
+    my $host_port = $host_url->port;
+    my $target_port = $target_url->port;
+    if (defined $host_port and
+        defined $target_port and
+        $host_port eq $target_port) {
+      #
+    } elsif (not defined $host_port and not defined $target_port) {
+      #
+    } else {
+      $stream->_fatal;
+      return 0;
+    }
+  }
   # XXX SNI host
-  $req->{target_url} = $target_url;
-  delete $req->{target};
+  $stream->{request}->{target_url} = $target_url;
 
   ## Connection:
   my $con = join ',', '', @{$headers{connection} or []}, '';
   $con =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
   if ($con =~ /,[\x09\x20]*close[\x09\x20]*,/) {
-    $req->{close_after_response} = 1;
-  } elsif ($req->{version} != 1.1) {
+    $stream->{close_after_response} = 1;
+  } elsif ($stream->{request}->{version} != 1.1) {
     unless ($con =~ /,[\x09\x20]*keep-alive[\x09\x20]*,/) {
-      $req->{close_after_response} = 1;
+      $stream->{close_after_response} = 1;
     }
   }
 
-          ## Upgrade: websocket
-          if (@{$headers{upgrade} or []} == 1) {
-            WS_OK: {
-              my $status = 400;
-              WS_CHECK: {
-                last WS_CHECK unless $req->{method} eq 'GET';
-                last WS_CHECK unless $req->{version} == 1.1;
-                # XXX request-url->scheme eq 'http' or 'https'
-                my $upgrade = $headers{upgrade}->[0];
-                $upgrade =~ tr/A-Z/a-z/; ## ASCII case-insensitive;
-                last WS_CHECK unless $upgrade eq 'websocket';
-                last WS_CHECK unless $con =~ /,[\x09\x20]*upgrade[\x09\x20]*,/;
+  ## Upgrade: websocket
+  if (@{$headers{upgrade} or []} == 1) {
+    WS_OK: {
+      my $status = 400;
+      WS_CHECK: {
+        last WS_CHECK unless $stream->{request}->{method} eq 'GET';
+        last WS_CHECK unless $stream->{request}->{version} == 1.1;
+        # XXX request-url->scheme eq 'http' or 'https'
+        my $upgrade = $headers{upgrade}->[0];
+        $upgrade =~ tr/A-Z/a-z/; ## ASCII case-insensitive;
+        last WS_CHECK unless $upgrade eq 'websocket';
+        last WS_CHECK unless $con =~ /,[\x09\x20]*upgrade[\x09\x20]*,/;
 
-                last WS_CHECK unless @{$headers{'sec-websocket-key'} or []} == 1;
-                $req->{ws_key} = $headers{'sec-websocket-key'}->[0];
-                ## 16 bytes (unencoded) = 3*5+1 = 4*5+4 (encoded)
-                last WS_CHECK unless $req->{ws_key} =~ m{\A[A-Za-z0-9+/]{22}==\z};
+        last WS_CHECK unless @{$headers{'sec-websocket-key'} or []} == 1;
+        $stream->{ws_key} = $headers{'sec-websocket-key'}->[0];
+        ## 16 bytes (unencoded) = 3*5+1 = 4*5+4 (encoded)
+        last WS_CHECK unless $stream->{ws_key} =~ m{\A[A-Za-z0-9+/]{22}==\z};
 
-                last WS_CHECK unless @{$headers{'sec-websocket-version'} or []} == 1;
-                my $ver = $headers{'sec-websocket-version'}->[0];
-                unless ($ver eq '13') {
-                  $status = 426;
-                  last WS_CHECK;
-                }
+        last WS_CHECK unless @{$headers{'sec-websocket-version'} or []} == 1;
+        my $ver = $headers{'sec-websocket-version'}->[0];
+        unless ($ver eq '13') {
+          $status = 426;
+          last WS_CHECK;
+        }
 
-                $self->{ws_protos} = [grep { length $_ } split /[\x09\x20]*,[\x09\x20]*/, join ',', '', @{$headers{'sec-websocket-protocol'} or []}, ''];
+        # XXX
+        $stream->{ws_protos} = [grep { length $_ } split /[\x09\x20]*,[\x09\x20]*/, join ',', '', @{$headers{'sec-websocket-protocol'} or []}, ''];
 
-                # XXX
-                #my $exts = [grep { length $_ } split /[\x09\x20]*,[\x09\x20]*/, join ',', '', @{$headers{'sec-websocket-extensions'} or []}, ''];
+        # XXX
+        #my $exts = [grep { length $_ } split /[\x09\x20]*,[\x09\x20]*/, join ',', '', @{$headers{'sec-websocket-extensions'} or []}, ''];
 
-                last WS_OK;
-              } # WS_CHECK
+        last WS_OK;
+      } # WS_CHECK
 
-              if ($status == 426) {
-                $req->_request_done;
-                $req->_send_error (426, 'Upgrade Required', [
-                  ['Upgrade', 'websocket'],
-                  ['Sec-WebSocket-Version', '13'],
-                ]) unless $self->{write_closed};
-                $req->close_response;
-              } else {
-                $req->_fatal;
-              }
-              return 0;
-            } # WS_OK
-          } elsif (@{$headers{upgrade} or []}) {
-            $req->_fatal;
-            return 0;
-          }
-
-  ## Transfer-Encoding:
-  if (@{$headers{'transfer-encoding'} or []}) {
-    $req->_request_done;
-    $req->_send_error (411, 'Length Required') unless $self->{write_closed};
-    $req->close_response;
+      if ($status == 426) {
+        $stream->_request_done;
+        $stream->_send_error (426, 'Upgrade Required', [
+          ['Upgrade', 'websocket'],
+          ['Sec-WebSocket-Version', '13'],
+        ]) unless $self->{write_closed};
+        $stream->close_response;
+      } else {
+        $stream->_fatal;
+      }
+      return 0;
+    } # WS_OK
+  } elsif (@{$headers{upgrade} or []}) {
+    $stream->_fatal;
     return 0;
   }
 
-  $self->{state} = 'request body' if $req->{method} eq 'CONNECT';
+  ## Transfer-Encoding:
+  if (@{$headers{'transfer-encoding'} or []}) {
+    $stream->_request_done;
+    $stream->_send_error (411, 'Length Required') unless $self->{write_closed};
+    $stream->close_response;
+    return 0;
+  }
+
+  $self->{state} = 'request body' if $stream->{request}->{method} eq 'CONNECT';
 
   ## Content-Length:
   my $l = 0;
   if (@{$headers{'content-length'} or []} == 1 and
       $headers{'content-length'}->[0] =~ /\A[0-9]+\z/) {
-    $l = 0+$headers{'content-length'}->[0] unless $req->{method} eq 'CONNECT';
+    $l = 0+$headers{'content-length'}->[0]
+        unless $stream->{request}->{method} eq 'CONNECT';
   } elsif (@{$headers{'content-length'} or []}) { # multiple headers or broken
-    $req->_fatal;
+    $stream->_fatal;
     return 0;
   }
   if ($l == 0) {
-    if (defined $req->{ws_key}) {
+    if (defined $stream->{ws_key}) {
       $self->{state} = 'ws handshaking';
-      $self->{request}->{close_after_response} = 1;
+      $self->{stream}->{close_after_response} = 1;
     }
   } else {
-    $req->{body_length} = $l;
+    $stream->{body_length} = $l;
     $self->{unread_length} = $l;
     $self->{state} = 'request body';
   }
-  $req->_ev ('headers', $req);
-  $req->_ev ('datastart');
-  if ($l == 0 and not $req->{method} eq 'CONNECT') {
-    $req->_ev ('dataend');
-    unless (defined $req->{ws_key}) {
-      $req->_request_done;
+  $stream->_ev ('headers', $stream->{request});
+  $stream->_ev ('datastart');
+  if ($l == 0 and not $stream->{request}->{method} eq 'CONNECT') {
+    $stream->_ev ('dataend');
+    unless (defined $stream->{ws_key}) {
+      $stream->_request_done;
     }
   }
 
@@ -598,58 +607,59 @@ BEGIN {
 }
 
 sub send_response_headers ($$$;%) {
-  my ($req, $response, %args) = @_;
+  my ($stream, $response, %args) = @_;
   # XXX validation
-  $req->{close_after_response} = 1 if $args{close} or $req->{version} == 0.9;
+  $stream->{close_after_response} = 1
+      if $args{close} or $stream->{request}->{version} == 0.9;
   my $done = 0;
   my $connect = 0;
   my $ws = 0;
-  if ($req->{method} eq 'HEAD' or
+  if ($stream->{request}->{method} eq 'HEAD' or
       $response->{status} == 304) {
     ## No response body by definition
     if (defined $args{content_length}) {
-      $req->{to_be_sent_length} = 0+$args{content_length};
+      $stream->{to_be_sent_length} = 0+$args{content_length};
     }
     $done = 1;
-  } elsif ($req->{method} eq 'CONNECT' and
+  } elsif ($stream->{request}->{method} eq 'CONNECT' and
            200 <= $response->{status} and $response->{status} < 300) {
     ## No response body by definition but switched to the tunnel mode
     croak "|content_length| not allowed" if defined $args{content_length};
-    $req->{write_mode} = 'raw';
+    $stream->{write_mode} = 'raw';
     $connect = 1;
   } elsif (100 <= $response->{status} and $response->{status} < 200) {
     ## No response body by definition
     croak "|content_length| not allowed" if defined $args{content_length};
-    if (defined $req->{ws_key} and $response->{status} == 101) {
+    if (defined $stream->{ws_key} and $response->{status} == 101) {
       $ws = 1;
-      $req->{write_mode} = 'ws';
-      $req->{ws_state} = 'OPEN';
-      $req->{connection}->{state} = 'ws';
-      $req->{state} = 'before ws frame';
+      $stream->{write_mode} = 'ws';
+      $stream->{ws_state} = 'OPEN';
+      $stream->{connection}->{state} = 'ws';
+      $stream->{state} = 'before ws frame';
     } else {
       croak "1xx response not supported";
     }
   } else {
     if (defined $args{content_length}) {
       ## If body length is specified
-      $req->{write_mode} = 'raw';
-      $req->{to_be_sent_length} = 0+$args{content_length};
-      $done = 1 if $req->{to_be_sent_length} <= 0;
-    } elsif ($req->{version} == 1.1) {
+      $stream->{write_mode} = 'raw';
+      $stream->{to_be_sent_length} = 0+$args{content_length};
+      $done = 1 if $stream->{to_be_sent_length} <= 0;
+    } elsif ($stream->{request}->{version} == 1.1) {
       ## Otherwise, if chunked encoding can be used
-      $req->{write_mode} = 'chunked';
+      $stream->{write_mode} = 'chunked';
     } else {
       ## Otherwise, end of the response is the termination of the connection
-      $req->{close_after_response} = 1;
-      $req->{write_mode} = 'raw';
+      $stream->{close_after_response} = 1;
+      $stream->{write_mode} = 'raw';
     }
   }
 
   ## Response-line and response headers
-  if ($req->{DEBUG}) {
-    warn "$req->{id}: Sending response headers... @{[scalar gmtime]}\n";
+  if ($stream->{DEBUG}) {
+    warn "$stream->{id}: Sending response headers... @{[scalar gmtime]}\n";
   }
-  if ($req->{version} != 0.9) {
+  if ($stream->{request}->{version} != 0.9) {
     my $res = sprintf qq{HTTP/1.1 %d %s\x0D\x0A},
         $response->{status},
         $response->{status_text};
@@ -659,37 +669,38 @@ sub send_response_headers ($$$;%) {
       push @header,
           ['Upgrade', 'websocket'],
           ['Connection', 'Upgrade'],
-          ['Sec-WebSocket-Accept', encode_base64 sha1 ($req->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), ''];
+          ['Sec-WebSocket-Accept', encode_base64 sha1 ($stream->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), ''];
       # XXX Sec-WebSocket-Protocol
       # XXX Sec-WebSocket-Extensions
     } else {
-      if ($req->{close_after_response} and not $connect) {
+      if ($stream->{close_after_response} and not $connect) {
         push @header, ['Connection', 'close'];
-      } elsif ($req->{version} == 1.0) {
+      } elsif ($stream->{request}->{version} == 1.0) {
         push @header, ['Connection', 'keep-alive'];
       }
-      if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
+      if (defined $stream->{write_mode} and
+          $stream->{write_mode} eq 'chunked') {
         push @header, ['Transfer-Encoding', 'chunked'];
       }
-      if (defined $req->{to_be_sent_length}) {
-        push @header, ['Content-Length', $req->{to_be_sent_length}];
+      if (defined $stream->{to_be_sent_length}) {
+        push @header, ['Content-Length', $stream->{to_be_sent_length}];
       }
     }
     for (@header, @{$response->{headers}}) {
       $res .= "$_->[0]: $_->[1]\x0D\x0A";
     }
     $res .= "\x0D\x0A";
-    if ($req->{DEBUG}) {
+    if ($stream->{DEBUG}) {
       for (split /\x0A/, $res) {
-        warn "$req->{id}: S: @{[_e4d $_]}\n";
+        warn "$stream->{id}: S: @{[_e4d $_]}\n";
       }
     }
-    $req->{connection}->{transport}->push_write (\$res);
+    $stream->{connection}->{transport}->push_write (\$res);
   }
 
   if ($done) {
-    delete $req->{to_be_sent_length};
-    $req->close_response;
+    delete $stream->{to_be_sent_length};
+    $stream->close_response;
   }
 } # send_response_headers
 
@@ -733,41 +744,44 @@ sub send_response_data ($$) {
 } # send_response_data
 
 sub close_response ($;%) {
-  my ($req, %args) = @_;
-  return unless defined $req->{connection};
-  if (defined $req->{to_be_sent_length} and $req->{to_be_sent_length} > 0) {
+  my ($stream, %args) = @_;
+  return unless defined $stream->{connection};
+  if (defined $stream->{to_be_sent_length} and
+      $stream->{to_be_sent_length} > 0) {
     carp sprintf "Truncated end of sent data (%d more bytes expected)",
-        $req->{to_be_sent_length};
-    $req->{close_after_response} = 1;
-    $req->_next;
+        $stream->{to_be_sent_length};
+    $stream->{close_after_response} = 1;
+    $stream->_next;
   } else {
-    $req->{close_after_response} = 1 if $req->{method} eq 'CONNECT';
-    if (defined $req->{write_mode} and $req->{write_mode} eq 'chunked') {
+    $stream->{close_after_response} = 1
+        if $stream->{request}->{method} eq 'CONNECT';
+    if (defined $stream->{write_mode} and $stream->{write_mode} eq 'chunked') {
       # XXX trailer headers
-      $req->{connection}->{transport}->push_write (\"0\x0D\x0A\x0D\x0A");
-      $req->_next;
-    } elsif (defined $req->{write_mode} and $req->{write_mode} eq 'ws') {
-      $req->close (%args);
+      $stream->{connection}->{transport}->push_write (\"0\x0D\x0A\x0D\x0A");
+      $stream->_next;
+    } elsif (defined $stream->{write_mode} and $stream->{write_mode} eq 'ws') {
+      $stream->close (%args);
     } else {
-      $req->_next;
+      $stream->_next;
     }
   }
 } # close_response
 
 sub _send_error ($$$;$) {
-  my ($req, $status, $status_text, $headers) = @_;
+  my ($stream, $status, $status_text, $headers) = @_;
   my $res = qq{<!DOCTYPE html><html>
 <head><title>$status $status_text</title></head>
 <body>$status $status_text};
   #$res .= Carp::longmess;
   $res .= qq{</body></html>\x0A};
-  $req->send_response_headers
+  $stream->send_response_headers
       ({status => $status, status_text => $status_text,
         headers => [
           @{$headers or []},
           ['Content-Type' => 'text/html; charset=utf-8'],
         ]}, close => 1, content_length => length $res);
-  $req->send_response_data (\$res) unless $req->{method} eq 'HEAD';
+  $stream->send_response_data (\$res)
+      unless $stream->{request}->{method} eq 'HEAD';
 } # _send_error
 
 sub _fatal ($) {
@@ -785,7 +799,7 @@ sub _request_done ($;$) {
   my $con = $req->{connection};
   delete $con->{timer};
   $con->{disable_timer} = 1;
-  delete $con->{request};
+  delete $con->{stream};
   delete $con->{unread_length};
   if ($req->{close_after_response}) {
     $con->{state} = 'end';

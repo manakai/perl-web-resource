@@ -2,6 +2,8 @@ package Web::Transport::HTTPServerConnection;
 use strict;
 use warnings;
 our $VERSION = '1.0';
+use Web::Transport::HTTPConnection;
+push our @ISA, qw(Web::Transport::HTTPConnection);
 use AnyEvent;
 use Promise;
 use Web::URL;
@@ -595,15 +597,14 @@ sub DESTROY ($) {
 } # DESTROY
 
 package Web::Transport::HTTPServerConnection::Stream;
-use Web::Transport::HTTPStream;
-push our @ISA, qw(Web::Transport::HTTPStream);
+push our @ISA, qw(Web::Transport::HTTPConnection::Stream);
 use Carp qw(carp croak);
 use Digest::SHA qw(sha1);
 use MIME::Base64 qw(encode_base64);
 
 BEGIN {
-  *_e4d = \&Web::Transport::HTTPStream::_e4d;
-  *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
+  *_e4d = \&Web::Transport::HTTPConnection::Stream::_e4d;
+  *_e4d_t = \&Web::Transport::HTTPConnection::Stream::_e4d_t;
 }
 
 sub send_response_headers ($$$;%) {

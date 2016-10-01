@@ -1,7 +1,9 @@
-package Web::Transport::HTTPStream;
+package Web::Transport::HTTPConnection;
 use strict;
 use warnings;
 our $VERSION = '1.0';
+
+package Web::Transport::HTTPConnection::Stream;
 use Carp qw(croak);
 use AnyEvent;
 use Promise;

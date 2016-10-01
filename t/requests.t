@@ -236,7 +236,7 @@ test {
     my $error;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         $error = $data if $type eq 'complete';
       });
     })->then (sub {
@@ -270,12 +270,12 @@ test {
     my $error;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         $error = $data if $type eq 'complete';
       });
     })->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         $error = $data if $type eq 'complete';
       });
     })->then (sub {
@@ -345,7 +345,7 @@ test {
     my $error;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         $error = $data->{reason} if $type eq 'complete';
       });
     })->then (sub {
@@ -393,7 +393,7 @@ close
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->$tbmethod (3);
           $http->send_data (\'abc');
@@ -435,7 +435,7 @@ close
     my $error = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->$tbmethod (2);
           eval {
@@ -483,7 +483,7 @@ close
     my $error = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->$tbmethod (2);
           eval {
@@ -532,7 +532,7 @@ close
     my @p;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->$tbmethod (3);
           $http->send_data (\'ab');
@@ -596,7 +596,7 @@ close
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->$tbmethod (0);
           $http->$tbmethod (3);
@@ -646,7 +646,7 @@ close
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->close;
           $sent++;
@@ -690,7 +690,7 @@ close
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->close (status => 1234);
           $sent++;
@@ -734,7 +734,7 @@ close
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->close (status => 1234, reason => 'av c');
           $sent++;
@@ -778,7 +778,7 @@ close
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->close (status => 0x10000, reason => 'av c')->then (sub {
             test { ok 0 } $c;
@@ -829,7 +829,7 @@ close
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->close (status => 1234, reason => "\x{105}")->then (sub {
             test { ok 0 } $c;
@@ -880,7 +880,7 @@ close
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->close (status => 1234, reason => 'x' x 126)->then (sub {
             test { ok 0 } $c;
@@ -922,7 +922,7 @@ CRLF
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           AE::postpone {
             $http->abort;
@@ -965,7 +965,7 @@ CRLF
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           AE::postpone {
             $http->abort;
@@ -1014,7 +1014,7 @@ close
     my $pong = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->send_ping;
           $sent++;
@@ -1061,7 +1061,7 @@ close
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->send_ping (pong => 1);
           $sent++;
@@ -1105,7 +1105,7 @@ close
     my $sent = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->send_ping (data => "ab c");
           $sent++;
@@ -1149,7 +1149,7 @@ close
     my $error = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           eval {
             $http->send_ping (data => "ab c\x{500}");
@@ -1200,7 +1200,7 @@ close
     my $error = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           eval {
             $http->send_ping (data => 'x' x 126);
@@ -1251,7 +1251,7 @@ close
     my $error = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->close->then (sub {
             $http->send_ping (data => 'x');
@@ -1302,7 +1302,7 @@ close
     my $ping = 0;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $http->close;
         } elsif ($type eq 'ping') {
@@ -1387,7 +1387,7 @@ close
     my @ev;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         push @ev, $type if $type eq 'complete';
         if ($type eq 'headers') {
           AE::postpone {
@@ -1435,7 +1435,7 @@ close
     my @ev;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         push @ev, $type if $type eq 'complete';
         if ($type eq 'headers') {
           AE::postpone {
@@ -1491,7 +1491,7 @@ close
     my @ev;
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         push @ev, $type if $type eq 'complete';
         if ($type eq 'headers') {
           AE::postpone {
@@ -1539,7 +1539,7 @@ close
     my $p = Promise->new (sub { $x = $_[0] });
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           AE::postpone {
             $http->close->then (sub {
@@ -1584,7 +1584,7 @@ close
     my $received = '';
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           $received .= '(headers)';
           AE::postpone {
@@ -1621,7 +1621,7 @@ close
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'headers') {
           my $timer; $timer = AE::timer 1, 0, sub {
             $http->send_data (\'abc');
@@ -1662,7 +1662,7 @@ CRLF
       my $p = $http->send_request_headers
           ({method => 'GET', target => 'test',
             headers => [['Content-Length' => 4]]}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'data') {
           test {
             is $data, 'OK';
@@ -1699,7 +1699,7 @@ CRLF
           ({method => 'GET', target => 'test',
             headers => [['Content-Length' => 4]]},
            cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'data') {
           test {
             ok 0;
@@ -1742,7 +1742,7 @@ CRLF
       my $p = $http->send_request_headers
           ({method => 'GET', target => 'test',
             headers => [['Content-Length' => 4]]}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'data') {
           test {
             ok 0;
@@ -1786,7 +1786,7 @@ CRLF
       my $p = $http->send_request_headers
           ({method => 'GET', target => 'test',
             headers => [['Content-Length' => 0]]}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'data') {
           test {
             ok 0;
@@ -1864,7 +1864,7 @@ CRLF
           ({method => 'GET', target => 'test',
             headers => [['Content-Length' => 4]]},
            cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'data') {
           test {
             ok 0;
@@ -1919,7 +1919,7 @@ CRLF
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET',
                                            target => '/test'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'data') {
           $d .= $data;
         }
@@ -2010,7 +2010,7 @@ CRLF
     my $d = '';
     $http->connect->then (sub {
       return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
-        my ($http, $req, $type, $data) = @_;
+        my ($http, $type, $data) = @_;
         if ($type eq 'data') {
           $d .= $data;
         }

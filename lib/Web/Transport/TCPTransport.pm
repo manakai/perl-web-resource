@@ -48,9 +48,12 @@ sub start ($$) {
     }
   })->then (sub {
     $self->{fh} = $_[0];
-    my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $self->{fh};
-    my $info = {local_host => Web::Host->new_from_packed_addr ($h),
-                local_port => $p};
+    my $info = {};
+    if ($self->type eq 'TCP') {
+      my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $self->{fh};
+      $info->{local_host} = Web::Host->new_from_packed_addr ($h);
+      $info->{local_port} = $p;
+    }
     AnyEvent::Util::fh_nonblocking $self->{fh}, 1;
 
     ## Applied to TCP only (not applied to Unix domain socket)

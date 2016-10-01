@@ -155,62 +155,67 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
         my $http = Web::Transport::HTTPClientConnection->new
             (transport => $transport);
         my $test_type = $test->{'test-type'}->[1]->[0] || '';
-        
+
+        my $req;
         my $req_results = {};
         my $onev = sub {
-          my ($http, $req, $type, undef, $flag) = @_;
-          #warn "$req $type";
-          my $result = $req_results->{$req->{id}} ||= {};
-          if (not {requestsent => 1}->{$type}) {
-            push @{$result->{r_events} ||= []}, $type;
-          }
-          if ({requestsent => 1, complete => 1}->{$type}) {
-            push @{$result->{s_events} ||= []}, $type;
-          }
-          if ($type eq 'headers') {
-            $result->{response} = $_[3];
-            if ($req->{method} eq 'CONNECT') {
-              $req->{_tunnel}->();
+          my $req = shift;
+          return sub {
+            my ($http, $type, undef, $flag) = @_;
+            #warn "$req $type";
+            my $result = $req_results->{$req ? $req->{id} : ''} ||= {};
+            if (not {requestsent => 1}->{$type}) {
+              push @{$result->{r_events} ||= []}, $type;
             }
-            if ($flag) {
-              $result->{ws_established} = 1;
-              if ($test_type eq 'ws' and $test->{'ws-send'}) {
-                $http->send_text_header (3);
-                $http->send_data (\'stu');
+            if ({requestsent => 1, complete => 1}->{$type}) {
+              push @{$result->{s_events} ||= []}, $type;
+            }
+            if ($type eq 'headers') {
+              $result->{response} = $_[2];
+              if ($req->{method} eq 'CONNECT') {
+                $req->{_tunnel}->();
               }
-            } else {
-              if ($test_type eq 'ws') {
-                AE::postpone { $http->abort };
+              if ($flag) {
+                $result->{ws_established} = 1;
+                if ($test_type eq 'ws' and $test->{'ws-send'}) {
+                  $http->send_text_header (3);
+                  $http->send_data (\'stu');
+                }
+              } else {
+                if ($test_type eq 'ws') {
+                  AE::postpone { $http->abort };
+                }
               }
             }
-          }
-          if ($type eq 'data' or $type eq 'text') {
-            $result->{body} = '' unless defined $result->{body};
-            $result->{body} .= $_[3];
-            $result->{body} .= '(boundary)' if $test->{boundary};
-          }
-          if ($type eq 'dataend' and
-              $req->{method} eq 'CONNECT' and
-              $result->{response}->{status} == 200) {
-            AE::postpone { $http->close };
-          }
-          if ($type eq 'complete') {
-            $result->{version} = $result->{response} ? $result->{response}->{version} : '1.1';
-            $result->{body} = '' unless defined $result->{body};
-            $result->{body} .= '(close)';
-            $result->{is_error} = 1 if $_[3]->{failed};
-            $result->{can_retry} = 1 if $_[3]->{can_retry};
-            if ($_[3]->{reset}) {
-              $result->{body} = '';
-              $result->{version} = '1.1';
+            if ($type eq 'data' or $type eq 'text') {
+              $result->{body} = '' unless defined $result->{body};
+              $result->{body} .= $_[2];
+              $result->{body} .= '(boundary)' if $test->{boundary};
             }
-            if ($_[3]->{failed}) {
-              delete $result->{response};
-              $result->{body} = '(close)' unless defined $_[3]->{status};
+            if ($type eq 'dataend' and
+                $req->{method} eq 'CONNECT' and
+                $result->{response}->{status} == 200) {
+              AE::postpone { $http->close };
             }
-            $result->{exit} = $_[3];
-            $req->{_ok}->();
-          }
+            if ($type eq 'complete') {
+              $result->{version} = $result->{response}
+                  ? $result->{response}->{version} : '1.1';
+              $result->{body} = '' unless defined $result->{body};
+              $result->{body} .= '(close)';
+              $result->{is_error} = 1 if $_[2]->{failed};
+              $result->{can_retry} = 1 if $_[2]->{can_retry};
+              if ($_[2]->{reset}) {
+                $result->{body} = '';
+                $result->{version} = '1.1';
+              }
+              if ($_[2]->{failed}) {
+                delete $result->{response};
+                $result->{body} = '(close)' unless defined $_[2]->{status};
+              }
+              $result->{exit} = $_[2];
+              $req->{_ok}->();
+            }
+          };
         }; # $onev
 
         my $next_req_id = 1;
@@ -242,7 +247,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 ($req,
                  ws => 1,
                  ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}],
-                 cb => $onev);
+                 cb => $onev->($req));
             return $req->{done}->then (sub {
               return $req_results->{$req->{id}};
             });
@@ -270,7 +275,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   return $try->();
                 });
               }
-              $http->send_request_headers ($req, cb => $onev);
+              $http->send_request_headers ($req, cb => $onev->($req));
               $http->send_data (\('x' x (1024*1024))) if $test_type eq 'largerequest-second';
               if ($req->{method} eq 'CONNECT') {
                 $req->{tunnel}->then (sub {
@@ -311,7 +316,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               target => _a $test->{url}->[1]->[0],
               headers => [['Content-Length' => $test_type eq 'largerequest' ? 1024*1024 : 0]],
             );
-            $http->send_request_headers ($req, cb => $onev);
+            $http->send_request_headers ($req, cb => $onev->($req));
             if ($test_type eq 'largerequest') {
               $http->send_data (\('x' x 1024)) for 1..1024;
             }

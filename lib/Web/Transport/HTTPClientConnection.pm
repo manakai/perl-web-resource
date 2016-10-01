@@ -2,8 +2,9 @@ package Web::Transport::HTTPClientConnection;
 use strict;
 use warnings;
 our $VERSION = '1.0';
-use Web::Transport::HTTPStream;
-push our @ISA, qw(Web::Transport::HTTPStream);
+use Web::Transport::HTTPConnection;
+push our @ISA, qw(Web::Transport::HTTPConnection
+                  Web::Transport::HTTPConnection::Stream);
 use Carp qw(croak);
 use Errno;
 use MIME::Base64 qw(encode_base64);
@@ -16,8 +17,8 @@ use Promise;
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
 BEGIN {
-  *_e4d = \&Web::Transport::HTTPStream::_e4d;
-  *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
+  *_e4d = \&Web::Transport::HTTPConnection::Stream::_e4d;
+  *_e4d_t = \&Web::Transport::HTTPConnection::Stream::_e4d_t;
 }
 
 sub new ($%) {
@@ -26,7 +27,7 @@ sub new ($%) {
                     rbuf => \(my $x = ''),
                     DEBUG => DEBUG}, shift;
   $self->{args} = {@_};
-  $self->{con_cb} = delete $self->{args}->{cb};
+  $self->{con_cb} = (delete $self->{args}->{cb}) || sub { };
   return $self;
 } # new_from_cb
 

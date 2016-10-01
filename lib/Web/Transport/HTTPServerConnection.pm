@@ -5,7 +5,6 @@ our $VERSION = '1.0';
 use Web::Transport::HTTPConnection;
 push our @ISA, qw(Web::Transport::HTTPConnection);
 use AnyEvent;
-use Promise;
 use Web::URL;
 
 use constant DEBUG => $ENV{WEBSERVER_DEBUG} || 0;
@@ -73,12 +72,6 @@ sub _new_stream ($) {
     },
     # cb target
   }, __PACKAGE__ . '::Stream';
-  my $p1 = Promise->new (sub { $req->{req_done} = $_[0] });
-  my $p2 = Promise->new (sub { $req->{res_done} = $_[0] });
-  Promise->all ([$p1, $p2])->then (sub {
-    $req->_both_done ($_[0]->[0] || $_[0]->[1] || {});
-    $self->_con_ev ('endstream', $req);
-  });
   $req->{cb} = $self->_con_ev ('startstream', $req);
   return $req;
 } # _new_stream
@@ -294,11 +287,12 @@ sub _oneof ($$) {
           unless $exit->{failed};
     }
     $self->{stream}->_ev ('dataend');
+    $self->{exit} = $exit;
     $self->{stream}->_receive_done ($exit);
   } elsif ($self->{state} eq 'before ws frame' or
            $self->{state} eq 'ws data' or
            $self->{state} eq 'ws terminating') {
-    $self->{exit} = $exit; # XXX
+    $self->{exit} = $exit;
     return $self->_ws_received_eof (\'');
   } elsif ($self->{state} eq 'ws handshaking') {
     return $self->{stream}->_fatal;
@@ -768,49 +762,55 @@ sub _fatal ($) {
 } # _fatal
 
 sub _send_done ($) {
-  my $req = $_[0];
-  if (delete $req->{close_after_response}) {
-    $req->{connection}->{transport}->push_shutdown
-        unless $req->{connection}->{write_closed};
-    $req->{connection}->{write_closed} = 1;
+  my $stream = $_[0];
+  if (delete $stream->{close_after_response}) {
+    $stream->{connection}->{transport}->push_shutdown
+        unless $stream->{connection}->{write_closed};
+    $stream->{connection}->{write_closed} = 1;
   }
-  if (defined $req->{res_done}) {
-    (delete $req->{res_done})->({});
+  delete $stream->{write_mode};
+  delete $stream->{to_be_sent_length};
+  $stream->{send_done} = 1;
+  if ($stream->{receive_done}) {
+    $stream->_both_done;
   }
-  delete $req->{write_mode};
-  delete $req->{to_be_sent_length};
 } # _send_done
 
-sub _receive_done ($;$) {
-  my ($req, $exit) = @_;
-  my $con = $req->{connection};
+sub _receive_done ($) {
+  my $stream = $_[0];
+  my $con = $stream->{connection};
   delete $con->{timer};
   $con->{disable_timer} = 1;
   delete $con->{stream};
   delete $con->{unread_length};
   delete $con->{ws_timer};
-  if ($req->{close_after_response}) {
+  if ($stream->{close_after_response}) {
     $con->{state} = 'end';
   } else {
     $con->{state} = 'after request';
   }
-  if (defined $req->{req_done}) {
-    (delete $req->{req_done})->($exit);
+  $stream->{receive_done} = 1;
+  if ($stream->{send_done}) {
+    $stream->_both_done;
   }
 } # _receive_done
 
-sub _both_done ($$) {
-  my ($req, $exit) = @_;
-  my $con = $req->{connection};
-  if (delete $req->{close_after_response}) {
+sub _both_done ($) {
+  my $stream = $_[0];
+  my $con = $stream->{connection};
+  return unless defined $con;
+
+  if (delete $stream->{close_after_response}) {
     $con->{transport}->push_shutdown unless $con->{write_closed};
     $con->{write_closed} = 1;
     $con->{state} = 'end';
   }
   delete $con->{disable_timer};
+  $stream->_ev ('complete', $con->{exit} || {});
+  $con->_con_ev ('endstream', $stream);
+
   $con->{timer} = AE::timer $ReadTimeout, 0, sub { $con->_timeout };
-  $req->_ev ('complete', $exit);
-  delete $req->{connection};
+  delete $stream->{connection};
 } # _both_done
 
 sub DESTROY ($) {

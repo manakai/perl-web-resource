@@ -357,9 +357,9 @@ sub _con_ev ($$) {
       warn "$id: $type @{[scalar gmtime]}\n";
     }
   }
-  $self->{con_cb}->(@_);
-  # XXX |closeconnection| should be fired after all |endstream|s
-#XXX  delete $self->{con_cb} if $type eq 'closeconnection';
+  my $return = $self->{con_cb}->(@_);
+  delete $self->{con_cb} if $type eq 'closeconnection';
+  return $return;
 } # _con_ev
 
 sub DESTROY ($) {

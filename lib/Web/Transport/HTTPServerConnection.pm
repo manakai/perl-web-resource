@@ -7,6 +7,7 @@ push our @ISA, qw(Web::Transport::HTTPConnection);
 use AnyEvent;
 use Promise;
 use Promised::Flow;
+use Web::Host;
 use Web::URL;
 
 use constant DEBUG => $ENV{WEBSERVER_DEBUG} || 0;
@@ -90,6 +91,29 @@ sub server_header ($;$) {
   }
   return defined $_[0]->{server_header} ? $_[0]->{server_header} : 'Server';
 } # server_header
+
+sub _url_scheme ($) {
+  my $self = $_[0];
+  my $transport = $self->{transport};
+  if ($transport->type eq 'TLS') {
+    return 'https';
+  } else { # TCP or UNIXDomainSocket
+    return 'http';
+  }
+} # _url_scheme
+
+sub _url_hostport ($) {
+  my $self = $_[0];
+  my $transport = $self->{transport};
+  if ($transport->type eq 'TLS') {
+    $transport = $transport->{transport};
+  }
+  if ($transport->type eq 'TCP') {
+    return $transport->info->{local_host}->to_ascii . ':' . $transport->{info}->{local_port};
+  } else { # UNIXDomainSocket
+    return '0.0.0.0';
+  }
+} # _url_hostport
 
 sub _new_stream ($) {
   my $self = $_[0];
@@ -406,8 +430,8 @@ sub _request_headers ($) {
       return 0;
     }
   } elsif ($stream->{target} eq '*') {
-    my $scheme = 'http'; # XXX
     if (defined $host) {
+      my $scheme = $stream->{connection}->_url_scheme;
       $host_url = Web::URL->parse_string ("$scheme://$host/");
       if (not defined $host_url or
           not $host_url->path eq '/' or
@@ -417,13 +441,14 @@ sub _request_headers ($) {
         return 0;
       }
       $target_url = $host_url;
+      delete $stream->{target};
     } else {
-      $target_url = $host_url = Web::URL->parse_string ("$scheme://0");
+      $stream->_fatal;
+      return 0;
     }
-    delete $stream->{target};
   } elsif ($stream->{target} =~ m{\A/}) {
     if (defined $host) {
-      my $scheme = 'http'; # XXX
+      my $scheme = $stream->{connection}->_url_scheme;
       $host_url = Web::URL->parse_string ("$scheme://$host/");
       if (not defined $host_url or
           not $host_url->path eq '/' or
@@ -439,8 +464,9 @@ sub _request_headers ($) {
     if (defined $host_url) {
       $target_url = Web::URL->parse_string ($host_url->get_origin->to_ascii . $target);
     } else {
-      my $scheme = 'http'; # XXX
-      $target_url = Web::URL->parse_string ("$scheme://0" . $target);
+      my $scheme = $stream->{connection}->_url_scheme;
+      my $hostport = $stream->{connection}->_url_hostport;
+      $target_url = Web::URL->parse_string ("$scheme://$hostport" . $target);
     }
     if (not defined $target_url or
         not defined $target_url->host) {
@@ -915,8 +941,6 @@ sub DESTROY ($) {
 
 # XXX server-side API
 # XXX TLS configurations
-# XXX transport type -> target URL construction
-# XXX remote* -> TCPTransport
 
 1;
 

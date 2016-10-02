@@ -3716,7 +3716,7 @@ test {
         $ok->($data);
       }
     })->then (sub {
-      $tcp->push_write (\"GET /$path HTTP/1.1\x0D\x0AHost: test\x0D\x0A\x0D\x0A");
+      $tcp->push_write (\"GET /$path HTTP/1.1\x0D\x0AHost: test.domain\x0D\x0A\x0D\x0A");
     });
   });
 
@@ -3733,12 +3733,14 @@ test {
 test {
   my $c = shift;
   my $path = rand;
+  my $url;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $self->send_response_headers ({status => 201, status_text => 'OK'},
                                   close => 1);
     $self->send_response_data (\'abcde');
     $self->close_response;
+    $url = $req->{target_url};
   };
 
   my $tcp = Web::Transport::UNIXDomainSocketTransport->new (path => $UnixPath);
@@ -3755,19 +3757,149 @@ test {
         $ok->($data);
       }
     })->then (sub {
-      $tcp->push_write (\"GET /$path HTTP/1.1\x0D\x0AHost: test\x0D\x0A\x0D\x0A");
+      $tcp->push_write (\"GET /$path HTTP/1.0\x0D\x0A\x0D\x0A");
     });
   });
 
   $client->then (sub {
     test {
+      is $url->stringify, qq<http://0.0.0.0/$path>;
       like $data, qr{abcde};
     } $c;
   })->then (sub {
     done $c;
     undef $c;
   });
-} n => 1, name => 'UNIX socket';
+} n => 2, name => 'UNIX socket, no Host:';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $url;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'},
+                                  close => 1);
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+    $url = $req->{target_url};
+  };
+
+  my $tcp = Web::Transport::TCPTransport->new
+      (host => $Origin->host, port => $Origin->port);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        $tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      $tcp->push_write (\"GET /$path HTTP/1.0\x0D\x0AHost:hoge.test\x0D\x0A\x0D\x0A");
+    });
+  });
+
+  $client->then (sub {
+    test {
+      is $url->stringify, qq<http://hoge.test/$path>;
+      like $data, qr{abcde};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'HTTP over TCP, URL';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $url;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'},
+                                  close => 1);
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+    $url = $req->{target_url};
+  };
+
+  my $tcp = Web::Transport::TCPTransport->new
+      (host => $Origin->host, port => $Origin->port);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        $tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      $tcp->push_write (\"GET /$path HTTP/1.0\x0D\x0A\x0D\x0A");
+    });
+  });
+
+  $client->then (sub {
+    test {
+      my $h = $Origin->hostport;
+      is $url->stringify, qq<http://$h/$path>;
+      like $data, qr{abcde};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'HTTP over TCP, URL, no Host:';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $url;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'},
+                                  close => 1);
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+    $url = $req->{target_url};
+  };
+
+  my $tcp = Web::Transport::UNIXDomainSocketTransport->new (path => $UnixPath);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        $tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      $tcp->push_write (\"GET /$path HTTP/1.1\x0D\x0AHost: test.domain\x0D\x0A\x0D\x0A");
+    });
+  });
+
+  $client->then (sub {
+    test {
+      is $url->stringify, qq<http://test.domain/$path>;
+      like $data, qr{abcde};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'UNIX socket';
 
 test {
   my $c = shift;
@@ -3879,6 +4011,105 @@ test {
     undef $c;
   });
 } n => 3, name => 'HTTPS server - with server cert';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $url;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'},
+                                  close => 1);
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+    $url = $req->{target_url};
+  };
+
+  my $data = '';
+  TLSTestResolver->new->resolve ($TLSOrigin->host)->then (sub {
+    my $_tcp = Web::Transport::TCPTransport->new
+        (host => $_[0],
+         port => $TLSOrigin->port || 443);
+    my $tcp = Web::Transport::TLSTransport->new
+        (transport => $_tcp,
+         ca_file => Test::Certificates->ca_path ('cert.pem'));
+
+    return Promise->new (sub {
+      my $ok = $_[0];
+      $tcp->start (sub {
+        my ($self, $type) = @_;
+        if ($type eq 'readdata') {
+          $data .= ${$_[2]};
+        } elsif ($type eq 'readeof') {
+          $tcp->push_shutdown;
+        } elsif ($type eq 'close') {
+          $ok->($data);
+        }
+      })->then (sub {
+        $tcp->push_write (\"GET /$path HTTP/1.1\x0D\x0AHost: test.domain\x0D\x0A\x0D\x0A");
+      });
+    });
+  })->then (sub {
+    test {
+      is $url->stringify, qq<https://test.domain/$path>;
+      like $data, qr{abcde};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'HTTPS, URL';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $url;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'},
+                                  close => 1);
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+    $url = $req->{target_url};
+  };
+
+  my $data = '';
+  my $host;
+  TLSTestResolver->new->resolve ($TLSOrigin->host)->then (sub {
+    $host = $_[0];
+    my $_tcp = Web::Transport::TCPTransport->new
+        (host => $host,
+         port => $TLSOrigin->port || 443);
+    my $tcp = Web::Transport::TLSTransport->new
+        (transport => $_tcp,
+         ca_file => Test::Certificates->ca_path ('cert.pem'));
+
+    return Promise->new (sub {
+      my $ok = $_[0];
+      $tcp->start (sub {
+        my ($self, $type) = @_;
+        if ($type eq 'readdata') {
+          $data .= ${$_[2]};
+        } elsif ($type eq 'readeof') {
+          $tcp->push_shutdown;
+        } elsif ($type eq 'close') {
+          $ok->($data);
+        }
+      })->then (sub {
+        $tcp->push_write (\"GET /$path HTTP/1.0\x0D\x0A\x0D\x0A");
+      });
+    });
+  })->then (sub {
+    test {
+      my $h = $host->to_ascii . ':' . $TLSOrigin->port;
+      is $url->stringify, qq<https://$h/$path>;
+      like $data, qr{abcde};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'HTTPS, URL, no Host:';
 
 test {
   my $c = shift;

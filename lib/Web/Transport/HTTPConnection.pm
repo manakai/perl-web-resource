@@ -366,12 +366,12 @@ sub _con_ev ($$) {
       my $data = $_[2];
       if (defined $data->{remote_host}) {
         my $host = $data->{remote_host}->to_ascii;
-        warn "$id: $type remote=$host:$data->{remote_port}\n";
+        warn "$id: $type remote=$host:$data->{remote_port} @{[scalar gmtime]}\n";
       } elsif (defined $data->{local_host}) {
         my $host = $data->{local_host}->to_ascii;
-        warn "$id: $type remote=$host:$data->{local_port}\n";
+        warn "$id: $type remote=$host:$data->{local_port} @{[scalar gmtime]}\n";
       } else {
-        warn "$id: $type\n";
+        warn "$id: $type @{[scalar gmtime]}\n";
       }
     } elsif ($type eq 'startstream') {
       my $req = $_[2];

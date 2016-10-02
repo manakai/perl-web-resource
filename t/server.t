@@ -1,12 +1,17 @@
 use strict;
 use warnings;
 use Path::Tiny;
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Web::Host;
 use Web::URL;
 use Web::Transport::TCPTransport;
+use Web::Transport::UNIXDomainSocketTransport;
 use Web::Transport::ConnectionClient;
 use Web::Transport::WSClient;
+use Web::Transport::HTTPServerConnection;
+use AnyEvent::Socket;
+use Test::Certificates;
 use Test::X1;
 use Test::More;
 use AnyEvent;
@@ -45,13 +50,16 @@ my $GlobalCV = AE::cv;
 }
 
 my $Origin;
+my $TLSOrigin;
 my $WSOrigin;
+my $UnixPath = path (__FILE__)->parent->parent->child
+    ('local/test/' . rand)->absolute;
+$UnixPath->parent->mkpath;
 my $HandleRequestHeaders = {};
 {
-  use AnyEvent::Socket;
-  use Web::Transport::HTTPServerConnection;
   my $host = '127.0.0.1';
   my $port = find_listenable_port;
+  my $tls_port = find_listenable_port;
   $Origin = Web::URL->parse_string ("http://$host:$port");
   $WSOrigin = Web::URL->parse_string ("ws://$host:$port");
 
@@ -97,6 +105,42 @@ my $HandleRequestHeaders = {};
         (transport => Web::Transport::TCPTransport->new (fh => $_[0]),
          remote_host => Web::Host->parse_string ($_[1]),
          remote_port => $_[2],
+         cb => $con_cb);
+    $GlobalCV->begin;
+    promised_cleanup { $GlobalCV->end } $con->closed;
+  };
+
+  $TLSOrigin = Web::URL->parse_string ("https://tlstestserver.test:$tls_port");
+  {
+    package TLSTestResolver;
+    sub new {
+      return bless {}, $_[0];
+    }
+    sub resolve ($$) {
+      return Promise->resolve (Web::Host->parse_string ($host));
+    }
+  }
+  my $cert_args = {host => 'tlstestserver.test'};
+  Test::Certificates->wait_create_cert ($cert_args);
+  our $tls_server = tcp_server $host, $tls_port, sub {
+    my $tcp = Web::Transport::TCPTransport->new (fh => $_[0]);
+    my $tls = Web::Transport::TLSTransport->new
+        (server => 1, transport => $tcp,
+         ca_file => Test::Certificates->ca_path ('cert.pem'),
+         cert_file => Test::Certificates->cert_path ('cert-chained.pem', $cert_args),
+         key_file => Test::Certificates->cert_path ('key.pem', $cert_args));
+    my $con = Web::Transport::HTTPServerConnection->new
+        (transport => $tls,
+         remote_host => Web::Host->parse_string ($_[1]),
+         remote_port => $_[2],
+         cb => $con_cb);
+    $GlobalCV->begin;
+    promised_cleanup { $GlobalCV->end } $con->closed;
+  };
+
+  our $unix_server = tcp_server 'unix/', $UnixPath, sub {
+    my $con = Web::Transport::HTTPServerConnection->new
+        (transport => Web::Transport::UNIXDomainSocketTransport->new (fh => $_[0]),
          cb => $con_cb);
     $GlobalCV->begin;
     promised_cleanup { $GlobalCV->end } $con->closed;
@@ -3687,6 +3731,157 @@ test {
   });
 } n => 1, name => 'reset after sent';
 
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'},
+                                  close => 1);
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+  };
+
+  my $tcp = Web::Transport::UNIXDomainSocketTransport->new (path => $UnixPath);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        $tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      $tcp->push_write (\"GET /$path HTTP/1.1\x0D\x0AHost: test\x0D\x0A\x0D\x0A");
+    });
+  });
+
+  $client->then (sub {
+    test {
+      like $data, qr{abcde};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'UNIX socket';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga2'],
+        ]}, close => 1);
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+    $invoked++;
+  };
+
+  my $origin = $Origin->stringify;
+  $origin =~ s/^http/https/;
+  $origin = Web::URL->parse_string ($origin);
+  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      is $invoked, 0;
+      ok $res->is_network_error;
+      ok $res->network_error_message;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'HTTP server, HTTPS client';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga2'],
+        ]}, close => 1);
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+    $invoked++;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($TLSOrigin);
+  $http->resolver (TLSTestResolver->new);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      is $invoked, 0;
+      ok $res->is_network_error;
+      ok $res->network_error_message;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'HTTPS server - no server cert';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga2'],
+        ]}, close => 1);
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+    $invoked++;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($TLSOrigin);
+  $http->resolver (TLSTestResolver->new);
+  $http->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      is $invoked, 1;
+      is $res->status, 201;
+      is $res->status_text, 'OK';
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'HTTPS server - with server cert';
+
+Test::Certificates->wait_create_cert;
 $GlobalCV->begin;
 run_tests;
 $GlobalCV->end;

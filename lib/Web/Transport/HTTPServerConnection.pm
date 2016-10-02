@@ -70,8 +70,16 @@ sub new ($%) {
                     {remote_host => $args{remote_host},
                      remote_port => $args{remote_port}});
     return $close_p;
+  }, sub {
+    my $error = $_[0];
+    if (ref $error eq 'HASH' and defined $error->{exit}) {
+      $self->_con_ev ('openconnection', $error->{transport_data});
+      $self->{exit} = $error->{exit};
+    } else {
+      die $error;
+    }
   })->then (sub {
-    $self->_con_ev ('closeconnection');
+    $self->_con_ev ('closeconnection', $self->{exit} || {});
   });
   return $self;
 } # new
@@ -864,9 +872,10 @@ sub DESTROY ($) {
       if $@ =~ /during global destruction/;
 } # DESTROY
 
-# XXX UNIX socket server
-# XXX HTTPS server
 # XXX server-side API
+# XXX TLS configurations
+# XXX transport type -> target URL construction
+# XXX remote* -> TCPTransport
 
 1;
 

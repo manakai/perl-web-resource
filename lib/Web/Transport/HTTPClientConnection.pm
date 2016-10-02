@@ -678,7 +678,7 @@ sub connect ($) {
               ($self->{rbuf}, abort => $data->{failed}, errno => $data->{errno});
         }
         $transport->abort;
-      } else {
+      } else { # not failure
         $self->_process_rbuf ($self->{rbuf}, eof => 1);
         $self->_process_rbuf_eof ($self->{rbuf});
         unless ($self->{state} eq 'tunnel sending') {
@@ -760,6 +760,8 @@ sub send_request_headers ($$;%) {
 
   $self->{id} = $req->{id} = $self->{transport}->id . '.' . ++$self->{req_id};
   $self->_con_ev ('startstream', $req);
+  my $cb = $args{cb} || sub { };
+  $self->{cb} = $cb;
 
   $self->{request} = $req;
   $self->{response} = {status => 200, reason => 'OK', version => '0.9',
@@ -789,21 +791,19 @@ sub send_request_headers ($$;%) {
       warn "$req->{id}: S: @{[_e4d $_]}\n";
     }
   }
-  my $cb = $args{cb} || sub { };
-  $self->{transport}->push_promise->then (sub {
-    $self->{cb} = $cb;
-  });
   $self->{request_state} = 'sending headers';
   $self->{transport}->push_write (\$header);
+  my $sent;
   if ($self->{to_be_sent_length} <= 0) {
-    $self->{transport}->push_promise->then (sub { # XXX can fail
+    $sent = $self->{transport}->push_promise->then (sub {
       $self->_send_done; # XXX $self->{stream}
     });
   } else {
-    $self->{transport}->push_promise->then (sub {
+    $sent = $self->{transport}->push_promise->then (sub {
       $self->{request_state} = 'sending body';
     });
   }
+  $sent->catch (sub { }); # could be rejected when connection aborted
   return $req_done->then (sub {
     $self->_con_ev ('endstream', $req);
   });

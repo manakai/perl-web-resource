@@ -1722,7 +1722,7 @@ CRLF
       undef $c;
     });
   });
-} n => 1, name => 'with request body - too long';
+} n => 1, name => 'with request body - too long 1';
 
 test {
   my $c = shift;
@@ -1766,7 +1766,7 @@ CRLF
       undef $c;
     });
   });
-} n => 1, name => 'with request body - too long';
+} n => 1, name => 'with request body - too long 2';
 
 test {
   my $c = shift;

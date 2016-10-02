@@ -3,7 +3,6 @@ use strict;
 use warnings;
 our $VERSION = '1.0';
 use Carp qw(croak carp);
-use Scalar::Util qw(weaken);
 use AnyEvent;
 use Promise;
 use Net::SSLeay;
@@ -16,8 +15,11 @@ use Web::Transport::OCSP;
 sub new ($%) {
   my $self = bless {}, shift;
   $self->{args} = {@_};
-  carp "|si_host| is not defined" unless defined $self->{args}->{si_host};
-  carp "|sni_host| is not defined" unless defined $self->{args}->{sni_host};
+  $self->{server} = delete $self->{args}->{server};
+  unless ($self->{server}) {
+    carp "|si_host| is not defined" unless defined $self->{args}->{si_host};
+    carp "|sni_host| is not defined" unless defined $self->{args}->{sni_host};
+  }
   $self->{args}->{clock} ||= do {
     require Web::DateTime::Clock;
     Web::DateTime::Clock->realtime_clock;
@@ -124,7 +126,7 @@ sub verify_hostname($$) {
 }
 
 sub start ($$;%) {
-  weaken (my $self = $_[0]);
+  my $self = $_[0];
   croak "Bad state" if not defined $self->{args};
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
@@ -141,6 +143,9 @@ sub start ($$;%) {
         #$data->{failed} = 1;
         $data->{message} = 'Underlying transport closed before TLS closure'
             unless defined $data->{message};
+        if (defined $self->{starttls_done}) {
+          (delete $self->{starttls_done})->[1]->($data->{message});
+        }
         if ($self->{started}) {
           AE::postpone { $self->{cb}->($self, 'readeof', $data) };
         }
@@ -194,7 +199,7 @@ sub start ($$;%) {
       parent_transport_type => $self->{transport}->type,
       parent_transport_data => $_[0],
     };
-    if ($args->{server}) {
+    if ($self->{server}) {
       Net::SSLeay::set_accept_state ($tls);
       Net::SSLeay::CTX_set_tlsext_servername_callback ($self->{tls_ctx}->ctx, sub {
         $self->{starttls_data}->{sni_host_name} = Net::SSLeay::get_servername ($_[0]);

@@ -3428,6 +3428,68 @@ test {
   });
 } n => 2, name => 'server abort - w/o headers';
 
+test {
+  my $c = shift;
+  my $tcp = Web::Transport::TCPTransport->new
+      (host => $Origin->host, port => $Origin->port);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        #$tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      return $tcp->push_shutdown;
+    });
+  });
+
+  $client->then (sub {
+    test {
+      like $data, qr{^<!DOCTYPE html><html>.+400 Bad Request.*</html>.*$}s;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'empty client';
+
+test {
+  my $c = shift;
+  my $tcp = Web::Transport::TCPTransport->new
+      (host => $Origin->host, port => $Origin->port);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        $tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      #return $tcp->push_shutdown;
+    });
+  });
+
+  $client->then (sub {
+    test {
+      is $data, '';
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'empty client, timeout';
+
 $GlobalCV->begin;
 run_tests;
 $GlobalCV->end;

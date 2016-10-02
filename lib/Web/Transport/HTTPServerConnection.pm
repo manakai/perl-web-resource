@@ -286,10 +286,16 @@ sub _oneof ($$) {
   my ($self, $exit) = @_;
   if ($self->{state} eq 'initial' or
       $self->{state} eq 'before request-line') {
-    my $stream = $self->_new_stream;
-    $stream->{request}->{version} = 0.9;
-    $stream->{request}->{method} = 'GET';
-    return $stream->_fatal;
+    if ($self->{write_closed}) {
+      delete $self->{timer};
+      $self->{state} = 'end';
+      return;
+    } else {
+      my $stream = $self->_new_stream;
+      $stream->{request}->{version} = 0.9;
+      $stream->{request}->{method} = 'GET';
+      return $stream->_fatal;
+    }
   } elsif ($self->{state} eq 'before request header') {
     $self->{stream}->{close_after_response} = 1;
     return $self->{stream}->_fatal;
@@ -584,8 +590,8 @@ sub closed ($) {
 
 sub abort ($) {
   my ($self, %args) = @_;
-  $self->{write_closed} = 1;
   $self->{transport}->abort (%args);
+  $self->{write_closed} = 1;
   if (defined $self->{stream}) {
     $self->{stream}->_send_done;
   }
@@ -854,7 +860,6 @@ sub DESTROY ($) {
       if $@ =~ /during global destruction/;
 } # DESTROY
 
-# XXX no complete if no request data
 # XXX reset
 # XXX UNIX socket server
 # XXX HTTPS server

@@ -12,6 +12,11 @@ use Web::URL;
 use constant DEBUG => $ENV{WEBSERVER_DEBUG} || 0;
 our $ReadTimeout ||= 60;
 
+BEGIN {
+  *_e4d = \&Web::Transport::HTTPConnection::Stream::_e4d;
+  *_e4d_t = \&Web::Transport::HTTPConnection::Stream::_e4d_t;
+}
+
 sub new ($%) {
   my ($class, %args) = @_;
   my $self = bless {DEBUG => DEBUG, is_server => 1,
@@ -37,19 +42,19 @@ sub new ($%) {
       if (DEBUG) {
         my $id = $transport->id;
         if (defined $data->{message}) {
-          warn "$id: R: EOF ($data->{message})\n";
+          warn "$id: R: EOF (@{[_e4d_t $data->{message}]})\n";
         } else {
           warn "$id: R: EOF\n";
         }
       }
       delete $self->{timer};
-      $self->_oneof ($_[2]);
+      $self->_oneof ($data);
     } elsif ($type eq 'writeeof') {
       if (DEBUG) {
         my $data = $_[2];
         my $id = $transport->id;
         if (defined $data->{message}) {
-          warn "$id: S: EOF ($data->{message})\n";
+          warn "$id: S: EOF (@{[_e4d_t $data->{message}]})\n";
         } else {
           warn "$id: S: EOF\n";
         }
@@ -581,6 +586,9 @@ sub abort ($) {
   my ($self, %args) = @_;
   $self->{write_closed} = 1;
   $self->{transport}->abort (%args);
+  if (defined $self->{stream}) {
+    $self->{stream}->_send_done;
+  }
   return $self->{closed};
 } # abort
 
@@ -755,6 +763,11 @@ sub close_response ($;%) {
   }
 } # close_response
 
+sub abort ($;%) {
+  my $stream = shift;
+  return $stream->{connection}->abort (@_);
+} # abort
+
 sub _send_error ($$$;$) {
   my ($stream, $status, $status_text, $headers) = @_;
   my $res = qq{<!DOCTYPE html><html>
@@ -843,7 +856,6 @@ sub DESTROY ($) {
 
 # XXX no complete if no request data
 # XXX reset
-# XXX abort tests
 # XXX UNIX socket server
 # XXX HTTPS server
 # XXX server-side API

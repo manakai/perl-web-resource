@@ -77,10 +77,11 @@ my $HandleRequestHeaders = {};
     } elsif ($type eq 'text') {
       $self->{text} .= $_[2];
     } elsif ($type eq 'dataend' or $type eq 'textend' or
-             $type eq 'ping') {
+             $type eq 'ping' or $type eq 'complete') {
       $self->{$type}->($_[2], $_[3]) if $self->{$type};
-    } elsif ($type eq 'complete') {
-      delete $self->{$_} for qw(ondata dataend textend ping);
+      if ($type eq 'complete') {
+        delete $self->{$_} for qw(ondata dataend textend ping complete);
+      }
     }
   }; # $cb
 
@@ -137,7 +138,8 @@ test {
 
 test {
   my $c = shift;
-  $HandleRequestHeaders->{'/hoge2'} = sub {
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $self->send_response_headers
         ({status => 201, status_text => 'OK', headers => [
@@ -149,7 +151,7 @@ test {
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
-  $http->request (path => ['hoge2'])->then (sub {
+  $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
       is $res->status, 201;
@@ -3278,6 +3280,153 @@ test {
     undef $c;
   });
 } n => 1, name => 'request-target empty (HTTP/0.9)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  my $exit;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers
+        ({status => 101, status_text => 'Switched!'});
+    $self->send_binary_header (5);
+    $self->send_response_data (\"abcde");
+    $serverreq = $self;
+    $self->{dataend} = sub {
+      if ($self->{body} =~ /stuvw/) {
+        $self->abort (message => "Test abort\x{6001}");
+      }
+    };
+    $self->{complete} = sub {
+      $exit = $_[0];
+    };
+  };
+
+  my $received = '';
+  my $sent = 0;
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      if (defined $data) {
+        $received .= $data;
+      } else {
+        $received .= '(end)';
+      }
+      if ($received =~ /abcde/ and not $sent) {
+        $client->send_binary ('stuvw');
+        $sent = 1;
+      }
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      is $serverreq->{body}, 'stuvw';
+      is $received, '(end)abcde(end)';
+      ok ! $res->is_network_error;
+      ok ! $res->ws_closed_cleanly;
+      is $res->ws_code, 1006;
+      is $res->ws_reason, '';
+      ok $exit->{failed};
+      ok $exit->{ws};
+      is $exit->{status}, 1006;
+      is $exit->{reason}, "Test abort\x{6001}";
+      ok ! $exit->{cleanly};
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 11, name => 'server abort - WS';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'});
+    $self->send_response_data (\'abcde');
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 201;
+      is $res->status_text, 'OK';
+      is $res->header ('Transfer-Encoding'), 'chunked';
+      is $res->body_bytes, 'abcde';
+      ok $res->incomplete;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'server abort - chunked';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'},
+                                  content_length => 10);
+    $self->send_response_data (\'abcde');
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error;
+      is $res->network_error_message, 'Connection truncated';
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'server abort - content-length';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error;
+      is $res->network_error_message, 'Connection closed without response';
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'server abort - w/o headers';
 
 $GlobalCV->begin;
 run_tests;

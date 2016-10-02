@@ -337,7 +337,12 @@ sub _ws_received_eof ($;%) {
   if ($self->{state} eq 'before ws frame' or
       $self->{state} eq 'ws data') {
     $self->{ws_state} = 'CLOSING';
-    $self->{exit} = {ws => 1, failed => 1, status => 1006, reason => ''};
+    my $reason = '';
+    $reason = $self->{exit}->{message}
+        if defined $self->{exit} and
+           defined $self->{exit}->{message} and
+           $self->{is_server};
+    $self->{exit} = {ws => 1, failed => 1, status => 1006, reason => $reason};
   } elsif ($self->{state} eq 'ws terminating') {
     $self->{ws_state} = 'CLOSING';
     if ($args{abort} and not $self->{exit}->{failed}) {
@@ -670,7 +675,7 @@ sub _ev ($$;$$) {
           defined $_[0]->{message} ? 'message=' . $_[0]->{message} : (),
           defined $_[0]->{status} ? 'status=' . $_[0]->{status} : (),
           defined $_[0]->{reason} ? 'reason=' . $_[0]->{reason} : ();
-      warn "$req->{id}: + @{[_e4d $err]}\n" if length $err;
+      warn "$req->{id}: + @{[_e4d_t $err]}\n" if length $err;
     } elsif ($type eq 'ping') {
       if ($_[1]) {
         warn "$req->{id}: R: pong data=@{[_e4d $_[0]]}\n";

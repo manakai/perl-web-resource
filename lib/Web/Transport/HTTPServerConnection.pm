@@ -84,6 +84,13 @@ sub new ($%) {
   return $self;
 } # new
 
+sub server_header ($;$) {
+  if (@_ > 1) {
+    $_[0]->{server_header} = $_[1];
+  }
+  return defined $_[0]->{server_header} ? $_[0]->{server_header} : 'Server';
+} # server_header
+
 sub _new_stream ($) {
   my $self = $_[0];
   my $req = $self->{stream} = bless {
@@ -612,6 +619,8 @@ push our @ISA, qw(Web::Transport::HTTPConnection::Stream);
 use Carp qw(carp croak);
 use Digest::SHA qw(sha1);
 use MIME::Base64 qw(encode_base64);
+use Web::Encoding;
+use Web::DateTime::Clock;
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPConnection::Stream::_e4d;
@@ -620,99 +629,128 @@ BEGIN {
 
 sub send_response_headers ($$$;%) {
   my ($stream, $response, %args) = @_;
-  # XXX validation
-  $stream->{close_after_response} = 1
-      if $args{close} or $stream->{request}->{version} == 0.9;
+  croak "|send_response_headers| is invoked twice"
+      if defined $stream->{write_mode};
+
+  my $con = $stream->{connection};
+  my $close = $args{close} ||
+              $stream->{close_after_response} ||
+              $stream->{request}->{version} == 0.9;
   my $done = 0;
   my $connect = 0;
   my $ws = 0;
+  my $to_be_sent = undef;
+  my $write_mode = 'sent';
   if ($stream->{request}->{method} eq 'HEAD' or
       $response->{status} == 304) {
     ## No response body by definition
-    if (defined $args{content_length}) {
-      $stream->{to_be_sent_length} = 0+$args{content_length};
-    }
+    $to_be_sent = 0+$args{content_length} if defined $args{content_length};
     $done = 1;
   } elsif ($stream->{request}->{method} eq 'CONNECT' and
            200 <= $response->{status} and $response->{status} < 300) {
     ## No response body by definition but switched to the tunnel mode
     croak "|content_length| not allowed" if defined $args{content_length};
-    $stream->{write_mode} = 'raw';
+    $write_mode = 'raw';
     $connect = 1;
   } elsif (100 <= $response->{status} and $response->{status} < 200) {
     ## No response body by definition
     croak "|content_length| not allowed" if defined $args{content_length};
     if (defined $stream->{ws_key} and $response->{status} == 101) {
       $ws = 1;
-      $stream->{write_mode} = 'ws';
-      $stream->{connection}->{ws_state} = 'OPEN';
-      $stream->{connection}->{state} = 'before ws frame';
+      $write_mode = 'ws';
     } else {
       croak "1xx response not supported";
     }
   } else {
     if (defined $args{content_length}) {
       ## If body length is specified
-      $stream->{write_mode} = 'raw';
-      $stream->{to_be_sent_length} = 0+$args{content_length};
-      $done = 1 if $stream->{to_be_sent_length} <= 0;
+      $write_mode = 'raw';
+      $to_be_sent = 0+$args{content_length};
+      $done = 1 if $to_be_sent <= 0;
     } elsif ($stream->{request}->{version} == 1.1) {
       ## Otherwise, if chunked encoding can be used
-      $stream->{write_mode} = 'chunked';
+      $write_mode = 'chunked';
     } else {
       ## Otherwise, end of the response is the termination of the connection
-      $stream->{close_after_response} = 1;
-      $stream->{write_mode} = 'raw';
+      $close = 1;
+      $write_mode = 'raw';
     }
   }
 
-  ## Response-line and response headers
-  if ($stream->{DEBUG}) {
-    warn "$stream->{id}: Sending response headers... @{[scalar gmtime]}\n";
+  my @header;
+  push @header, ['Server', encode_web_utf8 $con->server_header];
+
+  my $dt = Web::DateTime->new_from_unix_time
+      (Web::DateTime::Clock->realtime_clock->());
+  push @header, ['Date', $dt->to_http_date_string];
+
+  if ($ws) {
+    $con->{ws_state} = 'OPEN';
+    $con->{state} = 'before ws frame';
+    push @header,
+        ['Upgrade', 'websocket'],
+        ['Connection', 'Upgrade'],
+        ['Sec-WebSocket-Accept', encode_base64 sha1 ($stream->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), ''];
+      # XXX Sec-WebSocket-Protocol
+      # XXX Sec-WebSocket-Extensions
+  } else {
+    if ($close and not $connect) {
+      push @header, ['Connection', 'close'];
+    } elsif ($stream->{request}->{version} == 1.0) {
+      push @header, ['Connection', 'keep-alive'];
+    }
+    if ($write_mode eq 'chunked') {
+      push @header, ['Transfer-Encoding', 'chunked'];
+    }
+    if (defined $to_be_sent) {
+      push @header, ['Content-Length', $to_be_sent];
+    }
   }
+
+  push @header, @{$response->{headers} or []};
+
+  croak "Bad status text |@{[_e4d $response->{status_text}]}|"
+      if $response->{status_text} =~ /[\x0D\x0A]/;
+  croak "Status text is utf8-flagged"
+      if utf8::is_utf8 $response->{status_text};
+
+  for (@header) {
+    croak "Bad header name |@{[_e4d $_->[0]]}|"
+        unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
+    croak "Bad header value |$_->[0]: @{[_e4d $_->[1]]}|"
+        unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
+    croak "Header name |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[0];
+    croak "Header value of |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[1];
+  }
+
   if ($stream->{request}->{version} != 0.9) {
     my $res = sprintf qq{HTTP/1.1 %d %s\x0D\x0A},
         $response->{status},
         $response->{status_text};
-    my @header;
-    push @header, ['Server', 'Server/1'], ['Date', 'XXX'];
-    if ($ws) {
-      push @header,
-          ['Upgrade', 'websocket'],
-          ['Connection', 'Upgrade'],
-          ['Sec-WebSocket-Accept', encode_base64 sha1 ($stream->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), ''];
-      # XXX Sec-WebSocket-Protocol
-      # XXX Sec-WebSocket-Extensions
-    } else {
-      if ($stream->{close_after_response} and not $connect) {
-        push @header, ['Connection', 'close'];
-      } elsif ($stream->{request}->{version} == 1.0) {
-        push @header, ['Connection', 'keep-alive'];
-      }
-      if (defined $stream->{write_mode} and
-          $stream->{write_mode} eq 'chunked') {
-        push @header, ['Transfer-Encoding', 'chunked'];
-      }
-      if (defined $stream->{to_be_sent_length}) {
-        push @header, ['Content-Length', $stream->{to_be_sent_length}];
-      }
-    }
-    for (@header, @{$response->{headers}}) {
+    for (@header) {
       $res .= "$_->[0]: $_->[1]\x0D\x0A";
     }
     $res .= "\x0D\x0A";
     if ($stream->{DEBUG}) {
+      warn "$stream->{id}: Sending response headers... @{[scalar gmtime]}\n";
       for (split /\x0A/, $res) {
         warn "$stream->{id}: S: @{[_e4d $_]}\n";
       }
     }
-    my $transport = $stream->{connection}->{transport};
-    $transport->push_write (\$res);
+    $con->{transport}->push_write (\$res);
+  } else {
+    if ($stream->{DEBUG}) {
+      warn "$stream->{id}: Response headers skipped (HTTP/0.9) @{[scalar gmtime]}\n";
+    }
   }
 
+  $stream->{close_after_response} = 1 if $close;
+  $stream->{write_mode} = $write_mode;
   if ($done) {
     delete $stream->{to_be_sent_length};
     $stream->close_response;
+  } else {
+    $stream->{to_be_sent_length} = $to_be_sent if defined $to_be_sent;
   }
 } # send_response_headers
 
@@ -759,8 +797,10 @@ sub send_response_data ($$) {
 sub close_response ($;%) {
   my ($stream, %args) = @_;
   return unless defined $stream->{connection};
-  if (defined $stream->{to_be_sent_length} and
-      $stream->{to_be_sent_length} > 0) {
+  if (not defined $stream->{write_mode}) {
+    $stream->abort (message => 'Closed without response');
+  } elsif (defined $stream->{to_be_sent_length} and
+           $stream->{to_be_sent_length} > 0) {
     carp sprintf "Truncated end of sent data (%d more bytes expected)",
         $stream->{to_be_sent_length};
     $stream->{close_after_response} = 1;
@@ -768,7 +808,7 @@ sub close_response ($;%) {
   } else {
     $stream->{close_after_response} = 1
         if $stream->{request}->{method} eq 'CONNECT';
-    if (defined $stream->{write_mode} and $stream->{write_mode} eq 'chunked') {
+    if ($stream->{write_mode} eq 'chunked') {
       # XXX trailer headers
       my $transport = $stream->{connection}->{transport};
       $transport->push_write (\"0\x0D\x0A\x0D\x0A");
@@ -820,7 +860,7 @@ sub _send_done ($) {
     $transport->push_shutdown if not $stream->{connection}->{write_closed};
     $stream->{connection}->{write_closed} = 1;
   }
-  delete $stream->{write_mode};
+  $stream->{write_mode} = 'sent';
   delete $stream->{to_be_sent_length};
   $stream->{send_done} = 1;
   if ($stream->{receive_done}) {

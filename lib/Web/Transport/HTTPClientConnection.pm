@@ -734,9 +734,9 @@ sub send_request_headers ($$;%) {
   }
   $self->{to_be_sent_length} = 0;
   for (@{$req->{headers} or []}) {
-    croak "Bad header name |$_->[0]|"
+    croak "Bad header name |@{[_e4d $_->[0]]}|"
         unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
-    croak "Bad header value |$_->[1]|"
+    croak "Bad header value |@{[_e4d $_->[1]]}|"
         unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
     my $n = $_->[0];
     $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive.

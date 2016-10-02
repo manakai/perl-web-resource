@@ -3881,6 +3881,623 @@ test {
   });
 } n => 3, name => 'HTTPS server - with server cert';
 
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->{connection}->server_header ('Hoge/1.4.6');
+    $self->send_response_headers
+        ({status => 201, status_text => 'OK'}, close => 1);
+    $self->close_response;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->header ('Server'), 'Hoge/1.4.6';
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => '$con->server_header';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->{connection}->server_header ("\x{3000}a\x00");
+    $self->send_response_headers
+        ({status => 201, status_text => 'OK'}, close => 1);
+    $self->close_response;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->header ('Server'), "\xE3\x80\x80a\x00";
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => '$con->server_header';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->{connection}->server_header (undef);
+    $self->send_response_headers
+        ({status => 201, status_text => 'OK'}, close => 1);
+    $self->close_response;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->header ('Server'), "Server";
+      like $res->header ('Date'), qr{^\w+, \d\d \w+ \d{4} \d\d:\d\d:\d\d GMT$};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => '$con->server_header, Date: header';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->{connection}->server_header ("");
+    $self->send_response_headers
+        ({status => 201, status_text => 'OK'}, close => 1);
+    $self->close_response;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->header ('Server'), "";
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => '$con->server_header';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->{connection}->server_header ("0");
+    $self->send_response_headers
+        ({status => 201, status_text => 'OK'}, close => 1);
+    $self->close_response;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->header ('Server'), "0";
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => '$con->server_header';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->{connection}->server_header ("ab\x0Dvd");
+    eval {
+      $self->send_response_headers
+          ({status => 201, status_text => 'OK'}, close => 1);
+    };
+    $error = $@;
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Bad header value \|Server: ab\\x0Dvd\| at @{[__FILE__]} line @{[__LINE__-11]}};
+      ok $res->is_network_error;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => '$con->server_header newlines';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->{connection}->server_header ("ab\x0Avd");
+    eval {
+      $self->send_response_headers
+          ({status => 201, status_text => 'OK'}, close => 1);
+    };
+    $error = $@;
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Bad header value \|Server: ab\\x0Avd\| at @{[__FILE__]} line @{[__LINE__-11]}};
+      ok $res->is_network_error;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => '$con->server_header newlines';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    eval {
+      $self->send_response_headers
+          ({status => 201, status_text => 'OK', headers => [
+            ["\x00", 'hoge'],
+          ]}, close => 1);
+    };
+    $error = $@;
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Bad header name \|\\x00\| at @{[__FILE__]} line @{[__LINE__-13]}};
+      ok $res->is_network_error;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response_headers bad header name';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    eval {
+      $self->send_response_headers
+          ({status => 201, status_text => 'OK', headers => [
+            ["", 'hoge'],
+          ]}, close => 1);
+    };
+    $error = $@;
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Bad header name \|\| at @{[__FILE__]} line @{[__LINE__-13]}};
+      ok $res->is_network_error;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response_headers bad header name';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    eval {
+      $self->send_response_headers
+          ({status => 201, status_text => 'OK', headers => [
+            ["Foo", "x\x0Ab"],
+          ]}, close => 1);
+    };
+    $error = $@;
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Bad header value \|Foo: x\\x0Ab\| at @{[__FILE__]} line @{[__LINE__-13]}};
+      ok $res->is_network_error;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response_headers bad header value';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    eval {
+      $self->send_response_headers
+          ({status => 201, status_text => 'OK', headers => [
+            [(substr "a\x{5000}", 0, 1), 'hoge'],
+          ]}, close => 1);
+    };
+    $error = $@;
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Header name \|a\| is utf8-flagged at @{[__FILE__]} line @{[__LINE__-13]}};
+      ok $res->is_network_error;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response_headers bad header name';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    eval {
+      $self->send_response_headers
+          ({status => 201, status_text => 'OK', headers => [
+            ["X", (substr "a\x{5000}", 0, 1)],
+          ]}, close => 1);
+    };
+    $error = $@;
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Header value of \|X\| is utf8-flagged at @{[__FILE__]} line @{[__LINE__-13]}};
+      ok $res->is_network_error;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response_headers bad header value';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    eval {
+      $self->send_response_headers
+          ({status => 201, status_text => "a\x0Db"}, close => 1);
+    };
+    $error = $@;
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Bad status text \|a\\x0Db\| at @{[__FILE__]} line @{[__LINE__-11]}};
+      ok $res->is_network_error;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response_headers bad status text';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    eval {
+      $self->send_response_headers
+          ({status => 201, status_text => "a\x{5000}b"}, close => 1);
+    };
+    $error = $@;
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Status text is utf8-flagged at @{[__FILE__]} line @{[__LINE__-11]}};
+      ok $res->is_network_error;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response_headers bad status text';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers
+        ({status => 201, status_text => "OK"}, close => 1);
+    eval {
+      $self->send_response_headers
+          ({status => 202, status_text => "Not OK"}, close => 1);
+    };
+    $error = $@;
+    $self->close_response;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^\|send_response_headers\| is invoked twice at @{[__FILE__]} line @{[__LINE__-11]}};
+      is $res->status, 201;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response_headers after headers';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    eval {
+      $self->send_response_data (\"abc");
+    };
+    $error = $@;
+    $self->abort;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Not writable for now at @{[__FILE__]} line @{[__LINE__-10]}};
+      ok $res->is_network_error;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response_data without headers';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->close_response;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'close_response without headers';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers
+        ({status => 201, status_text => "OK"}, close => 1);
+    $self->close_response;
+    eval {
+      $self->send_response_data (\"abc");
+    };
+    $error = $@;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^Not writable for now at @{[__FILE__]} line @{[__LINE__-9]}};
+      is $res->status, 201;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response_data after close';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers
+        ({status => 201, status_text => "OK"}, close => 1);
+    $self->close_response;
+    eval {
+      $self->send_response_headers
+          ({status => 202, status_text => "Not OK"}, close => 1);
+    };
+    $error = $@;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^\|send_response_headers\| is invoked twice at @{[__FILE__]} line @{[__LINE__-10]}};
+      is $res->status, 201;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response_headers after close';
+
 Test::Certificates->wait_create_cert;
 $GlobalCV->begin;
 run_tests;

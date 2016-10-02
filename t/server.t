@@ -69,7 +69,7 @@ my $HandleRequestHeaders = {};
             ({status => 404, status_text => 'Not Found (/)'}, close => 1);
         $self->close_response;
       } else {
-        die "No handler for |$req->{target}|";
+        die "No handler for |@{[$req->{target_url}->stringify]}|";
       }
     } elsif ($type eq 'data') {
       $self->{body} .= $_[2];
@@ -3490,11 +3490,208 @@ test {
   });
 } n => 1, name => 'empty client, timeout';
 
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'});
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+  };
+
+  my $tcp = Web::Transport::TCPTransport->new
+      (host => $Origin->host, port => $Origin->port);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        #$tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      $tcp->push_write (\"GET /$path HTTP/1.1\x0D\x0AHost: test\x0D\x0A");
+      return $tcp->_push_reset;
+    });
+  });
+
+  $client->then (sub {
+    test {
+      is $data, '';
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'reset before headers';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'});
+    #$self->send_response_data (\'abcde');
+    #$self->close_response;
+  };
+
+  my $tcp = Web::Transport::TCPTransport->new
+      (host => $Origin->host, port => $Origin->port);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        #$tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      $tcp->push_write (\"GET /$path HTTP/1.1\x0D\x0AHost: test\x0D\x0A\x0D\x0A");
+      return $tcp->_push_reset;
+    });
+  });
+
+  $client->then (sub {
+    test {
+      is $data, '';
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'reset after headers';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    #
+  };
+
+  my $tcp = Web::Transport::TCPTransport->new
+      (host => $Origin->host, port => $Origin->port);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        #$tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      $tcp->push_write (\"GET /$path HTTP/1.1\x0D\x0AHost: test\x0D\x0A\x0D\x0A");
+      return $tcp->_push_reset;
+    });
+  });
+
+  $client->then (sub {
+    test {
+      is $data, '';
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'reset after headers';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'});
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+  };
+
+  my $tcp = Web::Transport::TCPTransport->new
+      (host => $Origin->host, port => $Origin->port);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+        $tcp->_push_reset if $data =~ /abcde/;
+      } elsif ($type eq 'readeof') {
+        #$tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      $tcp->push_write (\"GET /$path HTTP/1.1\x0D\x0AHost: test\x0D\x0A\x0D\x0A");
+    });
+  });
+
+  $client->then (sub {
+    test {
+      like $data, qr{abcde};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'reset after sent';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'});
+    $self->send_response_data (\'abcde');
+  };
+
+  my $tcp = Web::Transport::TCPTransport->new
+      (host => $Origin->host, port => $Origin->port);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+        $tcp->_push_reset if $data =~ /abcde/;
+      } elsif ($type eq 'readeof') {
+        #$tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      $tcp->push_write (\"GET /$path HTTP/1.1\x0D\x0AHost: test\x0D\x0A\x0D\x0A");
+    });
+  });
+
+  $client->then (sub {
+    test {
+      like $data, qr{abcde};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'reset after sent';
+
 $GlobalCV->begin;
 run_tests;
 $GlobalCV->end;
-$HandleRequestHeaders = {};
 $GlobalCV->recv;
+$HandleRequestHeaders = {};
 
 =head1 LICENSE
 

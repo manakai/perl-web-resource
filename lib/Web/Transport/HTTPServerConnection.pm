@@ -48,6 +48,7 @@ sub new ($%) {
         }
       }
       delete $self->{timer};
+      $self->{write_closed} = 1;
       $self->_oneof ($data);
     } elsif ($type eq 'writeeof') {
       if (DEBUG) {
@@ -697,7 +698,8 @@ sub send_response_headers ($$$;%) {
         warn "$stream->{id}: S: @{[_e4d $_]}\n";
       }
     }
-    $stream->{connection}->{transport}->push_write (\$res);
+    my $transport = $stream->{connection}->{transport};
+    $transport->push_write (\$res);
   }
 
   if ($done) {
@@ -715,11 +717,12 @@ sub send_response_data ($$) {
       warn "$req->{id}: S: @{[_e4d $_]}\n";
     }
   }
+  my $transport = $req->{connection}->{transport};
   if ($wm eq 'chunked') {
     if (length $$ref) {
-      $req->{connection}->{transport}->push_write (\sprintf "%X\x0D\x0A", length $$ref);
-      $req->{connection}->{transport}->push_write ($ref);
-      $req->{connection}->{transport}->push_write (\"\x0D\x0A");
+      $transport->push_write (\sprintf "%X\x0D\x0A", length $$ref);
+      $transport->push_write ($ref);
+      $transport->push_write (\"\x0D\x0A");
     }
   } elsif ($wm eq 'raw' or $wm eq 'ws') {
     croak "Not writable for now"
@@ -735,7 +738,7 @@ sub send_response_data ($$) {
             length $$ref, $req->{to_be_sent_length};
       }
     }
-    $req->{connection}->{transport}->push_write ($ref);
+    $transport->push_write ($ref);
     if ($wm eq 'raw' and
         defined $req->{to_be_sent_length} and $req->{to_be_sent_length} <= 0) {
       $req->close_response;
@@ -759,7 +762,8 @@ sub close_response ($;%) {
         if $stream->{request}->{method} eq 'CONNECT';
     if (defined $stream->{write_mode} and $stream->{write_mode} eq 'chunked') {
       # XXX trailer headers
-      $stream->{connection}->{transport}->push_write (\"0\x0D\x0A\x0D\x0A");
+      my $transport = $stream->{connection}->{transport};
+      $transport->push_write (\"0\x0D\x0A\x0D\x0A");
       $stream->_send_done;
     } elsif (defined $stream->{write_mode} and $stream->{write_mode} eq 'ws') {
       $stream->close (%args);
@@ -804,8 +808,8 @@ sub _fatal ($) {
 sub _send_done ($) {
   my $stream = $_[0];
   if (delete $stream->{close_after_response}) {
-    $stream->{connection}->{transport}->push_shutdown
-        unless $stream->{connection}->{write_closed};
+    my $transport = $stream->{connection}->{transport};
+    $transport->push_shutdown if not $stream->{connection}->{write_closed};
     $stream->{connection}->{write_closed} = 1;
   }
   delete $stream->{write_mode};
@@ -860,7 +864,6 @@ sub DESTROY ($) {
       if $@ =~ /during global destruction/;
 } # DESTROY
 
-# XXX reset
 # XXX UNIX socket server
 # XXX HTTPS server
 # XXX server-side API

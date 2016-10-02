@@ -5,7 +5,7 @@ our $VERSION = '1.0';
 require utf8;
 use Carp qw(croak);
 use Errno qw(EAGAIN EWOULDBLOCK EINTR);
-use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE);
+use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE SO_LINGER);
 use AnyEvent::Util qw(WSAEWOULDBLOCK);
 use AnyEvent::Socket qw(tcp_connect);
 use Promise;
@@ -161,7 +161,7 @@ sub _start_write ($) {
     } # while
     delete $self->{ww} unless @{$self->{wq}};
   }; # $run
-  $run->();
+  #$run->();
 
   $self->{ww} = AE::io $self->{fh}, 1, sub {
     $run->();
@@ -209,6 +209,33 @@ sub push_shutdown ($) {
   return $p;
 } # push_shutdown
 
+## For tests only
+sub _push_reset ($) {
+  my $self = $_[0];
+  croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
+  my ($ok, $ng);
+  my $p = Promise->new (sub { ($ok, $ng) = @_ });
+  push @{$self->{wq}}, [sub {
+    setsockopt $self->{fh}, SOL_SOCKET, SO_LINGER, pack "II", 1, 0;
+    my $wc = $self->{write_closed};
+    my $rc = $self->{read_closed};
+    $self->{write_closed} = 1;
+    $self->{read_closed} = 1;
+    my $reason = 'Reset sent';
+    AE::postpone {
+      $self->{cb}->($self, 'writeeof', {failed => 1, message => $reason})
+          unless $wc;
+      $self->{cb}->($self, 'readeof', {failed => 1, message => $reason})
+          unless $rc;
+    };
+    $self->_close;
+    $ok->();
+  }, $ng];
+  $self->{write_shutdown} = 1;
+  $self->_start_write;
+  return $p;
+} # _push_reset
+
 sub abort ($;%) {
   my ($self, %args) = @_;
   delete $self->{args};
@@ -233,7 +260,7 @@ sub _close ($$) {
   while (@{$self->{wq} || []}) {
     my $q = shift @{$self->{wq}};
     if (@$q == 2) { # promise
-      $q->[1]->();
+      $q->[1]->("Canceled by failure of earlier write operations");
     }
   }
   delete $self->{rw};

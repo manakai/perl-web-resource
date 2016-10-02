@@ -65,11 +65,11 @@ my $con_cb = sub {
 
 my $server = tcp_server $host, $port, sub {
   $cv->begin;
+  my $tcp = Web::Transport::TCPTransport->new
+      (server => 1, fh => $_[0],
+       host => Web::Host->parse_string ($_[1]), port => $_[2]);
   my $con = Web::Transport::HTTPServerConnection->new
-      (transport => Web::Transport::TCPTransport->new (fh => $_[0]),
-       remote_host => Web::Host->parse_string ($_[1]),
-       remote_port => $_[2],
-       cb => $con_cb);
+      (transport => $tcp, cb => $con_cb);
   promised_cleanup { $cv->end } $con->closed;
 };
 

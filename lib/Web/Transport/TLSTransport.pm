@@ -35,6 +35,7 @@ sub id ($) {
 
 sub type ($) { return 'TLS' }
 sub layered_type ($) { return $_[0]->type . '/' . $_[0]->{transport}->layered_type }
+sub info ($) { return $_[0]->{info} } # or undef
 
 sub request_mode ($;$) {
   if (@_ > 1) {
@@ -144,7 +145,7 @@ sub start ($$;%) {
         $data->{message} = 'Underlying transport closed before TLS closure'
             unless defined $data->{message};
         if (defined $self->{starttls_done}) {
-          (delete $self->{starttls_done})->[1]->($data->{message});
+          (delete $self->{starttls_done})->[1]->($data);
         }
         if ($self->{started}) {
           AE::postpone { $self->{cb}->($self, 'readeof', $data) };
@@ -160,6 +161,9 @@ sub start ($$;%) {
         #$data->{failed} = 1;
         $data->{message} = 'Underlying transport closed before TLS closure'
             unless defined $data->{message};
+        if (defined $self->{starttls_done}) {
+          (delete $self->{starttls_done})->[1]->($data);
+        }
         if ($self->{started}) {
           AE::postpone { $self->{cb}->($self, 'writeeof', $data) };
         }
@@ -171,14 +175,14 @@ sub start ($$;%) {
     } elsif ($type eq 'close') {
       my $data = $_[2];
       if (defined $self->{starttls_done}) {
-        (delete $self->{starttls_done})->[1]->("Connection closed by a TLS error");
+        (delete $self->{starttls_done})->[1]->({failed => 1, message => "Connection closed by a TLS error"});
       }
       if ($self->{started}) {
         AE::postpone { (delete $self->{cb})->($self, 'close', $data) };
       } else {
         delete $self->{cb};
       }
-      delete $self->{transport};
+      #delete $self->{transport};
     }
   })->then (sub {
     my $vmode;
@@ -195,10 +199,7 @@ sub start ($$;%) {
 
     $self->{tls_ctx} = AnyEvent::TLS->new (%$args);
     my $tls = $self->{tls} = Net::SSLeay::new ($self->{tls_ctx}->ctx);
-    $self->{starttls_data} = {
-      parent_transport_type => $self->{transport}->type,
-      parent_transport_data => $_[0],
-    };
+    $self->{starttls_data} = {};
     if ($self->{server}) {
       Net::SSLeay::set_accept_state ($tls);
       Net::SSLeay::CTX_set_tlsext_servername_callback ($self->{tls_ctx}->ctx, sub {
@@ -206,7 +207,7 @@ sub start ($$;%) {
         # XXX hook for the application to choose a certificate
         Net::SSLeay::set_SSL_CTX ($tls, $self->{tls_ctx}->ctx);
       });
-      $self->{starttls_data}->{stapling_result} = {}; # not applicable
+      $self->{starttls_data}->{stapling_result} = undef; # not applicable
     } else { # client
       Net::SSLeay::set_connect_state ($tls);
       if (defined $args->{sni_host} and $args->{sni_host}->is_domain) {
@@ -334,21 +335,20 @@ sub start ($$;%) {
       $data->{tls_cipher} = Net::SSLeay::get_cipher ($self->{tls});
       $data->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($self->{tls});
     }
+    $self->{info} = $data;
 
     if (defined $data and defined $data->{stapling_result} and
         $data->{stapling_result}->{failed}) {
-      die {failed => 1, message => $data->{stapling_result}->{message},
-           transport_data => $data};
+      die {failed => 1, message => $data->{stapling_result}->{message}};
     } else {
       my $n = $self->{tls} && Net::SSLeay::get_verify_result ($self->{tls});
       if ($n) {
         my $s = Net::SSLeay::X509_verify_cert_error_string ($n);
-        die {failed => 1, message => "Certificate verification error $n - $s",
-             transport_data => $data};
+        die {failed => 1, message => "Certificate verification error $n - $s"};
       } elsif (ref $_[0] eq 'HASH') {
-        die {%{$_[0]}, transport_data => $data};
+        die $_[0];
       } else {
-        die {failed => 1, message => $_[0], transport_data => $data};
+        die {failed => 1, message => $_[0]};
       }
     }
   });
@@ -420,7 +420,7 @@ sub _tls ($) {
           }
 
           if (defined $self->{starttls_done}) {
-            (delete $self->{starttls_done})->[1]->({exit => $data});
+            (delete $self->{starttls_done})->[1]->($data);
           } else {
             my $rc = $self->{read_closed};
             $self->{read_closed} = 1;
@@ -451,7 +451,7 @@ sub _tls ($) {
       AE::postpone { $self->{cb}->($self, 'readdata', \$read) };
     } else { # EOF
       if (defined $self->{starttls_done}) {
-        (delete $self->{starttls_done})->[1]->("TLS handshake failed");
+        (delete $self->{starttls_done})->[1]->({failed => 1, message => "TLS handshake failed"});
       } else {
         unless ($self->{read_closed}) {
           $self->{read_closed} = 1;
@@ -475,7 +475,7 @@ sub _tls ($) {
       }
 
       if (defined $self->{starttls_done}) {
-        (delete $self->{starttls_done})->[1]->({exit => $data});
+        (delete $self->{starttls_done})->[1]->($data);
       } else {
         my $wc = $self->{write_closed};
         $self->{read_closed} = 1;
@@ -512,14 +512,14 @@ sub _tls ($) {
       if (not defined $data->{stapling_result} and
           defined $data->{tls_cert_chain}->[0] and
           Web::Transport::OCSP->x509_has_must_staple ($data->{tls_cert_chain}->[0])) {
-        (delete $self->{starttls_done})->[1]->("There is no stapled OCSP response, which is required by the certificate");
+        (delete $self->{starttls_done})->[1]->({failed => 1, message => "There is no stapled OCSP response, which is required by the certificate"});
         $self->abort (message => 'TLS error');
         return;
       }
 
       delete $self->{starttls_data};
       $self->{started} = 1;
-      (delete $self->{starttls_done})->[0]->($data);
+      (delete $self->{starttls_done})->[0]->($self->{info} = $data);
     }
   }
 

@@ -101,11 +101,11 @@ my $HandleRequestHeaders = {};
   }; # $con_cb
 
   our $server = tcp_server $host, $port, sub {
+    my $tcp = Web::Transport::TCPTransport->new
+        (fh => $_[0],
+         host => Web::Host->parse_string ($_[1]), port => $_[2]);
     my $con = Web::Transport::HTTPServerConnection->new
-        (transport => Web::Transport::TCPTransport->new (fh => $_[0]),
-         remote_host => Web::Host->parse_string ($_[1]),
-         remote_port => $_[2],
-         cb => $con_cb);
+        (transport => $tcp, cb => $con_cb);
     $GlobalCV->begin;
     promised_cleanup { $GlobalCV->end } $con->closed;
   };
@@ -123,17 +123,16 @@ my $HandleRequestHeaders = {};
   my $cert_args = {host => 'tlstestserver.test'};
   Test::Certificates->wait_create_cert ($cert_args);
   our $tls_server = tcp_server $host, $tls_port, sub {
-    my $tcp = Web::Transport::TCPTransport->new (fh => $_[0]);
+    my $tcp = Web::Transport::TCPTransport->new
+        (fh => $_[0],
+         host => Web::Host->parse_string ($_[1]), port => $_[2]);
     my $tls = Web::Transport::TLSTransport->new
         (server => 1, transport => $tcp,
          ca_file => Test::Certificates->ca_path ('cert.pem'),
          cert_file => Test::Certificates->cert_path ('cert-chained.pem', $cert_args),
          key_file => Test::Certificates->cert_path ('key.pem', $cert_args));
     my $con = Web::Transport::HTTPServerConnection->new
-        (transport => $tls,
-         remote_host => Web::Host->parse_string ($_[1]),
-         remote_port => $_[2],
-         cb => $con_cb);
+        (transport => $tls, cb => $con_cb);
     $GlobalCV->begin;
     promised_cleanup { $GlobalCV->end } $con->closed;
   };

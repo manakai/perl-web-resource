@@ -15,6 +15,7 @@ sub id ($) {
 
 sub type ($) { return 'HTTP' }
 sub transport ($) { $_[0]->{transport} }
+sub info ($) { return $_[0]->{info} } # or undef
 
 sub layered_type ($) {
   if (defined $_[0]->{args}) {
@@ -358,21 +359,85 @@ sub _ws_received_eof ($;%) {
   $stream->_receive_done;
 } # _ws_received_eof
 
+sub _debug_handshake_done ($$) {
+  my ($self, $exit) = @_;
+  no warnings 'uninitialized';
+  my $id = $self->{transport}->id;
+
+  my @transport = ($self->{transport});
+  while (1) {
+    if (defined $transport[-1]->{transport}) {
+      push @transport, $transport[-1]->{transport};
+    } elsif (defined $transport[-1]->{http}) {
+      push @transport, $transport[-1]->{http};
+    } else {
+      last;
+    }
+  }
+
+  for my $transport (reverse @transport) {
+    warn "$id: + @{[$transport->id]} @{[$transport->type]}\n";
+    my $info = $transport->info;
+    
+    if (defined $info->{remote_host}) {
+      my $host = $info->{remote_host}->to_ascii;
+      warn "$id:   + Remote: $host:$info->{remote_port}\n";
+    }
+    if (defined $info->{local_host}) {
+      my $host = $info->{local_host}->to_ascii;
+      warn "$id:   + Local: $host:$info->{local_port}\n";
+    }
+
+    if (defined $info->{tls_protocol}) {
+      my $ver = $info->{tls_protocol} == 0x0301 ? '1.0' :
+                $info->{tls_protocol} == 0x0302 ? '1.1' :
+                $info->{tls_protocol} == 0x0303 ? '1.2' :
+                $info->{tls_protocol} == 0x0304 ? '1.3' :
+                sprintf '0x%04X', $info->{tls_protocol};
+      warn "$id:   + TLS version: $ver\n";
+    }
+    if (defined $info->{tls_cipher}) {
+      warn "$id:   + Cipher suite: $info->{tls_cipher} ($info->{tls_cipher_usekeysize})\n";
+    }
+    warn "$id:   + Resumed session\n" if $info->{tls_session_resumed};
+    my $i = 0;
+    for (@{$info->{tls_cert_chain} or []}) {
+      if (defined $_) {
+        warn "$id:   + #$i: @{[$_->debug_info]}\n";
+      } else {
+        warn "$id:   + #$i: ?\n";
+      }
+      $i++;
+    }
+    if (defined (my $result = $info->{stapling_result})) {
+      if ($result->{failed}) {
+        warn "$id:   + OCSP stapling: NG - $result->{message}\n";
+      } else {
+        warn "$id:   + OCSP stapling: OK\n";
+      }
+      if (defined (my $res = $result->{response})) {
+        warn "$id:   +   Status=$res->{response_status} Produced=$res->{produced}\n";
+        for my $r (values %{$res->{responses} or {}}) {
+          warn "$id:   +   - Status=$r->{cert_status} Revocation=$r->{revocation_time} ThisUpdate=$r->{this_update} NextUpdate=$r->{next_update}\n";
+        }
+      }
+    } elsif (defined $info->{tls_protocol}) {
+      warn "$id:   + OCSP stapling: N/A\n";
+    }
+  } # $transport
+
+  if ($exit->{failed}) {
+    warn "$id: + Failure ($exit->{message})\n";
+  }
+} # _debug_handshake_done
+
 sub _con_ev ($$) {
   my ($self, $type) = @_;
   if ($self->{DEBUG}) {
     my $id = $self->{transport}->id;
     if ($type eq 'openconnection') {
-      my $data = $_[2];
-      if (defined $data->{remote_host}) {
-        my $host = $data->{remote_host}->to_ascii;
-        warn "$id: $type remote=$host:$data->{remote_port} @{[scalar gmtime]}\n";
-      } elsif (defined $data->{local_host}) {
-        my $host = $data->{local_host}->to_ascii;
-        warn "$id: $type remote=$host:$data->{local_port} @{[scalar gmtime]}\n";
-      } else {
-        warn "$id: $type @{[scalar gmtime]}\n";
-      }
+      warn "$id: $type @{[scalar gmtime]}\n";
+      $self->_debug_handshake_done ($_[2]);
     } elsif ($type eq 'startstream') {
       my $req = $_[2];
       warn "$id: ========== @{[ref $self]}\n";

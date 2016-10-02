@@ -552,83 +552,6 @@ sub _process_rbuf_eof ($$;%) {
   $self->_receive_done;
 } # _process_rbuf_eof
 
-sub debug_handshake_done ($$$) {
-  my ($self, $ok, $info) = @_;
-  no warnings 'uninitialized';
-
-  my $id = $self->{transport}->id;
-  warn "$id: Connection established @{[scalar gmtime]}\n" if $ok;
-
-  if ($self->{transport}->type eq 'TCP') {
-    my $data = $info->{transport_data};
-    my $host = $data->{local_host}->to_ascii;
-    warn "$id: + Local: $host:$data->{local_port}\n";
-  }
-
-  if ($self->{transport}->type eq 'TLS') {
-    my $data = $info->{transport_data};
-
-    if ($data->{parent_transport_type} eq 'TCP') {
-      my $data = $data->{parent_transport_data};
-      my $host = $data->{local_host}->to_ascii;
-      warn "$id: + TCP Local: $host:$data->{local_port}\n";
-    }
-
-    if (defined $data->{tls_protocol}) {
-      my $ver = $data->{tls_protocol} == 0x0301 ? '1.0' :
-                $data->{tls_protocol} == 0x0302 ? '1.1' :
-                $data->{tls_protocol} == 0x0303 ? '1.2' :
-                $data->{tls_protocol} == 0x0304 ? '1.3' :
-                sprintf '0x%04X', $data->{tls_protocol};
-      warn "$id: + TLS version: $ver\n";
-    }
-    if (defined $data->{tls_cipher}) {
-      warn "$id: + Cipher suite: $data->{tls_cipher} ($data->{tls_cipher_usekeysize})\n";
-    }
-    warn "$id: + Resumed session\n" if $data->{tls_session_resumed};
-    my $i = 0;
-    for (@{$data->{tls_cert_chain} or []}) {
-      if (defined $_) {
-        warn "$id: + #$i: @{[$_->debug_info]}\n";
-      } else {
-        warn "$id: + #$i: ?\n";
-      }
-      $i++;
-    }
-    if (defined (my $result = $data->{stapling_result})) {
-      if ($result->{failed}) {
-        warn "$id: + OCSP stapling: NG - $result->{message}\n";
-      } else {
-        warn "$id: + OCSP stapling: OK\n";
-      }
-      if (defined (my $res = $result->{response})) {
-        warn "$id: +   Status=$res->{response_status} Produced=$res->{produced}\n";
-        for my $r (values %{$res->{responses} or {}}) {
-          warn "$id: +   - Status=$r->{cert_status} Revocation=$r->{revocation_time} ThisUpdate=$r->{this_update} NextUpdate=$r->{next_update}\n";
-        }
-      }
-    } elsif (defined $data->{tls_protocol}) {
-      warn "$id: + OCSP stapling: N/A\n";
-    }
-  } # TLS
-
-  if (not $ok) {
-    my $msg = (defined $info && ref $info eq 'HASH' &&
-               defined $info->{exit} && ref $info->{exit} eq 'HASH' &&
-               defined $info->{exit}->{message})
-                  ? $info->{exit}->{message} :
-              (defined $info && ref $info eq 'HASH' && $info->{failed} &&
-               defined $info->{message})
-                  ? $info->{message} :
-              (defined $info && ref $info eq 'HASH' &&
-               defined $info->{response} &&
-               defined $info->{response}->{status})
-                  ? $info->{response}->{status}
-                  : $info;
-    warn "$id: Connection failed ($msg) @{[scalar gmtime]}\n";
-  }
-} # debug_handshake_done
-
 sub connect ($) {
   my ($self) = @_;
   croak "Bad state" if not defined $self->{args};
@@ -703,11 +626,15 @@ sub connect ($) {
       $onclosed->();
     }
   })->then (sub {
-    debug_handshake_done $self, 1, {transport_data => $_[0]} if DEBUG; # XXX integrate with _con_ev
-    $self->_con_ev ('openconnection', $_[0]);
+    $self->{info} = {};
+    $self->_con_ev ('openconnection', {});
   }, sub {
     my $error = $_[0];
-    debug_handshake_done $self, 0, $error if DEBUG; # XXX integrate with _con_ev
+    unless (ref $error eq 'HASH' and $error->{failed}) {
+      $error = {failed => 1, message => ''.$error};
+    }
+    $self->{info} = {};
+    $self->_con_ev ('openconnection', $error);
     $self->{transport}->abort;
     $onclosed->();
     die $error;

@@ -17,12 +17,11 @@ use Web::Host;
 sub new ($%) {
   my $self = bless {}, shift;
   my $args = $self->{args} = {@_};
-  if (not defined $args->{fh}) {
-    croak "Bad |host|" unless defined $args->{host} and $args->{host}->is_ip;
-    $args->{addr} = $args->{host}->text_addr;
-    croak "Bad |port|" unless defined $args->{port};
-    croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
-  }
+  croak "Bad |fh|" if $args->{server} and not defined $args->{fh};
+  croak "Bad |host|" unless defined $args->{host} and $args->{host}->is_ip;
+  $args->{addr} = $args->{host}->text_addr;
+  croak "Bad |port|" unless defined $args->{port};
+  croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
   croak "Bad |id|" if defined $args->{id} and utf8::is_utf8 ($args->{id});
   $self->{id} = (defined $args->{id} ? $args->{id} : $$ . '.' . ++$Web::Transport::NextID);
   return $self;
@@ -53,6 +52,8 @@ sub start ($$) {
       my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $self->{fh};
       $info->{local_host} = Web::Host->new_from_packed_addr ($h);
       $info->{local_port} = $p;
+      $info->{remote_host} = $args->{host};
+      $info->{remote_port} = 0+$args->{port};
     }
     AnyEvent::Util::fh_nonblocking $self->{fh}, 1;
 
@@ -95,13 +96,14 @@ sub start ($$) {
       }
     }; # $self->{rw}
 
-    return $info;
+    return $self->{info} = $info;
   });
 } # start
 
 sub id ($) { return $_[0]->{id} }
 sub type ($) { return 'TCP' }
 sub layered_type ($) { return $_[0]->type }
+sub info ($) { return $_[0]->{info} } # or undef
 
 sub request_mode ($;$) {
   if (@_ > 1) {

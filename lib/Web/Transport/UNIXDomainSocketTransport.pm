@@ -10,6 +10,7 @@ push our @ISA, qw(Web::Transport::TCPTransport);
 sub new ($%) {
   my $self = bless {}, shift;
   my $args = $self->{args} = {@_};
+  $args->{unix} = 1;
   if (not defined $args->{fh}) {
     $args->{addr} = 'unix/';
     $args->{port} = delete $args->{path};

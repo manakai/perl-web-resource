@@ -66,14 +66,14 @@ sub new ($%) {
     }
   })->then (sub {
     $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
-    $self->_con_ev ('openconnection',
-                    {remote_host => $args{remote_host},
-                     remote_port => $args{remote_port}});
+    $self->{info} = {};
+    $self->_con_ev ('openconnection', {});
     return $close_p;
   }, sub {
     my $error = $_[0];
-    if (ref $error eq 'HASH' and defined $error->{exit}) {
-      $self->_con_ev ('openconnection', $error->{transport_data});
+    if (ref $error eq 'HASH' and $error->{failed}) {
+      $self->{info} = {};
+      $self->_con_ev ('openconnection', $error);
       $self->{exit} = $error->{exit};
     } else {
       die $error;
@@ -620,6 +620,7 @@ use Carp qw(carp croak);
 use Digest::SHA qw(sha1);
 use MIME::Base64 qw(encode_base64);
 use Web::Encoding;
+use Web::DateTime;
 use Web::DateTime::Clock;
 
 BEGIN {

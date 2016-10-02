@@ -46,10 +46,13 @@ sub start ($$) {
     } elsif ($type eq 'headers') {
       my $res = $_[2];
       if ($res->{status} == 200) {
+        $self->{info} = {};
         $ok->({response => $res});
         $self->{started} = 1;
       } else {
-        $ng->({response => $res});
+        $self->{info} = {};
+        $ng->({failed => 1, message => "HTTP |$res->{status}| response",
+               response => $res});
       }
     } elsif ($type eq 'complete') {
       my $exit = $_[2];
@@ -64,7 +67,8 @@ sub start ($$) {
             AE::postpone { $self->{cb}->($self, 'writeeof', $exit) };
           }
         } else {
-          $ng->({exit => $exit});
+          $self->{info} = {};
+          $ng->($exit);
         }
       }
       $self->{http}->close->then (sub {
@@ -80,6 +84,7 @@ sub start ($$) {
   $self->{http}->connect->then (sub {
     return $self->{http}->send_request_headers ($req, cb => $onevent);
   })->catch (sub {
+    $self->{info} = {};
     $ng->($_[0]);
     delete $self->{cb} unless $self->{started};
     delete $self->{http};
@@ -91,6 +96,7 @@ sub id ($) { return $_[0]->{id} }
 sub type ($) { return 'H1CONNECT' }
 sub layered_type ($) { return $_[0]->type . '/' . $_[0]->{http}->layered_type }
 sub request_mode ($) { 'default' }
+sub info ($) { return $_[0]->{info} } # or undef
 
 sub read_closed ($) { return $_[0]->{read_closed} }
 sub write_closed ($) { return $_[0]->{write_closed} }

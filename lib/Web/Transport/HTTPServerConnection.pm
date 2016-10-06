@@ -793,9 +793,10 @@ sub send_response_data ($$) {
   my $transport = $req->{connection}->{transport};
   if ($wm eq 'chunked') {
     if (length $$ref) {
-      $transport->push_write (\sprintf "%X\x0D\x0A", length $$ref);
-      $transport->push_write ($ref);
-      $transport->push_write (\"\x0D\x0A");
+      ## Note that some clients fail to parse chunks if there are TCP
+      ## segment boundaries within a chunk (which is smaller than
+      ## MSS).
+      $transport->push_write (\sprintf "%X\x0D\x0A%s\x0D\x0A", length $$ref, $$ref); # string copy!
     }
   } elsif ($wm eq 'raw' or $wm eq 'ws') {
     croak "Not writable for now"

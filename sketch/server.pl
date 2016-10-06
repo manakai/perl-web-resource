@@ -20,10 +20,11 @@ $cv->begin;
 {
   package Writer;
 
-  sub _new ($$$$) {
-    my ($class, $stream, $method, $status) = @_;
+  sub _new ($$$$$) {
+    my ($class, $stream, $method, $status, $cv) = @_;
     return bless [$stream,
-                  ($method eq 'HEAD' or $status == 204 or $status == 304)],
+                  ($method eq 'HEAD' or $status == 204 or $status == 304),
+                  $cv],
                  $class;
   } # _new
 
@@ -33,6 +34,7 @@ $cv->begin;
 
   sub close ($) {
     $_[0]->[0]->close_response;
+    $_[0]->[2]->end;
   } # close
 }
 
@@ -54,15 +56,46 @@ sub psgi_app ($) {
       my $c = $_[0];
       AE::postpone {
         my $w = $c->([200, []]);
+#        $w->write ("<p>");
+#        $w->write ("x" x 1024);
+#        $w->write ("x" x 1024);
         AE::postpone {
           $w->write ("<p>1!");
         };
+        my $timer; $timer = AE::timer 1, 0, sub {
+          AE::postpone {
+            $w->write ("<p>2!");
+          };
+          AE::postpone {
+            $w->write ("<p>3!");
+          };
+          AE::postpone {
+            $w->close;
+          };
+          undef $timer;
+        };
+      };
+    };
+  } elsif ($env->{PATH_INFO} eq '/3') {
+    return sub {
+      my $c = $_[0];
+      $env->{'psgix.exit_guard'}->begin;
+      AE::postpone {
+        my $w = $c->([200, []]);
         AE::postpone {
-          $w->write ("<p>2!");
+          $w->write ("<p>1!");
+          $w->write ("<p>2!!");
+          $w->write ("<p>3!");
+          $w->write ("<p>4!");
         };
         AE::postpone {
           $w->close;
         };
+      };
+      my $timer; $timer = AE::timer 5, 0, sub {
+        warn "4!";
+        $env->{'psgix.exit_guard'}->end;
+        undef $timer;
       };
     };
   }
@@ -89,7 +122,7 @@ sub metavariables ($$) {
   my ($req, $transport) = @_;
 
   my $vars = {
-    CONTENT_LENGTH => ''.$req->{body_length},
+    # CONTENT_LENGTH
     PATH_INFO => (percent_decode_b encode_web_utf8 $req->{target_url}->path),
     REQUEST_METHOD => $req->{method},
     SCRIPT_NAME => '',
@@ -195,12 +228,17 @@ my $cb = sub {
       $env->{'psgi.streaming'} = 1;
       $method = $env->{REQUEST_METHOD};
     } elsif ($type eq 'data') {
+      # XXX If too large
       $input .= ${$_[2]};
     } elsif ($type eq 'dataend') {
       if ($method eq 'CONNECT') {
         #XXX
       } else {
+        $env->{CONTENT_LENGTH} = length $input;
         open $env->{'psgi.input'}, '<', \$input;
+        $env->{'psgix.exit_guard'} = AE::cv;
+        $env->{'psgix.exit_guard'}->cb (sub { warn "done!" });
+        $env->{'psgix.exit_guard'}->begin;
 
         my $result = psgi_app ($env); # XXX if thrown
         if (defined $result and ref $result eq 'ARRAY' and
@@ -211,7 +249,7 @@ my $cb = sub {
               ({status => $status, status_text => $status_text,
                 headers => $headers}); # XXX or throw
 
-          my $writer = Writer->_new ($self, $method, $status);
+          my $writer = Writer->_new ($self, $method, $status, $env->{'psgix.exit_guard'});
 
           my $body = $result->[2];
           if (defined $body and ref $body eq 'ARRAY') {
@@ -237,7 +275,7 @@ my $cb = sub {
                 ({status => $status, status_text => $status_text,
                   headers => $headers}); # XXX or throw
 
-            my $writer = Writer->_new ($self, $method, $status);
+            my $writer = Writer->_new ($self, $method, $status, $env->{'psgix.exit_guard'});
 
             if (@$result == 3) {
               my $body = $result->[2];

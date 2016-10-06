@@ -534,7 +534,7 @@ sub _request_headers ($) {
       WS_CHECK: {
         last WS_CHECK unless $stream->{request}->{method} eq 'GET';
         last WS_CHECK unless $stream->{request}->{version} == 1.1;
-        # XXX request-url->scheme eq 'http' or 'https'
+        last WS_CHECK unless $stream->{request}->{target_url}->is_http_s;
         my $upgrade = $headers{upgrade}->[0];
         $upgrade =~ tr/A-Z/a-z/; ## ASCII case-insensitive;
         last WS_CHECK unless $upgrade eq 'websocket';

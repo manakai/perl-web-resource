@@ -1315,6 +1315,71 @@ test {
   });
 } n => 6, name => 'WS handshake with Content-Length:0 - not handshake response 1', timeout => 120;
 
+{
+  sub pp ($) {
+    return bless $_[0], 'proxymanager';
+  } # pp
+
+  package proxymanager;
+  use Promise;
+
+  sub get_proxies_for_url ($$) {
+    for (@{$_[0]}) {
+      if (defined $_->{host} and not ref $_->{host}) {
+        $_->{host} = Web::Host->parse_string ($_->{host});
+      }
+    }
+    return Promise->resolve ($_[0]);
+  } # get_proxies_for_url
+}
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers
+        ({status => 201, status_text => 'OK'}, content_length => 0);
+    $self->close_response;
+    $invoked = 1;
+  };
+
+  my $url = Web::URL->parse_string (q<ftp://hoge/>);
+  my $http = Web::Transport::ConnectionClient->new_from_url ($url);
+  $http->proxy_manager (pp [{protocol => 'http', host => $Origin->host,
+                             port => $Origin->port}]);
+  $http->request (url => $url, headers => {
+    Upgrade => 'websocket',
+    Connection => 'upgrade',
+    'Sec-WebSocket-Version' => 13,
+    'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF==',
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      ok ! $invoked;
+      is $res->status, 400;
+      is $res->status_text, 'Bad Request';
+      is $res->header ('Connection'), 'close';
+      is $res->header ('Content-Type'), 'text/html; charset=utf-8';
+      is $res->body_bytes, q{<!DOCTYPE html><html>
+<head><title>400 Bad Request</title></head>
+<body>400 Bad Request</body></html>
+};
+    } $c;
+  }, sub {
+    my $error = $_[0];
+    test {
+      is $error, undef;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS handshake error - Bad origin';
+
 test {
   my $c = shift;
   my $path = rand;

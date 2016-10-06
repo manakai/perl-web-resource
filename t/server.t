@@ -254,7 +254,8 @@ test {
 test {
   my $c = shift;
   my $x;
-  $HandleRequestHeaders->{'/hoge4'} = sub {
+  my $rand = rand;
+  $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
     $self->send_response_headers
         ({status => 304, status_text => 'OK', headers => [
@@ -268,7 +269,7 @@ test {
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
-  $http->request (path => ['hoge4'])->then (sub {
+  $http->request (path => [$rand])->then (sub {
     my $res = $_[0];
     test {
       is $res->status, 304;
@@ -289,6 +290,46 @@ test {
     undef $c;
   });
 } n => 6, name => 'no payload body (304) but data';
+
+test {
+  my $c = shift;
+  my $x;
+  my $rand = rand;
+  $HandleRequestHeaders->{"/$rand"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers
+        ({status => 204, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga4'],
+        ]});
+    eval {
+      $self->send_response_data (\'abcde4');
+    };
+    $x = $@;
+    $self->close_response;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$rand])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 204;
+      is $res->status_text, 'OK';
+      is $res->header ('Hoge'), 'Fuga4';
+      is $res->header ('Connection'), undef;
+      is $res->body_bytes, '';
+      like $x, qr{^Not writable for now at .+ line @{[__LINE__-15]}};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'no payload body (204) but data';
 
 test {
   my $c = shift;
@@ -814,7 +855,8 @@ test {
 test {
   my $c = shift;
   my $x;
-  $HandleRequestHeaders->{'/hoge25'} = sub {
+  my $rand = rand;
+  $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
     $self->send_response_headers
         ({status => 304, status_text => 'OK', headers => [
@@ -828,7 +870,7 @@ test {
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
-  $http->request (path => ['hoge25'])->then (sub {
+  $http->request (path => [$rand])->then (sub {
     my $res = $_[0];
     test {
       is $res->status, 304;
@@ -850,6 +892,47 @@ test {
     undef $c;
   });
 } n => 7, name => '304 with Content-Length';
+
+test {
+  my $c = shift;
+  my $x;
+  my $rand = rand;
+  $HandleRequestHeaders->{"/$rand"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers
+        ({status => 204, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga25'],
+        ]}, content_length => 5);
+    eval {
+      $self->send_response_data (\'abcde');
+    };
+    $x = $@;
+    $self->close_response;
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$rand])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 204;
+      is $res->status_text, 'OK';
+      is $res->header ('Hoge'), 'Fuga25';
+      is $res->header ('Connection'), undef;
+      is $res->header ('Content-Length'), '5';
+      is $res->body_bytes, '';
+      like $x, qr{^Not writable for now at .+ line @{[__LINE__-16]}};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 7, name => '204 with Content-Length';
 
 test {
   my $c = shift;
@@ -3566,6 +3649,49 @@ test {
     undef $c;
   });
 } n => 1, name => 'empty client';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response_headers ({status => 201, status_text => 'OK'});
+    $self->send_response_data (\'abcde');
+    $self->close_response;
+  };
+
+  my $tcp = Web::Transport::TCPTransport->new
+      (host => $Origin->host, port => $Origin->port);
+  my $data = '';
+  my $client = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        $data .= '(readeof)';
+      } elsif ($type eq 'writeeof') {
+        $data .= '(writeeof)';
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      $tcp->push_write (\qq{GET /$path HTTP/1.1\x0D\x0AHost: a\x0D\x0A\x0D\x0A});
+      return $tcp->push_shutdown;
+    });
+  });
+
+  $client->then (sub {
+    test {
+      like $data, qr{abcde}s;
+      like $data, qr{\Q(writeeof)\E.*\Q(readeof)\E}s;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'closed by client';
 
 test {
   my $c = shift;

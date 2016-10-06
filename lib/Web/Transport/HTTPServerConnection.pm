@@ -49,7 +49,6 @@ sub new ($%) {
         }
       }
       delete $self->{timer};
-      $self->{write_closed} = 1;
       $self->_oneof ($data);
     } elsif ($type eq 'writeeof') {
       if (DEBUG) {
@@ -598,13 +597,13 @@ sub _request_headers ($) {
     $stream->_fatal;
     return 0;
   }
+  $stream->{request}->{body_length} = $l;
   if ($l == 0) {
     if (defined $stream->{ws_key}) {
       $self->{state} = 'ws handshaking';
       $self->{stream}->{close_after_response} = 1;
     }
   } else {
-    $stream->{body_length} = $l;
     $self->{unread_length} = $l;
     $self->{state} = 'request body';
   }
@@ -669,6 +668,7 @@ sub send_response_headers ($$$;%) {
   my $to_be_sent = undef;
   my $write_mode = 'sent';
   if ($stream->{request}->{method} eq 'HEAD' or
+      $response->{status} == 204 or
       $response->{status} == 304) {
     ## No response body by definition
     $to_be_sent = 0+$args{content_length} if defined $args{content_length};

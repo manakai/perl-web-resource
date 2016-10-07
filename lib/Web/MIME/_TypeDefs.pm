@@ -564,7 +564,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                            },
                                             'clue_info+xml' => {
                                                                  'iana' => 'permanent',
-                                                                 'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/clue_info+xml'
+                                                                 'iana_intended_usage' => 'limited use',
+                                                                 'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/clue_info+xml',
+                                                                 'related' => {}
                                                                },
                                             'cms' => {
                                                        'iana' => 'permanent',
@@ -757,13 +759,17 @@ $Web::MIME::_TypeDefs::Type = {
                                                          'related' => {}
                                                        },
                                             'dicom+json' => {
-                                                              'iana' => 'provisional'
+                                                              'iana' => 'permanent',
+                                                              'iana_intended_usage' => 'common',
+                                                              'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/dicom+json'
                                                             },
                                             'dicom+rle' => {
                                                              'preferred_type' => 'image/dicom-rle'
                                                            },
                                             'dicom+xml' => {
-                                                             'iana' => 'provisional'
+                                                             'iana' => 'permanent',
+                                                             'iana_intended_usage' => 'common',
+                                                             'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/dicom+xml'
                                                            },
                                             'dii' => {
                                                        'iana' => 'permanent',
@@ -1210,6 +1216,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'geo+json' => {
                                                             'compressible' => 1,
                                                             'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'common',
                                                             'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/geo+json'
                                                           },
                                             'ghostview' => {
@@ -4382,6 +4389,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                   },
                                             'vnd.amazon.mobi8-ebook' => {
                                                                           'iana' => 'permanent',
+                                                                          'iana_intended_usage' => 'common',
                                                                           'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.amazon.mobi8-ebook'
                                                                         },
                                             'vnd.americandynamics.acc' => {
@@ -4622,6 +4630,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                   },
                                             'vnd.chess-pgn' => {
                                                                  'iana' => 'permanent',
+                                                                 'iana_intended_usage' => 'common',
                                                                  'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.chess-pgn'
                                                                },
                                             'vnd.chipnuts.karaoke-mmd' => {
@@ -4717,6 +4726,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                           },
                                             'vnd.comicbook+zip' => {
                                                                      'iana' => 'permanent',
+                                                                     'iana_intended_usage' => 'common',
                                                                      'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.comicbook+zip'
                                                                    },
                                             'vnd.commerce-battelle' => {
@@ -4870,6 +4880,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                             },
                                             'vnd.d2l.coursepackage1p0+zip' => {
                                                                                 'iana' => 'permanent',
+                                                                                'iana_intended_usage' => 'common',
                                                                                 'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.d2l.coursepackage1p0+zip'
                                                                               },
                                             'vnd.dart' => {
@@ -5234,6 +5245,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.error+json' => {},
                                             'vnd.espass-espass+zip' => {
                                                                          'iana' => 'permanent',
+                                                                         'iana_intended_usage' => 'common',
                                                                          'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.espass-espass+zip'
                                                                        },
                                             'vnd.eszigno3+xml' => {
@@ -7512,6 +7524,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.nearst.inv+json' => {
                                                                        'compressible' => 1,
                                                                        'iana' => 'permanent',
+                                                                       'iana_intended_usage' => 'common',
                                                                        'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.nearst.inv+json'
                                                                      },
                                             'vnd.nervana' => {
@@ -8145,6 +8158,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     },
                                             'vnd.oma.lwm2m+tlv' => {
                                                                      'iana' => 'permanent',
+                                                                     'iana_intended_usage' => 'limited use',
                                                                      'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.oma.lwm2m+tlv'
                                                                    },
                                             'vnd.oma.pal+xml' => {
@@ -8241,6 +8255,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                'label' => 'Open Office Extension',
                                                                                'related' => {}
                                                                              },
+                                            'vnd.openstreetmap.data+xml' => {
+                                                                              'iana' => 'permanent',
+                                                                              'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.openstreetmap.data+xml'
+                                                                            },
                                             'vnd.openxmlformats' => {
                                                                       'related' => {
                                                                                      'application/octet-stream' => {}
@@ -9054,6 +9072,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                            },
                                             'vnd.rar' => {
                                                            'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common',
                                                            'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.rar'
                                                          },
                                             'vnd.realvnc.bed' => {
@@ -9712,6 +9731,11 @@ $Web::MIME::_TypeDefs::Type = {
                                                                       'related' => {}
                                                                     },
                                             'vnd.travis-ci.2+json' => {},
+                                            'vnd.tri.onesource' => {
+                                                                     'iana' => 'permanent',
+                                                                     'iana_intended_usage' => 'limited use',
+                                                                     'iana_template_url' => 'https://www.iana.org/assignments/media-types/application/vnd.tri.onesource'
+                                                                   },
                                             'vnd.trid.tpt' => {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common',
@@ -10920,6 +10944,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                             'application/octet-stream' => {}
                                                                           }
                                                            },
+                                            'x-arib-ait+xml' => {},
+                                            'x-arib-ttml+xml' => {},
                                             'x-arj' => {
                                                          'related' => {
                                                                         'application/arj' => {},
@@ -17251,6 +17277,11 @@ $Web::MIME::_TypeDefs::Type = {
                                       'x-ape' => {
                                                    'related' => {}
                                                  },
+                                      'x-arib-aiff' => {},
+                                      'x-arib-mp3' => {},
+                                      'x-arib-mpeg4-aac' => {},
+                                      'x-arib-mpeg4-als' => {},
+                                      'x-arib-romsound' => {},
                                       'x-au' => {
                                                   'related' => {
                                                                  'audio/basic' => {}
@@ -18260,6 +18291,7 @@ $Web::MIME::_TypeDefs::Type = {
                        'subtype' => {
                                       'amidraw' => {},
                                       'any' => {},
+                                      'ascii-art' => {},
                                       'avi' => {
                                                  'related' => {
                                                                 'video/avi' => {}
@@ -18358,6 +18390,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                      },
                                       'dicom-rle' => {
                                                        'iana' => 'permanent',
+                                                       'iana_intended_usage' => 'common',
                                                        'iana_template_url' => 'https://www.iana.org/assignments/media-types/image/dicom-rle'
                                                      },
                                       'djvu' => {
@@ -18463,6 +18496,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'jbig' => {},
                                       'jls' => {
                                                  'iana' => 'permanent',
+                                                 'iana_intended_usage' => 'common',
                                                  'iana_template_url' => 'https://www.iana.org/assignments/media-types/image/jls'
                                                },
                                       'jng' => {},
@@ -20244,6 +20278,7 @@ $Web::MIME::_TypeDefs::Type = {
                                       'gltf+json' => {
                                                        'compressible' => 1,
                                                        'iana' => 'permanent',
+                                                       'iana_intended_usage' => 'common',
                                                        'iana_template_url' => 'https://www.iana.org/assignments/media-types/model/gltf+json'
                                                      },
                                       'iges' => {
@@ -21654,6 +21689,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                   },
                                      'vnd.ascii-art' => {
                                                           'iana' => 'permanent',
+                                                          'iana_intended_usage' => 'common',
                                                           'iana_template_url' => 'https://www.iana.org/assignments/media-types/text/vnd.ascii-art'
                                                         },
                                      'vnd.csr' => {},
@@ -21977,6 +22013,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-apple-binscii' => {},
                                      'x-apple-macintalk' => {},
                                      'x-applescript' => {},
+                                     'x-ascii-art' => {},
                                      'x-ascii-html' => {},
                                      'x-ascii-plain' => {},
                                      'x-asciidoc' => {},
@@ -23977,9 +24014,12 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'related' => {}
                                                      },
                                       'x-arib-aiff' => {},
+                                      'x-arib-avc' => {},
+                                      'x-arib-hevc' => {},
                                       'x-arib-mng' => {},
                                       'x-arib-mpeg1' => {},
                                       'x-arib-mpeg2-aac' => {},
+                                      'x-arib2-broadcast' => {},
                                       'x-atomic3d-feature' => {
                                                                 'related' => {}
                                                               },

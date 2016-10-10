@@ -1093,17 +1093,17 @@ test {
       test {
         is $res->status, 500;
         is $res->body_bytes, "500";
-        is $error_invoked, 1;
+        is $error_invoked, 2;
       } $c;
     });
   }, sub {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{: Thrown! at \Q@{[__FILE__]}\E line @{[__LINE__-19]}}, $error;
+      like $error, qr{: Thrown! at \Q@{[__FILE__]}\E line @{[__LINE__-19]}|PSGI application did not invoke the responder}, $error;
     } $c;
   });
-} n => 4, name => 'Response callback throws';
+} n => 5, name => 'Response callback throws';
 
 test {
   my $c = shift;
@@ -1123,15 +1123,17 @@ test {
       test {
         is $res->status, 500;
         is $res->body_bytes, "500";
-        is $error_invoked, 1;
+        is $error_invoked, 2;
       } $c;
     });
   }, sub {
     my $error = $_[1];
     test {
       $error_invoked++;
-      ok ref $hoge;
-      is $error, $hoge;
+      if (ref $error) {
+        ok ref $hoge;
+        is $error, $hoge;
+      }
     } $c;
   });
 } n => 5, name => 'Response callback throws';
@@ -1374,6 +1376,133 @@ test {
   });
 } n => 5, name => 'Writer';
 
+test {
+  my $c = shift;
+  my $error_invoked = 0;
+  my $after_thrown = 0;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    return sub {
+      my $responder = $_[0];
+      my $return = $responder->([200, ['Foo', 5]]);
+      $return->write ("a");
+      $return->close;
+      $return->close;
+      $after_thrown++;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 200;
+        is $res->body_bytes, "a";
+        is $error_invoked, 0;
+        is $after_thrown, 1;
+      } $c;
+    });
+  }, sub {
+    my $error = $_[1];
+    test {
+      $error_invoked++;
+      ok 0, $error;
+    } $c;
+  });
+} n => 4, name => 'Writer';
+
+test {
+  my $c = shift;
+  my $error_invoked = 0;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    return sub {
+      my $responder = $_[0];
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 500;
+        is $res->body_bytes, "500";
+        is $error_invoked, 1;
+      } $c;
+    });
+  }, sub {
+    my $error = $_[1];
+    test {
+      $error_invoked++;
+      like $error, qr{PSGI application did not invoke the responder};
+    } $c;
+  });
+} n => 4, name => 'Responder not called';
+
+test {
+  my $c = shift;
+  my $error_invoked = 0;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    return sub {
+      my $responder = $_[0];
+      my $return = $responder->([200, ['Foo', 5]]);
+      $return->write ("a");
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'Connection closed without response';
+        is $error_invoked, 0;
+      } $c;
+    });
+  }, sub {
+    my $error = $_[1];
+    test {
+      $error_invoked++;
+      ok 0, $error;
+    } $c;
+  });
+} n => 3, name => 'Writer no close';
+
+test {
+  my $c = shift;
+  my $error_invoked = 0;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    return sub {
+      my $responder = $_[0];
+      my $return = $responder->([200, ['Foo', 5]]);
+      AE::postpone { $return->write ("a") };
+      AE::postpone { undef $return };
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'Connection closed without response';
+        is $error_invoked, 0;
+      } $c;
+    });
+  }, sub {
+    my $error = $_[1];
+    test {
+      $error_invoked++;
+      ok 0, $error;
+    } $c;
+  });
+} n => 3, name => 'Writer no close';
 
 run_tests;
 

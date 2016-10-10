@@ -188,7 +188,14 @@ sub _run ($$$$$$) {
         die "PSGI application specified bad response body\n";
       }
     } elsif (defined $result and ref $result eq 'CODE') {
+      my $invoked = 0;
+      my $ondestroy = bless sub {
+        $server->_send_error ($stream, "$stream->{id}: PSGI application did not invoke the responder")
+            unless $invoked;
+      }, 'Web::Transport::PSGIServerConnection::DestroyCallback';
       my $onready = sub {
+        $invoked = 1;
+        undef $ondestroy;
         my $result = $_[0];
         unless (defined $result and ref $result eq 'ARRAY' and
                 (@$result == 2 or @$result == 3)) {
@@ -285,11 +292,29 @@ sub write ($$) {
 } # write
 
 sub close ($) {
+  return if $_[0]->[3];
+  $_[0]->[3] = 1;
   $_[0]->[0]->close_response;
   $_[0]->[2]->end;
 } # close
 
-# XXX DESTROY
+sub DESTROY ($) {
+  unless ($_[0]->[3]) {
+    $_[0]->[0]->abort (message => "PSGI application did not close the body");
+    $_[0]->close;
+  }
+
+  local $@;
+  eval { die };
+  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+      if $@ =~ /during global destruction/;
+} # DESTROY
+
+package Web::Transport::PSGIServerConnection::DestroyCallback;
+
+sub DESTROY ($) {
+  $_[0]->();
+} # DESTROY
 
 # XXX documentation
 

@@ -702,6 +702,7 @@ sub send_response_headers ($$$;%) {
       $close = 1;
       $write_mode = 'raw';
     }
+    $close = 1 if $stream->{request}->{method} eq 'CONNECT';
   }
 
   my @header;

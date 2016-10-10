@@ -204,7 +204,7 @@ sub status_and_headers ($) {
     push @$h, [$name, $value]; ## Errors will be thrown later
   }
 
-  return ($status, $headers);
+  return ($status, $h);
 } # status_and_headers
 
 my $cb = sub {
@@ -229,7 +229,7 @@ my $cb = sub {
       $method = $env->{REQUEST_METHOD};
     } elsif ($type eq 'data') {
       # XXX If too large
-      $input .= ${$_[2]};
+      $input .= $_[2];
     } elsif ($type eq 'dataend') {
       if ($method eq 'CONNECT') {
         #XXX

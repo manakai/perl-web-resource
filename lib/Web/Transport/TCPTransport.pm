@@ -281,7 +281,7 @@ sub DESTROY ($) {
 
   local $@;
   eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+  warn "Reference to @{[ref $_[0]]} (@{[$_[0]->{id}]}) is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 
 } # DESTROY

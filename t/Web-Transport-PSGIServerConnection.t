@@ -65,6 +65,31 @@ sub server ($$;$) {
   });
 } # server
 
+my $UnixParentPath = path (__FILE__)->parent->parent->child
+    ('local/test/')->absolute;
+$UnixParentPath->mkpath;
+
+sub unix_server ($$;$) {
+  my $app = shift;
+  my $cb = shift;
+  my $onerror = shift;
+  return Promise->new (sub {
+    my ($ok, $ng) = @_;
+    my $cv = AE::cv;
+    $cv->begin;
+    my $unix_path = $UnixParentPath->child (rand);
+    my $server = tcp_server 'unix/', $unix_path, sub {
+      $cv->begin;
+      my $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, @_);
+      $con->onerror ($onerror) if defined $onerror;
+      promised_cleanup { $cv->end } $con->closed;
+    };
+    $cv->cb ($ok);
+    my $close = sub { undef $server; $cv->end };
+    $cb->($unix_path, $close);
+  });
+} # unix_server
+
 test {
   my $c = shift;
   promised_cleanup { done $c; undef $c } server (sub ($) {
@@ -1503,6 +1528,126 @@ test {
     } $c;
   });
 } n => 3, name => 'Writer no close';
+
+test {
+  my $c = shift;
+  my $error_invoked = 0;
+  my $envs = {};
+  my $origin;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    $envs = {%$env};
+    return [200, [], []];
+  }, sub {
+    my $close;
+    ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin);
+  })->then (sub {
+    test {
+      is $envs->{SERVER_PROTOCOL}, 'HTTP/1.1';
+      is $envs->{REMOTE_ADDR}, '127.0.0.1';
+      is $envs->{REMOTE_HOST}, undef;
+      is $envs->{CONTENT_LENGTH}, '0';
+      is $envs->{REQUEST_METHOD}, 'GET';
+      is $envs->{SERVER_NAME}, $origin->host->to_ascii;
+      is $envs->{SERVER_PORT}, $origin->port;
+      is $envs->{SCRIPT_NAME}, '';
+      is $envs->{PATH_INFO}, '/';
+      is $envs->{REQUEST_URI}, '/';
+      is $envs->{QUERY_STRING}, undef;
+      is $envs->{'psgi.url_scheme'}, 'http';
+      is $envs->{HTTPS}, undef;
+      is $envs->{HTTP_HOST}, $origin->hostport;
+      is $envs->{CONTENT_TYPE}, undef;
+    } $c;
+  });
+} n => 15, name => 'env';
+
+test {
+  my $c = shift;
+  my $error_invoked = 0;
+  my $envs = {};
+  my $origin;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    $envs = {%$env};
+    return [200, [], []];
+  }, sub {
+    my $close;
+    ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => Web::URL->parse_string (q</hoge/fu%2Fga?ab%23%4acd>, $origin), headers => {
+      hoge => ['foo', 'bar'],
+    }, method => 'PUT', body => "abcde");
+  })->then (sub {
+    test {
+      is $envs->{SERVER_PROTOCOL}, 'HTTP/1.1';
+      is $envs->{REMOTE_ADDR}, '127.0.0.1';
+      is $envs->{REMOTE_HOST}, undef;
+      is $envs->{CONTENT_LENGTH}, '5';
+      is $envs->{REQUEST_METHOD}, 'PUT';
+      is $envs->{SERVER_NAME}, $origin->host->to_ascii;
+      is $envs->{SERVER_PORT}, $origin->port;
+      is $envs->{SCRIPT_NAME}, '';
+      is $envs->{PATH_INFO}, '/hoge/fu/ga';
+      is $envs->{REQUEST_URI}, '/hoge/fu%2Fga?ab%23%4acd';
+      is $envs->{QUERY_STRING}, 'ab%23%4acd';
+      is $envs->{'psgi.url_scheme'}, 'http';
+      is $envs->{HTTPS}, undef;
+      is $envs->{HTTP_HOST}, $origin->hostport;
+      is $envs->{CONTENT_TYPE}, undef;
+      is $envs->{HTTP_HOGE}, 'foo, bar';
+    } $c;
+  });
+} n => 16, name => 'env';
+
+test {
+  my $c = shift;
+  my $error_invoked = 0;
+  my $envs = {};
+  my $url;
+  my $unix_path;
+  promised_cleanup { done $c; undef $c } unix_server (sub ($) {
+    my $env = $_[0];
+    $envs = {%$env};
+    return [200, [], []];
+  }, sub {
+    my $close;
+    ($unix_path, $close) = @_;
+    $url = Web::URL->parse_string ('http://foo/hoge/fu%2Fga?ab%23%4acd');
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'unix', path => $unix_path}]);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $url, headers => {
+      hoge => ['foo', 'bar'],
+    }, method => 'PUT', body => "abcde");
+  })->then (sub {
+    test {
+      is $envs->{SERVER_PROTOCOL}, 'HTTP/1.1';
+      is $envs->{REMOTE_ADDR}, '127.0.0.1';
+      is $envs->{REMOTE_HOST}, undef;
+      is $envs->{CONTENT_LENGTH}, '5';
+      is $envs->{REQUEST_METHOD}, 'PUT';
+      is $envs->{SERVER_NAME}, '127.0.0.1';
+      is $envs->{SERVER_PORT}, '0';
+      is $envs->{SCRIPT_NAME}, '';
+      is $envs->{PATH_INFO}, '/hoge/fu/ga';
+      is $envs->{REQUEST_URI}, '/hoge/fu%2Fga?ab%23%4acd';
+      is $envs->{QUERY_STRING}, 'ab%23%4acd';
+      is $envs->{'psgi.url_scheme'}, 'http';
+      is $envs->{HTTPS}, undef;
+      is $envs->{HTTP_HOST}, $url->hostport;
+      is $envs->{CONTENT_TYPE}, undef;
+      is $envs->{HTTP_HOGE}, 'foo, bar';
+    } $c;
+  });
+} n => 16, name => 'env UNIX';
 
 run_tests;
 

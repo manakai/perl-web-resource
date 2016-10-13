@@ -5,20 +5,14 @@ our $VERSION = '1.0';
 push our @CARP_NOT, qw(Web::Transport::PSGIServerConnection::Writer);
 use Carp qw(croak);
 use Web::Encoding;
+use Web::URL::Encoding qw(percent_decode_b);
 use Web::Host;
 use Web::Transport::HTTPServerConnection;
 use Web::Transport::TCPTransport;
 
-#XXX
-sub percent_decode_b ($) {
-  my $s = $_[0];
-  $s =~ s/%([0-9A-Fa-f]{2})/pack 'C', hex $1/ge;
-  return $s;
-} # percent_decode_b
 sub metavariables ($$) {
   my ($req, $transport) = @_;
 
-  # XXX tests
   my $vars = {
     # CONTENT_LENGTH
     PATH_INFO => (percent_decode_b encode_web_utf8 $req->{target_url}->path),
@@ -149,16 +143,22 @@ sub new_from_app_and_ae_tcp_server_args ($$$;$$) {
   my $class = shift;
   my $app = shift;
   my $self = bless {}, $class;
-  # XXX UNIX
-  my $tcp = Web::Transport::TCPTransport->new
-      (server => 1, fh => $_[0],
-       host => Web::Host->parse_string ($_[1]), port => $_[2]);
+  my $socket;
+  if ($_[1] eq 'unix/') {
+    require Web::Transport::UNIXDomainSocketTransport;
+    $socket = Web::Transport::UNIXDomainSocketTransport->new
+        (server => 1, fh => $_[0]);
+  } else {
+    $socket = Web::Transport::TCPTransport->new
+        (server => 1, fh => $_[0],
+         host => Web::Host->parse_string ($_[1]), port => $_[2]);
+  }
   $self->{connection} = Web::Transport::HTTPServerConnection->new (cb => sub {
     my ($sc, $type) = @_;
     if ($type eq 'startstream') {
       return $cb->($self, $app);
     }
-  }, transport => $tcp);
+  }, transport => $socket);
   return $self;
 } # new_from_app_and_ae_tcp_server_args
 

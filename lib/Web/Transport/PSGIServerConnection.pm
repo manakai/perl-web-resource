@@ -105,7 +105,9 @@ my $cb = sub {
   my $env;
   my $method;
   my $status;
+  my $canceled = 0;
   my $input = '';
+  my $max = $server->max_request_body_length;
   
   return sub {
     my $self = $_[0];
@@ -113,7 +115,6 @@ my $cb = sub {
     if ($type eq 'headers') {
       my $req = $_[2];
       $env = metavariables ($req, $self->{connection}->{transport});
-
       $env->{'psgi.version'} = [1, 1];
       $env->{'psgi.multithread'} = 0;
       $env->{'psgi.multiprocess'} = 0;
@@ -127,11 +128,34 @@ my $cb = sub {
               headers => [['Content-Type', 'text/plain; charset=utf-8']]});
         $self->send_response_data (\q{405});
         $self->close_response;
+        $canceled = 1;
       }
-    } elsif ($type eq 'data') {
-      # XXX If too large
+      if (defined $max and $self->{request}->{body_length} > $max) {
+        $self->send_response_headers
+            ({status => 413, status_text => 'Payload Too Large',
+              headers => [['Content-Type', 'text/plain; charset=utf-8']]},
+             close => 1);
+        $self->send_response_data (\q{413});
+        $self->close_response;
+        $canceled = 1;
+      }
+    } elsif ($type eq 'data' and not $canceled) {
+      if (defined $max and (length $input) + (length $_[2]) > $max) {
+        if (defined $self->{write_mode}) {
+          $self->abort (message => "Request body too large ($max)");
+        } else {
+          $self->send_response_headers
+              ({status => 413, status_text => 'Payload Too Large',
+                headers => [['Content-Type', 'text/plain; charset=utf-8']]},
+               close => 1);
+          $self->send_response_data (\q{413});
+          $self->close_response;
+        }
+        $canceled = 1;
+        return;
+      }
       $input .= $_[2];
-    } elsif ($type eq 'dataend' and not $method eq 'CONNECT') {
+    } elsif ($type eq 'dataend' and not $canceled) {
       $env->{CONTENT_LENGTH} = length $input;
       open $env->{'psgi.input'}, '<', \$input;
       $server->_run ($self, $app, $env, $method, $status);
@@ -142,7 +166,9 @@ my $cb = sub {
 sub new_from_app_and_ae_tcp_server_args ($$$;$$) {
   my $class = shift;
   my $app = shift;
-  my $self = bless {}, $class;
+  my $self = bless {
+    max_request_body_length => 8_000_000,
+  }, $class;
   my $socket;
   if ($_[1] eq 'unix/') {
     require Web::Transport::UNIXDomainSocketTransport;
@@ -241,8 +267,15 @@ sub onerror ($;$) {
   if (@_ > 1) {
     $_[0]->{onerror} = $_[1];
   }
-  return $_[0]->{onerror} || sub { warn $_[0] };
+  return $_[0]->{onerror} || sub { warn $_[1] };
 } # onerror
+
+sub max_request_body_length ($;$) {
+  if (@_ > 1) {
+    $_[0]->{max_request_body_length} = $_[1];
+  }
+  return $_[0]->{max_request_body_length}; # or undef
+} # max_request_body_length
 
 sub _send_error ($$$) {
   my ($self, $stream, $error) = @_;

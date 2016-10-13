@@ -42,10 +42,11 @@ use Web::Transport::PSGIServerConnection;
   } # find_listenable_port
 }
 
-sub server ($$;$) {
+sub server ($$;$%) {
   my $app = shift;
   my $cb = shift;
   my $onerror = shift;
+  my %args = @_;
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     my $cv = AE::cv;
@@ -56,6 +57,9 @@ sub server ($$;$) {
       $cv->begin;
       my $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, @_);
       $con->onerror ($onerror) if defined $onerror;
+      if (exists $args{max}) {
+        $con->max_request_body_length ($args{max});
+      }
       promised_cleanup { $cv->end } $con->closed;
     };
     $cv->cb ($ok);
@@ -1648,6 +1652,62 @@ test {
     } $c;
   });
 } n => 16, name => 'env UNIX';
+
+test {
+  my $c = shift;
+  my $invoked = 0;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    $invoked++;
+    return [200, [], []];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin, body => "abcde")->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 413;
+        is $res->status_text, 'Payload Too Large';
+        is $res->body_bytes, '413';
+      } $c;
+    });
+  }, undef, max => 4)->then (sub {
+    test {
+      is $invoked, 0;
+    } $c;
+  });
+} n => 4, name => 'max_request_body_length';
+
+test {
+  my $c = shift;
+  my $invoked = 0;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    $invoked++;
+    return sub {
+      my $w = $_[0]->([200, []]);
+      $w->write ("abcdeF");
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'Connection closed without response';
+      } $c;
+    });
+  }, undef, max => 0)->then (sub {
+    test {
+      is $invoked, 1;
+    } $c;
+  });
+} n => 3, name => 'max_request_body_length';
 
 run_tests;
 

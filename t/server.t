@@ -3537,7 +3537,7 @@ test {
     my ($self, $req) = @_;
     $self->send_response_headers ({status => 201, status_text => 'OK'});
     $self->send_response_data (\'abcde');
-    $self->abort;
+    promised_sleep (1)->then (sub { $self->abort });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -3570,7 +3570,7 @@ test {
     $self->send_response_headers ({status => 201, status_text => 'OK'},
                                   content_length => 10);
     $self->send_response_data (\'abcde');
-    $self->abort;
+    promised_sleep (1)->then (sub { $self->abort });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);

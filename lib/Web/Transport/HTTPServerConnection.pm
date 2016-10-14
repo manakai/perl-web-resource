@@ -49,6 +49,7 @@ sub new ($%) {
         }
       }
       delete $self->{timer};
+      $self->{write_closed} = 1 if $data->{failed};
       $self->_oneof ($data);
     } elsif ($type eq 'writeeof') {
       if (DEBUG) {

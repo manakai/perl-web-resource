@@ -82,6 +82,7 @@ sub start ($$) {
         my $wc = $self->{write_closed};
         $self->{read_closed} = 1;
         $self->{write_closed} = 1;
+        $self->{write_shutdown} = 1;
         delete $self->{rw};
         my $err = $!;
         AE::postpone {
@@ -142,6 +143,7 @@ sub _start_write ($) {
           my $rc = $self->{read_closed};
           $self->{read_closed} = 1;
           $self->{write_closed} = 1;
+          $self->{write_shutdown} = 1;
           my $err = $!;
           AE::postpone {
             $self->{cb}->($self, 'writeeof', {failed => 1,
@@ -172,8 +174,8 @@ sub _start_write ($) {
 
 sub push_write ($$;$$) {
   my ($self, $ref, $offset, $length) = @_;
-  croak "Bad state (no wq)" if not defined $self->{wq};
   croak "Bad state (write shutdown)" if $self->{write_shutdown};
+  croak "Bad state (no wq)" if not defined $self->{wq};
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   $offset ||= 0;
   croak "Bad offset" if $offset > length $$ref;
@@ -186,7 +188,8 @@ sub push_write ($$;$$) {
 
 sub push_promise ($) {
   my $self = $_[0];
-  croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
+  croak "Bad state (write shutdown)" if $self->{write_shutdown};
+  croak "Bad state (no wq)" if not defined $self->{wq};
   my ($ok, $ng);
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
   push @{$self->{wq}}, [$ok, $ng];
@@ -196,7 +199,8 @@ sub push_promise ($) {
 
 sub push_shutdown ($) {
   my $self = $_[0];
-  croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
+  croak "Bad state (write shutdown)" if $self->{write_shutdown};
+  croak "Bad state (no wq)" if not defined $self->{wq};
   my ($ok, $ng);
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
   push @{$self->{wq}}, [sub {

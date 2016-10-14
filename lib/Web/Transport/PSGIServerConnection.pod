@@ -1,0 +1,107 @@
+=head1 NAME
+
+Web::Transport::PSGIServerConnection - PSGI interface for HTTP server connection
+
+=head1 SYNOPSIS
+
+  $psgi_app = sub { ... };
+  tcp_server $host, $port, sub {
+    my $con = Web::Transport::PSGIServerConnection
+        ->new_from_app_and_ae_tcp_server_args ($psgi_app, @_);
+    $con->completed->then (sub {
+      warn "Client disconnected and PSGI application done";
+    });
+  };
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::PSGIServerConnection> module is an
+implementation of HTTP server and PSGI.  It wraps an HTTP server's TCP
+connection socket and processes any incoming request by a PSGI
+application.
+
+=head1 METHODS
+
+There are following methods:
+
+=over 4
+
+=item $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, ...)
+
+Create an object.
+
+The first argument must be a PSGI application, i.e. a code reference.
+See the PSGI specification for the requirements on the code reference.
+
+The remaining arguments must be the arguments for the
+C<AnyEvent::Socket::tcp_server>'s callback.  That is, the filehandle
+of the socket, the remote host, and the remote port (if TCP).  The
+socket can be of a TCP or UNIX socket domain.
+
+=item $con->onexception ($code)
+
+=item $code = $con->onexception
+
+Get or set the callback code reference that is invoked when an error
+is detected while interacting with the PSGI application such that the
+server returns an error response to the client.
+
+The callback has to be set as soon as the object has been created and
+it should not be changed later.
+
+The callback can return a promise, to delay the resolution of the
+C<complated> promise until the promise is resolved or rejected.
+
+=item $con->max_request_body_length ($integer)
+
+=item $integer = $con->max_request_body_length
+
+Get or set the maximum length of the request body to be accepted by
+the server, in bytes.  If C<undef>, no limit is set.
+
+Note that the server loads the whole request body on memory, as the
+server has to notify the request body's length of the PSGI application
+at the time of invocation.
+
+=item $promise = $con->completed
+
+Return a promise (L<Promise>) which will be resolved once the
+connection between the server and the client has been closed and the
+PSGI application has been completed.
+
+An invocation of PSGI application is considered as completed when
+either a complete response is returned by the PSGI application or the
+PSGI application invoked the C<< $writer->close >> method, and the
+C<psgix.exit_guard> condvar's callback is invoked.
+
+=back
+
+=head1 SEE ALSO
+
+L<AnyEvent::Socket>.
+
+=head1 SPECIFICATIONS
+
+Web Transport Processing
+<https://wiki.suikawiki.org/n/Web%20Transport%20Processing>.
+
+RFC 3875, The Common Gateway Interface (CGI) Version 1.1
+<https://tools.ietf.org/html/rfc3875>.
+
+PSGI <http://search.cpan.org/dist/PSGI/PSGI.pod>.
+
+C<psgix.exit_guard>
+<https://github.com/kazeburo/Twiggy-Prefork#psgi-extensions>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

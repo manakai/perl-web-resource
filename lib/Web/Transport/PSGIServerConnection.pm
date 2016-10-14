@@ -279,12 +279,12 @@ sub _run ($$$$$$) {
   }
 } # _run
 
-sub onerror ($;$) {
+sub onexception ($;$) {
   if (@_ > 1) {
-    $_[0]->{onerror} = $_[1];
+    $_[0]->{onexception} = $_[1];
   }
-  return $_[0]->{onerror} || sub { warn $_[1] };
-} # onerror
+  return $_[0]->{onexception} || sub { warn $_[1] };
+} # onexception
 
 sub max_request_body_length ($;$) {
   if (@_ > 1) {
@@ -297,7 +297,7 @@ sub _send_error ($$$) {
   my ($self, $stream, $error) = @_;
   my $p = Promise->all ([
     Promise->resolve->then (sub {
-      return $self->onerror->($self, $error);
+      return $self->onexception->($self, $error);
     })->catch (sub {
       warn $_[0];
     }),
@@ -369,8 +369,6 @@ package Web::Transport::PSGIServerConnection::DestroyCallback;
 sub DESTROY ($) {
   $_[0]->();
 } # DESTROY
-
-# XXX documentation
 
 1;
 

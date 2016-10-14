@@ -45,7 +45,7 @@ use Web::Transport::PSGIServerConnection;
 sub server ($$;$%) {
   my $app = shift;
   my $cb = shift;
-  my $onerror = shift;
+  my $onexception = shift;
   my %args = @_;
   return Promise->new (sub {
     my ($ok, $ng) = @_;
@@ -57,7 +57,7 @@ sub server ($$;$%) {
     my $server = tcp_server $host, $port, sub {
       $cv->begin;
       $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, @_);
-      $con->onerror ($onerror) if defined $onerror;
+      $con->onexception ($onexception) if defined $onexception;
       if (exists $args{max}) {
         $con->max_request_body_length ($args{max});
       }
@@ -77,7 +77,7 @@ $UnixParentPath->mkpath;
 sub unix_server ($$;$) {
   my $app = shift;
   my $cb = shift;
-  my $onerror = shift;
+  my $onexception = shift;
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     my $cv = AE::cv;
@@ -86,7 +86,7 @@ sub unix_server ($$;$) {
     my $server = tcp_server 'unix/', $unix_path, sub {
       $cv->begin;
       my $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, @_);
-      $con->onerror ($onerror) if defined $onerror;
+      $con->onexception ($onexception) if defined $onexception;
       promised_cleanup { $cv->end } $con->closed;
     };
     $cv->cb ($ok);
@@ -365,7 +365,7 @@ test {
       } $c;
     });
   });
-} n => 4, name => 'app throws, no onerror';
+} n => 4, name => 'app throws, no onexception';
 
 test {
   my $c = shift;
@@ -1818,7 +1818,7 @@ test {
   }, sub {
     push @event, 'error';
   });
-} n => 1, name => 'closed / completed - onerror invoked';
+} n => 1, name => 'closed / completed - onexception invoked';
 
 test {
   my $c = shift;
@@ -1852,7 +1852,7 @@ test {
     push @event, 'error';
     return promised_sleep (1)->then (sub { push @event, 'aftererror' });
   });
-} n => 1, name => 'closed / completed - onerror invoked';
+} n => 1, name => 'closed / completed - onexception invoked';
 
 test {
   my $c = shift;

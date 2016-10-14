@@ -61,7 +61,7 @@ sub server ($$;$%) {
       if (exists $args{max}) {
         $con->max_request_body_length ($args{max});
       }
-      promised_cleanup { $cv->end } $con->closed;
+      promised_cleanup { $cv->end } $con->completed;
     };
     $cv->cb ($ok);
     my $origin = Web::URL->parse_string ("http://$host:$port");
@@ -87,7 +87,7 @@ sub unix_server ($$;$) {
       $cv->begin;
       my $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, @_);
       $con->onexception ($onexception) if defined $onexception;
-      promised_cleanup { $cv->end } $con->closed;
+      promised_cleanup { $cv->end } $con->completed;
     };
     $cv->cb ($ok);
     my $close = sub { undef $server; $cv->end };

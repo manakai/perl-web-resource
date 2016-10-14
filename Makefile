@@ -60,6 +60,7 @@ test-deps: deps
 
 test-main:
 	$(PROVE) t/*.t
+	WEBUA_DEBUG=2 t/Web-Transport-WSClient.t
 
 test-main-server:
 	$(PERL) sketch/server.pl &

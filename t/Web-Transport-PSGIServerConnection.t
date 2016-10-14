@@ -152,7 +152,7 @@ test {
     my $env = $_[0];
     return sub {
       my $c = $_[0];
-      $c->([209, ['Hoge', 'foo'], ['200', '!']]);
+      $c->([208, ['Hoge', 'foo'], ['200', '!']]);
     };
   }, sub {
     my ($origin, $close) = @_;
@@ -162,13 +162,14 @@ test {
     } $client->request (url => $origin)->then (sub {
       my $res = $_[0];
       test {
-        is $res->status, 209;
+        is $res->status, 208;
+        is $res->status_text, 'Already Reported';
         is $res->header ('Hoge'), 'foo';
         is $res->body_bytes, "200!";
       } $c;
     });
   });
-} n => 3, name => 'code response';
+} n => 4, name => 'code response';
 
 test {
   my $c = shift;
@@ -211,12 +212,13 @@ test {
       my $res = $_[0];
       test {
         is $res->status, 205;
+        is $res->status_text, 'Reset Content';
         is $res->header ('Hoge'), 'foo';
         is $res->body_bytes, "";
       } $c;
     });
   });
-} n => 3, name => '205 response';
+} n => 4, name => '205 response';
 
 test {
   my $c = shift;
@@ -232,12 +234,13 @@ test {
       my $res = $_[0];
       test {
         is $res->status, 304;
+        is $res->status_text, 'Not Modified';
         is $res->header ('Hoge'), 'foo';
         is $res->body_bytes, "";
       } $c;
     });
   });
-} n => 3, name => '304 response';
+} n => 4, name => '304 response';
 
 test {
   my $c = shift;
@@ -274,12 +277,13 @@ test {
       my $res = $_[0];
       test {
         is $res->status, 403;
+        is $res->status_text, 'Forbidden';
         is $res->header ('Hoge'), 'foo';
         is $res->body_bytes, "";
       } $c;
     });
   });
-} n => 3, name => 'HEAD response';
+} n => 4, name => 'HEAD response';
 
 test {
   my $c = shift;
@@ -334,12 +338,13 @@ test {
       my $res = $_[0];
       test {
         is $res->status, 200;
+        is $res->status_text, 'OK';
         is $res->header ('Hoge'), 'foo';
         is $res->body_bytes, "";
       } $c;
     });
   });
-} n => 3, name => 'stream response';
+} n => 4, name => 'stream response';
 
 test {
   my $c = shift;
@@ -550,6 +555,7 @@ test {
       my $res = $_[0];
       test {
         is $res->status, 40;
+        is $res->status_text, '';
         is $res->body_bytes, "abv";
         is $error_invoked, 0;
       } $c;
@@ -561,7 +567,7 @@ test {
       ok 0;
     } $c;
   });
-} n => 3, name => 'Bad status code';
+} n => 4, name => 'Bad status code';
 
 test {
   my $c = shift;
@@ -577,6 +583,7 @@ test {
       my $res = $_[0];
       test {
         is $res->status, 500;
+        is $res->status_text, 'Internal Server Error';
         is $res->body_bytes, "500";
         is $error_invoked, 1;
       } $c;
@@ -588,7 +595,7 @@ test {
       like $error, qr{PSGI application specified a bad status \|101\|};
     } $c;
   });
-} n => 4, name => 'Bad status code';
+} n => 5, name => 'Bad status code';
 
 test {
   my $c = shift;

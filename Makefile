@@ -37,12 +37,18 @@ build: build-deps build-main
 
 build-deps: deps
 
-build-main: lib/Web/MIME/_TypeDefs.pm
+build-main: lib/Web/MIME/_TypeDefs.pm lib/Web/Transport/_Defs.pm
 
 lib/Web/MIME/_TypeDefs.pm: local/mime-types.json bin/generate-list.pl
 	$(PERL) bin/generate-list.pl < $< > $@
 local/mime-types.json:
 	$(WGET) -O $@ https://raw.github.com/manakai/data-web-defs/master/data/mime-types.json
+
+lib/Web/Transport/_Defs.pm: bin/generate-transport-defs.pl \
+    local/http-status-codes.json
+	$(PERL) $< > $@
+local/http-status-codes.json:
+	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/http-status-codes.json
 
 ## ------ Tests ------
 

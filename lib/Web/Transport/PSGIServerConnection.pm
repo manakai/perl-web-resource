@@ -7,6 +7,7 @@ use Carp qw(croak);
 use Web::Encoding;
 use Web::URL::Encoding qw(percent_decode_b);
 use Web::Host;
+use Web::Transport::_Defs;
 use Web::Transport::HTTPServerConnection;
 use Web::Transport::TCPTransport;
 
@@ -86,7 +87,7 @@ sub _status_and_headers ($) {
   if (defined $headers and ref $headers eq 'ARRAY' and not (@$headers % 2)) {
     #
   } else {
-    die "PSGI application specified bad headers |$headers|\n";
+    die "PSGI application specified bad headers |@{[defined $headers ? $headers : '']}|\n";
   }
   $headers = [@$headers];
   my $h = [];
@@ -124,7 +125,8 @@ my $cb = sub {
       $method = $env->{REQUEST_METHOD};
       if ($method eq 'CONNECT') {
         $self->send_response_headers
-            ({status => 405, status_text => 'Method Not Allowed',
+            ({status => 405,
+              status_text => $Web::Transport::_Defs::ReasonPhrases->{405},
               headers => [['Content-Type', 'text/plain; charset=utf-8']]});
         $self->send_response_data (\q{405});
         $self->close_response;
@@ -132,7 +134,8 @@ my $cb = sub {
       }
       if (defined $max and $self->{request}->{body_length} > $max) {
         $self->send_response_headers
-            ({status => 413, status_text => 'Payload Too Large',
+            ({status => 413,
+              status_text => $Web::Transport::_Defs::ReasonPhrases->{413},
               headers => [['Content-Type', 'text/plain; charset=utf-8']]},
              close => 1);
         $self->send_response_data (\q{413});
@@ -145,7 +148,8 @@ my $cb = sub {
           $self->abort (message => "Request body too large ($max)");
         } else {
           $self->send_response_headers
-              ({status => 413, status_text => 'Payload Too Large',
+              ({status => 413,
+                status_text => $Web::Transport::_Defs::ReasonPhrases->{413},
                 headers => [['Content-Type', 'text/plain; charset=utf-8']]},
                close => 1);
           $self->send_response_data (\q{413});
@@ -207,9 +211,9 @@ sub _run ($$$$$$) {
       my ($status, $headers) = _status_and_headers ($result);
       my $body = $result->[2];
       if (defined $body and ref $body eq 'ARRAY') {
-        my $status_text = $status; # XXX
         $stream->send_response_headers
-            ({status => $status, status_text => $status_text,
+            ({status => $status,
+              status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
               headers => $headers});
         my $writer = Web::Transport::PSGIServerConnection::Writer->_new
             ($stream, $method, $status, $endguard);
@@ -237,12 +241,12 @@ sub _run ($$$$$$) {
         }
 
         my ($status, $headers) = _status_and_headers ($result);
-        my $status_text = $status; # XXX
         if (@$result == 3) {
           my $body = $result->[2];
           if (defined $body and ref $body eq 'ARRAY') {
             $stream->send_response_headers
-                ({status => $status, status_text => $status_text,
+                ({status => $status,
+                  status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
                   headers => $headers});
             my $writer = Web::Transport::PSGIServerConnection::Writer->_new
                 ($stream, $method, $status, $endguard);
@@ -258,7 +262,8 @@ sub _run ($$$$$$) {
           my $writer = Web::Transport::PSGIServerConnection::Writer->_new
               ($stream, $method, $status, $endguard);
           $stream->send_response_headers
-              ({status => $status, status_text => $status_text,
+              ({status => $status,
+                status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
                 headers => $headers});
           return $writer;
         }
@@ -298,7 +303,8 @@ sub _send_error ($$$) {
     }),
     Promise->resolve->then (sub {
       $stream->send_response_headers
-          ({status => 500, status_text => 'Internal Server Error',
+          ({status => 500,
+            status_text => $Web::Transport::_Defs::ReasonPhrases->{500},
             headers => [['Content-Type', 'text/plain; charset=utf-8']]});
       $stream->send_response_data (\q{500});
       $stream->close_response;

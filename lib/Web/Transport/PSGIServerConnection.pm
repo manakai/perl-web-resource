@@ -10,7 +10,7 @@ use Web::Host;
 use Web::Transport::HTTPServerConnection;
 use Web::Transport::TCPTransport;
 
-sub metavariables ($$) {
+sub _metavariables ($$) {
   my ($req, $transport) = @_;
 
   my $vars = {
@@ -72,9 +72,9 @@ sub metavariables ($$) {
   }
 
   return $vars;
-} # metavariables
+} # _metavariables
 
-sub status_and_headers ($) {
+sub _status_and_headers ($) {
   my ($result) = @_;
 
   my $status = 0+$result->[0];
@@ -97,7 +97,7 @@ sub status_and_headers ($) {
   }
 
   return ($status, $h);
-} # status_and_headers
+} # _status_and_headers
 
 my $cb = sub {
   my $server = shift;
@@ -114,7 +114,7 @@ my $cb = sub {
     my $type = $_[1];
     if ($type eq 'headers') {
       my $req = $_[2];
-      $env = metavariables ($req, $self->{connection}->{transport});
+      $env = _metavariables ($req, $self->{connection}->{transport});
       $env->{'psgi.version'} = [1, 1];
       $env->{'psgi.multithread'} = 0;
       $env->{'psgi.multiprocess'} = 0;
@@ -185,27 +185,34 @@ sub new_from_app_and_ae_tcp_server_args ($$$;$$) {
       return $cb->($self, $app);
     }
   }, transport => $socket);
+  $self->{completed} = $self->{connection}->closed;
   return $self;
 } # new_from_app_and_ae_tcp_server_args
 
 sub _run ($$$$$$) {
   my ($server, $stream, $app, $env, $method, $status) = @_;
+  $env->{'psgix.exit_guard'} = AE::cv;
+  $env->{'psgix.exit_guard'}->begin;
+  my $guardended = 0;
+  my $endguard = sub {
+    $env->{'psgix.exit_guard'}->end unless $guardended++;
+  };
   eval {
-    $env->{'psgix.exit_guard'} = AE::cv;
-    $env->{'psgix.exit_guard'}->cb (sub { warn "done!" }); # XXX
-    $env->{'psgix.exit_guard'}->begin;
+    $server->{completed} = $server->{completed}->then (sub {
+      return Promise->from_cv ($env->{'psgix.exit_guard'});
+    });
 
     my $result = $app->($env);
     if (defined $result and ref $result eq 'ARRAY' and @$result == 3) {
-      my ($status, $headers) = status_and_headers ($result);
+      my ($status, $headers) = _status_and_headers ($result);
       my $body = $result->[2];
       if (defined $body and ref $body eq 'ARRAY') {
         my $status_text = $status; # XXX
-        my $writer = Web::Transport::PSGIServerConnection::Writer->_new
-            ($stream, $method, $status, $env->{'psgix.exit_guard'});
         $stream->send_response_headers
             ({status => $status, status_text => $status_text,
               headers => $headers});
+        my $writer = Web::Transport::PSGIServerConnection::Writer->_new
+            ($stream, $method, $status, $endguard);
         for (@$body) {
           $writer->write ($_);
         }
@@ -218,6 +225,7 @@ sub _run ($$$$$$) {
       my $ondestroy = bless sub {
         $server->_send_error ($stream, "$stream->{id}: PSGI application did not invoke the responder")
             unless $invoked;
+        $endguard->();
       }, 'Web::Transport::PSGIServerConnection::DestroyCallback';
       my $onready = sub {
         $invoked = 1;
@@ -228,16 +236,16 @@ sub _run ($$$$$$) {
           croak "PSGI application did not call the responder with a response";
         }
 
-        my ($status, $headers) = status_and_headers ($result);
+        my ($status, $headers) = _status_and_headers ($result);
         my $status_text = $status; # XXX
-        my $writer = Web::Transport::PSGIServerConnection::Writer->_new
-            ($stream, $method, $status, $env->{'psgix.exit_guard'});
         if (@$result == 3) {
           my $body = $result->[2];
           if (defined $body and ref $body eq 'ARRAY') {
             $stream->send_response_headers
                 ({status => $status, status_text => $status_text,
                   headers => $headers});
+            my $writer = Web::Transport::PSGIServerConnection::Writer->_new
+                ($stream, $method, $status, $endguard);
             for (@$body) {
               $writer->write ($_);
             }
@@ -247,6 +255,8 @@ sub _run ($$$$$$) {
             croak "PSGI application specified bad response body";
           }
         } else { # @$result == 2
+          my $writer = Web::Transport::PSGIServerConnection::Writer->_new
+              ($stream, $method, $status, $endguard);
           $stream->send_response_headers
               ({status => $status, status_text => $status_text,
                 headers => $headers});
@@ -260,6 +270,7 @@ sub _run ($$$$$$) {
   };
   if ($@) {
     $server->_send_error ($stream, ref $@ ? $@ : "$stream->{id}: $@");
+    $endguard->();
   }
 } # _run
 
@@ -279,7 +290,7 @@ sub max_request_body_length ($;$) {
 
 sub _send_error ($$$) {
   my ($self, $stream, $error) = @_;
-  Promise->all ([
+  my $p = Promise->all ([
     Promise->resolve->then (sub {
       return $self->onerror->($self, $error);
     })->catch (sub {
@@ -295,12 +306,16 @@ sub _send_error ($$$) {
       $stream->abort (message => "PSGI application throws an exception");
     }),
   ]);
-  # XXX closed has to wait
+  $self->{completed} = $self->{completed}->then (sub { return $p });
 } # _send_error
 
 sub closed ($) {
   return $_[0]->{connection}->closed;
 } # closed
+
+sub completed ($) {
+  return $_[0]->{completed};
+} # completed
 
 sub DESTROY ($) {
   local $@;
@@ -328,7 +343,7 @@ sub close ($) {
   return if $_[0]->[3];
   $_[0]->[3] = 1;
   $_[0]->[0]->close_response;
-  $_[0]->[2]->end;
+  $_[0]->[2]->();
 } # close
 
 sub DESTROY ($) {

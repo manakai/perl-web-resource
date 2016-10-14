@@ -53,9 +53,10 @@ sub server ($$;$%) {
     $cv->begin;
     my $host = '127.0.0.1';
     my $port = find_listenable_port;
+    my $con;
     my $server = tcp_server $host, $port, sub {
       $cv->begin;
-      my $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, @_);
+      $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, @_);
       $con->onerror ($onerror) if defined $onerror;
       if (exists $args{max}) {
         $con->max_request_body_length ($args{max});
@@ -65,7 +66,7 @@ sub server ($$;$%) {
     $cv->cb ($ok);
     my $origin = Web::URL->parse_string ("http://$host:$port");
     my $close = sub { undef $server; $cv->end };
-    $cb->($origin, $close);
+    $cb->($origin, $close, \$con);
   });
 } # server
 
@@ -1708,6 +1709,179 @@ test {
     } $c;
   });
 } n => 3, name => 'max_request_body_length';
+
+test {
+  my $c = shift;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    return sub {
+      my $w = $_[0]->([200, [], []]);
+    };
+  }, sub {
+    my ($origin, $close, $conref) = @_;
+    my @event;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $close->();
+      undef $conref;
+    } $client->request (url => $origin)->then (sub {
+      return $client->close;
+    })->then (sub {
+      return Promise->all ([
+        $$conref->closed->then (sub {
+          push @event, 'closed';
+        }),
+        $$conref->completed->then (sub {
+          push @event, 'completed';
+        }),
+      ]);
+    })->then (sub {
+      test {
+        is join (',', @event), 'closed,completed';
+      } $c;
+    });
+  });
+} n => 1, name => 'closed / completed';
+
+test {
+  my $c = shift;
+  my @event;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    return sub {
+      my $w = $_[0]->([200, []]);
+      AE::postpone {
+        $w->close;
+        push @event, 'writerclose';
+      };
+    };
+  }, sub {
+    my ($origin, $close, $conref) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $close->();
+      undef $conref;
+    } $client->request (url => $origin)->then (sub {
+      return $client->close;
+    })->then (sub {
+      return Promise->all ([
+        $$conref->closed->then (sub {
+          push @event, 'closed';
+        }),
+        $$conref->completed->then (sub {
+          push @event, 'completed';
+        }),
+      ]);
+    })->then (sub {
+      test {
+        is join (',', @event), 'writerclose,closed,completed';
+      } $c;
+    });
+  });
+} n => 1, name => 'closed / completed';
+
+test {
+  my $c = shift;
+  my @event;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    return 0;
+  }, sub {
+    my ($origin, $close, $conref) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $close->();
+      undef $conref;
+    } $client->request (url => $origin)->then (sub {
+      return $client->close;
+    })->then (sub {
+      return Promise->all ([
+        $$conref->closed->then (sub {
+          push @event, 'closed';
+        }),
+        $$conref->completed->then (sub {
+          push @event, 'completed';
+        }),
+      ]);
+    })->then (sub {
+      test {
+        is join (',', @event), 'error,closed,completed';
+      } $c;
+    });
+  }, sub {
+    push @event, 'error';
+  });
+} n => 1, name => 'closed / completed - onerror invoked';
+
+test {
+  my $c = shift;
+  my @event;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    return 0;
+  }, sub {
+    my ($origin, $close, $conref) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $close->();
+      undef $conref;
+    } $client->request (url => $origin)->then (sub {
+      return $client->close;
+    })->then (sub {
+      return Promise->all ([
+        $$conref->closed->then (sub {
+          push @event, 'closed';
+        }),
+        $$conref->completed->then (sub {
+          push @event, 'completed';
+        }),
+      ]);
+    })->then (sub {
+      test {
+        is join (',', @event), 'error,closed,aftererror,completed';
+      } $c;
+    });
+  }, sub {
+    push @event, 'error';
+    return promised_sleep (1)->then (sub { push @event, 'aftererror' });
+  });
+} n => 1, name => 'closed / completed - onerror invoked';
+
+test {
+  my $c = shift;
+  my @event;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    $env->{'psgix.exit_guard'}->begin;
+    promised_sleep (1)->then (sub {
+      push @event, 'aftersleep';
+      $env->{'psgix.exit_guard'}->end;
+    });
+    return [200, [], []];
+  }, sub {
+    my ($origin, $close, $conref) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $close->();
+      undef $conref;
+    } $client->request (url => $origin)->then (sub {
+      return $client->close;
+    })->then (sub {
+      return Promise->all ([
+        $$conref->closed->then (sub {
+          push @event, 'closed';
+        }),
+        $$conref->completed->then (sub {
+          push @event, 'completed';
+        }),
+      ]);
+    })->then (sub {
+      test {
+        is join (',', @event), 'closed,aftersleep,completed';
+      } $c;
+    });
+  });
+} n => 1, name => 'closed / completed - psgix.exit_guard';
 
 run_tests;
 

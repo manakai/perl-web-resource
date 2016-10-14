@@ -853,7 +853,7 @@ sub close_response ($;%) {
 
 sub abort ($;%) {
   my $stream = shift;
-  return $stream->{connection}->abort (@_);
+  $stream->{connection}->abort (@_) if defined $stream->{connection};
 } # abort
 
 sub _send_error ($$$;$) {
@@ -936,14 +936,13 @@ sub _both_done ($) {
 } # _both_done
 
 sub DESTROY ($) {
+  $_[0]->abort;
+
   local $@;
   eval { die };
   warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 } # DESTROY
-
-# XXX server-side API
-# XXX TLS configurations
 
 1;
 

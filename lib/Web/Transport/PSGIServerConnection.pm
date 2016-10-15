@@ -232,6 +232,7 @@ sub _run ($$$$$$) {
         $endguard->();
       }, 'Web::Transport::PSGIServerConnection::DestroyCallback';
       my $onready = sub {
+        croak "PSGI application invoked the responder twice" if $invoked;
         $invoked = 1;
         undef $ondestroy;
         my $result = $_[0];
@@ -247,7 +248,10 @@ sub _run ($$$$$$) {
             $stream->send_response_headers
                 ({status => $status,
                   status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
-                  headers => $headers});
+                  headers => $headers})
+                    unless $stream->is_completed;
+                ## Strictly speaking, this is not desired as $headers'
+                ## errors are not detected when is_completed is true.
             my $writer = Web::Transport::PSGIServerConnection::Writer->_new
                 ($stream, $method, $status, $endguard);
             for (@$body) {
@@ -342,7 +346,8 @@ sub _new ($$$$$) {
 } # _new
 
 sub write ($$) {
-  $_[0]->[0]->send_response_data (\($_[1])) unless $_[0]->[1]; # or throw
+  $_[0]->[0]->send_response_data (\($_[1]))
+      if not $_[0]->[1] and not $_[0]->[0]->is_completed; # or throw
 } # write
 
 sub close ($) {

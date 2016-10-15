@@ -751,12 +751,17 @@ sub _ev ($$;$$) {
   }
   $self->{cb}->($self, $type, @_);
   if ($type eq 'complete') {
+    $self->{is_completed} = 1;
     unless ($self->{is_server}) {
       (delete $self->{request_done})->();
     }
     delete $self->{cb};
   }
 } # _ev
+
+sub is_completed ($) {
+  return $_[0]->{is_completed};
+} # is_completed
 
 1;
 

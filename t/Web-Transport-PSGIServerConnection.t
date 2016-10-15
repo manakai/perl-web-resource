@@ -688,6 +688,7 @@ test {
     } $c;
   });
 } n => 4, name => 'Bad headers';
+#
 test {
   my $c = shift;
   my $error_invoked = 0;
@@ -1889,6 +1890,218 @@ test {
     });
   });
 } n => 1, name => 'closed / completed - psgix.exit_guard';
+
+test {
+  my $c = shift;
+  my $error_invoked = 0;
+  my $after_thrown = 0;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    return sub {
+      $_[0]->([201, ['X', 'Y'], ["abc"]]);
+      $_[0]->([202, ['Z', 'A'], ["def"]]);
+      $after_thrown++;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->header ('X'), 'Y';
+        is $res->header ('Z'), undef;
+        is $res->body_bytes, "abc";
+        is $error_invoked, 1;
+        is $after_thrown, 0;
+      } $c;
+    });
+  }, sub {
+    my $error = $_[1];
+    test {
+      $error_invoked++;
+      like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-23]}};
+    } $c;
+  });
+} n => 7, name => 'PSGI responder invoked twice';
+
+test {
+  my $c = shift;
+  my $error_invoked = 0;
+  my $error;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    return sub {
+      my $d = $_[0];
+      AE::postpone {
+        $d->([201, ['X', 'Y'], ["abc"]]);
+        eval {
+          $d->([202, ['Z', 'A'], ["def"]]);
+        };
+        $error = $@;
+      };
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->header ('X'), 'Y';
+        is $res->header ('Z'), undef;
+        is $res->body_bytes, "abc";
+        is $error_invoked, 0;
+        like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
+      } $c;
+    });
+  }, sub {
+    test {
+      $error_invoked++;
+    } $c;
+  });
+} n => 6, name => 'PSGI responder invoked twice';
+
+test {
+  my $c = shift;
+  my $error_invoked = 0;
+  my $error;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    return sub {
+      my $d = $_[0];
+      AE::postpone {
+        my $w = $d->([201, ['X', 'Y']]);
+        eval {
+          $d->([202, ['Z', 'A']]);
+        };
+        $error = $@;
+        $w->write ("abc");
+        $w->close;
+      };
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->header ('X'), 'Y';
+        is $res->header ('Z'), undef;
+        is $res->body_bytes, "abc";
+        is $error_invoked, 0;
+        like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-20]}};
+      } $c;
+    });
+  }, sub {
+    test {
+      $error_invoked++;
+    } $c;
+  });
+} n => 6, name => 'PSGI responder invoked twice';
+
+test {
+  my $c = shift;
+  my $after = 0;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    return sub {
+      my $d = $_[0];
+      AE::postpone {
+        $d->([201, ['X', 'Y'], ["abc"]]);
+        $after++;
+      };
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $tcp = Web::Transport::TCPTransport->new
+        (host => $origin->host, port => $origin->port);
+    my $data = '';
+    my $client = Promise->new (sub {
+      my $ok = $_[0];
+      $tcp->start (sub {
+        my ($self, $type) = @_;
+        if ($type eq 'readdata') {
+          $data .= ${$_[2]};
+        } elsif ($type eq 'readeof') {
+          #$tcp->push_shutdown;
+        } elsif ($type eq 'close') {
+          $ok->($data);
+        }
+      })->then (sub {
+        $tcp->push_write (\"GET / HTTP/1.1\x0D\x0AHost: test\x0D\x0A\x0D\x0A");
+        return $tcp->_push_reset;
+      });
+    });
+    return promised_cleanup { $close->() } $client->then (sub {
+      test {
+        is $data, '';
+      } $c;
+    }, sub {
+      my $error = $_[0];
+      test {
+        ok 0, $error;
+      } $c;
+    });
+  })->then (sub {
+    test {
+      is $after, 1;
+    } $c;
+  });
+} n => 2, name => 'reset after headers';
+
+test {
+  my $c = shift;
+  my $after = 0;
+  my $d;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    return sub {
+      $d = $_[0];
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $tcp = Web::Transport::TCPTransport->new
+        (host => $origin->host, port => $origin->port);
+    my $data = '';
+    my $client = Promise->new (sub {
+      my $ok = $_[0];
+      $tcp->start (sub {
+        my ($self, $type) = @_;
+        if ($type eq 'readdata') {
+          $data .= ${$_[2]};
+        } elsif ($type eq 'readeof') {
+          #$tcp->push_shutdown;
+        } elsif ($type eq 'close') {
+          $ok->($data);
+        }
+      })->then (sub {
+        $tcp->push_write (\"GET / HTTP/1.1\x0D\x0AHost: test\x0D\x0A\x0D\x0A");
+        return $tcp->_push_reset;
+      });
+    });
+    return promised_cleanup { $close->() } $client->then (sub {
+      test {
+        is $data, '';
+        (promised_wait_until { defined $d })->then (sub {
+          $d->([201, ['X', 'Y'], ["abc"]]);
+          $after++;
+        });
+      } $c;
+    }, sub {
+      my $error = $_[0];
+      test {
+        ok 0, $error;
+      } $c;
+    });
+  })->then (sub {
+    test {
+      is $after, 1;
+    } $c;
+  });
+} n => 2, name => 'reset after headers 2';
 
 run_tests;
 

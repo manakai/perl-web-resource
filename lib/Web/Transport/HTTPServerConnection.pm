@@ -49,7 +49,6 @@ sub new ($%) {
         }
       }
       delete $self->{timer};
-      $self->{write_closed} = 1 if $data->{failed};
       $self->_oneof ($data);
     } elsif ($type eq 'writeeof') {
       if (DEBUG) {
@@ -62,6 +61,9 @@ sub new ($%) {
         }
       }
       $self->{write_closed} = 1;
+      if (defined $self->{sending_stream}) {
+        $self->{sending_stream}->_send_done;
+      }
     } elsif ($type eq 'close') {
       $closed->();
     }
@@ -340,6 +342,7 @@ sub _oneof ($$) {
     $self->{stream}->{close_after_response} = 1;
     return $self->{stream}->_fatal;
   } elsif ($self->{state} eq 'request body') {
+    $self->{write_closed} = 1 if $exit->{failed};
     $self->{stream}->{close_after_response} = 1;
     if (defined $self->{unread_length}) {
       # $self->{unread_length} > 0
@@ -349,7 +352,7 @@ sub _oneof ($$) {
     }
     $self->{stream}->_ev ('dataend');
     $self->{exit} = $exit;
-    $self->{stream}->_receive_done ($exit);
+    $self->{stream}->_receive_done;
   } elsif ($self->{state} eq 'before ws frame' or
            $self->{state} eq 'ws data' or
            $self->{state} eq 'ws terminating') {
@@ -364,11 +367,13 @@ sub _oneof ($$) {
       $stream->{request}->{method} = 'GET';
       return $stream->_fatal;
     } else {
+      $self->{write_closed} = 1 if $exit->{failed};
       $self->{transport}->push_shutdown unless $self->{write_closed};
       $self->{write_closed} = 1;
       $self->{state} = 'end';
     }
   } elsif ($self->{state} eq 'end') {
+    $self->{write_closed} = 1 if $exit->{failed};
     $self->{transport}->push_shutdown unless $self->{write_closed};
     $self->{write_closed} = 1;
   } else {
@@ -752,7 +757,16 @@ sub send_response_headers ($$$;%) {
     croak "Header value of |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[1];
   }
 
-  if ($stream->{request}->{version} != 0.9) {
+  if ($stream->{connection}->{write_closed}) {
+    ## Connection aborted (typically by client) before the application
+    ## sends the headers
+    $write_mode = 'void';
+    $done = 1;
+  }
+
+  if ($write_mode eq 'void') {
+    #
+  } elsif ($stream->{request}->{version} != 0.9) {
     my $res = sprintf qq{HTTP/1.1 %d %s\x0D\x0A},
         $response->{status},
         $response->{status_text};
@@ -819,6 +833,8 @@ sub send_response_data ($$) {
         defined $req->{to_be_sent_length} and $req->{to_be_sent_length} <= 0) {
       $req->close_response;
     }
+  } elsif ($wm eq 'void') {
+    #
   } else {
     croak "Not writable for now";
   }
@@ -885,6 +901,7 @@ sub _fatal ($) {
 
 sub _send_done ($) {
   my $stream = $_[0];
+  delete $stream->{connection}->{sending_stream};
   if (delete $stream->{close_after_response}) {
     my $transport = $stream->{connection}->{transport};
     $transport->push_shutdown if not $stream->{connection}->{write_closed};
@@ -901,9 +918,11 @@ sub _send_done ($) {
 sub _receive_done ($) {
   my $stream = $_[0];
   my $con = $stream->{connection};
+  my $exit = $con->{exit} || {};
+  $con->{sending_stream} = $con->{stream} if not $stream->{send_done};
+  delete $con->{stream};
   delete $con->{timer};
   $con->{disable_timer} = 1;
-  delete $con->{stream};
   delete $con->{unread_length};
   delete $con->{ws_timer};
   if ($stream->{close_after_response}) {

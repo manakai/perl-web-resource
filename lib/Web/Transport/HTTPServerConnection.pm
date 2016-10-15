@@ -936,8 +936,6 @@ sub _both_done ($) {
 } # _both_done
 
 sub DESTROY ($) {
-  $_[0]->abort;
-
   local $@;
   eval { die };
   warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"

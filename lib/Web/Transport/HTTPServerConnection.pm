@@ -326,6 +326,7 @@ sub _ondata ($$) {
 
 sub _oneof ($$) {
   my ($self, $exit) = @_;
+  $self->{write_closed} = 1 if $exit->{failed};
   if ($self->{state} eq 'initial' or
       $self->{state} eq 'before request-line') {
     if ($self->{write_closed}) {
@@ -342,7 +343,6 @@ sub _oneof ($$) {
     $self->{stream}->{close_after_response} = 1;
     return $self->{stream}->_fatal;
   } elsif ($self->{state} eq 'request body') {
-    $self->{write_closed} = 1 if $exit->{failed};
     $self->{stream}->{close_after_response} = 1;
     if (defined $self->{unread_length}) {
       # $self->{unread_length} > 0
@@ -367,13 +367,11 @@ sub _oneof ($$) {
       $stream->{request}->{method} = 'GET';
       return $stream->_fatal;
     } else {
-      $self->{write_closed} = 1 if $exit->{failed};
       $self->{transport}->push_shutdown unless $self->{write_closed};
       $self->{write_closed} = 1;
       $self->{state} = 'end';
     }
   } elsif ($self->{state} eq 'end') {
-    $self->{write_closed} = 1 if $exit->{failed};
     $self->{transport}->push_shutdown unless $self->{write_closed};
     $self->{write_closed} = 1;
   } else {
@@ -780,6 +778,7 @@ sub send_response_headers ($$$;%) {
         warn "$stream->{id}: S: @{[_e4d $_]}\n";
       }
     }
+
     $con->{transport}->push_write (\$res);
   } else {
     if ($stream->{DEBUG}) {

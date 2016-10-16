@@ -62,6 +62,7 @@ test-main:
 	$(PROVE) t/*.t
 	WEBUA_DEBUG=2 $(PERL) t/Web-Transport-WSClient.t
 	TEST_METHOD=37 WEBUA_DEBUG=2 $(PERL) t/Web-Transport-ConnectionClient.t
+	TEST_METHOD=45 WEBUA_DEBUG=2 $(PERL) t/Web-Transport-PSGIServerConnection.t
 
 test-main-server:
 	$(PERL) sketch/server.pl &

@@ -197,6 +197,7 @@ sub _run ($$$$$$) {
   my ($server, $stream, $app, $env, $method, $status) = @_;
   $env->{'psgix.exit_guard'} = AE::cv;
   $env->{'psgix.exit_guard'}->begin;
+  my $ondestroy;
   my $guardended = 0;
   my $endguard = sub {
     $env->{'psgix.exit_guard'}->end unless $guardended++;
@@ -226,7 +227,7 @@ sub _run ($$$$$$) {
       }
     } elsif (defined $result and ref $result eq 'CODE') {
       my $invoked = 0;
-      my $ondestroy = bless sub {
+      $ondestroy = bless sub {
         $server->_send_error ($stream, "$stream->{id}: PSGI application did not invoke the responder")
             unless $invoked;
         $endguard->();
@@ -272,16 +273,12 @@ sub _run ($$$$$$) {
           return $writer;
         }
       }; # $onready
-warn "CODE invoke";
       $result->($onready);
-warn "CODE invoked";
     } else {
       die "PSGI application did not return a response\n";
     }
   };
-warn "After eval [$@]";
   if ($@) {
-warn "Error!";
     $server->_send_error ($stream, ref $@ ? $@ : "$stream->{id}: $@");
     $endguard->();
   }
@@ -303,10 +300,8 @@ sub max_request_body_length ($;$) {
 
 sub _send_error ($$$) {
   my ($self, $stream, $error) = @_;
-warn "_send_error |$error|";
   my $p = Promise->all ([
     Promise->resolve->then (sub {
-warn "_send_error then |$error|";
       return $self->onexception->($self, $error);
     })->catch (sub {
       warn $_[0];

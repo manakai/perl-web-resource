@@ -1119,7 +1119,6 @@ test {
   my $error_invoked = 0;
   promised_cleanup { done $c; undef $c } server (sub ($) {
     return sub {
-warn ">>> CODE thrown";
       die "Thrown!";
     };
   }, sub {

@@ -58,6 +58,7 @@ sub new ($%) {
     my $cb = $args{cb};
     push @$header_list, [Upgrade => 'websocket'], [Connection => 'Upgrade'];
     my $in_ws = 0;
+    my $bad_response;
     return $self->{client}->request ('GET', $url_record, $header_list, undef, $args{superreload}, 'ws', sub {
       if ($_[1]->{ws_connection_established}) {
         if (defined $_[3]) {
@@ -71,12 +72,16 @@ sub new ($%) {
           return $cb->($self, undef, undef);
         }
       } else {
+        $bad_response = {%{$_[1]}};
         return $self->{client}->abort (message => "WebSocket handshake failed");
       }
     })->then (sub {
       my ($response, $result) = @{$_[0]};
       return $self->close->then (sub {
-        if (not defined $response or $response->{ws_connection_established}) {
+        if (defined $bad_response) {
+          $bad_response->{ws} = 2;
+          return bless $bad_response, 'Web::Transport::Response';
+        } elsif (not defined $response or $response->{ws_connection_established}) {
           return bless $result, 'Web::Transport::Response';
         } else {
           $response->{ws} = 2;

@@ -73,6 +73,9 @@ sub new ($%) {
         }
       } else {
         $bad_response = {%{$_[1]}};
+        #XXX
+        use Data::Dumper;
+        warn Dumper $bad_response;
         return $self->{client}->abort (message => "WebSocket handshake failed");
       }
     })->then (sub {

@@ -61,6 +61,7 @@ test-deps: deps
 test-main:
 	$(PROVE) t/*.t
 	WEBUA_DEBUG=2 $(PERL) t/Web-Transport-WSClient.t
+	TEST_METHOD=37 WEBUA_DEBUG=2 $(PERL) t/Web-Transport-ConnectionClient.t
 
 test-main-server:
 	$(PERL) sketch/server.pl &

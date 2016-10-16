@@ -72,7 +72,7 @@ sub new ($%) {
           return $cb->($self, undef, undef);
         }
       } else {
-        $bad_response = {%{$_[1]}};
+        $bad_response ||= {%{$_[1]}};
         #XXX
         use Data::Dumper;
         warn Dumper $bad_response;

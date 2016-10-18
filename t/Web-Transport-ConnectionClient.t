@@ -2993,6 +2993,43 @@ test {
   });
 } n => 2, name => 'request options - multipart/form-data';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "POST", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    receive CRLFCRLF, end capture
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $p = $client->request (url => $url, method => 'POST', params => {
+      hoge => undef,
+    });
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+    $p->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203, $res;
+        like $res->body_bytes, qr{Content-Length: 0\x0D\x0A};
+      } $c;
+    }, sub {
+      my $error = $_[0];
+      test { ok 0, $error } $c;
+    })->then (sub {
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'request options - params with undef value only';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

@@ -10,11 +10,14 @@ push our @ISA, qw(Web::Transport::TCPTransport);
 sub new ($%) {
   my $self = bless {}, shift;
   my $args = $self->{args} = {@_};
-  $args->{addr} = 'unix/';
-  $args->{port} = delete $args->{path};
-  croak "No |file_name| specified" unless defined $args->{port};
+  $args->{unix} = 1;
+  if (not defined $args->{fh}) {
+    $args->{addr} = 'unix/';
+    $args->{port} = delete $args->{path};
+    croak "No |path| specified" unless defined $args->{port};
+  }
   croak "Bad |id|" if defined $args->{id} and utf8::is_utf8 ($args->{id});
-  $self->{id} = (defined $args->{id} ? $args->{id} : int rand 100000);
+  $self->{id} = (defined $args->{id} ? $args->{id} : $$ . '.' . ++$Web::Transport::NextID);
   return $self;
 } # new
 

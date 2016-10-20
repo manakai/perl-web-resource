@@ -5,10 +5,11 @@ our $VERSION = '1.0';
 require utf8;
 use Carp qw(croak);
 use Errno qw(EAGAIN EWOULDBLOCK EINTR);
-use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE);
+use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE SO_LINGER);
 use AnyEvent::Util qw(WSAEWOULDBLOCK);
-use AnyEvent::Socket qw(tcp_connect format_address);
+use AnyEvent::Socket qw(tcp_connect);
 use Promise;
+use Web::Host;
 
 ## Note that this class is also used as the base of the
 ## |Web::Transport::UNIXDomainSocket| class.
@@ -16,12 +17,13 @@ use Promise;
 sub new ($%) {
   my $self = bless {}, shift;
   my $args = $self->{args} = {@_};
+  croak "Bad |fh|" if $args->{server} and not defined $args->{fh};
   croak "Bad |host|" unless defined $args->{host} and $args->{host}->is_ip;
   $args->{addr} = $args->{host}->text_addr;
   croak "Bad |port|" unless defined $args->{port};
   croak "utf8-flagged |port|" if utf8::is_utf8 $args->{port};
   croak "Bad |id|" if defined $args->{id} and utf8::is_utf8 ($args->{id});
-  $self->{id} = (defined $args->{id} ? $args->{id} : int rand 100000);
+  $self->{id} = (defined $args->{id} ? $args->{id} : $$ . '.' . ++$Web::Transport::NextID);
   return $self;
 } # new
 
@@ -35,14 +37,24 @@ sub start ($$) {
 
   return Promise->new (sub {
     my ($ok, $ng) = @_;
-    tcp_connect $args->{addr}, $args->{port}, sub {
-      return $ng->($!) unless $_[0];
-      $ok->($_[0]);
-    };
+    if (defined $args->{fh}) {
+      $ok->($args->{fh});
+    } else {
+      tcp_connect $args->{addr}, $args->{port}, sub {
+        return $ng->($!) unless $_[0];
+        $ok->($_[0]);
+      };
+    }
   })->then (sub {
     $self->{fh} = $_[0];
-    my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $self->{fh};
-    my $info = {local_host => format_address $h, local_port => $p};
+    my $info = {};
+    if ($self->type eq 'TCP') {
+      my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $self->{fh};
+      $info->{local_host} = Web::Host->new_from_packed_addr ($h);
+      $info->{local_port} = $p;
+      $info->{remote_host} = $args->{host};
+      $info->{remote_port} = 0+$args->{port};
+    }
     AnyEvent::Util::fh_nonblocking $self->{fh}, 1;
 
     ## Applied to TCP only (not applied to Unix domain socket)
@@ -70,6 +82,7 @@ sub start ($$) {
         my $wc = $self->{write_closed};
         $self->{read_closed} = 1;
         $self->{write_closed} = 1;
+        $self->{write_shutdown} = 1;
         delete $self->{rw};
         my $err = $!;
         AE::postpone {
@@ -84,13 +97,14 @@ sub start ($$) {
       }
     }; # $self->{rw}
 
-    return $info;
+    return $self->{info} = $info;
   });
 } # start
 
 sub id ($) { return $_[0]->{id} }
 sub type ($) { return 'TCP' }
 sub layered_type ($) { return $_[0]->type }
+sub info ($) { return $_[0]->{info} } # or undef
 
 sub request_mode ($;$) {
   if (@_ > 1) {
@@ -129,6 +143,7 @@ sub _start_write ($) {
           my $rc = $self->{read_closed};
           $self->{read_closed} = 1;
           $self->{write_closed} = 1;
+          $self->{write_shutdown} = 1;
           my $err = $!;
           AE::postpone {
             $self->{cb}->($self, 'writeeof', {failed => 1,
@@ -150,7 +165,7 @@ sub _start_write ($) {
     } # while
     delete $self->{ww} unless @{$self->{wq}};
   }; # $run
-  $run->();
+  #$run->();
 
   $self->{ww} = AE::io $self->{fh}, 1, sub {
     $run->();
@@ -159,7 +174,8 @@ sub _start_write ($) {
 
 sub push_write ($$;$$) {
   my ($self, $ref, $offset, $length) = @_;
-  croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
+  croak "Bad state (write shutdown)" if $self->{write_shutdown};
+  croak "Bad state (no wq)" if not defined $self->{wq};
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   $offset ||= 0;
   croak "Bad offset" if $offset > length $$ref;
@@ -172,7 +188,8 @@ sub push_write ($$;$$) {
 
 sub push_promise ($) {
   my $self = $_[0];
-  croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
+  croak "Bad state (write shutdown)" if $self->{write_shutdown};
+  croak "Bad state (no wq)" if not defined $self->{wq};
   my ($ok, $ng);
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
   push @{$self->{wq}}, [$ok, $ng];
@@ -182,7 +199,8 @@ sub push_promise ($) {
 
 sub push_shutdown ($) {
   my $self = $_[0];
-  croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
+  croak "Bad state (write shutdown)" if $self->{write_shutdown};
+  croak "Bad state (no wq)" if not defined $self->{wq};
   my ($ok, $ng);
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
   push @{$self->{wq}}, [sub {
@@ -196,6 +214,33 @@ sub push_shutdown ($) {
   $self->_start_write;
   return $p;
 } # push_shutdown
+
+## For tests only
+sub _push_reset ($) {
+  my $self = $_[0];
+  croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
+  my ($ok, $ng);
+  my $p = Promise->new (sub { ($ok, $ng) = @_ });
+  push @{$self->{wq}}, [sub {
+    setsockopt $self->{fh}, SOL_SOCKET, SO_LINGER, pack "II", 1, 0;
+    my $wc = $self->{write_closed};
+    my $rc = $self->{read_closed};
+    $self->{write_closed} = 1;
+    $self->{read_closed} = 1;
+    my $reason = 'Reset sent';
+    AE::postpone {
+      $self->{cb}->($self, 'writeeof', {failed => 1, message => $reason})
+          unless $wc;
+      $self->{cb}->($self, 'readeof', {failed => 1, message => $reason})
+          unless $rc;
+    };
+    $self->_close;
+    $ok->();
+  }, $ng];
+  $self->{write_shutdown} = 1;
+  $self->_start_write;
+  return $p;
+} # _push_reset
 
 sub abort ($;%) {
   my ($self, %args) = @_;
@@ -221,7 +266,7 @@ sub _close ($$) {
   while (@{$self->{wq} || []}) {
     my $q = shift @{$self->{wq}};
     if (@$q == 2) { # promise
-      $q->[1]->();
+      $q->[1]->("Canceled by failure of earlier write operations");
     }
   }
   delete $self->{rw};
@@ -240,7 +285,7 @@ sub DESTROY ($) {
 
   local $@;
   eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+  warn "Reference to @{[ref $_[0]]} (@{[$_[0]->{id}]}) is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 
 } # DESTROY

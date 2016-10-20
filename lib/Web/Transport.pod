@@ -29,6 +29,10 @@ A connection-oriented HTTP client.
 
 A WebSocket client.
 
+=item L<Web::Transport::PSGIServerConnection>
+
+A PSGI interface of HTTP server.
+
 =item L<Web::Transport::PlatformResolver>
 
 A name resolver using system's resolver.

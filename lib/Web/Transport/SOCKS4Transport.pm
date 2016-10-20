@@ -24,6 +24,7 @@ sub id ($) {
 sub type ($) { return 'SOCKS4' }
 sub layered_type ($) { return $_[0]->type . '/' . $_[0]->{transport}->layered_type }
 sub request_mode ($) { 'default' }
+sub info ($) { return $_[0]->{info} } # or undef
 
 sub start ($$;%) {
   my $self = $_[0];
@@ -51,6 +52,7 @@ sub start ($$;%) {
         }
         $self->{started} = 1;
         undef $timer;
+        $self->{info} = {};
         $ok->();
       } else {
         $self->{transport}->abort
@@ -78,6 +80,7 @@ sub start ($$;%) {
     } elsif ($type eq 'writeeof') {
       #
     } elsif ($type eq 'close') {
+      $self->{info} = {};
       $ng->($_[2] || $last_error);
       delete $self->{transport};
       delete $self->{cb};
@@ -90,6 +93,7 @@ sub start ($$;%) {
         (\("\x04\x01".(pack 'n', $port).$addr."\x00"));
     return $self->{transport}->push_promise;
   })->catch (sub {
+    $self->{info} = {};
     $ng->($_[0]);
     delete $self->{cb};
     undef $self;

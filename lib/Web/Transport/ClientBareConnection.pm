@@ -6,7 +6,7 @@ use AnyEvent;
 use Promise;
 use Web::Transport::TCPTransport;
 use Web::Transport::TLSTransport;
-use Web::Transport::HTTPConnection;
+use Web::Transport::HTTPClientConnection;
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Scheme qw(get_default_port);
 
@@ -90,7 +90,8 @@ my $proxy_to_transport = sub {
       }
       if ($url_record->scheme eq 'https') {
         # XXX HTTP version
-        my $http = Web::Transport::HTTPConnection->new (transport => $transport);
+        my $http = Web::Transport::HTTPClientConnection->new
+            (transport => $transport);
         require Web::Transport::H1CONNECTTransport;
         $transport = Web::Transport::H1CONNECTTransport->new
             (http => $http,
@@ -208,7 +209,8 @@ sub connect ($%) {
           not $url_record->scheme eq 'ftp') {
         die "Bad URL scheme |@{[$url_record->scheme]}|\n";
       }
-      $self->{http} = Web::Transport::HTTPConnection->new (transport => $_[0]);
+      $self->{http} = Web::Transport::HTTPClientConnection->new
+          (transport => $_[0], cb => sub { });
       return $self->{http}->connect;
     })->catch (sub {
       delete $self->{connect_promise};
@@ -245,12 +247,12 @@ sub request ($$$$$$$) {
 
     my $response;
     my $result;
-    $self->{http}->onevent (sub {
+    my $onevent = sub {
       my $http = $_[0];
-      my $type = $_[2];
+      my $type = $_[1];
       if ($type eq 'data' or $type eq 'text') {
         if (not defined $result) {
-          my $v = $_[3]; # buffer copy!
+          my $v = $_[2]; # buffer copy!
           Promise->resolve->then (sub { return $cb->($http, $response, $v, $type eq 'text') });
         }
       } elsif ($type eq 'dataend' or $type eq 'textend') {
@@ -258,15 +260,15 @@ sub request ($$$$$$$) {
           Promise->resolve->then (sub { return $cb->($http, $response, undef, $type eq 'textend') });
         }
       } elsif ($type eq 'complete') {
-        my $exit = $_[3];
+        my $exit = $_[2];
         if ($exit->{failed}) {
           $response = undef;
         }
         $result ||= $exit;
         undef $timer;
       } elsif ($type eq 'headers') {
-        my $transport = $_[0]->transport;
-        my $res = $_[3];
+        my $transport = $http->transport;
+        my $res = $_[2];
         if ($transport->request_mode ne 'HTTP proxy' and
             $res->{status} == 407) {
           $response = undef;
@@ -279,14 +281,16 @@ sub request ($$$$$$$) {
           }
         }
         if (not defined $result) {
-          $response->{ws_connection_established} = $_[4];
+          $response->{ws_connection_established} = $_[3];
           Promise->resolve->then (sub { return $cb->($http, $response, '', undef) });
         }
-      }
-    });
+      } elsif ($type eq 'closing') {
+        $cb->($http, $response, undef, 'closing'); # sync!
+      } # $type
+    }; # $onevent
     my $p = $self->{http}->send_request_headers
         ({method => $method, target => encode_web_utf8 ($target),
-          headers => $headers}, ws => $is_ws)->then (sub {
+          headers => $headers}, ws => $is_ws, cb => $onevent)->then (sub {
       return [$response, $result];
     });
     if (defined $body_ref and length $$body_ref) {

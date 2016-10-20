@@ -18,7 +18,7 @@ sub new_from_url ($$) {
     path_prefix => $_[1]->path,
     origin => $origin,
     queue => Promise->resolve,
-    parent_id => (int rand 100000),
+    parent_id => ($$ . '.' . ++$Web::Transport::NextID),
   }, $_[0];
 } # new_from_url
 

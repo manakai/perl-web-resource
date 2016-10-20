@@ -33,10 +33,10 @@ sub start ($$) {
   push @{$req->{headers}}, ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36']; # XXX
 
   # XXX headers
-  $self->{http}->onevent (sub {
-    my $type = $_[2];
+  my $onevent = sub {
+    my $type = $_[1];
     if ($type eq 'data' and $self->{started}) {
-      my $data = $_[3];
+      my $data = $_[2]; # string copy!
       AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
     } elsif ($type eq 'dataend' and $self->{started}) {
       unless ($self->{read_closed}) {
@@ -44,15 +44,18 @@ sub start ($$) {
         AE::postpone { $self->{cb}->($self, 'readeof', {}) };
       }
     } elsif ($type eq 'headers') {
-      my $res = $_[3];
+      my $res = $_[2];
       if ($res->{status} == 200) {
+        $self->{info} = {};
         $ok->({response => $res});
         $self->{started} = 1;
       } else {
-        $ng->({response => $res});
+        $self->{info} = {};
+        $ng->({failed => 1, message => "HTTP |$res->{status}| response",
+               response => $res});
       }
     } elsif ($type eq 'complete') {
-      my $exit = $_[3];
+      my $exit = $_[2];
       if ($exit->{failed}) {
         if ($self->{started}) {
           unless ($self->{read_closed}) {
@@ -64,7 +67,8 @@ sub start ($$) {
             AE::postpone { $self->{cb}->($self, 'writeeof', $exit) };
           }
         } else {
-          $ng->({exit => $exit});
+          $self->{info} = {};
+          $ng->($exit);
         }
       }
       $self->{http}->close->then (sub {
@@ -76,10 +80,11 @@ sub start ($$) {
         delete $self->{http};
       });
     }
-  });
+  }; # $onevent
   $self->{http}->connect->then (sub {
-    return $self->{http}->send_request_headers ($req);
+    return $self->{http}->send_request_headers ($req, cb => $onevent);
   })->catch (sub {
+    $self->{info} = {};
     $ng->($_[0]);
     delete $self->{cb} unless $self->{started};
     delete $self->{http};
@@ -91,6 +96,7 @@ sub id ($) { return $_[0]->{id} }
 sub type ($) { return 'H1CONNECT' }
 sub layered_type ($) { return $_[0]->type . '/' . $_[0]->{http}->layered_type }
 sub request_mode ($) { 'default' }
+sub info ($) { return $_[0]->{info} } # or undef
 
 sub read_closed ($) { return $_[0]->{read_closed} }
 sub write_closed ($) { return $_[0]->{write_closed} }

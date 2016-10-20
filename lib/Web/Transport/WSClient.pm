@@ -30,7 +30,7 @@ sub new ($%) {
     $url_record = Web::URL->parse_string
         (($url_record->scheme eq 'wss' ? 'https' : 'http') . '://' . $url_record->hostport . $url_record->pathquery);
 
-    my $self = bless {parent_id => (int rand 100000)}, $class;
+    my $self = bless {parent_id => ($$ . '.' . ++$Web::Transport::NextID)}, $class;
 
     $args{proxy_manager} ||= do {
       require Web::Transport::ENVProxyManager;
@@ -58,19 +58,30 @@ sub new ($%) {
     my $cb = $args{cb};
     push @$header_list, [Upgrade => 'websocket'], [Connection => 'Upgrade'];
     my $in_ws = 0;
+    my $bad_response;
     return $self->{client}->request ('GET', $url_record, $header_list, undef, $args{superreload}, 'ws', sub {
       if ($_[1]->{ws_connection_established}) {
         if (defined $_[3]) {
-          return $cb->($self, $_[2], $_[3]);
+          if ($_[3] eq 'closing') {
+            $self->{ws_closing} = 1;
+          } else { # text or binary
+            return $cb->($self, $_[2], $_[3]);
+          }
         } else {
           $in_ws = 1;
           return $cb->($self, undef, undef);
         }
+      } else {
+        $bad_response ||= {%{$_[1]}};
+        return $self->{client}->abort (message => "WebSocket handshake failed");
       }
     })->then (sub {
       my ($response, $result) = @{$_[0]};
       return $self->close->then (sub {
-        if (not defined $response or $response->{ws_connection_established}) {
+        if (defined $bad_response) {
+          $bad_response->{ws} = 2;
+          return bless $bad_response, 'Web::Transport::Response';
+        } elsif (not defined $response or $response->{ws_connection_established}) {
           return bless $result, 'Web::Transport::Response';
         } else {
           $response->{ws} = 2;
@@ -86,10 +97,17 @@ sub new ($%) {
   });
 } # new
 
+# XXX test and documentation
+sub can_send ($) {
+  my $self = $_[0];
+  return (defined $self->{client} && !defined $self->{closed_promise} && !$self->{ws_closing});
+} # can_send
+
 sub send_binary ($$) {
   my $self = $_[0];
   croak "Bad state"
-      if not defined $self->{client} or defined $self->{closed_promise};
+      if not defined $self->{client} or defined $self->{closed_promise} or
+         $self->{ws_closing};
   croak "Data is utf8-flagged"
       if utf8::is_utf8 ($_[1]);
   my $http = $self->{client}->{http};
@@ -97,13 +115,15 @@ sub send_binary ($$) {
   $http->send_data (\($_[1]));
 } # send_binary
 
+# XXX test
 sub send_text ($$) {
   my $self = $_[0];
   croak "Bad state"
-      if not defined $self->{client} or defined $self->{closed_promise};
+      if not defined $self->{client} or defined $self->{closed_promise} or
+         $self->{ws_closing};
   my $http = $self->{client}->{http};
   my $text = encode_web_utf8 $_[1];
-  $http->send_binary_header (length $text);
+  $http->send_text_header (length $text);
   $http->send_data (\$text);
 } # send_text
 

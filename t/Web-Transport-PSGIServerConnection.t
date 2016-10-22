@@ -56,7 +56,8 @@ sub server ($$;$%) {
     my $con;
     my $server = tcp_server $host, $port, sub {
       $cv->begin;
-      $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, @_);
+      $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args
+          ($app, [@_], parent_id => $args{parent_id});
       $con->onexception ($onexception) if defined $onexception;
       if (exists $args{max}) {
         $con->max_request_body_length ($args{max});
@@ -85,7 +86,7 @@ sub unix_server ($$;$) {
     my $unix_path = $UnixParentPath->child (rand);
     my $server = tcp_server 'unix/', $unix_path, sub {
       $cv->begin;
-      my $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, @_);
+      my $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, [@_]);
       $con->onexception ($onexception) if defined $onexception;
       promised_cleanup { $cv->end } $con->completed;
     };
@@ -1745,11 +1746,12 @@ test {
       ]);
     })->then (sub {
       test {
+        ok $$conref->id, "has id";
         is join (',', @event), 'closed,completed';
       } $c;
     });
   });
-} n => 1, name => 'closed / completed';
+} n => 2, name => 'closed / completed';
 
 test {
   my $c = shift;
@@ -2102,6 +2104,29 @@ test {
     } $c;
   });
 } n => 2, name => 'reset after headers 2';
+
+test {
+  my $c = shift;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    return sub {
+      my $w = $_[0]->([200, [], []]);
+    };
+  }, sub {
+    my ($origin, $close, $conref) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $close->();
+      undef $conref;
+    } $client->request (url => $origin)->then (sub {
+      return $client->close;
+    })->then (sub {
+      test {
+        like $$conref->id, qr{\Ahogefuga\.\d+\z};
+      } $c;
+    });
+  }, undef, parent_id => 'hogefuga');
+} n => 1, name => 'custom ID';
 
 run_tests;
 

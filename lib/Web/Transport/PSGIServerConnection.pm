@@ -167,21 +167,21 @@ my $cb = sub {
   };
 }; # $cb
 
-sub new_from_app_and_ae_tcp_server_args ($$$;$$) {
-  my $class = shift;
-  my $app = shift;
+sub new_from_app_and_ae_tcp_server_args ($$$;%) {
+  my ($class, $app, $aeargs, %args) = @_;
   my $self = bless {
     max_request_body_length => 8_000_000,
   }, $class;
   my $socket;
-  if ($_[1] eq 'unix/') {
+  if ($aeargs->[1] eq 'unix/') {
     require Web::Transport::UNIXDomainSocketTransport;
     $socket = Web::Transport::UNIXDomainSocketTransport->new
-        (server => 1, fh => $_[0]);
+        (server => 1, fh => $aeargs->[0], parent_id => $args{parent_id});
   } else {
     $socket = Web::Transport::TCPTransport->new
-        (server => 1, fh => $_[0],
-         host => Web::Host->parse_string ($_[1]), port => $_[2]);
+        (server => 1, fh => $aeargs->[0],
+         host => Web::Host->parse_string ($aeargs->[1]), port => $aeargs->[2],
+         parent_id => $args{parent_id});
   }
   $self->{connection} = Web::Transport::HTTPServerConnection->new (cb => sub {
     my ($sc, $type) = @_;
@@ -192,6 +192,10 @@ sub new_from_app_and_ae_tcp_server_args ($$$;$$) {
   $self->{completed} = $self->{connection}->closed;
   return $self;
 } # new_from_app_and_ae_tcp_server_args
+
+sub id ($) {
+  return $_[0]->{connection}->id;
+} # id
 
 sub _run ($$$$$$) {
   my ($server, $stream, $app, $env, $method, $status) = @_;

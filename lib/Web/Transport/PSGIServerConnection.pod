@@ -7,7 +7,7 @@ Web::Transport::PSGIServerConnection - PSGI interface for HTTP server connection
   $psgi_app = sub { ... };
   tcp_server $host, $port, sub {
     my $con = Web::Transport::PSGIServerConnection
-        ->new_from_app_and_ae_tcp_server_args ($psgi_app, @_);
+        ->new_from_app_and_ae_tcp_server_args ($psgi_app, [@_]);
     $con->completed->then (sub {
       warn "Client disconnected and PSGI application done";
     });
@@ -26,17 +26,22 @@ There are following methods:
 
 =over 4
 
-=item $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, ...)
+=item $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, [...], NAME => VALUE, ...)
 
 Create an object.
 
 The first argument must be a PSGI application, i.e. a code reference.
 See the PSGI specification for the requirements on the code reference.
 
-The remaining arguments must be the arguments for the
-C<AnyEvent::Socket::tcp_server>'s callback.  That is, the filehandle
-of the socket, the remote host, and the remote port (if TCP).  The
-socket can be of a TCP or UNIX socket domain.
+The second argument must be an array reference of the arguments
+received by the C<AnyEvent::Socket::tcp_server>'s callback.  That is,
+the filehandle of the socket, the remote host, and the remote port (if
+TCP).  The socket can be of a TCP or UNIX socket domain.
+
+Additionally, options can be specified as key/value pairs.  The
+C<parent_id> argument, if any, specifies the short string that
+identifies the "parent" context in which the connection appears, which
+will be used in debug outputs.
 
 =item $con->onexception ($code)
 
@@ -73,6 +78,12 @@ An invocation of PSGI application is considered as completed when
 either a complete response is returned by the PSGI application or the
 PSGI application invoked the C<< $writer->close >> method, and the
 C<psgix.exit_guard> condvar's callback is invoked.
+
+=item $string = $con->id
+
+A short string assigned to the server connection, which can be used
+for debugging purposes.  It is composed from the C<parent_id> option
+to the constructor, if any.
 
 =back
 

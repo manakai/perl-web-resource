@@ -17,7 +17,7 @@ sub new ($%) {
     croak "No |path| specified" unless defined $args->{port};
   }
   croak "Bad |id|" if defined $args->{id} and utf8::is_utf8 ($args->{id});
-  $self->{id} = (defined $args->{id} ? $args->{id} : $$ . '.' . ++$Web::Transport::NextID);
+  $self->{id} = (defined $args->{id} ? $args->{id} : (defined $args->{parent_id} ? $args->{parent_id} : $$) . '.' . ++$Web::Transport::NextID);
   return $self;
 } # new
 

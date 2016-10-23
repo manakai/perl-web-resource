@@ -643,6 +643,22 @@ sub abort ($) {
   return $self->{closed};
 } # abort
 
+sub close_after_current_stream ($) {
+  my $self = $_[0];
+
+  if (defined $self->{stream}) {
+    $self->{stream}->{close_after_response} = 1;
+  } elsif (defined $self->{sending_stream}) {
+    $self->{sending_stream}->{close_after_response} = 1;
+  } else {
+    $self->{transport}->push_shutdown unless $self->{write_closed};
+    $self->{write_closed} = 1;
+    $self->{state} = 'end';
+  }
+
+  return $self->{closed};
+} # close_after_current_stream
+
 package Web::Transport::HTTPServerConnection::Stream;
 push our @ISA, qw(Web::Transport::HTTPConnection::Stream);
 use Carp qw(carp croak);
@@ -835,7 +851,7 @@ sub send_response_data ($$) {
   } elsif ($wm eq 'void') {
     #
   } else {
-    croak "Not writable for now";
+    croak "Not writable for now ($wm)";
   }
 } # send_response_data
 

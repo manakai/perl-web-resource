@@ -79,6 +79,31 @@ either a complete response is returned by the PSGI application or the
 PSGI application invoked the C<< $writer->close >> method, and the
 C<psgix.exit_guard> condvar's callback is invoked.
 
+=item $con->close_after_current_response (timeout => $seconds)
+
+Schedule to close the connection as soon as possible.
+
+If the connection is not used at the moment, it is immediately closed.
+Otherwise, the connection is closed after the response to the
+currently processed request is sent.
+
+The C<timeout> option can be specified as a key/value pair.  The
+option specifies the seconds of the timeout, whose default is C<10>
+(seconds).  If this option is set to an number greater than zero and
+the current response is not closed before that seconds have elapsed
+since the invocation of this method, the connection is aborted.  The
+PSGI application is expected to return the whole response before this
+timeout.
+
+Please note that even when the connection is aborted because of the
+timeout, the C<completed> promise is not resolved or rejected until
+the C<psgix.exit_guard> condvar is fullfilled and any reference to the
+PSGI writer is destroyed.  As the PSGI does not provide any way to
+abort the PSGI application, invocation of this method does not
+terminate any running PSGI application.
+
+This method can be used to gracefully terminate the server.
+
 =item $string = $con->id
 
 A short string assigned to the server connection, which can be used

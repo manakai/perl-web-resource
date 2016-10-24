@@ -73,8 +73,9 @@ test {
     my $tcp = Web::Transport::TCPTransport->new
         (fh => $_[0],
          host => Web::Host->parse_string ($_[1]), port => $_[2]);
-    $con = Web::Transport::HTTPServerConnection->new
+    my $x = Web::Transport::HTTPServerConnection->new
         (transport => $tcp, cb => $con_cb);
+    $con ||= $x;
   }; # $server
 
   my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
@@ -145,8 +146,9 @@ test {
     my $tcp = Web::Transport::TCPTransport->new
         (fh => $_[0],
          host => Web::Host->parse_string ($_[1]), port => $_[2]);
-    $con = Web::Transport::HTTPServerConnection->new
+    my $x = Web::Transport::HTTPServerConnection->new
         (transport => $tcp, cb => $con_cb);
+    $con ||= $x;
   }; # $server
 
   my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
@@ -225,8 +227,9 @@ test {
     my $tcp = Web::Transport::TCPTransport->new
         (fh => $_[0],
          host => Web::Host->parse_string ($_[1]), port => $_[2]);
-    $con = Web::Transport::HTTPServerConnection->new
+    my $x = Web::Transport::HTTPServerConnection->new
         (transport => $tcp, cb => $con_cb);
+    $con ||= $x;
   }; # $server
 
   my $client = Web::Transport::ConnectionClient->new_from_url ($origin);

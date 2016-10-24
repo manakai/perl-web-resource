@@ -4,6 +4,8 @@ use warnings;
 our $VERSION = '1.0';
 push our @CARP_NOT, qw(Web::Transport::PSGIServerConnection::Writer);
 use Carp qw(croak);
+use AnyEvent;
+use Promise;
 use Web::Encoding;
 use Web::URL::Encoding qw(percent_decode_b);
 use Web::Host;
@@ -189,7 +191,10 @@ sub new_from_app_and_ae_tcp_server_args ($$$;%) {
       return $cb->($self, $app);
     }
   }, transport => $socket);
-  $self->{completed} = $self->{connection}->closed;
+  $self->{completed_cv} = AE::cv;
+  $self->{completed_cv}->begin;
+  $self->{connection}->closed->then (sub { $self->{completed_cv}->end });
+  $self->{completed} = Promise->from_cv ($self->{completed_cv});
   return $self;
 } # new_from_app_and_ae_tcp_server_args
 
@@ -199,17 +204,18 @@ sub id ($) {
 
 sub _run ($$$$$$) {
   my ($server, $stream, $app, $env, $method, $status) = @_;
-  $env->{'psgix.exit_guard'} = AE::cv;
-  $env->{'psgix.exit_guard'}->begin;
   my $ondestroy;
-  my $guardended = 0;
-  my $endguard = sub {
-    $env->{'psgix.exit_guard'}->end unless $guardended++;
-  };
   eval {
-    $server->{completed} = $server->{completed}->then (sub {
-      return Promise->from_cv ($env->{'psgix.exit_guard'});
+    my $xg_cv = $env->{'psgix.exit_guard'} = AE::cv;
+    $server->{completed_cv}->begin;
+    Promise->from_cv ($xg_cv)->then (sub {
+      $server->{completed_cv}->end;
     });
+
+    $xg_cv->begin;
+    my $ondestroy2 = bless sub {
+      $xg_cv->end;
+    }, 'Web::Transport::PSGIServerConnection::DestroyCallback';
 
     my $result = $app->($env);
     if (defined $result and ref $result eq 'ARRAY' and @$result == 3) {
@@ -221,7 +227,7 @@ sub _run ($$$$$$) {
               status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
               headers => $headers});
         my $writer = Web::Transport::PSGIServerConnection::Writer->_new
-            ($stream, $method, $status, $endguard);
+            ($stream, $method, $status, sub { undef $ondestroy2 });
         for (@$body) {
           $writer->write ($_);
         }
@@ -234,7 +240,6 @@ sub _run ($$$$$$) {
       $ondestroy = bless sub {
         $server->_send_error ($stream, "$stream->{id}: PSGI application did not invoke the responder")
             unless $invoked;
-        $endguard->();
       }, 'Web::Transport::PSGIServerConnection::DestroyCallback';
       my $onready = sub {
         croak "PSGI application invoked the responder twice" if $invoked;
@@ -258,7 +263,7 @@ sub _run ($$$$$$) {
                 ## Strictly speaking, this is not desired as $headers'
                 ## errors are not detected when is_completed is true.
             my $writer = Web::Transport::PSGIServerConnection::Writer->_new
-                ($stream, $method, $status, $endguard);
+                ($stream, $method, $status, sub { undef $ondestroy2 });
             for (@$body) {
               $writer->write ($_);
             }
@@ -268,8 +273,14 @@ sub _run ($$$$$$) {
             croak "PSGI application specified bad response body";
           }
         } else { # @$result == 2
+          my $destroyed = 0;
+          $server->{completed_cv}->begin;
           my $writer = Web::Transport::PSGIServerConnection::Writer->_new
-              ($stream, $method, $status, $endguard);
+              ($stream, $method, $status, sub {
+                 return if $destroyed++;
+                 $server->{completed_cv}->end;
+                 undef $ondestroy2;
+               });
           $stream->send_response_headers
               ({status => $status,
                 status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
@@ -284,7 +295,6 @@ sub _run ($$$$$$) {
   };
   if ($@) {
     $server->_send_error ($stream, ref $@ ? $@ : "$stream->{id}: $@");
-    $endguard->();
   }
 } # _run
 
@@ -321,7 +331,8 @@ sub _send_error ($$$) {
       $stream->abort (message => "PSGI application throws an exception");
     }),
   ]);
-  $self->{completed} = $self->{completed}->then (sub { return $p });
+  $self->{completed_cv}->begin;
+  $p->then (sub { $self->{completed_cv}->end });
 } # _send_error
 
 sub closed ($) {
@@ -331,6 +342,24 @@ sub closed ($) {
 sub completed ($) {
   return $_[0]->{completed};
 } # completed
+
+sub close_after_current_response ($;%) {
+  my ($self, %args) = @_;
+  my $timeout = $args{timeout};
+  $timeout = 10 unless defined $timeout;
+  $self->{connection}->close_after_current_stream;
+  my $timer;
+  if ($timeout > 0) {
+    $timer = AE::timer $timeout, 0, sub {
+      $self->{connection}->abort
+          (message => "|close_after_current_response| timeout ($timeout)");
+      undef $timer;
+    };
+  }
+  return $self->completed->then (sub {
+    undef $timer;
+  });
+} # close_after_current_response
 
 sub DESTROY ($) {
   local $@;
@@ -343,10 +372,11 @@ package Web::Transport::PSGIServerConnection::Writer;
 push our @CARP_NOT, qw(Web::Transport::HTTPServerConnection::Stream);
 
 sub _new ($$$$$) {
-  my ($class, $stream, $method, $status, $cv) = @_;
+  my ($class, $stream, $method, $status, $ondestroy) = @_;
   return bless [$stream,
                 ($method eq 'HEAD' or $status == 204 or $status == 304),
-                $cv],
+                $ondestroy,
+                undef],
                $class;
 } # _new
 
@@ -359,7 +389,6 @@ sub close ($) {
   return if $_[0]->[3];
   $_[0]->[3] = 1;
   $_[0]->[0]->close_response;
-  $_[0]->[2]->();
 } # close
 
 sub DESTROY ($) {
@@ -367,6 +396,8 @@ sub DESTROY ($) {
     $_[0]->[0]->abort (message => "PSGI application did not close the body");
     $_[0]->close;
   }
+
+  $_[0]->[2]->();
 
   local $@;
   eval { die };

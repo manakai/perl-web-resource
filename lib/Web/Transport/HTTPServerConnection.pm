@@ -651,7 +651,12 @@ sub close_after_current_stream ($) {
   } elsif (defined $self->{sending_stream}) {
     $self->{sending_stream}->{close_after_response} = 1;
   } else {
-    $self->{transport}->push_shutdown unless $self->{write_closed};
+    unless ($self->{write_closed}) {
+      $self->{transport}->push_promise->then (sub {
+        $self->{transport}->abort
+            (message => 'Close by |close_after_current_stream|');
+      });
+    }
     $self->{write_closed} = 1;
     $self->{state} = 'end';
   }

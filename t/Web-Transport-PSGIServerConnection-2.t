@@ -77,7 +77,10 @@ test {
   })->then (sub {
     my $res = $_[0];
     test {
-      is $res->status, 210;
+#XXX
+      use Data::Dumper;
+warn Dumper $res;
+      is $res->status, 210, $res;
       #unlike $res->status_text, qr{^\Q$id\E};
     } $c;
     return $client->close;

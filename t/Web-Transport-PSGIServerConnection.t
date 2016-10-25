@@ -1509,7 +1509,7 @@ test {
       ok 0, $error;
     } $c;
   });
-} n => 3, name => 'Writer no close';
+} n => 3, name => 'Writer no close 1';
 
 test {
   my $c = shift;
@@ -1541,7 +1541,7 @@ test {
       ok 0, $error;
     } $c;
   });
-} n => 3, name => 'Writer no close';
+} n => 3, name => 'Writer no close 2';
 
 test {
   my $c = shift;

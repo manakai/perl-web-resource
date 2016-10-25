@@ -393,8 +393,8 @@ sub close ($) {
 
 sub DESTROY ($) {
   unless ($_[0]->[3]) {
+    $_[0]->[3] = 1;
     $_[0]->[0]->abort (message => "PSGI application did not close the body");
-    $_[0]->close;
   }
 
   $_[0]->[2]->();

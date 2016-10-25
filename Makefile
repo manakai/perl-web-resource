@@ -61,6 +61,8 @@ test-deps: deps
 test-main:
 	# XXX
 	WEBUA_DEBUG=2 $(PERL) t/Web-Transport-ConnectionClient.t || true
+	# XXX
+	WEBSERVER_DEBUG=2 WEBUA_DEBUG=2 $(PERL) t/Web-Transport-HTTPServerConnection.t || true
 	$(PROVE) t/*.t
 
 test-main-server:

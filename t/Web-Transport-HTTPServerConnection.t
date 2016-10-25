@@ -94,8 +94,13 @@ test {
   })->then (sub {
     my $res = $_[0];
     test {
-      is $res->status, 210, $res;
-      unlike $res->status_text, qr{^\Q$id\E};
+      if ($res->is_network_error) {
+        ok $res->is_reset_error;
+        ok 1;
+      } else {
+        is $res->status, 210, $res;
+        unlike $res->status_text, qr{^\Q$id\E};
+      }
     } $c;
     return $client->close;
   })->then (sub {

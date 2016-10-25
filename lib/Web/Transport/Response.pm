@@ -8,6 +8,10 @@ sub is_network_error ($) {
   return $_[0]->{failed} && !$_[0]->{ws};
 } # is_network_error
 
+sub is_reset_error ($) {
+  return $_[0]->is_network_error && $_[0]->{reset};
+} # is_reset_error
+
 sub network_error_message ($) {
   return $_[0]->{message};
 } # network_error_message

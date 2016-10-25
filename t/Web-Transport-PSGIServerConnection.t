@@ -1410,7 +1410,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{Not writable for now at \Q@{[__FILE__]}\E line @{[__LINE__-21]}}, $error;
+      like $error, qr{Not writable for now.* at \Q@{[__FILE__]}\E line @{[__LINE__-21]}}, $error;
     } $c;
   });
 } n => 5, name => 'Writer';

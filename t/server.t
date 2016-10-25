@@ -277,7 +277,7 @@ test {
       is $res->header ('Hoge'), 'Fuga4';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now at .+ line @{[__LINE__-15]}};
+      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-15]}};
     } $c;
   }, sub {
     test {
@@ -317,7 +317,7 @@ test {
       is $res->header ('Hoge'), 'Fuga4';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now at .+ line @{[__LINE__-15]}};
+      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-15]}};
     } $c;
   }, sub {
     test {
@@ -408,7 +408,7 @@ test {
       is $res->header ('Hoge'), 'Fuga7';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now at .+ line @{[__LINE__-15]}};
+      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-15]}};
     } $c;
   }, sub {
     test {
@@ -449,7 +449,7 @@ test {
       is $res->header ('Hoge'), 'Fuga8';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, 'abcde8abcde9';
-      like $x, qr{^Not writable for now at .+ line @{[__LINE__-14]}};
+      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-14]}};
     } $c;
   }, sub {
     test {
@@ -580,7 +580,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '0';
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now at .+ line @{[__LINE__-15]}};
+      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-15]}};
     } $c;
   }, sub {
     test {
@@ -798,7 +798,7 @@ test {
       is $res->header ('Hoge'), 'Fuga23';
       is $res->header ('Connection'), 'close';
       is $res->body_bytes, 'abc23';
-      like $x, qr{^Not writable for now at .+ line @{[__LINE__-14]}};
+      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-14]}};
     } $c;
   }, sub {
     test {
@@ -879,7 +879,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '5';
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now at .+ line @{[__LINE__-16]}};
+      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-16]}};
     } $c;
   }, sub {
     test {
@@ -920,7 +920,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '5';
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now at .+ line @{[__LINE__-16]}};
+      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-16]}};
     } $c;
   }, sub {
     test {
@@ -960,7 +960,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '0';
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now at .+ line @{[__LINE__-16]}};
+      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-16]}};
     } $c;
   }, sub {
     test {
@@ -2089,7 +2089,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Not writable for now at @{[__FILE__]} line @{[__LINE__-16]}};
+      like $error, qr{^Not writable for now.* at @{[__FILE__]} line @{[__LINE__-16]}};
       is $received, '(end)(end)';
       ok ! $res->is_network_error;
       ok $res->ws_closed_cleanly;
@@ -2128,7 +2128,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Not writable for now at @{[__FILE__]} line @{[__LINE__-18]}};
+      like $error, qr{^Not writable for now.* at @{[__FILE__]} line @{[__LINE__-18]}};
       is $received, '(end)1(end)';
       ok ! $res->is_network_error;
       ok $res->ws_closed_cleanly;
@@ -4809,7 +4809,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Not writable for now at @{[__FILE__]} line @{[__LINE__-10]}};
+      like $error, qr{^Not writable for now.* at @{[__FILE__]} line @{[__LINE__-10]}};
       ok $res->is_network_error;
     } $c;
   }, sub {
@@ -4869,7 +4869,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Not writable for now at @{[__FILE__]} line @{[__LINE__-9]}};
+      like $error, qr{^Not writable for now.* at @{[__FILE__]} line @{[__LINE__-9]}};
       is $res->status, 201;
     } $c;
   }, sub {

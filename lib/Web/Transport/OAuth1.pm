@@ -40,8 +40,8 @@ sub create_request_params ($$$$) {
 
   # 1.
   for (@param) {
-    $_ = [oauth1_percent_encode_c $_->[0],
-          defined $_->[1] ? oauth1_percent_encode_c $_->[1] : ''];
+    $_ = [oauth1_percent_encode_b $_->[0],
+          defined $_->[1] ? oauth1_percent_encode_b $_->[1] : ''];
   }
   for (@$params) {
     push @param, [oauth1_percent_encode_c $_->[0],

@@ -5,7 +5,7 @@ our $VERSION = '3.0';
 use Carp qw(croak);
 use Digest::SHA;
 use MIME::Base64;
-use Web::URL::Encoding qw(oauth1_percent_encode_c);
+use Web::URL::Encoding qw(oauth1_percent_encode_c oauth1_percent_encode_b);
 
 sub create_request_params ($$$$) {
   my ($query, $header, $bodyref, $params) = @_;
@@ -34,7 +34,7 @@ sub create_request_params ($$$$) {
     } split /=/, $_, 2];
   } split /&/, $$bodyref, -1 if defined $bodyref;
 
-  push @param, @$params;
+  # and @$params
 
   # 3.4.1.3.2.
 
@@ -42,6 +42,10 @@ sub create_request_params ($$$$) {
   for (@param) {
     $_ = [oauth1_percent_encode_c $_->[0],
           defined $_->[1] ? oauth1_percent_encode_c $_->[1] : ''];
+  }
+  for (@$params) {
+    push @param, [oauth1_percent_encode_c $_->[0],
+                  defined $_->[1] ? oauth1_percent_encode_c $_->[1] : ''];
   }
 
   # 4.

@@ -62,6 +62,7 @@ test-main:
 	# XXX
 	WEBUA_DEBUG=2 $(PERL) t/Web-Transport-ConnectionClient.t || true
 	$(PROVE) t/*.t
+	$(PROVE) t/real/*.t
 
 test-main-server:
 	$(PERL) sketch/server.pl &

@@ -152,17 +152,17 @@ sub write_to_be_closed ($) {
 } # write_to_be_closed
 
 sub push_write ($$;$$) {
-  croak "Bad state" unless $_[0]->{started};
+  croak "Bad state (not started)" unless $_[0]->{started};
   return shift->{transport}->push_write (@_);
 } # push_write
 
 sub push_promise ($) {
-  croak "Bad state" unless $_[0]->{started};
+  croak "Bad state (not started)" unless $_[0]->{started};
   return shift->{transport}->push_promise (@_);
 } # push_promise
 
 sub push_shutdown ($) {
-  croak "Bad state" unless $_[0]->{started};
+  croak "Bad state (not started)" unless $_[0]->{started};
   return shift->{transport}->push_shutdown (@_);
 } # push_shutdown
 
@@ -175,7 +175,7 @@ sub DESTROY ($) {
 
   local $@;
   eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+  warn "$$: Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 
 } # DESTROY

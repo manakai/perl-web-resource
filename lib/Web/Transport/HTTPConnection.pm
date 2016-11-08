@@ -388,6 +388,20 @@ sub _debug_handshake_done ($$) {
       warn "$id:   + Local: $host:$info->{local_port}\n";
     }
 
+    if (defined $info->{openssl_version}) {
+      warn "$id:   + OpenSSL: $info->{openssl_version}->[0]\n";
+      if ($self->{DEBUG} >= 2) {
+        warn "$id:   +          $info->{openssl_version}->[1]\n";
+        warn "$id:   +          $info->{openssl_version}->[2]\n";
+        warn "$id:   +          $info->{openssl_version}->[3]\n";
+      }
+    }
+    if ($self->{DEBUG} >= 2) {
+      if (defined $info->{net_ssleay_version}) {
+        warn "$id:   + Net::SSLeay: $info->{net_ssleay_version} $info->{net_ssleay_path}\n";
+      }
+    }
+
     if (defined $info->{tls_protocol}) {
       my $ver = $info->{tls_protocol} == 0x0301 ? '1.0' :
                 $info->{tls_protocol} == 0x0302 ? '1.1' :

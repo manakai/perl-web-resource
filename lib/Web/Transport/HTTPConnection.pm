@@ -390,13 +390,13 @@ sub _debug_handshake_done ($$) {
 
     if (defined $info->{openssl_version}) {
       warn "$id:   + OpenSSL: $info->{openssl_version}->[0]\n";
-      if ($self->{DEBUG} >= 2) {
+      if ($self->{DEBUG} > 1) {
         warn "$id:   +          $info->{openssl_version}->[1]\n";
         warn "$id:   +          $info->{openssl_version}->[2]\n";
         warn "$id:   +          $info->{openssl_version}->[3]\n";
       }
     }
-    if ($self->{DEBUG} >= 2) {
+    if ($self->{DEBUG} > 1) {
       if (defined $info->{net_ssleay_version}) {
         warn "$id:   + Net::SSLeay: $info->{net_ssleay_version} $info->{net_ssleay_path}\n";
       }
@@ -708,8 +708,12 @@ sub _ws_debug ($$$%) {
       $args{length};
   if ($args{opcode} == 8 and defined $args{status}) {
     warn "$id: S: status=$args{status} |@{[_e4d (defined $_[2] ? $_[2] : '')]}|\n";
-  } elsif (($self->{DEBUG} > 1 or $args{opcode} >= 8) and length $_[2]) {
-    warn "$id: S: @{[_e4d $_[2]]}\n";
+  } elsif (length $_[2]) {
+    if ($self->{DEBUG} > 1 or length $_[2] <= 40) {
+      warn "$id: S: @{[_e4d $_[2]]}\n";
+    } else {
+      warn "$id: S: @{[_e4d substr $_[2], 0, 40]}... (@{[length $_[2]]})\n";
+    }
   }
 } # _ws_debug
 
@@ -719,13 +723,21 @@ sub _ev ($$;$$) {
   my $req = $self->{is_server} ? $self : $self->{request};
   if ($self->{DEBUG}) {
     warn "$req->{id}: $type @{[scalar gmtime]}\n";
-    if ($type eq 'data' and $self->{DEBUG} > 1) {
-      for (split /\x0D?\x0A/, $_[0], -1) {
-        warn "$req->{id}: R: @{[_e4d $_]}\n";
+    if ($type eq 'data' and $self->{DEBUG}) {
+      if ($self->{DEBUG} > 1 or length $_[0] <= 40) {
+        for (split /\x0D?\x0A/, $_[0], -1) {
+          warn "$req->{id}: R: @{[_e4d $_]}\n";
+        }
+      } else {
+        warn "$req->{id}: R: @{[_e4d substr $_[0], 0, 40]}... (@{[length $_[0]]})\n";
       }
-    } elsif ($type eq 'text' and $self->{DEBUG} > 1) {
-      for (split /\x0D?\x0A/, $_[0], -1) {
-        warn "$req->{id}: R: @{[_e4d_t $_]}\n";
+    } elsif ($type eq 'text' and $self->{DEBUG}) {
+      if ($self->{DEBUG} > 1 or length $_[0] <= 40) {
+        for (split /\x0D?\x0A/, $_[0], -1) {
+          warn "$req->{id}: R: @{[_e4d_t $_]}\n";
+        }
+      } else {
+        warn "$req->{id}: R: @{[_e4d_t substr $_[0], 0, 40]}... (@{[length $_[0]]})\n";
       }
     } elsif ($type eq 'headers') {
       my $obj = $_[0];

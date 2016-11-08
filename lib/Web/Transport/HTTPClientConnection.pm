@@ -750,9 +750,13 @@ sub send_data ($$;%) {
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   return unless length $$ref;
 
-  if (DEBUG > 1) {
-    for (split /\x0A/, $$ref, -1) {
-      warn "$self->{request}->{id}: S: @{[_e4d $_]}\n";
+  if (DEBUG) {
+    if (DEBUG > 1 or length $$ref <= 40) {
+      for (split /\x0A/, $$ref, -1) {
+        warn "$self->{request}->{id}: S: @{[_e4d $_]}\n";
+      }
+    } else {
+      warn "$self->{request}->{id}: S: @{[_e4d substr $_, 0, 40]}... (@{[length $_]})\n";
     }
   }
 

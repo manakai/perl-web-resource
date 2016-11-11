@@ -4188,7 +4188,7 @@ test {
     my $res = $_[0];
     test {
       is $invoked, 1;
-      is $res->status, 201;
+      is $res->status, 201, $res;
       is $res->status_text, 'OK';
     } $c;
   }, sub {

@@ -141,10 +141,10 @@ sub start ($$;%) {
     } elsif ($type eq 'readeof') {
       unless ($self->{read_closed}) {
         my $data = $_[2];
-        #$data->{failed} = 1;
         $data->{message} = 'Underlying transport closed before TLS closure'
             unless defined $data->{message};
         if (defined $self->{starttls_done}) {
+          $data->{failed} = 1;
           (delete $self->{starttls_done})->[1]->($data);
         }
         if ($self->{started}) {
@@ -158,10 +158,10 @@ sub start ($$;%) {
     } elsif ($type eq 'writeeof') {
       unless ($self->{write_closed}) {
         my $data = $_[2];
-        #$data->{failed} = 1;
         $data->{message} = 'Underlying transport closed before TLS closure'
             unless defined $data->{message};
         if (defined $self->{starttls_done}) {
+          $data->{failed} = 1;
           (delete $self->{starttls_done})->[1]->($data);
         }
         if ($self->{started}) {

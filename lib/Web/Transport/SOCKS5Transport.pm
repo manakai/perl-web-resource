@@ -70,7 +70,6 @@ sub start ($$;%) {
           if (length $data) {
             AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
           }
-          $self->{started} = 1;
           undef $timer;
           $self->{info} = {};
           $ok1->();
@@ -88,10 +87,14 @@ sub start ($$;%) {
   }; # $process_data
 
   my $last_error;
+  my $readeof_sent = 0;
+  my $writeeof_sent = 0;
   $self->{transport}->start (sub {
     my $type = $_[1];
     if ($self->{started}) {
       if ($type eq 'close') {
+        $self->{cb}->('readeof', {failed => 1, message => "Read already closed"}) if $readeof_sent;
+        $self->{cb}->('writeeof', {failed => 1, message => "Write already closed"}) if $writeeof_sent;
         goto &{delete $self->{cb}};
       } else {
         goto &{$self->{cb}};
@@ -103,8 +106,9 @@ sub start ($$;%) {
     } elsif ($type eq 'readeof') {
       $last_error = $_[2];
       $process_data->(1);
+      $readeof_sent = 1;
     } elsif ($type eq 'writeeof') {
-      #
+      $writeeof_sent = 1;
     } elsif ($type eq 'close') {
       my $error = $_[2] || $last_error;
       unless ($error->{failed}) {
@@ -141,8 +145,10 @@ sub start ($$;%) {
   })->then (sub {
     return $p1;
   })->then (sub {
+    $self->{started} = 1;
     $ok->();
-  }, sub {
+    $self->{cb}->($self, 'open');
+  })->catch (sub {
     $self->{info} = {};
     $ng->($_[0]);
     delete $self->{cb};

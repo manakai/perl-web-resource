@@ -65,13 +65,14 @@ sub new ($%) {
       if (defined $self->{sending_stream}) {
         $self->{sending_stream}->_send_done;
       }
+    } elsif ($type eq 'open') {
+      $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
+      $self->{info} = {};
+      $self->_con_ev ('openconnection', {});
     } elsif ($type eq 'close') {
       $closed->();
     }
   })->then (sub {
-    $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
-    $self->{info} = {};
-    $self->_con_ev ('openconnection', {});
     return $close_p;
   }, sub {
     my $error = $_[0];

@@ -95,7 +95,10 @@ sub start ($$) {
       }
     }; # $self->{rw}
 
-    return $self->{info} = $info;
+    $self->{info} = $info;
+    AE::postpone {
+      $self->{cb}->($self, 'open');
+    };
   });
 } # start
 

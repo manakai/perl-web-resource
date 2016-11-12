@@ -53,7 +53,6 @@ sub start ($$;%) {
         if (length $data) {
           AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
         }
-        $self->{started} = 1;
         undef $timer;
         $self->{info} = {};
         $ok1->();
@@ -69,6 +68,8 @@ sub start ($$;%) {
     my $type = $_[1];
     if ($self->{started}) {
       if ($type eq 'close') {
+        $self->{cb}->('readeof', {failed => 1, message => "Read already closed"}) if $readeof_sent;
+        $self->{cb}->('writeeof', {failed => 1, message => "Write already closed"}) if $writeeof_sent;
         goto &{delete $self->{cb}};
       } else {
         goto &{$self->{cb}};
@@ -99,7 +100,9 @@ sub start ($$;%) {
   })->then (sub {
     return $p1;
   })->then (sub {
+    $self->{started} = 1;
     $ok->();
+    $self->{cb}->($self, 'open');
   })->catch (sub {
     $self->{info} = {};
     $ng->($_[0]);

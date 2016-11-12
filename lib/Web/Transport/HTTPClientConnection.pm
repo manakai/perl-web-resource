@@ -574,6 +574,9 @@ sub connect ($) {
     warn "$id: Connect (@{[$self->{transport}->layered_type]})... @{[scalar gmtime]}\n";
   }
 
+  my ($ok0, $ng0);
+  my $p0 = Promise->new (sub { ($ok0, $ng0) = @_ });
+
   my $p = $self->{transport}->start (sub {
     my ($transport, $type) = @_;
     if ($type eq 'readdata') {
@@ -623,13 +626,17 @@ sub connect ($) {
       if ($self->{state} eq 'tunnel sending') {
         $self->_ev ('complete', {});
       }
+    } elsif ($type eq 'open') {
+      $self->{info} = {};
+      $self->_con_ev ('openconnection', {});
+      $ok0->();
     } elsif ($type eq 'close') {
       $onclosed->();
+      $ng0->();
     }
   })->then (sub {
-    $self->{info} = {};
-    $self->_con_ev ('openconnection', {});
-  }, sub {
+    return $p0;
+  })->catch (sub {
     my $error = $_[0];
     unless (ref $error eq 'HASH' and $error->{failed}) {
       $error = {failed => 1, message => ''.$error};

@@ -46,6 +46,7 @@ sub start ($$) {
     } elsif ($type eq 'headers') {
       my $res = $_[2];
       if ($res->{status} == 200) {
+        AE::postpone { $self->{cb}->($self, 'open') };
         $self->{info} = {};
         $ok->({response => $res});
         $self->{started} = 1;

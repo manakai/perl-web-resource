@@ -172,6 +172,8 @@ sub start ($$;%) {
       } else {
         #warn join ' ', "transport writeeof", %{$_[2]};
       }
+    } elsif ($type eq 'open') {
+      #
     } elsif ($type eq 'close') {
       my $data = $_[2];
       if (defined $self->{starttls_done}) {
@@ -333,7 +335,9 @@ sub start ($$;%) {
     }
   });
 
-  return $p->catch (sub {
+  return $p->then (sub {
+    $self->{cb}->($self, 'open');
+  })->catch (sub {
     delete $self->{cb};
 
     my $data = $self->{starttls_data};

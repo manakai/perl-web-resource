@@ -32,6 +32,9 @@ sub start ($$;%) {
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
 
+  my ($ok1, $ng1) = @_;
+  my $p1 = Promise->new (sub { ($ok1, $ng1) = @_ });
+
   my ($ok, $ng) = @_;
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
 
@@ -53,7 +56,7 @@ sub start ($$;%) {
         $self->{started} = 1;
         undef $timer;
         $self->{info} = {};
-        $ok->();
+        $ok1->();
       } else {
         $self->{transport}->abort
             (message => sprintf "SOCKS4 server does not return a valid reply (result code %d)", ord substr $data, 1, 1);
@@ -81,6 +84,7 @@ sub start ($$;%) {
       #
     } elsif ($type eq 'close') {
       $self->{info} = {};
+      $ng1->($_[2] || $last_error);
       $ng->($_[2] || $last_error);
       delete $self->{transport};
       delete $self->{cb};
@@ -92,6 +96,10 @@ sub start ($$;%) {
     $self->{transport}->push_write
         (\("\x04\x01".(pack 'n', $port).$addr."\x00"));
     return $self->{transport}->push_promise;
+  })->then (sub {
+    return $p1;
+  })->then (sub {
+    $ok->();
   })->catch (sub {
     $self->{info} = {};
     $ng->($_[0]);

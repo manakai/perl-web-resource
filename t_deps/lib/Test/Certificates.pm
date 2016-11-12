@@ -10,7 +10,7 @@ my $cert_path = $root_path->child ('local/cert');
 my $cn = $ENV{SERVER_HOST_NAME} || 'hoge.test';
 $cert_path->mkpath;
 my $DUMP = $ENV{DUMP};
-my $RSA = 0;
+my $RSA = 1;
 
 sub ca_path ($$) {
   return $cert_path->child ("ca-" . $_[1]);

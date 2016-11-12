@@ -33,8 +33,6 @@ sub start ($$) {
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
 
-  # XXX server
-
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     if (defined $args->{fh}) {
@@ -47,7 +45,7 @@ sub start ($$) {
     }
   })->then (sub {
     $self->{fh} = $_[0];
-    my $info = {};
+    my $info = {is_server => !!$args->{server}};
     if ($self->type eq 'TCP') {
       my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $self->{fh};
       $info->{local_host} = Web::Host->new_from_packed_addr ($h);

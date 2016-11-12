@@ -375,17 +375,24 @@ sub _debug_handshake_done ($$) {
     }
   }
 
+  warn "$id: DEBUG mode |$self->{DEBUG}|\n" unless $self->{DEBUG} eq '1';
   for my $transport (reverse @transport) {
     warn "$id: + @{[$transport->id]} @{[$transport->type]}\n";
     my $info = $transport->info;
-    
+
     if (defined $info->{remote_host}) {
       my $host = $info->{remote_host}->to_ascii;
       warn "$id:   + Remote: $host:$info->{remote_port}\n";
     }
     if (defined $info->{local_host}) {
       my $host = $info->{local_host}->to_ascii;
-      warn "$id:   + Local: $host:$info->{local_port}\n";
+      if (defined $info->{is_server}) {
+        warn "$id:   + Local: $host:$info->{local_port} " . ($info->{is_server} ? 'Server' : 'Client') . "\n";
+      } else {
+        warn "$id:   + Local: $host:$info->{local_port}\n";
+      }
+    } elsif (defined $info->{is_server}) {
+      warn "$id:   + " . ($info->{is_server} ? 'Server' : 'Client') . "\n";
     }
 
     if (defined $info->{openssl_version}) {

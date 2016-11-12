@@ -44,6 +44,13 @@ sub tls_options ($;$) {
   return $_[0]->{tls_options} || {};
 } # tls_options
 
+sub debug ($;$) {
+  if (@_ > 1) {
+    $_[0]->{debug} = $_[1];
+  }
+  return defined $_[0]->{debug} ? $_[0]->{debug} : DEBUG;
+} # debug
+
 sub last_resort_timeout ($;$) {
   if (@_ > 1) {
     $_[0]->{last_resort_timeout} = $_[1];
@@ -53,7 +60,7 @@ sub last_resort_timeout ($;$) {
 
 my $proxy_to_transport = sub {
   ## create a transport for a proxy configuration
-  my ($tid, $proxy, $url_record, $resolver, $no_cache) = @_;
+  my ($tid, $proxy, $url_record, $resolver, $no_cache, $debug) = @_;
 
   ## 1. If $proxy->{protocol} is not supported, return null.
 
@@ -68,7 +75,7 @@ my $proxy_to_transport = sub {
       die "No port specified\n" unless defined $port;
 
       $port = 0+$port;
-      warn "$tid: TCP @{[$addr->stringify]}:$port...\n" if DEBUG;
+      warn "$tid: TCP @{[$addr->stringify]}:$port...\n" if $debug;
       return Web::Transport::TCPTransport->new
           (host => $addr, port => $port, id => $tid);
     });
@@ -78,7 +85,7 @@ my $proxy_to_transport = sub {
       die "Can't resolve proxy host |@{[$proxy->{host}->stringify]}|\n"
           unless defined $_[0];
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : ($proxy->{protocol} eq 'https' ? 443 : 80));
-      warn "$tid: TCP @{[$_[0]->stringify]}:$pport...\n" if DEBUG;
+      warn "$tid: TCP @{[$_[0]->stringify]}:$pport...\n" if $debug;
       my $transport = Web::Transport::TCPTransport->new
           (host => $_[0], port => $pport, id => $tid);
       if ($proxy->{protocol} eq 'https') {
@@ -91,7 +98,7 @@ my $proxy_to_transport = sub {
       if ($url_record->scheme eq 'https') {
         # XXX HTTP version
         my $http = Web::Transport::HTTPClientConnection->new
-            (transport => $transport);
+            (transport => $transport, debug => $debug || $proxy->{debug});
         require Web::Transport::H1CONNECTTransport;
         $transport = Web::Transport::H1CONNECTTransport->new
             (http => $http,
@@ -121,7 +128,7 @@ my $proxy_to_transport = sub {
       die "No port specified\n" unless defined $port;
 
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : 1080);
-      warn "$tid: TCP @{[$proxy_addr->stringify]}:$pport...\n" if DEBUG;
+      warn "$tid: TCP @{[$proxy_addr->stringify]}:$pport...\n" if $debug;
       my $tcp = Web::Transport::TCPTransport->new
           (host => $proxy_addr, port => $pport, id => $tid);
       require Web::Transport::SOCKS4Transport;
@@ -138,7 +145,7 @@ my $proxy_to_transport = sub {
       die "No port specified\n" unless defined $port;
 
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : 1080);
-      warn "$tid: TCP @{[$_[0]->stringify]}:$pport...\n" if DEBUG;
+      warn "$tid: TCP @{[$_[0]->stringify]}:$pport...\n" if $debug;
       my $tcp = Web::Transport::TCPTransport->new
           (host => $_[0], port => $pport, id => $tid);
 
@@ -148,7 +155,7 @@ my $proxy_to_transport = sub {
     });
   } elsif ($proxy->{protocol} eq 'unix') {
     require Web::Transport::UNIXDomainSocketTransport;
-    warn "$tid: Unix $proxy->{path}...\n" if DEBUG;
+    warn "$tid: Unix $proxy->{path}...\n" if $debug;
     my $transport = Web::Transport::UNIXDomainSocketTransport->new
         (path => $proxy->{path}, id => $tid);
     return Promise->resolve ($transport);
@@ -164,6 +171,7 @@ sub connect ($%) {
     ## Establish a transport
 
     my $parent_id = $self->parent_id;
+    my $debug = $self->debug;
 
     my $url_record = $self->{url};
     $self->proxy_manager->get_proxies_for_url ($url_record)->then (sub {
@@ -176,7 +184,7 @@ sub connect ($%) {
         if (@$proxies) {
           my $proxy = shift @$proxies;
           my $tid = $parent_id . '.' . ++$self->{tid};
-          return $proxy_to_transport->($tid, $proxy, $url_record, $resolver, $args{no_cache})->catch (sub {
+          return $proxy_to_transport->($tid, $proxy, $url_record, $resolver, $args{no_cache}, $debug)->catch (sub {
             if (@$proxies) {
               return $get->();
             } else {
@@ -210,7 +218,7 @@ sub connect ($%) {
         die "Bad URL scheme |@{[$url_record->scheme]}|\n";
       }
       $self->{http} = Web::Transport::HTTPClientConnection->new
-          (transport => $_[0], cb => sub { });
+          (transport => $_[0], cb => sub { }, debug => $debug);
       return $self->{http}->connect;
     })->catch (sub {
       delete $self->{connect_promise};
@@ -307,7 +315,7 @@ sub request ($$$$$$$) {
       $err =~ s/\n$//;
       return [undef, {failed => 1, message => $err}];
     }
-#XXX warn if DEBUG
+#XXX warn if $self->debug
   });
 } # request
 

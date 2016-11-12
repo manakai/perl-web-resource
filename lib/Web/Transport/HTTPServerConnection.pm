@@ -25,6 +25,7 @@ sub new ($%) {
                     transport => $args{transport},
                     rbuf => '', state => 'initial',
                     con_cb => $args{cb}}, $class;
+  $self->{DEBUG} = $args{debug} if defined $args{debug};
   my $closed;
   my $close_p = Promise->new (sub { $closed = $_[0] });
   $self->{closed} = promised_cleanup {
@@ -40,7 +41,7 @@ sub new ($%) {
       $self->_ondata ($_[2]);
     } elsif ($type eq 'readeof') {
       my $data = $_[2];
-      if (DEBUG) {
+      if ($self->{DEBUG}) {
         my $id = $transport->id;
         if (defined $data->{message}) {
           warn "$id: R: EOF (@{[_e4d_t $data->{message}]})\n";
@@ -51,7 +52,7 @@ sub new ($%) {
       delete $self->{timer};
       $self->_oneof ($data);
     } elsif ($type eq 'writeeof') {
-      if (DEBUG) {
+      if ($self->{DEBUG}) {
         my $data = $_[2];
         my $id = $transport->id;
         if (defined $data->{message}) {
@@ -120,7 +121,7 @@ sub _url_hostport ($) {
 sub _new_stream ($) {
   my $self = $_[0];
   my $req = $self->{stream} = bless {
-    is_server => 1, DEBUG => DEBUG,
+    is_server => 1, DEBUG => $self->{DEBUG},
     connection => $self,
     id => $self->{id} . '.' . ++$self->{req_id},
     request => {

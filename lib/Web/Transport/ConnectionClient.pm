@@ -72,6 +72,13 @@ sub max_size ($;$) {
   return defined $_[0]->{max_size} ? $_[0]->{max_size} : -1;
 } # max_size
 
+sub debug ($;$) {
+  if (@_ > 1) {
+    $_[0]->{debug} = $_[1];
+  }
+  return defined $_[0]->{debug} ? $_[0]->{debug} : DEBUG;
+} # debug
+
 our $LastResortTimeout;
 $LastResortTimeout = 60*10 unless defined $LastResortTimeout;
 sub last_resort_timeout ($;$) {
@@ -90,10 +97,10 @@ sub _connect ($$) {
 
   return Promise->resolve->then (sub {
     if (defined $self->{client}) {
-      warn "$self->{parent_id}: @{[__PACKAGE__]}: Current connection is no longer active @{[scalar gmtime]}\n" if DEBUG;
+      warn "$self->{parent_id}: @{[__PACKAGE__]}: Current connection is no longer active @{[scalar gmtime]}\n" if $self->debug;
       return $self->{client}->abort;
     } else {
-      warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n" if DEBUG;
+      warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n" if $self->debug;
     }
   })->then (sub {
     $self->{client} = Web::Transport::ClientBareConnection->new_from_url
@@ -102,6 +109,7 @@ sub _connect ($$) {
     $self->{client}->proxy_manager ($self->proxy_manager);
     $self->{client}->resolver ($self->resolver);
     $self->{client}->tls_options ($self->tls_options);
+    $self->{client}->debug ($self->debug);
     $self->{client}->last_resort_timeout ($self->last_resort_timeout);
     return $self->{client};
   });
@@ -196,7 +204,7 @@ sub close ($) {
     my $client = delete $self->{client};
     return $client->close if defined $client;
   })->then (sub {
-    warn "$self->{parent_id}: @{[__PACKAGE__]}: Closed @{[scalar gmtime]}\n" if DEBUG;
+    warn "$self->{parent_id}: @{[__PACKAGE__]}: Closed @{[scalar gmtime]}\n" if $self->debug;
   });
 } # close
 

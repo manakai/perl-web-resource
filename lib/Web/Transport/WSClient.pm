@@ -52,6 +52,7 @@ sub new ($%) {
     $self->{client}->proxy_manager ($args{proxy_manager});
     $self->{client}->resolver ($args{resolver});
     $self->{client}->tls_options ($args{tls_options});
+    $self->{client}->debug ($args{debug});
 
     warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n" if DEBUG;
 

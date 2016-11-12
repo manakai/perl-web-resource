@@ -108,6 +108,12 @@ default, a resolver using system's name resolution API
 
 XXX
 
+=item debug => $mode
+
+Specify the debug mode.  The default value is the C<WEBUA_DEBUG>
+environment variable's value.  See C<WEBUA_DEBUG> section in
+L<Web::Transport> for available mode values.
+
 =item cb => $code
 
 Specify the callback subroutine.  The value must be a code reference.

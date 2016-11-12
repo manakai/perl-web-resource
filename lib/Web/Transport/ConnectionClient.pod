@@ -150,6 +150,14 @@ response, in bytes.  The initial value is -1, i.e. no limit is set.
 This option must be set before the first invocation of the C<request>
 method.
 
+=item $client->debug ($mode)
+
+=item $mode = $client->debug
+
+Get or set the debug mode.  The initial value is the C<WEBUA_DEBUG>
+environment variable's value.  See C<WEBUA_DEBUG> section in
+L<Web::Transport> for available mode values.
+
 =item $client->last_resort_timeout ($seconds)
 
 =item $seconds = $client->last_resort_timeout

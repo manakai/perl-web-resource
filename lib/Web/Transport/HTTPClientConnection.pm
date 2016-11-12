@@ -27,6 +27,7 @@ sub new ($%) {
                     rbuf => \(my $x = ''),
                     DEBUG => DEBUG}, shift;
   $self->{args} = {@_};
+  $self->{DEBUG} = delete $self->{args}->{debug} if defined $self->{args}->{debug};
   $self->{con_cb} = (delete $self->{args}->{cb}) || sub { };
   return $self;
 } # new_from_cb
@@ -246,9 +247,9 @@ sub _process_rbuf ($$;%) {
           if (defined $self->{pending_frame}) {
             $self->{ws_state} = 'CLOSING';
             $self->{transport}->push_write (\($self->{pending_frame}));
-            $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if DEBUG; # XXX $self->{stream}
+            $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if $self->{DEBUG}; # XXX $self->{stream}
             $self->{ws_timer} = AE::timer 20, 0, sub {
-              warn "$self->{request}->{id}: WS timeout (20)\n" if DEBUG;
+              warn "$self->{request}->{id}: WS timeout (20)\n" if $self->{DEBUG};
               delete $self->{ws_timer};
               $self->_receive_done;
             };
@@ -568,7 +569,7 @@ sub connect ($) {
     $self->_con_ev ('closeconnection');
   });
 
-  if (DEBUG) {
+  if ($self->{DEBUG}) {
     my $id = $self->{transport}->id;
     warn "$id: Connect (@{[$self->{transport}->layered_type]})... @{[scalar gmtime]}\n";
   }
@@ -580,7 +581,7 @@ sub connect ($) {
       $self->_process_rbuf ($self->{rbuf});
     } elsif ($type eq 'readeof') {
       my $data = $_[2];
-      if (DEBUG) {
+      if ($self->{DEBUG}) {
         my $id = $self->{transport}->id;
         if (defined $data->{message}) {
           warn "$id: R: EOF ($data->{message})\n";
@@ -609,7 +610,7 @@ sub connect ($) {
         }
       }
     } elsif ($type eq 'writeeof') {
-      if (DEBUG) {
+      if ($self->{DEBUG}) {
         my $data = $_[2];
         my $id = $self->{transport}->id;
         if (defined $data->{message}) {
@@ -713,7 +714,7 @@ sub send_request_headers ($$;%) {
       "$method $url HTTP/1.1\x0D\x0A",
       (map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []}),
       "\x0D\x0A";
-  if (DEBUG) {
+  if ($self->{DEBUG}) {
     for (split /\x0A/, $header) {
       warn "$req->{id}: S: @{[_e4d $_]}\n";
     }
@@ -750,8 +751,8 @@ sub send_data ($$;%) {
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   return unless length $$ref;
 
-  if (DEBUG) {
-    if (DEBUG > 1 or length $$ref <= 40) {
+  if ($self->{DEBUG}) {
+    if ($self->{DEBUG} > 1 or length $$ref <= 40) {
       for (split /\x0A/, $$ref, -1) {
         warn "$self->{request}->{id}: S: @{[_e4d $_]}\n";
       }

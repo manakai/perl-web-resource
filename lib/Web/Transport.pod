@@ -274,8 +274,9 @@ L<Web::Transport::CachedResolver>.
 
 =head1 ENVIRONMENT VARIABLE
 
-The C<WEBUA_DEBUG> environment variable can be specified to enable
-debug output.  If its value is a true value, debug messages, such as
+The C<WEBUA_DEBUG> and C<WEBSERVER_DEBUG> environment variables can be
+used to enable the debug mode of client and server modules,
+respectively.  If a true value is specified, debug output, such as
 some of network input and output, are printed to the standard error
 output.  If its value is greater than C<1>, more verbose messages are
 printed.

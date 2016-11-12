@@ -64,6 +64,8 @@ sub start ($$;%) {
   }; # $process_data
 
   my $last_error;
+  my $readeof_sent = 0;
+  my $writeeof_sent = 0;
   $self->{transport}->start (sub {
     my $type = $_[1];
     if ($self->{started}) {

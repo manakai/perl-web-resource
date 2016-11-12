@@ -961,7 +961,7 @@ test {
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
-        is $res->status, 203;
+        is $res->status, 203, $res;
         is $res->body_bytes, 'abcdef';
       } $c;
     })->then (sub{

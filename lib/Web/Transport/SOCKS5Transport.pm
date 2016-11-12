@@ -42,6 +42,9 @@ sub start ($$;%) {
   my ($ok0, $ng0) = @_;
   my $p0 = Promise->new (sub { ($ok0, $ng0) = @_ });
 
+  my ($ok1, $ng1) = @_;
+  my $p1 = Promise->new (sub { ($ok1, $ng1) = @_ });
+
   my ($ok, $ng) = @_;
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
 
@@ -70,7 +73,7 @@ sub start ($$;%) {
           $self->{started} = 1;
           undef $timer;
           $self->{info} = {};
-          $ok->();
+          $ok1->();
         } else {
           $self->{transport}->abort
               (message => "SOCKS5 server does not return a valid reply");
@@ -109,6 +112,7 @@ sub start ($$;%) {
                   message => 'SOCKS5 connection closed before handshake has completed'};
       }
       $self->{info} = {};
+      $ng1->($error);
       $ng->($error);
       delete $self->{transport};
       delete $self->{cb};
@@ -134,7 +138,11 @@ sub start ($$;%) {
       die "Unknown |host| type";
     }
     return $self->{transport}->push_promise;
-  })->catch (sub {
+  })->then (sub {
+    return $p1;
+  })->then (sub {
+    $ok->();
+  }, sub {
     $self->{info} = {};
     $ng->($_[0]);
     delete $self->{cb};

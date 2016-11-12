@@ -104,13 +104,13 @@ sub start ($$;%) {
       $data .= ${$_[2]};
       $process_data->(0);
     } elsif ($type eq 'readeof') {
-      $last_error = $_[2];
+      $last_error = $_[2] if $_[2]->{failed};
       $process_data->(1);
       $readeof_sent = 1;
     } elsif ($type eq 'writeeof') {
       $writeeof_sent = 1;
     } elsif ($type eq 'close') {
-      my $error = $_[2] || $last_error;
+      my $error = $last_error || $_[2] || {};
       unless ($error->{failed}) {
         $error = {failed => 1,
                   message => 'SOCKS5 connection closed before handshake has completed'};

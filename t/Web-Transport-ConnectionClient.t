@@ -431,11 +431,11 @@ test {
     ])->then (sub {
       my ($res1, $res2) = @{$_[0]};
       test {
-        ok ! $res1->is_network_error;
+        ok ! $res1->is_network_error, $res1;
         is $res1->network_error_message, undef;
         is $res1->body_bytes, 'hoge';
 
-        ok ! $res2->is_network_error;
+        ok ! $res2->is_network_error, $res2;
         is $res2->network_error_message, undef;
         is $res2->body_bytes, 'hoge';
       } $c;

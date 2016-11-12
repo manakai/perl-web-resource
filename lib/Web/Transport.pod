@@ -264,6 +264,15 @@ L<Web::Transport::ENVProxyManager>.
 
 XXX
 
+debug => $mode
+
+Specify the debug mode.  The default value is the C<WEBUA_DEBUG>
+environment variable's value.  See C<WEBUA_DEBUG> section for
+available mode values.
+
+This option is only applicable to C<http> and C<https> protocols.
+
+
 =head1 RESOLVERS
 
 XXX

@@ -1041,7 +1041,8 @@ test {
     my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
     $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
-                        port => $server->{port}}]);
+                                 port => $server->{port}}]);
+    $client->debug (2);
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {

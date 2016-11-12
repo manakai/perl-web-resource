@@ -75,7 +75,7 @@ sub start ($$) {
         } else {
           delete $self->{rw};
           $self->{read_closed} = 1;
-          AE::postpone { $self->{cb}->($self, 'readeof', {}) };
+          AE::postpone { $self->{cb}->($self, 'readeof', {message => "EOF received"}) };
           $self->_close if $self->{write_closed};
         }
       } elsif ($! != EAGAIN && $! != EINTR && $! != EWOULDBLOCK && $! != WSAEWOULDBLOCK) {
@@ -206,7 +206,7 @@ sub push_shutdown ($) {
   push @{$self->{wq}}, [sub {
     shutdown $self->{fh}, 1;
     $self->{write_closed} = 1;
-    AE::postpone { $self->{cb}->($self, 'writeeof', {}) };
+    AE::postpone { $self->{cb}->($self, 'writeeof', {message => "Write shutdown"}) };
     $self->_close if $self->{read_closed};
     $ok->();
   }, $ng];

@@ -1095,7 +1095,7 @@ test {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->last_resort_timeout (0.1);
+    $client->last_resort_timeout (0.5);
     my $p = $client->request (url => $url);
     test {
       isa_ok $p, 'Promise';
@@ -1129,7 +1129,7 @@ test {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->last_resort_timeout (0.1);
+    $client->last_resort_timeout (0.5);
     my $p = $client->request (url => $url);
     test {
       isa_ok $p, 'Promise';
@@ -1164,7 +1164,7 @@ test {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->last_resort_timeout (0.1);
+    $client->last_resort_timeout (0.5);
     my $p = $client->request (url => $url);
     test {
       isa_ok $p, 'Promise';
@@ -1196,7 +1196,7 @@ test {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->last_resort_timeout (0.1);
+    $client->last_resort_timeout (0.5);
     my $p = $client->request (url => $url);
     test {
       isa_ok $p, 'Promise';

@@ -26,6 +26,13 @@ sub layered_type ($) { return $_[0]->type . '/' . $_[0]->{transport}->layered_ty
 sub request_mode ($) { 'default' }
 sub info ($) { return $_[0]->{info} } # or undef
 
+sub _e4d ($) {
+  return $_[0] unless $_[0] =~ /[^\x20-\x5B\x5D-\x7E]/;
+  my $x = $_[0];
+  $x =~ s/([^\x20-\x5B\x5D-\x7E])/sprintf '\x%02X', ord $1/ge;
+  return $x;
+} # _e4d
+
 sub start ($$;%) {
   my $self = $_[0];
   croak "Bad state" if not defined $self->{args};
@@ -75,12 +82,12 @@ sub start ($$;%) {
           $ok1->();
         } else {
           $self->{transport}->abort
-              (message => "SOCKS5 server does not return a valid reply");
+              (message => "SOCKS5 server does not return a valid reply: |@{[_e4d substr $data, 0, 100]}|, $_[0]");
           return;
         }
       } else {
         $self->{transport}->abort
-            (message => "SOCKS5 server does not return a valid reply");
+            (message => "SOCKS5 server does not return a valid reply: |@{[_e4d substr $data, 0, 100]}|, $_[0]");
         return;
       }
     }

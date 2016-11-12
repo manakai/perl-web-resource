@@ -10,6 +10,7 @@ my $cert_path = $root_path->child ('local/cert');
 my $cn = $ENV{SERVER_HOST_NAME} || 'hoge.test';
 $cert_path->mkpath;
 my $DUMP = $ENV{DUMP};
+my $RSA = 0;
 
 sub ca_path ($$) {
   return $cert_path->child ("ca-" . $_[1]);
@@ -48,12 +49,12 @@ sub generate_ca_cert ($) {
   my $ecname = 'prime256v1';
   unless ($ca_key_path->is_file) {
     my $ca_subj = $ca_name;
-    if (0) {
+    if ($RSA) {
       x "openssl genrsa -out \Q$ca_key_path\E 2048";
       x "openssl req -new -x509 -nodes -days 1 -key \Q$ca_key_path\E -out \Q$ca_cert_path\E -subj \Q$ca_subj\E -sha256 -set_serial @{[time]}";
     } else {
       x "openssl ecparam -name $ecname -out \Q$ca_key_path\E -genkey";
-      x "openssl req -new -x509 -nodes -days 1 -key \Q$ca_key_path\E -out \Q$ca_cert_path\E -subj \Q$ca_subj\E -set_serial @{[time]}";
+      x "openssl req -new -x509 -nodes -days 1 -key \Q$ca_key_path\E -out \Q$ca_cert_path\E -subj \Q$ca_subj\E -sha256 -set_serial @{[time]}";
     }
     sleep 1;
   }
@@ -94,20 +95,20 @@ sub generate_certs ($$) {
   #my $server_subj = '/subjectAltName=DNS.1='.$subject_name;
   my $server_subj = '/CN='.(defined $cert_args->{cn} ? $cert_args->{cn} : $subject_name);
   $server_subj .= '/CN=' . $cert_args->{cn2} if defined $cert_args->{cn2};
-  if (0) {
-    x "openssl req -newkey rsa:2048 -days 1 -nodes -keyout \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E";# -config \Q$config_path\E $no_san ? '' : -reqexts san";
+  if ($RSA) {
+    x "openssl req -newkey rsa:2048 -days 1 -nodes -keyout \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E -sha256";# -config \Q$config_path\E $no_san ? '' : -reqexts san";
   } else {
-    x "openssl req -days 1 -new -nodes -key \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E";# -config \Q$config_path\E $cert_args->{no_san} ? '' : -reqexts san";
+    x "openssl req -days 1 -new -nodes -key \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E -sha256";# -config \Q$config_path\E $cert_args->{no_san} ? '' : -reqexts san";
   }
 
-  if (0) {
+  if ($RSA) {
     my $server_key1_path = $_[0]->cert_path ('key-pkcs1.pem', $cert_args);
     x "openssl rsa -in \Q$server_key_path\E -out \Q$server_key1_path\E";
   }
 
   my $server_cert_path = $_[0]->cert_path ('cert.pem', $cert_args);
   my $chained_cert_path = $_[0]->cert_path ('cert-chained.pem', $cert_args);
-  x "openssl x509 -req -in \Q$server_req_path\E -days 1 -CA \Q$chained_ca_cert_path\E -CAkey \Q$ica_key_path\E -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E -extensions exts";
+  x "openssl x509 -req -in \Q$server_req_path\E -days 1 -CA \Q$chained_ca_cert_path\E -CAkey \Q$ica_key_path\E -sha256 -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E -extensions exts";
 
   my $server_p12_path = $_[0]->cert_path ('keys.p12', $cert_args);
   x "openssl pkcs12 -export -passout pass: -CAfile \Q$chained_cert_path\E -in \Q$server_cert_path\E -inkey \Q$server_key_path\E -out \Q$server_p12_path\E";

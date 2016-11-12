@@ -50,6 +50,8 @@ sub start ($$;%) {
     if (length $data >= 8 or $_[0]) {
       if (substr ($data, 0, 2) eq "\x00\x5A") {
         substr ($data, 0, 8) = '';
+        $self->{started} = 1;
+        AE::postpone { $self->{cb}->($self, 'open') };
         if (length $data) {
           AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
         }
@@ -102,9 +104,7 @@ sub start ($$;%) {
   })->then (sub {
     return $p1;
   })->then (sub {
-    $self->{started} = 1;
     $ok->();
-    $self->{cb}->($self, 'open');
   })->catch (sub {
     $self->{info} = {};
     $ng->($_[0]);

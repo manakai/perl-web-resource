@@ -74,6 +74,8 @@ sub start ($$;%) {
         my $length = $atyp eq "\x01" ? 4 : $atyp eq "\x04" ? 16 : 1 + ord substr ($data, 6, 1);
         if (length $data >= 2 + 4 + $length + 2 or $_[0]) {
           substr ($data, 0, 2 + 4 + $length + 2) = '';
+          $self->{started} = 1;
+          AE::postpone { $self->{cb}->($self, 'open') };
           if (length $data) {
             AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
           }
@@ -152,9 +154,7 @@ sub start ($$;%) {
   })->then (sub {
     return $p1;
   })->then (sub {
-    $self->{started} = 1;
     $ok->();
-    $self->{cb}->($self, 'open');
   })->catch (sub {
     $self->{info} = {};
     $ng->($_[0]);

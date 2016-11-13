@@ -175,12 +175,11 @@ sub start ($$;%) {
     } elsif ($type eq 'open') {
       #
     } elsif ($type eq 'close') {
-      my $data = $_[2];
       if (defined $self->{starttls_done}) {
         (delete $self->{starttls_done})->[1]->({failed => 1, message => "Connection closed by a TLS error"});
       }
       if ($self->{started}) {
-        AE::postpone { (delete $self->{cb})->($self, 'close', $data) };
+        AE::postpone { (delete $self->{cb})->($self, 'close') };
       } else {
         delete $self->{cb};
       }

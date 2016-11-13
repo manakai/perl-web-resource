@@ -74,7 +74,7 @@ sub start ($$) {
       }
       $self->{http}->close->then (sub {
         if ($self->{started}) {
-          AE::postpone { (delete $self->{cb})->($self, 'close', {}) };
+          AE::postpone { (delete $self->{cb})->($self, 'close') };
         } else {
           delete $self->{cb};
         }

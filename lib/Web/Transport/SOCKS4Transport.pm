@@ -1,7 +1,7 @@
 package Web::Transport::SOCKS4Transport;
 use strict;
 use warnings;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
 use Carp qw(croak);
 use AnyEvent;
 use Promise;
@@ -26,29 +26,36 @@ sub layered_type ($) { return $_[0]->type . '/' . $_[0]->{transport}->layered_ty
 sub request_mode ($) { 'default' }
 sub info ($) { return $_[0]->{info} } # or undef
 
+our $HandshakeTimeout ||= 30;
+
 sub start ($$;%) {
   my $self = $_[0];
   croak "Bad state" if not defined $self->{args};
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
 
-  my ($ok1, $ng1) = @_;
-  my $p1 = Promise->new (sub { ($ok1, $ng1) = @_ });
+  $self->{info} = {remote_host => $args->{host},
+                   remote_port => $args->{port}};
+
+  my ($ok0, $ng0) = @_;
+  my $p0 = Promise->new (sub { ($ok0, $ng0) = @_ });
 
   my ($ok, $ng) = @_;
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
 
   my $timer;
   my $ontimer = sub {
-    $self->{transport}->abort (message => 'SOCKS4 timeout');
+    $self->{transport}->abort (message => "SOCKS4 timeout ($HandshakeTimeout)")
+        if defined $self->{transport};
     undef $timer;
   };
-  $timer = AE::timer 30, 0, $ontimer;
+  $timer = AE::timer $HandshakeTimeout, 0, $ontimer;
 
+  my $last_error;
   my $data = '';
   my $process_data = sub {
     if (length $data >= 8 or $_[0]) {
-      if (substr ($data, 0, 2) eq "\x00\x5A") {
+      if (length $data >= 8 and substr ($data, 0, 2) eq "\x00\x5A") {
         substr ($data, 0, 8) = '';
         $self->{started} = 1;
         AE::postpone { $self->{cb}->($self, 'open') };
@@ -56,19 +63,23 @@ sub start ($$;%) {
           AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
         }
         undef $timer;
-        $self->{info} = {};
-        $ok1->();
+        $ok->();
       } else {
-        $self->{transport}->abort
-            (message => sprintf "SOCKS4 server does not return a valid reply (result code %d)", ord substr $data, 1, 1);
+        my $error = {failed => 1, message => 'SOCKS4 server does not return a valid reply'};
+        if (length $data) {
+          $error->{message} .= sprintf " (result code %d)", ord substr $data, 1, 1;
+        } else {
+          $error->{message} .= ' (empty)';
+        }
+        $self->{transport}->abort (message => $error->{message});
+        $last_error ||= $error;
       }
     }
   }; # $process_data
 
-  my $last_error;
   my $readeof_sent = 0;
   my $writeeof_sent = 0;
-  $self->{transport}->start (sub {
+  return $self->{transport}->start (sub {
     my $type = $_[1];
     if ($self->{started}) {
       if ($type eq 'close') {
@@ -83,36 +94,32 @@ sub start ($$;%) {
       $data .= ${$_[2]};
       $process_data->(0);
     } elsif ($type eq 'readeof') {
-      $last_error = $_[2];
+      $last_error = $_[2] if $_[2]->{failed};
       $process_data->(1);
     } elsif ($type eq 'writeeof') {
       #
+    } elsif ($type eq 'open') {
+      my $port = $args->{port};
+      my $addr = $args->{host}->packed_addr;
+      $self->{transport}->push_write
+          (\("\x04\x01".(pack 'n', $port).$addr."\x00"));
+      $self->{transport}->push_promise->then ($ok0, $ng0);
     } elsif ($type eq 'close') {
-      $self->{info} = {};
-      $ng1->($_[2] || $last_error);
-      $ng->($_[2] || $last_error);
+      $ng0->("Closed before SOCKS4 handshake sent");
+      unless ($last_error) {
+        $last_error = {failed => 1, message => 'SOCKS4 server does not return a valid reply'};
+      }
+      $ng->($last_error);
       delete $self->{transport};
       delete $self->{cb};
+      undef $timer;
       undef $self;
     }
   })->then (sub {
-    my $port = $args->{port};
-    my $addr = $args->{host}->packed_addr;
-    $self->{transport}->push_write
-        (\("\x04\x01".(pack 'n', $port).$addr."\x00"));
-    return $self->{transport}->push_promise;
+    return $p0;
   })->then (sub {
-    return $p1;
-  })->then (sub {
-    $ok->();
-  })->catch (sub {
-    $self->{info} = {};
-    $ng->($_[0]);
-    delete $self->{cb};
-    undef $self;
+    return $p;
   });
-
-  return $p;
 } # start
 
 sub read_closed ($) { return $_[0]->{transport}->read_closed }

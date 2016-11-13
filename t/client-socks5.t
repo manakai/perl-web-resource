@@ -283,7 +283,8 @@ test {
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
-        is $res->network_error_message, q{SOCKS5 server does not return a valid reply: |\x06\x00\x05\x00\x00\x00\x00|};
+        like $res->network_error_message,
+            qr{^\QSOCKS5 server does not return a valid reply: |\x06\x00\E.*\|};
       } $c;
     })->then (sub{
       return $client->close;

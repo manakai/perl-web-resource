@@ -6,20 +6,18 @@ use Promise;
 use Web::Host;
 use AnyEvent::Util qw(fork_call);
 
-use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
-
 sub new ($) {
   return bless {}, $_[0];
 } # new
 
 sub resolve ($$;%) {
-  my (undef, $host) = @_;
+  my (undef, $host, %args) = @_;
   return Promise->resolve ($host) if $host->is_ip;
   return Promise->new (sub {
     my ($ok, $ng) = @_;
     my $clock;
     my $time1;
-    if (DEBUG) {
+    if ($args{debug}) {
       require Web::DateTime::Clock;
       $clock = Web::DateTime::Clock->realtime_clock;
       $time1 = $clock->();
@@ -27,7 +25,7 @@ sub resolve ($$;%) {
     }
     fork_call { scalar gethostbyname $_[0] } $host->stringify, sub {
       my $r = defined $_[0] ? Web::Host->new_from_packed_addr ($_[0]) : undef;
-      if (DEBUG) {
+      if ($args{debug}) {
         if (defined $r) {
           warn sprintf "%s: Result: |%s| (elapsed %.3f s)\n",
               __PACKAGE__, $r->stringify, $clock->() - $time1;
@@ -35,6 +33,9 @@ sub resolve ($$;%) {
           warn sprintf "%s: Result: null (elapsed %.3f s)\n",
               __PACKAGE__, $clock->() - $time1;
         }
+      }
+      if (defined $r and $r->is_ipv4 and $r->text_addr =~ /^0\./) { # 0.0.0.0/8
+        $r = undef;
       }
       $ok->($r);
     };

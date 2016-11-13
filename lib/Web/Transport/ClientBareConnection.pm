@@ -65,7 +65,7 @@ my $proxy_to_transport = sub {
   ## 1. If $proxy->{protocol} is not supported, return null.
 
   if ($proxy->{protocol} eq 'tcp') {
-    return $resolver->resolve ($url_record->host, no_cache => $no_cache)->then (sub {
+    return $resolver->resolve ($url_record->host, no_cache => $no_cache, debug => $debug)->then (sub {
       my $addr = $_[0];
       die "Can't resolve host |@{[$url_record->host->stringify]}|\n"
           unless defined $addr;
@@ -81,7 +81,7 @@ my $proxy_to_transport = sub {
     });
   } elsif ($proxy->{protocol} eq 'http' or
            $proxy->{protocol} eq 'https') {
-    return $resolver->resolve ($proxy->{host})->then (sub {
+    return $resolver->resolve ($proxy->{host}, debug => $debug)->then (sub {
       die "Can't resolve proxy host |@{[$proxy->{host}->stringify]}|\n"
           unless defined $_[0];
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : ($proxy->{protocol} eq 'https' ? 443 : 80));
@@ -111,8 +111,8 @@ my $proxy_to_transport = sub {
     });
   } elsif ($proxy->{protocol} eq 'socks4') {
     return Promise->all ([
-      $resolver->resolve ($url_record->host, no_cache => $no_cache), # XXX force ipv4 option ?
-      $resolver->resolve ($proxy->{host}),
+      $resolver->resolve ($url_record->host, no_cache => $no_cache, debug => $debug), # XXX force ipv4 option ?
+      $resolver->resolve ($proxy->{host}, debug => $debug),
     ])->then (sub {
       my $addr = $_[0]->[0];
       die "Can't resolve host |@{[$url_record->host->stringify]}|\n"
@@ -136,7 +136,7 @@ my $proxy_to_transport = sub {
           (transport => $tcp, host => $addr, port => 0+$port);
     });
   } elsif ($proxy->{protocol} eq 'socks5') {
-    return $resolver->resolve ($proxy->{host})->then (sub {
+    return $resolver->resolve ($proxy->{host}, debug => $debug)->then (sub {
       die "Can't resolve proxy host |@{[$proxy->{host}->stringify]}|\n"
           unless defined $_[0];
 

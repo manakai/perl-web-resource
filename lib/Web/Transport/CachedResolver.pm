@@ -6,8 +6,6 @@ use Promise;
 use Web::Host;
 use AnyEvent::Util qw(fork_call);
 
-use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
-
 sub new_from_resolver_and_clock ($$$) {
   return bless {resolver => $_[1], cache => {},
                 clock => $_[2]}, $_[0];
@@ -17,12 +15,13 @@ my $CacheMaxAge = 60;
 
 sub resolve ($$;%) {
   my ($self, $host, %args) = @_;
+  my $DEBUG = $args{debug} || 0;
 
   my $cached = $args{no_cache} ? undef : $self->{cache}->{$host->stringify};
   if (defined $cached) {
     my $now = $self->{clock}->();
     if (defined $cached and $cached->[1] + $CacheMaxAge > $now) {
-      if (DEBUG > 1) {
+      if ($DEBUG > 1) {
         if (defined $cached->[0]) {
           warn sprintf "%s: Using cache of |%s|: |%s| (age %.3f s)\n",
               __PACKAGE__, $host->stringify,
@@ -38,7 +37,7 @@ sub resolve ($$;%) {
     if (defined $cached and defined $cached->[2]) {
       my $clock;
       my $time1;
-      if (DEBUG > 1) {
+      if ($DEBUG > 1) {
         require Web::DateTime::Clock;
         $clock = Web::DateTime::Clock->realtime_clock;
         $time1 = $clock->();
@@ -46,7 +45,7 @@ sub resolve ($$;%) {
             __PACKAGE__, $host->stringify;
       }
       return $cached->[2]->then (sub {
-        if (DEBUG > 1) {
+        if ($DEBUG > 1) {
           if (defined $_[0]) {
             warn sprintf "%s: Using cache: |%s| (elapsed %.3f s)\n",
                 __PACKAGE__, $_[0]->stringify, $clock->() - $time1;
@@ -60,7 +59,7 @@ sub resolve ($$;%) {
     }
 
     warn sprintf "%s: |%s| is not cached\n", __PACKAGE__, $host->stringify
-        if DEBUG > 1;
+        if $DEBUG > 1;
   } # $cached
 
   my $p = $self->{resolver}->resolve ($host)->then (sub {

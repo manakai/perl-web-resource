@@ -38,6 +38,9 @@ sub start ($$) {
     if (defined $args->{fh}) {
       $ok->($args->{fh});
     } else {
+      if ($args->{addr} eq '127.0.53.53') {
+        return $ng->('ICANN_NAME_COLLISION');
+      }
       tcp_connect $args->{addr}, $args->{port}, sub {
         return $ng->($!) unless $_[0];
         $ok->($_[0]);

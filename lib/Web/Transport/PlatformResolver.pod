@@ -27,9 +27,20 @@ Following methods are available:
 
 Create a resolver.
 
-=item $promise = $resolver->resolve ($host)
+=item $promise = $resolver->resolve ($host, no_cache => $boolean, debug => $mode)
 
-Resolve a domain.  The argument must be a host (L<Web::Host>).
+Resolve a domain.
+
+The first argument must be a host (L<Web::Host>) to resolve.
+
+Additionally, named arguments can be specified.
+
+The C<no_cache> named argument is ignored for this resolver (for now,
+at least).  That is, the platform's DNS cache can't be disabled.
+
+The C<debug> argument specifies the debug mode.  The default value is
+0 (not in the debug mode).  See C<WEBUA_DEBUG> section in
+L<Web::Transport> for available mode values.
 
 The method returns a promise (L<Promise>), which is to be resolved
 with the result.  If the host is a domain and is successfully resolved
@@ -37,18 +48,16 @@ into an IP address, or the host is an IP address, the promise is
 resolved with a host (L<Web::Host>) representing that IP address.
 Otherwise, it is resolved with C<undef>.
 
-The C<no_cache> named argument is ignored for this resolver (for now,
-at least).  That is, the platform's DNS cache can't be disabled.
-
 =back
-
-=head1 ENVIRONMENT VARIABLE
-
-This module supports C<WEBUA_DEBUG>.  See L<Web::Transport>.
 
 =head1 SEE ALSO
 
 L<Web::Transport::CachedResolver>.
+
+=head1 SPECIFICATION
+
+Web Transport Processing
+<https://wiki.suikawiki.org/n/Web%20Transport%20Processing>.
 
 =head1 AUTHOR
 

@@ -1,6 +1,7 @@
 package Web::Transport::SOCKS5Transport;
 use strict;
 use warnings;
+our $VERSION = '2.0';
 use Carp qw(croak);
 use AnyEvent;
 use Promise;
@@ -33,72 +34,106 @@ sub _e4d ($) {
   return $x;
 } # _e4d
 
+our $HandshakeTimeout ||= 30;
+
 sub start ($$;%) {
   my $self = $_[0];
   croak "Bad state" if not defined $self->{args};
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
 
+  $self->{info} = {remote_host => $args->{host},
+                   remote_port => $args->{port}};
+
   my $timer;
+  my $timeout = $HandshakeTimeout;
   my $ontimer = sub {
-    $self->{transport}->abort (message => 'SOCKS5 timeout');
+    $self->{transport}->abort (message => "SOCKS5 timeout ($timeout)")
+        if defined $self->{transport};
     undef $timer;
   };
-  $timer = AE::timer 30, 0, $ontimer;
+  $timer = AE::timer $timeout, 0, $ontimer;
 
-  my ($ok0, $ng0) = @_;
-  my $p0 = Promise->new (sub { ($ok0, $ng0) = @_ });
+  my ($send_ok, $send_ng) = @_;
+  my $send_p = Promise->new (sub { ($send_ok, $send_ng) = @_ });
 
-  my ($ok1, $ng1) = @_;
-  my $p1 = Promise->new (sub { ($ok1, $ng1) = @_ });
+  my ($receive_ok, $receive_ng) = @_;
+  my $receive_p = Promise->new (sub { ($receive_ok, $receive_ng) = @_ });
 
-  my ($ok, $ng) = @_;
-  my $p = Promise->new (sub { ($ok, $ng) = @_ });
-
+  my $last_error;
   my $data = '';
+  my $dest_sent = 0;
   my $process_data = sub {
     if (length $data >= 2 or $_[0]) {
-      if (substr ($data, 0, 2) eq "\x05\x00") {
-        $timer = AE::timer 30, 0, $ontimer;
-        $ok0->();
+      if (length $data >= 2 and substr ($data, 0, 2) eq "\x05\x00") {
+        $timer = AE::timer $timeout, 0, $ontimer;
+        unless ($dest_sent) {
+          my $port = $args->{port};
+          my $host = $args->{host};
+          if ($host->is_domain) {
+            $host = encode_web_utf8 $host->stringify;
+            $self->{transport}->push_write
+                (\("\x05\x01\x00\x03".(pack 'C', length $host).$host.(pack 'n', $port)));
+          } elsif ($host->is_ipv4) {
+            $self->{transport}->push_write
+                (\("\x05\x01\x00\x01".$host->packed_addr.(pack 'n', $port)));
+          } elsif ($host->is_ipv6) {
+            $self->{transport}->push_write
+                (\("\x05\x01\x00\x04".$host->packed_addr.(pack 'n', $port)));
+          } else { # never
+            $send_ng->("Unknown |host| type");
+            $receive_ng->("Unknown |host| type");
+            return;
+          }
+          $dest_sent = 1;
+          $self->{transport}->push_promise->then ($send_ok, sub {
+            $send_ng->($last_error || $_[0]);
+          });
+        }
       } else {
-        $self->{transport}->abort (message => "SOCKS5 negotiation failed");
-        $ng0->("SOCKS5 negotiation failed");
+        my $error = {failed => 1,
+                     message => 'SOCKS5 server does not return a valid reply'};
+        $error->{message} .= ": |@{[_e4d substr $data, 0, 100]}|";
+        $error->{message} .= ' (EOF received)' if $_[0];
+        $self->{transport}->abort (message => $error->{message});
+        $last_error ||= $error;
         return;
       }
+    } else {
+      return;
     }
 
     if (length $data >= 2 + 5 or $_[0]) {
-      if (substr ($data, 2, 4) =~ /^\x05\x00\x00([\x01\x03\x04])/) {
+      if (length $data >= 2 + 5 and
+          substr ($data, 2, 4) =~ /^\x05\x00\x00([\x01\x03\x04])/) {
         my $atyp = $1;
         my $length = $atyp eq "\x01" ? 4 : $atyp eq "\x04" ? 16 : 1 + ord substr ($data, 6, 1);
-        if (length $data >= 2 + 4 + $length + 2 or $_[0]) {
+        if (length $data >= 2 + 4 + $length + 2) {
           substr ($data, 0, 2 + 4 + $length + 2) = '';
-          $self->{started} = 1;
-          AE::postpone { $self->{cb}->($self, 'open') };
-          if (length $data) {
-            AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
-          }
           undef $timer;
-          $self->{info} = {};
-          $ok1->();
-        } else {
-          $self->{transport}->abort
-              (message => "SOCKS5 server does not return a valid reply: |@{[_e4d substr $data, 0, 100]}|, $_[0]");
+          $receive_ok->();
+          $self->{started} = 1;
+          $self->{cb}->($self, 'open');
+          if (length $data) {
+            $self->{cb}->($self, 'readdata', \$data);
+          }
+          return;
+        } elsif (not $_[0]) {
           return;
         }
-      } else {
-        $self->{transport}->abort
-            (message => "SOCKS5 server does not return a valid reply: |@{[_e4d substr $data, 0, 100]}|, $_[0]");
-        return;
       }
+      my $error = {failed => 1,
+                   message => 'SOCKS5 server does not return a valid reply'};
+      $error->{message} .= ": |@{[_e4d substr $data, 0, 100]}|";
+      $error->{message} .= ' (EOF received)' if $_[0];
+      $self->{transport}->abort (message => $error->{message});
+      $last_error ||= $error;
     }
   }; # $process_data
 
-  my $last_error;
   my $readeof_sent = 0;
   my $writeeof_sent = 0;
-  $self->{transport}->start (sub {
+  return $self->{transport}->start (sub {
     my $type = $_[1];
     if ($self->{started}) {
       if ($type eq 'close') {
@@ -118,51 +153,23 @@ sub start ($$;%) {
       $readeof_sent = 1;
     } elsif ($type eq 'writeeof') {
       $writeeof_sent = 1;
+    } elsif ($type eq 'open') {
+      $self->{transport}->push_write (\"\x05\x01\x00");
     } elsif ($type eq 'close') {
-      my $error = $last_error || $_[2] || {};
-      unless ($error->{failed}) {
-        $error = {failed => 1,
-                  message => 'SOCKS5 connection closed before handshake has completed'};
+      unless ($last_error) {
+        $last_error = {failed => 1,
+                       message => 'SOCKS5 server does not return a valid reply'};
       }
-      $self->{info} = {};
-      $ng1->($error);
-      $ng->($error);
+      $send_ng->($last_error);
+      $receive_ng->($last_error);
       delete $self->{transport};
       delete $self->{cb};
+      undef $timer;
       undef $self;
     }
   })->then (sub {
-    $self->{transport}->push_write (\"\x05\x01\x00");
-    return $p0;
-  })->then (sub {
-    my $port = $args->{port};
-    my $host = $args->{host};
-    if ($host->is_domain) {
-      $host = encode_web_utf8 $host->stringify;
-      $self->{transport}->push_write
-          (\("\x05\x01\x00\x03".(pack 'C', length $host).$host.(pack 'n', $port)));
-    } elsif ($host->is_ipv4) {
-      $self->{transport}->push_write
-          (\("\x05\x01\x00\x01".$host->packed_addr.(pack 'n', $port)));
-    } elsif ($host->is_ipv6) {
-      $self->{transport}->push_write
-          (\("\x05\x01\x00\x04".$host->packed_addr.(pack 'n', $port)));
-    } else { # never
-      die "Unknown |host| type";
-    }
-    return $self->{transport}->push_promise;
-  })->then (sub {
-    return $p1;
-  })->then (sub {
-    $ok->();
-  })->catch (sub {
-    $self->{info} = {};
-    $ng->($_[0]);
-    delete $self->{cb};
-    undef $self;
+    return Promise->all ([$send_p, $receive_p]);
   });
-
-  return $p;
 } # start
 
 sub read_closed ($) { return $_[0]->{transport}->read_closed }

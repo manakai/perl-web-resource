@@ -44,26 +44,27 @@ sub start ($$;%) {
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
 
   my $timer;
+  my $timeout = $HandshakeTimeout;
   my $ontimer = sub {
-    $self->{transport}->abort (message => "SOCKS4 timeout ($HandshakeTimeout)")
+    $self->{transport}->abort (message => "SOCKS4 timeout ($timeout)")
         if defined $self->{transport};
     undef $timer;
   };
-  $timer = AE::timer $HandshakeTimeout, 0, $ontimer;
+  $timer = AE::timer $timeout, 0, $ontimer;
 
   my $last_error;
   my $data = '';
   my $process_data = sub {
     if (length $data >= 8 or $_[0]) {
       if (length $data >= 8 and substr ($data, 0, 2) eq "\x00\x5A") {
+        undef $timer;
         substr ($data, 0, 8) = '';
         $self->{started} = 1;
-        AE::postpone { $self->{cb}->($self, 'open') };
-        if (length $data) {
-          AE::postpone { $self->{cb}->($self, 'readdata', \$data) };
-        }
-        undef $timer;
+        $self->{cb}->($self, 'open');
         $ok->();
+        if (length $data) {
+          $self->{cb}->($self, 'readdata', \$data);
+        }
       } else {
         my $error = {failed => 1, message => 'SOCKS4 server does not return a valid reply'};
         if (length $data) {
@@ -96,8 +97,9 @@ sub start ($$;%) {
     } elsif ($type eq 'readeof') {
       $last_error = $_[2] if $_[2]->{failed};
       $process_data->(1);
+      $readeof_sent = 1;
     } elsif ($type eq 'writeeof') {
-      #
+      $writeeof_sent = 1;
     } elsif ($type eq 'open') {
       my $port = $args->{port};
       my $addr = $args->{host}->packed_addr;
@@ -105,10 +107,10 @@ sub start ($$;%) {
           (\("\x04\x01".(pack 'n', $port).$addr."\x00"));
       $self->{transport}->push_promise->then ($ok0, $ng0);
     } elsif ($type eq 'close') {
-      $ng0->("Closed before SOCKS4 handshake sent");
       unless ($last_error) {
         $last_error = {failed => 1, message => 'SOCKS4 server does not return a valid reply'};
       }
+      $ng0->("Closed before SOCKS4 handshake sent");
       $ng->($last_error);
       delete $self->{transport};
       delete $self->{cb};

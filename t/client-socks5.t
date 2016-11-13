@@ -93,19 +93,30 @@ sub server_as_cv ($) {
   } # get_proxies_for_url
 }
 
+{
+  no warnings 'once';
+  $Web::Transport::SOCKS5Transport::HandshakeTimeout = 5;
+}
+
 test {
   my $c = shift;
   server_as_cv (q{
+    5
     0x00
-    90
+
+    5
+    0x00
+    0x00
+
+    0x01
+    0x00
+    0x00
+    0x00
+    0x00
 
     0x00
     0x00
 
-    0x00
-    0x00
-    0x00
-    0x00
     receive "GET /foo"
     "HTTP/1.1 203 Hoe"CRLF
     "Content-Length: 6"CRLF
@@ -113,13 +124,14 @@ test {
     "abcdef"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                        port => $server->{port}}]);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
+        is $res->network_error_message, undef;
         is $res->status, 203, $res;
         is $res->body_bytes, 'abcdef';
       } $c;
@@ -130,37 +142,35 @@ test {
       undef $c;
     });
   });
-} n => 2, name => 'socks4 proxy';
+} n => 3, name => 'socks5 proxy';
 
 test {
   my $c = shift;
   server_as_cv (q{
-    0x00
-    90
-
-    0x00
+    5
     0x00
 
+    5
+    0x00
+    0x00
+
+    0x01
     0x00
     0x00
     0x00
     0x00
-    receive "GET /foo"
-    "HTTP/1.1 203 Hoe"CRLF
-    "Content-Length: 6"CRLF
-    CRLF
-    "abcdef"
+
+    close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{http://badhost.test/foo});
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                        port => $server->{port}}]);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error;
-        is $res->network_error_message, "Can't resolve host |badhost.test|";
+        is $res->network_error_message, q{SOCKS5 server does not return a valid reply: |\x05\x00\x05\x00\x00\x01\x00\x00\x00\x00| (EOF received)}, $res;
       } $c;
     })->then (sub{
       return $client->close;
@@ -169,150 +179,151 @@ test {
       undef $c;
     });
   });
-} n => 2, name => 'socks4 proxy not resolvable';
+} n => 1, name => 'socks5 proxy incomplete close';
 
 test {
   my $c = shift;
   server_as_cv (q{
+    5
     0x00
-    90
 
+    5
     0x00
     0x00
-    close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
-    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                        port => $server->{port}}]);
-    return promised_cleanup {
-      done $c;
-      undef $c;
-    } $client->request (url => $url)->then (sub {
-      my $res = $_[0];
-      test {
-        ok $res->is_network_error;
-        is $res->network_error_message, 'SOCKS4 server does not return a valid reply (result code 90)';
-      } $c;
-    }, sub {
-      my $error = $_[0];
-      test {
-        ok 0;
-        is $error, undef;
-      } $c;
-    })->then (sub {
-      return $client->close;
-    });
-  });
-} n => 2, name => 'socks4 proxy incomplete';
 
-test {
-  my $c = shift;
-  server_as_cv (q{
-    0x00
-    95
-
-    0x00
-    0x00
-    0x00
-    0x00
+    0x01
     0x00
     0x00
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                        port => $server->{port}}]);
-    return promised_cleanup {
-      done $c;
-      undef $c;
-    } $client->request (url => $url)->then (sub {
-      my $res = $_[0];
-      test {
-        ok $res->is_network_error;
-        is $res->network_error_message, 'SOCKS4 server does not return a valid reply (result code 95)';
-      } $c;
-    }, sub {
-      my $error = $_[0];
-      test {
-        ok 0;
-        is $error, undef;
-      } $c;
-    })->then (sub {
-      return $client->close;
-    });
-  });
-} n => 2, name => 'socks4 proxy error';
-
-{
-  no warnings 'once';
-  $Web::Transport::SOCKS4Transport::HandshakeTimeout = 5;
-}
-
-test {
-  my $c = shift;
-  server_as_cv (q{
-    0x00
-    95
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
-    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                        port => $server->{port}}]);
-    return promised_cleanup {
-      done $c;
-      undef $c;
-    } $client->request (url => $url)->then (sub {
-      my $res = $_[0];
-      test {
-        ok $res->is_network_error;
-        is $res->network_error_message, 'SOCKS4 timeout (5)';
-      } $c;
-    }, sub {
-      my $error = $_[0];
-      test {
-        ok 0;
-        is $error, undef;
-      } $c;
-    })->then (sub {
-      return $client->close;
-    });
-  });
-} n => 2, name => 'socks4 proxy error incomplete';
-
-test {
-  my $c = shift;
-  server_as_cv (q{
-    close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
-    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
                                  port => $server->{port}}]);
-    return promised_cleanup {
-      done $c;
-      undef $c;
-    } $client->request (url => $url)->then (sub {
+    return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error;
-        is $res->network_error_message, 'SOCKS4 server does not return a valid reply (empty)';
+        is $res->network_error_message, q{SOCKS5 timeout (5)}, $res;
       } $c;
-    }, sub {
-      my $error = $_[0];
-      test {
-        ok 0;
-        is $error, undef;
-      } $c;
-    })->then (sub {
+    })->then (sub{
       return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
     });
   });
-} n => 2, name => 'socks4 proxy empty closed';
+} n => 1, name => 'socks5 proxy incomplete timeout';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
+    return $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->network_error_message, q{SOCKS5 server does not return a valid reply: || (EOF received)};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'socks5 proxy empty close';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
+    return $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->network_error_message, q{SOCKS5 server does not return a valid reply: |\x00| (EOF received)};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'socks5 proxy bad';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    6
+    0x00
+
+    5
+    0x00
+    0x00
+    0x00
+    0x00
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
+    return $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->network_error_message, q{SOCKS5 server does not return a valid reply: |\x06\x00\x05\x00\x00\x00\x00|};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'socks5 proxy bad';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    5
+    0x00
+
+    10
+    0x00
+    0x00
+    0x00
+    0x00
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
+    return $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->network_error_message, q{SOCKS5 server does not return a valid reply: |\x05\x00\x0A\x00\x00\x00\x00|}, $res;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'socks5 proxy bad';
 
 run_tests;
 

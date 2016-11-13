@@ -936,53 +936,6 @@ test {
 
 test {
   my $c = shift;
-  server_as_cv (q{
-    5
-    0x00
-
-    5
-    0x00
-    0x00
-
-    0x01
-    0x00
-    0x00
-    0x00
-    0x00
-
-    0x00
-    0x00
-
-    receive "GET /foo"
-    "HTTP/1.1 203 Hoe"CRLF
-    "Content-Length: 6"CRLF
-    CRLF
-    "abcdef"
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
-    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
-                                 port => $server->{port}}]);
-    $client->debug (2);
-    return $client->request (url => $url)->then (sub {
-      my $res = $_[0];
-      test {
-        is $res->network_error_message, undef;
-        is $res->status, 203;
-        is $res->body_bytes, 'abcdef';
-      } $c;
-    })->then (sub{
-      return $client->close;
-    })->then (sub {
-      done $c;
-      undef $c;
-    });
-  });
-} n => 3, name => 'socks5 proxy';
-
-test {
-  my $c = shift;
   unix_server_as_cv (q{
     receive "GET /foo"
     "HTTP/1.1 203 Hoe"CRLF

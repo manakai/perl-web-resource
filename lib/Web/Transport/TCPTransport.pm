@@ -159,6 +159,9 @@ sub _start_write ($) {
           };
           $self->_close;
           return;
+        } else { # retry later
+          unshift @{$self->{wq}}, $w;
+          last;
         }
       } elsif (@$w == 2) { # promise
         $w->[0]->();

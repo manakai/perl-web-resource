@@ -39,7 +39,7 @@ sub proxy_manager ($;$) {
   }
   return $_[0]->{proxy_manager} ||= do {
     require Web::Transport::ENVProxyManager;
-    Web::Transport::ENVProxyManager->new_from_envs;
+    Web::Transport::ENVProxyManager->new;
   };
 } # proxy_manager
 

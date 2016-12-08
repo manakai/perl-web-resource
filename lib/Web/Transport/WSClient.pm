@@ -34,7 +34,7 @@ sub new ($%) {
 
     $args{proxy_manager} ||= do {
       require Web::Transport::ENVProxyManager;
-      Web::Transport::ENVProxyManager->new_from_envs;
+      Web::Transport::ENVProxyManager->new;
     };
 
     $args{resolver} ||= do {

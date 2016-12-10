@@ -933,6 +933,7 @@ $Web::MIME::_TypeDefs::Type = {
                                           'marc' => {
                                                     'iana' => 'permanent'
                                                   },
+                                          'marc+xml' => {},
                                           'marche' => {},
                                           'marcxml+xml' => {
                                                            'iana' => 'permanent',
@@ -1159,6 +1160,10 @@ $Web::MIME::_TypeDefs::Type = {
                                           'msword5' => {},
                                           'msworks' => {},
                                           'mswrite' => {},
+                                          'mud+json' => {
+                                                        'iana' => 'permanent',
+                                                        'iana_intended_usage' => 'common'
+                                                      },
                                           'mxf' => {
                                                    'iana' => 'permanent',
                                                    'iana_intended_usage' => 'common'
@@ -1899,7 +1904,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'obsolete' => 1
                                                       },
                                           'trig' => {
-                                                    'iana' => 'provisional'
+                                                    'iana' => 'permanent',
+                                                    'iana_intended_usage' => 'common'
                                                   },
                                           'truetype' => {},
                                           'ttf' => {},
@@ -2484,6 +2490,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'iana' => 'permanent',
                                                        'iana_intended_usage' => 'common'
                                                      },
+                                          'vnd.docker.raw-stream' => {},
                                           'vnd.document+json' => {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'common'
@@ -7729,6 +7736,22 @@ $Web::MIME::_TypeDefs::Type = {
                                                     'iana' => 'permanent',
                                                     'iana_intended_usage' => 'common'
                                                   },
+                                          'yang-data+json' => {
+                                                              'iana' => 'permanent',
+                                                              'iana_intended_usage' => 'common'
+                                                            },
+                                          'yang-data+xml' => {
+                                                             'iana' => 'permanent',
+                                                             'iana_intended_usage' => 'common'
+                                                           },
+                                          'yang-patch+json' => {
+                                                               'iana' => 'permanent',
+                                                               'iana_intended_usage' => 'common'
+                                                             },
+                                          'yang-patch+xml' => {
+                                                              'iana' => 'permanent',
+                                                              'iana_intended_usage' => 'common'
+                                                            },
                                           'yin+xml' => {
                                                        'iana' => 'permanent',
                                                        'iana_intended_usage' => 'common'

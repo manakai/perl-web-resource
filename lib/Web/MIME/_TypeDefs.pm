@@ -299,6 +299,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'common'
                                                              },
+                                          'coap-payload' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'common'
+                                                          },
                                           'coffee-pot-command' => {
                                                                   'obsolete' => 1,
                                                                   'text' => 1
@@ -2978,8 +2982,11 @@ $Web::MIME::_TypeDefs::Type = {
                                                         },
                                           'vnd.git-lfs+json' => {},
                                           'vnd.github+json' => {},
+                                          'vnd.github.barred-rock-preview' => {},
                                           'vnd.github.cannonball-preview+json' => {},
                                           'vnd.github.cerberus-preview' => {},
+                                          'vnd.github.drax-preview+json' => {},
+                                          'vnd.github.inertia-preview+json' => {},
                                           'vnd.github.loki-preview+json' => {},
                                           'vnd.github.mirage-preview+json' => {},
                                           'vnd.github.mister-fantastic-preview+json' => {},
@@ -2987,6 +2994,7 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vnd.github.quicksilver-preview+json' => {},
                                           'vnd.github.sersi-preview+json' => {},
                                           'vnd.github.she-hulk-preview+json' => {},
+                                          'vnd.github.squirrel-girl-preview' => {},
                                           'vnd.github.swamp-thing-preview' => {},
                                           'vnd.github.the-key-preview+json' => {},
                                           'vnd.github.v3' => {},
@@ -3002,6 +3010,7 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vnd.github.v3.patch+json' => {},
                                           'vnd.github.v3.raw+json' => {},
                                           'vnd.github.v3.text+json' => {},
+                                          'vnd.github.wyandotte-preview+json' => {},
                                           'vnd.globalplatform.card-content-mgt' => {
                                                                                    'iana' => 'permanent',
                                                                                    'iana_intended_usage' => 'common'
@@ -8809,15 +8818,35 @@ $Web::MIME::_TypeDefs::Type = {
                                             }
                              },
           'font' => {
+                    'iana' => 'permanent',
                     'subtype' => {
+                                   'collection' => {
+                                                   'iana' => 'permanent'
+                                                 },
                                    'eot' => {},
                                    'opentype' => {},
-                                   'otf' => {},
+                                   'otf' => {
+                                            'iana' => 'permanent'
+                                          },
+                                   'sfnt' => {
+                                             'iana' => 'permanent',
+                                             'iana_intended_usage' => 'common'
+                                           },
                                    'truetype' => {},
-                                   'ttf' => {},
+                                   'ttf' => {
+                                            'iana' => 'permanent',
+                                            'iana_intended_usage' => 'common'
+                                          },
                                    'type1' => {},
                                    'vnd.ms-fontobject' => {},
-                                   'woff' => {},
+                                   'woff' => {
+                                             'iana' => 'permanent',
+                                             'iana_intended_usage' => 'common'
+                                           },
+                                   'woff2' => {
+                                              'iana' => 'permanent',
+                                              'iana_intended_usage' => 'common'
+                                            },
                                    'x-bdf' => {},
                                    'x-dos' => {},
                                    'x-figlet' => {},

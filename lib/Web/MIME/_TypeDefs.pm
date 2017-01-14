@@ -316,6 +316,18 @@ $Web::MIME::_TypeDefs::Type = {
                                                                    'iana_intended_usage' => 'common'
                                                                  },
                                           'core' => {},
+                                          'cose' => {
+                                                    'iana' => 'permanent',
+                                                    'iana_intended_usage' => 'common'
+                                                  },
+                                          'cose-key' => {
+                                                        'iana' => 'permanent',
+                                                        'iana_intended_usage' => 'common'
+                                                      },
+                                          'cose-key-set' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'common'
+                                                          },
                                           'cpi-download' => {},
                                           'cpi-job' => {},
                                           'cpl+xml' => {
@@ -630,7 +642,10 @@ $Web::MIME::_TypeDefs::Type = {
                                           'ghostview' => {
                                                          'obsolete' => 1
                                                        },
-                                          'gml+xml' => {},
+                                          'gml+xml' => {
+                                                       'iana' => 'permanent',
+                                                       'iana_intended_usage' => 'common'
+                                                     },
                                           'gnumeric' => {},
                                           'gnutar' => {},
                                           'gopher-ask-block' => {},
@@ -2453,6 +2468,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'limited use'
                                                                  },
+                                          'vnd.dataresource+json' => {
+                                                                     'iana' => 'permanent',
+                                                                     'iana_intended_usage' => 'common'
+                                                                   },
                                           'vnd.debian.binary-package' => {
                                                                          'iana' => 'permanent',
                                                                          'iana_intended_usage' => 'common'
@@ -3118,6 +3137,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'iana' => 'permanent',
                                                         'iana_intended_usage' => 'limited use'
                                                       },
+                                          'vnd.hc+json' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
+                                                         },
                                           'vnd.hcl-bireports' => {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'common'
@@ -5488,6 +5511,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                           'iana' => 'permanent',
                                                                           'iana_intended_usage' => 'common'
                                                                         },
+                                          'vnd.tableschema+json' => {
+                                                                    'iana' => 'permanent',
+                                                                    'iana_intended_usage' => 'common'
+                                                                  },
                                           'vnd.tao.intent-module-archive' => {
                                                                              'iana' => 'permanent',
                                                                              'iana_intended_usage' => 'common'

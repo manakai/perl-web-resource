@@ -491,6 +491,7 @@ sub _request_headers ($) {
       return 0;
     }
     my $target_port = $target_url->port;
+    $host_port = Web::URL->parse_string ($target_url->scheme . '://' . $host)->port;
     if (defined $host_port and defined $target_port and
         $host_port eq $target_port) {
       #

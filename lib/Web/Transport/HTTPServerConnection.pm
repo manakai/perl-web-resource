@@ -411,14 +411,12 @@ sub _request_headers ($) {
 
   ## Request-target and Host:
   my $target_url;
-  my $host_url;
+  my $host_host;
+  my $host_port;
   if ($stream->{request}->{method} eq 'CONNECT') {
     if (defined $host) {
-      $host_url = Web::URL->parse_string ("http://$host/");
-      if (not defined $host_url or
-          not $host_url->path eq '/' or
-          defined $host_url->query or
-          defined $host_url->{fragment}) { # XXX
+      ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
+      unless (defined $host_host) {
         $stream->_fatal;
         return 0;
       }
@@ -426,26 +424,21 @@ sub _request_headers ($) {
 
     my $target = delete $stream->{target};
     $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
-    $target_url = Web::URL->parse_string ("http://$target/");
-    if (not defined $target_url or
-        not $target_url->path eq '/' or
-        defined $target_url->query or
-        defined $target_url->{fragment}) { # XXX
+    my ($target_host, $target_port) = Web::Host->parse_hostport_string ($target);
+    unless (defined $target_host) {
       $stream->_fatal;
       return 0;
     }
+    $target_url = Web::URL->parse_string ("http://$target/");
   } elsif ($stream->{target} eq '*') {
     if (defined $host) {
-      my $scheme = $stream->{connection}->_url_scheme;
-      $host_url = Web::URL->parse_string ("$scheme://$host/");
-      if (not defined $host_url or
-          not $host_url->path eq '/' or
-          defined $host_url->query or
-          defined $host_url->{fragment}) { # XXX
+      ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
+      unless (defined $host_host) {
         $stream->_fatal;
         return 0;
       }
-      $target_url = $host_url;
+      my $scheme = $stream->{connection}->_url_scheme;
+      $target_url = Web::URL->parse_string ("$scheme://$host/");
       delete $stream->{target};
     } else {
       $stream->_fatal;
@@ -453,28 +446,25 @@ sub _request_headers ($) {
     }
   } elsif ($stream->{target} =~ m{\A/}) {
     if (defined $host) {
-      my $scheme = $stream->{connection}->_url_scheme;
-      $host_url = Web::URL->parse_string ("$scheme://$host/");
-      if (not defined $host_url or
-          not $host_url->path eq '/' or
-          defined $host_url->query or
-          defined $host_url->{fragment}) { # XXX
+      ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
+      unless (defined $host_host) {
         $stream->_fatal;
         return 0;
       }
     }
 
+    my $base_url;
+    my $scheme = $stream->{connection}->_url_scheme;
+    if (defined $host_host) {
+      $base_url = Web::URL->parse_string ("$scheme://$host");
+    } else {
+      my $hostport = $stream->{connection}->_url_hostport;
+      $base_url = Web::URL->parse_string ("$scheme://$hostport");
+    }
     my $target = delete $stream->{target};
     $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
-    if (defined $host_url) {
-      $target_url = Web::URL->parse_string ($host_url->get_origin->to_ascii . $target);
-    } else {
-      my $scheme = $stream->{connection}->_url_scheme;
-      my $hostport = $stream->{connection}->_url_hostport;
-      $target_url = Web::URL->parse_string ("$scheme://$hostport" . $target);
-    }
-    if (not defined $target_url or
-        not defined $target_url->host) {
+    $target_url = Web::URL->parse_string ($target, $base_url);
+    if (not defined $target_url or not defined $target_url->host) {
       $stream->_fatal;
       return 0;
     }
@@ -482,33 +472,26 @@ sub _request_headers ($) {
     my $target = delete $stream->{target};
     $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
     $target_url = Web::URL->parse_string ($target);
-    if (not defined $target_url or
-        not defined $target_url->host) {
+    if (not defined $target_url or not defined $target_url->host) {
       $stream->_fatal;
       return 0;
     }
 
     if (defined $host) {
-      my $scheme = $target_url->scheme;
-      $host_url = Web::URL->parse_string ("$scheme://$host/");
-      if (not defined $host_url or
-          not $host_url->path eq '/' or
-          defined $host_url->query or
-          defined $host_url->{fragment}) { # XXX
+      ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
+      unless (defined $host_host) {
         $stream->_fatal;
         return 0;
       }
     }
   }
-  if (defined $host_url and defined $target_url) {
-    unless ($host_url->host->equals ($target_url->host)) {
+  if (defined $host_host and defined $target_url) {
+    unless ($host_host->equals ($target_url->host)) {
       $stream->_fatal;
       return 0;
     }
-    my $host_port = $host_url->port;
     my $target_port = $target_url->port;
-    if (defined $host_port and
-        defined $target_port and
+    if (defined $host_port and defined $target_port and
         $host_port eq $target_port) {
       #
     } elsif (not defined $host_port and not defined $target_port) {

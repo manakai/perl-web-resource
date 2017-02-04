@@ -49,6 +49,7 @@ delete $RequestOptions->{url} if defined $RequestOptions->{path};
 #$client->tls_options ($tls_options);
 $client->request (%$RequestOptions)->then (sub {
   warn $_[0]->network_error_message;
+  print $_[0]->body_bytes;
 })->catch (sub {
   warn "ERROR:[$_[0]]";
 })->then (sub {

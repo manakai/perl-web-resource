@@ -4178,7 +4178,7 @@ test {
         ]}, close => 1);
     $self->send_response_data (\'abcde');
     $self->close_response;
-    $invoked++;
+    $invoked++; 
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($TLSOrigin);
@@ -4217,7 +4217,9 @@ test {
   };
 
   my $data = '';
-  TLSTestResolver->new->resolve ($TLSOrigin->host)->then (sub {
+  promised_cleanup { 
+    done $c; undef $c;
+  } TLSTestResolver->new->resolve ($TLSOrigin->host)->then (sub {
     my $_tcp = Web::Transport::TCPTransport->new
         (host => $_[0],
          port => $TLSOrigin->port || 443);
@@ -4227,6 +4229,7 @@ test {
 
     return Promise->new (sub {
       my $ok = $_[0];
+      my $ng = $_[1];
       $tcp->start (sub {
         my ($self, $type) = @_;
         if ($type eq 'readdata') {
@@ -4245,9 +4248,6 @@ test {
       is $url->stringify, qq<https://test.domain/$path>;
       like $data, qr{abcde};
     } $c;
-  })->then (sub {
-    done $c;
-    undef $c;
   });
 } n => 2, name => 'HTTPS, URL';
 

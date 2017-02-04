@@ -453,17 +453,15 @@ sub _request_headers ($) {
       }
     }
 
-    my $base_url;
     my $scheme = $stream->{connection}->_url_scheme;
-    if (defined $host_host) {
-      $base_url = Web::URL->parse_string ("$scheme://$host");
-    } else {
-      my $hostport = $stream->{connection}->_url_hostport;
-      $base_url = Web::URL->parse_string ("$scheme://$hostport");
-    }
     my $target = delete $stream->{target};
     $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
-    $target_url = Web::URL->parse_string ($target, $base_url);
+    if (defined $host_host) {
+      $target_url = Web::URL->parse_string ("$scheme://$host$target");
+    } else {
+      my $hostport = $stream->{connection}->_url_hostport;
+      $target_url = Web::URL->parse_string ("$scheme://$hostport$target");
+    }
     if (not defined $target_url or not defined $target_url->host) {
       $stream->_fatal;
       return 0;
@@ -717,11 +715,13 @@ sub send_response_headers ($$$;%) {
   }
 
   my @header;
-  push @header, ['Server', encode_web_utf8 $con->server_header];
+  unless ($args{proxying}) {
+    push @header, ['Server', encode_web_utf8 $con->server_header];
 
-  my $dt = Web::DateTime->new_from_unix_time
-      (Web::DateTime::Clock->realtime_clock->());
-  push @header, ['Date', $dt->to_http_date_string];
+    my $dt = Web::DateTime->new_from_unix_time
+        (Web::DateTime::Clock->realtime_clock->());
+    push @header, ['Date', $dt->to_http_date_string];
+  }
 
   if ($ws) {
     $con->{ws_state} = 'OPEN';

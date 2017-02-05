@@ -9,6 +9,7 @@ use Test::X1;
 use Test::More;
 use AnyEvent::Socket;
 use Web::URL;
+use Web::Transport::ConstProxyManager;
 use Web::Transport::ConnectionClient;
 use Web::Transport::WSClient;
 use Web::Transport::PSGIServerConnection;
@@ -889,23 +890,9 @@ test {
   });
 } n => 4, name => 'Bad header value';
 
-{
-  sub pp ($) {
-    return bless $_[0], 'proxymanager';
-  } # pp
-
-  package proxymanager;
-  use Promise;
-
-  sub get_proxies_for_url ($$) {
-    for (@{$_[0]}) {
-      if (defined $_->{host} and not ref $_->{host}) {
-        $_->{host} = Web::Host->parse_string ($_->{host});
-      }
-    }
-    return Promise->resolve ($_[0]);
-  } # get_proxies_for_url
-}
+sub pp ($) {
+  return Web::Transport::ConstProxyManager->new_from_arrayref ($_[0]);
+} # pp
 
 test {
   my $c = shift;

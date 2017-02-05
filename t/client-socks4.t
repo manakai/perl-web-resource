@@ -12,6 +12,7 @@ use AnyEvent::Util qw(run_cmd);
 use Web::Transport::ConnectionClient;
 use Web::Host;
 use Web::URL;
+use Web::Transport::ConstProxyManager;
 
 {
   use Socket;
@@ -75,23 +76,9 @@ sub server_as_cv ($) {
   return _server_as_cv ('localhost', '127.0.0.1', find_listenable_port, $_[0]);
 } # server_as_cv
 
-{
-  sub pp ($) {
-    return bless $_[0], 'proxymanager';
-  } # pp
-
-  package proxymanager;
-  use Promise;
-
-  sub get_proxies_for_url ($$) {
-    for (@{$_[0]}) {
-      if (defined $_->{host} and not ref $_->{host}) {
-        $_->{host} = Web::Host->parse_string ($_->{host});
-      }
-    }
-    return Promise->resolve ($_[0]);
-  } # get_proxies_for_url
-}
+sub pp ($) {
+  return Web::Transport::ConstProxyManager->new_from_arrayref ($_[0]);
+} # pp
 
 test {
   my $c = shift;

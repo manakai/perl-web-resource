@@ -257,12 +257,24 @@ HTML Standard <https://html.spec.whatwg.org/>.
 
 XXX
 
-There is following proxy manager in this repository:
-L<Web::Transport::ENVProxyManager>.
+There are following proxy managers in this repository:
+L<Web::Transport::ENVProxyManager> and
+L<Web::Transport::ConstProxyManager>.
 
 =head1 PROXY CONFIGURATIONS
 
+A B<proxy configuration list> is ...
+
 XXX
+
+host => ...
+
+XXX
+
+For a proxy configuration returned by a proxy manager, the value must
+be a L<Web::Host> object.  For a proxy configuration used as part of
+an input to the L<Web::Transport::ConstProxyManager>'s constructor,
+the value may be a string which is a valid host string.
 
 debug => $mode
 

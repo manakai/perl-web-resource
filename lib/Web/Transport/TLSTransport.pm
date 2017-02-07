@@ -505,9 +505,13 @@ sub _tls ($) {
   }
 
   unless ($self->{transport}->write_to_be_closed) {
-    my $read = Net::SSLeay::BIO_read ($self->{_wbio});
-    if (defined $read and length $read) {
-      $self->{transport}->push_write (\$read);
+    while (1){
+      my $read = Net::SSLeay::BIO_read ($self->{_wbio});
+      if (defined $read and length $read) {
+        $self->{transport}->push_write (\$read);
+      } else {
+        last;
+      }
     }
   }
 

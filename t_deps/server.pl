@@ -967,6 +967,8 @@ sub run_commands ($$$$) {
       AE::log error => qq{[$states->{id}] length of rbuf = @{[length $states->{received}]}};
     } elsif ($command =~ /^showcaptured$/) {
       AE::log error => qq{[$states->{id}] captured = |$states->{captured}|};
+    } elsif ($command =~ /^showcapturedlength$/) {
+      AE::log error => qq{[$states->{id}] captured length = @{[length $states->{captured}]}};
     } elsif ($command =~ /^show\s+"([^"]*)"$/) {
       warn "[$states->{id}] @{[time]} @{[scalar gmtime]} $1\n";
     } elsif ($command =~ /^data\s+"([^"]*)"$/) {

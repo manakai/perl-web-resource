@@ -2911,12 +2911,84 @@ test {
   });
 } n => 3, name => 'request options - params with undef value only';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /foo"
+    receive "_S_", start capture
+    receive "_E_", end capture
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    showcapturedlength
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $length = 5_000_000;
+    my $url = Web::URL->parse_string (qq{http://host2.test:$server->{port}/foo});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->resolver (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1');
+    my $data = '';
+    my @alpha = ('0'..'9','A'..'Z','a'..'z');
+    $data .= $alpha[rand @alpha] for 1..$length;
+    return $client->request (url => $url, body => '_S_' . $data . '_E_')->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is length $res->body_bytes, length ('_S_' . $data . '_E_');
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'large request data, plain HTTP over TCP';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    starttls host=host2.test
+    receive "GET /foo"
+    receive "_S_", start capture
+    receive "_E_", end capture
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    showcapturedlength
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $length = 5_000_000;
+    my $url = Web::URL->parse_string (qq{https://host2.test:$server->{port}/foo});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->resolver (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1');
+    $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+    my $data = '';
+    my @alpha = ('0'..'9','A'..'Z','a'..'z');
+    $data .= $alpha[rand @alpha] for 1..$length;
+    return $client->request (url => $url, body => '_S_' . $data . '_E_')->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is length $res->body_bytes, length ('_S_' . $data . '_E_');
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'large request data, HTTPS';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

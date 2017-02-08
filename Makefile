@@ -19,10 +19,9 @@ git-submodules:
 
 local/bin/pmbp.pl:
 	mkdir -p local/bin
-	#XXX
-	$(WGET) -O $@ https://raw.github.com/wakaba/perl-setupenv/staging/bin/pmbp.pl
+	$(WGET) -O $@ https://raw.github.com/wakaba/perl-setupenv/master/bin/pmbp.pl
 pmbp-upgrade: local/bin/pmbp.pl
-	#XXXperl local/bin/pmbp.pl --update-pmbp-pl
+	perl local/bin/pmbp.pl --update-pmbp-pl
 pmbp-update: git-submodules pmbp-upgrade
 	perl local/bin/pmbp.pl --update
 pmbp-install: pmbp-upgrade

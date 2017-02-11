@@ -54,18 +54,19 @@ sub create ($$) {
   my $ct;
   my $auth;
   for my $name (keys %$headers) {
+    my $name_lc = $name;
+    $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
     if (defined $headers->{$name}) {
       if (ref $headers->{$name} eq 'ARRAY') {
         push @$header_list, map {
-          [(encode_web_utf8 $name), (encode_web_utf8 $_)]
+          [(encode_web_utf8 $name), (encode_web_utf8 $_), $name_lc]
         } @{$headers->{$name}};
       } else {
         push @$header_list,
-            [(encode_web_utf8 $name), (encode_web_utf8 $headers->{$name})];
+            [(encode_web_utf8 $name), (encode_web_utf8 $headers->{$name}),
+             $name_lc];
       }
     }
-    my $name_lc = $name;
-    $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
     $has_header->{$name_lc} = 1;
     if ($name_lc eq 'content-type') {
       $ct = $header_list->[-1]->[-1];
@@ -76,13 +77,13 @@ sub create ($$) {
 
   if (defined $args->{cookies}) {
     push @$header_list,
-        ['Cookie', join '; ', map {
+        ['Cookie', (join '; ', map {
           if (defined $args->{cookies}->{$_}) {
             (percent_encode_c $_) . '=' . (percent_encode_c $args->{cookies}->{$_});
           } else {
             ();
           }
-        } sort { $a cmp $b } keys %{$args->{cookies}}];
+        } sort { $a cmp $b } keys %{$args->{cookies}}), 'cookie'];
     pop @$header_list unless length $header_list->[-1]->[1];
     $has_header->{cookie} = 1;
   }
@@ -91,7 +92,7 @@ sub create ($$) {
   if (defined $args->{files} and not defined $args->{body} and not defined $ct) {
     $boundary = '';
     $boundary .= $BoundaryAlphabet[rand @BoundaryAlphabet] for 1..50;
-    push @$header_list, ['Content-Type', $ct = 'multipart/form-data; boundary=' . $boundary];
+    push @$header_list, ['Content-Type', $ct = 'multipart/form-data; boundary=' . $boundary, 'content-type'];
     $has_header->{'content-type'} = 1;
   }
   return {failed => 1, message => "Both |files| and |body| are specified"}
@@ -147,19 +148,22 @@ sub create ($$) {
       $url_record->set_query_params ($args->{params}, append => 1);
     } else { # $param_container eq 'body'
       unless ($has_header->{'content-type'}) {
-        push @$header_list, ['Content-Type', $ct = 'application/x-www-form-urlencoded'];
+        push @$header_list, ['Content-Type', $ct = 'application/x-www-form-urlencoded', 'content-type'];
         $has_header->{'content-type'} = 1;
       }
       $args->{body} = serialize_form_urlencoded $args->{params};
     }
   }
 
-  push @$header_list, ['Accept', '*/*'] unless $has_header->{'accept'};
-  push @$header_list, ['Accept-Language', 'en'] unless $has_header->{'accept-language'};
-  push @$header_list, ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36'] unless $has_header->{'user-agent'};
+  push @$header_list, ['Accept', '*/*', 'accept']
+      unless $has_header->{'accept'};
+  push @$header_list, ['Accept-Language', 'en', 'accept-language']
+      unless $has_header->{'accept-language'};
+  push @$header_list, ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36', 'user-agent']
+      unless $has_header->{'user-agent'};
 
   if (defined $args->{bearer}) {
-    push @$header_list, ['Authorization' => $auth = 'Bearer ' . encode_web_utf8 $args->{bearer}];
+    push @$header_list, ['Authorization' => $auth = 'Bearer ' . encode_web_utf8 $args->{bearer}, 'authorization'];
     $has_header->{authorization} = 1;
   }
 
@@ -168,7 +172,7 @@ sub create ($$) {
     my $bauth = MIME::Base64::encode_base64
         (encode_web_utf8 ((defined $args->{basic_auth}->[0] ? $args->{basic_auth}->[0] : '') . ':' .
                           (defined $args->{basic_auth}->[1] ? $args->{basic_auth}->[1] : '')), '');
-    push @$header_list, ['Authorization', $auth = 'Basic ' . $bauth];
+    push @$header_list, ['Authorization', $auth = 'Basic ' . $bauth, 'authorization'];
     $has_header->{authorization} = 1;
   }
 
@@ -197,13 +201,13 @@ sub create ($$) {
           $args->{debug_prefix}, $result->{signature_base_string};
     }
     if (defined $result->{http_authorization}) {
-      push @$header_list, ['Authorization', $auth = $result->{http_authorization}];
+      push @$header_list, ['Authorization', $auth = $result->{http_authorization}, 'authorization'];
       $has_header->{authorization} = 1;
     }
     if (defined $result->{body_appended} and
         length $result->{body_appended}) {
       if (not defined $ct) {
-        push @$header_list, ['Content-Type', $ct = 'application/x-www-form-urlencoded'];
+        push @$header_list, ['Content-Type', $ct = 'application/x-www-form-urlencoded', 'content-type'];
         $has_header->{'content-type'} = 1;
       }
       $args->{body} .= $result->{body_appended};
@@ -211,25 +215,51 @@ sub create ($$) {
     $nostore = 1;
   }
 
+  if (defined $args->{aws4}) {
+    require Web::Transport::AWS;
+
+    # XXX
+    my $clock = $args->{clock} || do {
+      require Web::DateTime::Clock;
+      Web::DateTime::Clock->realtime_clock;
+    };
+
+    Web::Transport::AWS->aws4 (
+      clock => $clock,
+      method => $method,
+      url => $url_record,
+      header_list => $header_list, # to be modified!
+      signed_headers => $args->{aws4_signed_headers},
+      body_ref => (defined $args->{body} ? \($args->{body}) : \''),
+      access_key_id => $args->{aws4}->[0],
+      secret_access_key => $args->{aws4}->[1],
+      region => $args->{aws4}->[2],
+      service => $args->{aws4}->[3],
+    );
+  }
+
   if (defined $args->{body}) {
     if ($args->{no_body}) {
       return {failed => 1, message => "Request body not allowed"};
     }
 
-    push @$header_list, ['Content-Length', length ($args->{body})];
+    push @$header_list, ['Content-Length', length ($args->{body}), 'content-length'];
   }
   # XXX or, method requires payload
 
   if ($args->{superreload}) {
-    push @$header_list, ['Pragma', 'no-cache'], ['Cache-Control', 'no-cache'];
+    push @$header_list,
+        ['Pragma', 'no-cache', 'pragma'],
+        ['Cache-Control', 'no-cache', 'cache-control'];
   }
   $nostore = 1 if
       defined $has_header->{cookie} or
       defined $has_header->{authorization} or
       defined $has_header->{'x-wsse'};
   if ($nostore) {
-    push @$header_list, ['Pragma', 'no-cache'] unless $args->{superreload};
-    push @$header_list, ['Cache-Control', 'no-store'];
+    push @$header_list, ['Pragma', 'no-cache', 'pragma']
+        unless $args->{superreload};
+    push @$header_list, ['Cache-Control', 'no-store', 'cache-control'];
   }
 
   # XXX Accept-Encoding
@@ -252,7 +282,7 @@ The module partially derived from L<Web::UserAgent::Functions> from
 
 Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
 
-Copyright 2014-2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2014-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

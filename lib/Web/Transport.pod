@@ -220,6 +220,24 @@ Otherwise this option is ignored.
 
 This option is not available for L<Web::Transport::WSClient>.
 
+=item aws4 => [$access_key_id, $secret_access_key, $region, $service]
+
+If specified, signature of the request is attached using AWS Signature
+Version 4 and the L<Authorization:> header.
+
+The value must be an array reference of four values.  The zeroth item
+must be the access key ID.  The first item must be the secret access
+key.  The second item must be the AWS region, such as C<us-east-1>.
+The third item must be the AWS service, such as C<s3>.
+
+=item aws4_signed_headers => {$name1 => 1, $name2 => 1, ...}
+
+Specifies additionally signed headers.  This option is ignored unless
+C<aws4> option is also specified.
+
+If specified, the value must be a hash reference, whose keys are
+header names (ASCII case-insensitive) and values are true values.
+
 =item superreload => $boolean
 
 If true, C<Cache-Control: no-cache> and C<Pragma: no-store> headers
@@ -252,6 +270,11 @@ RFC 5849, The OAuth 1.0 Protocol
 <https://tools.ietf.org/html/rfc5849>.
 
 HTML Standard <https://html.spec.whatwg.org/>.
+
+Signature Calculations for the Authorization Header: Transferring
+Payload in a Single Chunk (AWS Signature Version 4) - Amazon Simple
+Storage Service
+<https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html>.
 
 =head1 PROXY MANAGERS
 

@@ -328,6 +328,15 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana' => 'permanent',
                                                             'iana_intended_usage' => 'common'
                                                           },
+                                          'cphl+json' => {},
+                                          'cphl+json+code' => {},
+                                          'cphl+json+code+formats' => {},
+                                          'cphl+json+docs+code+formats' => {},
+                                          'cphl+json+formats' => {},
+                                          'cphl+xml' => {},
+                                          'cphl+xml+docs+code+formats' => {},
+                                          'cphl+yaml' => {},
+                                          'cphl+yaml+docs+code+formats' => {},
                                           'cpi-download' => {},
                                           'cpi-job' => {},
                                           'cpl+xml' => {
@@ -1191,7 +1200,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'iana' => 'provisional'
                                                      },
                                           'n-triples' => {
-                                                         'iana' => 'provisional'
+                                                         'iana' => 'permanent',
+                                                         'iana_intended_usage' => 'common'
                                                        },
                                           'n3' => {},
                                           'name' => {},
@@ -2668,6 +2678,12 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vnd.ecowin.seriesupdate' => {
                                                                        'iana' => 'permanent'
                                                                      },
+                                          'vnd.efi.img' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                          'vnd.efi.iso' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                           'vnd.emclient.accessrequest+xml' => {
                                                                               'iana' => 'permanent',
                                                                               'iana_intended_usage' => 'common'
@@ -5687,6 +5703,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                         'iana' => 'permanent',
                                                                         'iana_intended_usage' => 'common'
                                                                       },
+                                          'vnd.viwi.v1.4.2+json' => {},
                                           'vnd.vmware.admin.catalog+xml' => {},
                                           'vnd.vmware.admin.diskcreateparams+xml' => {},
                                           'vnd.vmware.admin.edgegateway+xml' => {},

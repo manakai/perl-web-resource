@@ -2212,6 +2212,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana' => 'permanent',
                                                             'iana_intended_usage' => 'common'
                                                           },
+                                          'vnd.apothekende.reservation+json' => {
+                                                                                'iana' => 'permanent',
+                                                                                'iana_intended_usage' => 'common'
+                                                                              },
                                           'vnd.apple.installer+xml' => {
                                                                        'iana' => 'permanent',
                                                                        'iana_intended_usage' => 'common'
@@ -8143,6 +8147,22 @@ $Web::MIME::_TypeDefs::Type = {
                                     'make.my.funk' => {},
                                     'mdz' => {},
                                     'med' => {},
+                                    'melp' => {
+                                              'iana' => 'permanent',
+                                              'iana_intended_usage' => 'common'
+                                            },
+                                    'melp1200' => {
+                                                  'iana' => 'permanent',
+                                                  'iana_intended_usage' => 'common'
+                                                },
+                                    'melp2400' => {
+                                                  'iana' => 'permanent',
+                                                  'iana_intended_usage' => 'common'
+                                                },
+                                    'melp600' => {
+                                                 'iana' => 'permanent',
+                                                 'iana_intended_usage' => 'common'
+                                               },
                                     'mid' => {},
                                     'midi' => {},
                                     'mobile-xmf' => {

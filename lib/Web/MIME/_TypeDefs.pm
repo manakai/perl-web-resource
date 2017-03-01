@@ -533,10 +533,18 @@ $Web::MIME::_TypeDefs::Type = {
                                                                              'iana' => 'permanent',
                                                                              'iana_intended_usage' => 'limited use'
                                                                            },
+                                          'emergencycalldata.control+xml' => {
+                                                                             'iana' => 'permanent',
+                                                                             'iana_intended_usage' => 'limited use'
+                                                                           },
                                           'emergencycalldata.deviceinfo+xml' => {
                                                                                 'iana' => 'permanent',
                                                                                 'iana_intended_usage' => 'limited use'
                                                                               },
+                                          'emergencycalldata.ecall.msd' => {
+                                                                           'iana' => 'permanent',
+                                                                           'iana_intended_usage' => 'limited use'
+                                                                         },
                                           'emergencycalldata.providerinfo+xml' => {
                                                                                   'iana' => 'permanent',
                                                                                   'iana_intended_usage' => 'limited use'
@@ -549,6 +557,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                     'iana' => 'permanent',
                                                                                     'iana_intended_usage' => 'limited use'
                                                                                   },
+                                          'emergencycalldata.veds+xml' => {
+                                                                          'iana' => 'permanent',
+                                                                          'iana_intended_usage' => 'limited use'
+                                                                        },
                                           'emf' => {},
                                           'emma+xml' => {
                                                         'iana' => 'permanent'
@@ -648,6 +660,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'iana' => 'permanent',
                                                         'iana_intended_usage' => 'common'
                                                       },
+                                          'geo+json-seq' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'common'
+                                                          },
                                           'ghostview' => {
                                                          'obsolete' => 1
                                                        },
@@ -1085,6 +1101,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                      'iana' => 'permanent'
                                                    },
                                           'mime' => {},
+                                          'mmt-usd+xml' => {
+                                                           'iana' => 'provisional'
+                                                         },
                                           'mods+xml' => {
                                                         'iana' => 'permanent',
                                                         'iana_intended_usage' => 'common'
@@ -1599,9 +1618,15 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common'
                                                               },
+                                          'route-apd+xml' => {
+                                                             'iana' => 'provisional'
+                                                           },
                                           'route-s-tsid+xml' => {
                                                                 'iana' => 'provisional'
                                                               },
+                                          'route-usd+xml' => {
+                                                             'iana' => 'provisional'
+                                                           },
                                           'rpki-ghostbusters' => {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'common'

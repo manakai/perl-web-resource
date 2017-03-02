@@ -70,11 +70,13 @@ sub ws_closed_cleanly ($) {
 sub header ($$) {
   my $name = $_[1];
   $name =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+  my @value;
   for (@{$_[0]->{headers}}) {
     if ($_->[2] eq $name) {
-      return $_->[1];
+      push @value, $_->[1];
     }
   }
+  return join ',', @value if @value;
   return undef;
 } # header
 
@@ -123,7 +125,7 @@ sub stringify ($) {
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -476,7 +476,7 @@ test {
         ok ! $res1->is_error;
         is $res1->status_line, '201 OK ?';
         is $res1->header ('Hoge'), undef;
-        is $res1->header ('X-Hoge'), '4';
+        is $res1->header ('X-Hoge'), '4,5';
         is $res1->header ('Content-length'), '4';
         is $res1->body_bytes, 'hoge';
         is $res1->content, 'hoge';
@@ -519,7 +519,7 @@ test {
         ok $res1->is_error;
         is $res1->status_line, '404 OK ?';
         is $res1->header ('Hoge'), undef;
-        is $res1->header ('X-Hoge'), '4';
+        is $res1->header ('X-Hoge'), '4,5';
         is $res1->header ('Content-length'), '4';
         is $res1->body_bytes, 'hoge';
         is $res1->content, 'hoge';

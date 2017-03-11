@@ -1216,7 +1216,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                    'iana_intended_usage' => 'common'
                                                  },
                                           'n-quads' => {
-                                                       'iana' => 'provisional'
+                                                       'iana' => 'permanent',
+                                                       'iana_intended_usage' => 'common'
                                                      },
                                           'n-triples' => {
                                                          'iana' => 'permanent',
@@ -3279,6 +3280,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana' => 'permanent',
                                                             'iana_intended_usage' => 'limited use'
                                                           },
+                                          'vnd.imagemeter.image+zip' => {
+                                                                        'iana' => 'permanent',
+                                                                        'iana_intended_usage' => 'common'
+                                                                      },
                                           'vnd.immervision-ivp' => {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'common'
@@ -3515,6 +3520,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'iana' => 'permanent',
                                                                     'iana_intended_usage' => 'common'
                                                                   },
+                                          'vnd.las.las+json' => {
+                                                                'iana' => 'permanent',
+                                                                'iana_intended_usage' => 'limited use'
+                                                              },
                                           'vnd.las.las+xml' => {
                                                                'iana' => 'permanent'
                                                              },
@@ -4373,6 +4382,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'iana' => 'permanent',
                                                        'iana_intended_usage' => 'common'
                                                      },
+                                          'vnd.ocf+cbor' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'common'
+                                                          },
                                           'vnd.oftn.l10n+json' => {
                                                                   'iana' => 'permanent',
                                                                   'iana_intended_usage' => 'common'
@@ -6074,7 +6087,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana_intended_usage' => 'common'
                                                               },
                                           'widget' => {
-                                                      'iana' => 'permanent'
+                                                      'iana' => 'permanent',
+                                                      'iana_intended_usage' => 'common'
                                                     },
                                           'wiki' => {},
                                           'windows-library+xml' => {},

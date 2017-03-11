@@ -76,7 +76,7 @@ sub header ($$) {
       push @value, $_->[1];
     }
   }
-  return join ',', @value if @value;
+  return join ', ', @value if @value;
   return undef;
 } # header
 

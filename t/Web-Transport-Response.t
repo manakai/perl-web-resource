@@ -17,12 +17,12 @@ test {
     ['xyz', '', 'xyz'],
     ['xyz', '0', 'xyz'],
   ]}, 'Web::Transport::Response';
-  is $res->header ('hoge'), 'abc,zzz';
-  is $res->header ('hoGE'), 'abc,zzz';
-  is $res->header ('hoge'), 'abc,zzz';
+  is $res->header ('hoge'), 'abc, zzz';
+  is $res->header ('hoGE'), 'abc, zzz';
+  is $res->header ('hoge'), 'abc, zzz';
   is $res->header ('foO'), 'X';
   is $res->header ('bac'), '';
-  is $res->header ('xyz'), ',0';
+  is $res->header ('xyz'), ', 0';
   is $res->header ('foo2'), undef;
   is $res->header (':'), undef;
   done $c;

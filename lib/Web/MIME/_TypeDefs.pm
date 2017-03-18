@@ -8999,6 +8999,7 @@ $Web::MIME::_TypeDefs::Type = {
                      'subtype' => {
                                     'amidraw' => {},
                                     'any' => {},
+                                    'apng' => {},
                                     'ascii-art' => {},
                                     'avi' => {},
                                     'avs' => {},

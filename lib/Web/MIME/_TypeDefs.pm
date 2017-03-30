@@ -6628,6 +6628,7 @@ $Web::MIME::_TypeDefs::Type = {
                                           'x-httpd-python' => {},
                                           'x-hwp' => {},
                                           'x-hwt' => {},
+                                          'x-hybrid-thrift-binary' => {},
                                           'x-hypercosm' => {},
                                           'x-hypercosm-3d-applet' => {},
                                           'x-i-deas' => {},

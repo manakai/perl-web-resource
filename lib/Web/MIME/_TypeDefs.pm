@@ -1636,6 +1636,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                              'iana' => 'permanent',
                                                              'iana_intended_usage' => 'common'
                                                            },
+                                          'rpki-publication' => {
+                                                                'iana' => 'permanent',
+                                                                'iana_intended_usage' => 'common'
+                                                              },
                                           'rpki-roa' => {
                                                         'iana' => 'permanent',
                                                         'iana_intended_usage' => 'common'
@@ -9969,6 +9973,9 @@ $Web::MIME::_TypeDefs::Type = {
                                },
                      'preferred_cte' => 'base64',
                      'subtype' => {
+                                    '3mf' => {
+                                             'iana' => 'provisional'
+                                           },
                                     'example' => {
                                                  'iana' => 'permanent',
                                                  'iana_intended_usage' => 'limited use'
@@ -10660,6 +10667,9 @@ $Web::MIME::_TypeDefs::Type = {
                                    'sql' => {
                                             'scripting_language' => 'yes'
                                           },
+                                   'strings' => {
+                                                'iana' => 'provisional'
+                                              },
                                    'stylesheet' => {},
                                    'stylus' => {},
                                    't-time' => {},

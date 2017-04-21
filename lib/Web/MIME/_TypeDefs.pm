@@ -2469,6 +2469,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                          'iana' => 'permanent',
                                                                          'iana_intended_usage' => 'limited use'
                                                                        },
+                                          'vnd.crossref-api-message+json' => {},
+                                          'vnd.crossref.deposit+xml' => {},
                                           'vnd.ctc-posml' => {
                                                              'iana' => 'permanent',
                                                              'iana_intended_usage' => 'limited use'
@@ -3293,6 +3295,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana' => 'permanent',
                                                             'iana_intended_usage' => 'limited use'
                                                           },
+                                          'vnd.imagemeter.folder+zip' => {
+                                                                         'iana' => 'permanent',
+                                                                         'iana_intended_usage' => 'common'
+                                                                       },
                                           'vnd.imagemeter.image+zip' => {
                                                                         'iana' => 'permanent',
                                                                         'iana_intended_usage' => 'common'
@@ -4627,10 +4633,26 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana' => 'permanent',
                                                             'iana_intended_usage' => 'common'
                                                           },
+                                          'vnd.onepagertamp' => {
+                                                                'iana' => 'permanent',
+                                                                'iana_intended_usage' => 'common'
+                                                              },
+                                          'vnd.onepagertamx' => {
+                                                                'iana' => 'permanent',
+                                                                'iana_intended_usage' => 'common'
+                                                              },
                                           'vnd.onepagertat' => {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'common'
                                                              },
+                                          'vnd.onepagertatp' => {
+                                                                'iana' => 'permanent',
+                                                                'iana_intended_usage' => 'common'
+                                                              },
+                                          'vnd.onepagertatx' => {
+                                                                'iana' => 'permanent',
+                                                                'iana_intended_usage' => 'common'
+                                                              },
                                           'vnd.openblox.game+xml' => {
                                                                      'iana' => 'permanent',
                                                                      'iana_intended_usage' => 'common'

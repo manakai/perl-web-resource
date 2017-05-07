@@ -1,6 +1,7 @@
-package Whatpm::ContentType;
+package Web::MIME::Sniffer;
 use strict;
-our $VERSION=do{my @r=(q$Revision: 1.18 $=~/\d+/g);sprintf "%d."."%02d" x $#r,@r};
+use warnings;
+our $VERSION = '1.19';
 
 ## Table in <http://www.whatwg.org/specs/web-apps/current-work/#content-type1>.
 ##
@@ -128,6 +129,10 @@ my @ImageSniffingTable = (
 
 ## NOTE: From section "Content-Type sniffing: text or binary".
 my $binary_data_bytes = qr/[\x00-\x08\x0B\x0E-\x1A\x1C-\x1F]/;
+
+sub new ($) {
+  return bless {}, $_[0];
+} # new
 
 sub get_sniffed_type ($%) {
   shift;
@@ -320,9 +325,9 @@ sub get_sniffed_type ($%) {
 
 =head1 LICENSE
 
-Copyright 2007-2008 Wakaba <w@suika.fam.cx>
+Copyright 2007-2017 Wakaba <wakaba@suikawiki.org>.
 
-This library is free software; you can redistribute it
-and/or modify it under the same terms as Perl itself.
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
 
 =cut

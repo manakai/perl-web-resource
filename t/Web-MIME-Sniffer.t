@@ -1108,6 +1108,6 @@ sub get_official ($) {
   return $s;
 } # get_official
 
-## License: Public Domain.
-## $Date: 2008/10/02 10:59:05 $
 1;
+
+## License: Public Domain.

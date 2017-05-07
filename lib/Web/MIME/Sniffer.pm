@@ -1,31 +1,3 @@
-=head1 NAME
-
-Whatpm::ContentType - HTML5 Content Type Sniffer
-
-=head1 SYNOPSIS
-
-  ## Content-Type Sniffing
-  
-  require Whatpm::ContentType;
-  my $sniffed_type = Whatpm::ContentType->get_sniffed_type (
-    get_file_head => sub {
-      my $n = shift;
-      return $first_n_bytes_of_the_entity;
-    },
-    http_content_type_byte => $content_type_field_body_of_the_entity_in_bytes,
-    supported_image_types => {
-      'image/jpeg' => 1, 'image/png' => 1, 'image/gif' => 1, # for example
-    },
-  );
-
-=head1 DESCRIPTION
-
-The C<Whatpm::ContentType> module contains media type sniffer
-for Web user agents.  It implements the content type sniffing
-algorithm as defined in the HTML5 specification.
-
-=cut
-
 package Whatpm::ContentType;
 use strict;
 our $VERSION=do{my @r=(q$Revision: 1.18 $=~/\d+/g);sprintf "%d."."%02d" x $#r,@r};
@@ -156,87 +128,6 @@ my @ImageSniffingTable = (
 
 ## NOTE: From section "Content-Type sniffing: text or binary".
 my $binary_data_bytes = qr/[\x00-\x08\x0B\x0E-\x1A\x1C-\x1F]/;
-
-=head1 METHOD
-
-=over 4
-
-=item I<$sniffed_type> = Whatpm::ContentType->get_sniffed_type (I<named-parameters>)
-
-Returns the sniffed type of an entity.  The sniffed type
-is always represented in lowercase.
-
-B<In list context>, this method returns a list of 
-official type and sniffed type.  Official type is the media
-type as specified in the transfer protocol metadata,
-without any parameters and in lowercase.
-
-Arguments to this method MUST be specified as name-value pairs.
-Valid named parameters defined for this method is as follows:
-
-=over 4
-
-=item content_type_metadata => I<media-type>
-
-The Content-Type metadata, in character string, as defined in HTML5.
-The value of this parameter MUST be an Internet Media Type (with
-any parameters), that match to the C<media-type> rule
-defined in RFC 2616.
-
-If the C<http_content_type_byte> parameter is specified,
-then the C<content_type_metadata> parameter has no effect.  Otherwise,
-the C<content_type_metadata> parameter MUST be specified if and only
-if any Content-Type metadata is available.
-
-=item get_file_head => I<CODE>
-
-The code reference used to obtain first I<$n> bytes of the 
-entity sniffed.  The value of this parameter MUST be a
-reference to a subroutine that returns a string.
-
-This parameter MUST be specified.  If missing, an empty
-(zero-length) entity is assumed.
-
-When invoked, the code receives a parameter I<$n> that 
-represents the number of bytes expected.  The code SHOULD
-return I<$n> bytes at the beginning of the entity.
-If more than I<$n> bytes are returned, then I<$n> + 1
-byte and later are discarded.  The code MAY return
-a string whose length is less than I<$n> bytes
-if no more bytes is available.
-
-=item has_http_content_encoding => I<boolean>
-
-I<This parameter is obsolete and has no effect.>
-
-=item http_content_type_byte => I<Content-Type-field-body>
-
-The byte sequence of the C<field-body> part of the HTTP
-C<Content-Type> header field of the entity.
-
-This parameter MUST be set to the byte sequence of
-the C<Content-Type> header field's C<field-body> of
-the entity if and only if it is transfered over HTTP
-and the HTTP response entity contains the C<Content-Type>
-header field.
-
-=item supported_image_types => {I<media-type> => I<boolean>, ...}
-
-A reference to the hash that contains the list of supported
-image types.
-
-This parameter MUST be set to a reference to the hash
-whose keys are Internet Media Types (without any parameter)
-and whose values are whether image formats with those Internet Media Types
-are supported or not.  A value MUST be true if and only
-if the Internet Media Type is supported.
-
-If this parameter is missing, then no image types are 
-considered as supported.
-
-=back
-
-=cut
 
 sub get_sniffed_type ($%) {
   shift;
@@ -425,16 +316,7 @@ sub get_sniffed_type ($%) {
   return ($official_type, $official_type);
 } # get_sniffed_type
 
-=back
-
-=head1 SEE ALSO
-
-HTML5 - Determining the type of a new resource in a browsing context
-<http://www.whatwg.org/specs/web-apps/current-work/#content-type-sniffing>
-
-=head1 AUTHOR
-
-Wakaba <w@suika.fam.cx>.
+1;
 
 =head1 LICENSE
 
@@ -444,6 +326,3 @@ This library is free software; you can redistribute it
 and/or modify it under the same terms as Perl itself.
 
 =cut
-
-1;
-# $Date: 2008/10/02 10:59:04 $

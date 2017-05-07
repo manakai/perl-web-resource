@@ -1,18 +1,17 @@
 =head1 NAME
 
-Whatpm::ContentType - HTML5 Content Type Sniffer
+Web::MIME::Sniffer - MIME type sniffer
 
 =head1 SYNOPSIS
 
-  ## Content-Type Sniffing
-  
-  require Whatpm::ContentType;
-  my $sniffed_type = Whatpm::ContentType->get_sniffed_type (
-    get_file_head => sub {
-      my $n = shift;
-      return $first_n_bytes_of_the_entity;
-    },
-    http_content_type_byte => $content_type_field_body_of_the_entity_in_bytes,
+  use Web::MIME::Sniffer;
+  use Web::MIME::Type;
+  my $ct = $response->get_headers_by_name ('Content-Type')->[-1];
+  my $mime = defined $ct ? Web::MIME::Type->parse_web_mime_type ($ct) : undef;
+  my $sniffer = Web::MIME::Sniffer->new;
+  my $sniffed_type = $sniffer->detect (
+    $mime,
+    (substr $response->body, 0, 1445),
     supported_image_types => {
       'image/jpeg' => 1, 'image/png' => 1, 'image/gif' => 1, # for example
     },
@@ -20,72 +19,38 @@ Whatpm::ContentType - HTML5 Content Type Sniffer
 
 =head1 DESCRIPTION
 
-The C<Whatpm::ContentType> module contains media type sniffer
-for Web user agents.  It implements the content type sniffing
-algorithm as defined in the HTML5 specification.
+The C<Web::MIME::Sniffer> class is a MIME type sniffer for Web user
+agents.  It implements the MIME sniffing algorithm of the MIME
+Sniffing Standard.
 
-=head1 METHOD
+=head1 METHODS
 
-=over 4
-
-=item I<$sniffed_type> = Whatpm::ContentType->get_sniffed_type (I<named-parameters>)
-
-Returns the sniffed type of an entity.  The sniffed type
-is always represented in lowercase.
-
-B<In list context>, this method returns a list of 
-official type and sniffed type.  Official type is the media
-type as specified in the transfer protocol metadata,
-without any parameters and in lowercase.
-
-Arguments to this method MUST be specified as name-value pairs.
-Valid named parameters defined for this method is as follows:
+There are following methods:
 
 =over 4
 
-=item content_type_metadata => I<media-type>
+=item $sniffer = Web::MIME::Sniffer->new
 
-The Content-Type metadata, in character string, as defined in HTML5.
-The value of this parameter MUST be an Internet Media Type (with
-any parameters), that match to the C<media-type> rule
-defined in RFC 2616.
+Create a new instance of the sniffer.
 
-If the C<http_content_type_byte> parameter is specified,
-then the C<content_type_metadata> parameter has no effect.  Otherwise,
-the C<content_type_metadata> parameter MUST be specified if and only
-if any Content-Type metadata is available.
+=item $sniffed_type = $sniffer->detect ($mime, $bytes, $name => $value, ...)
 
-=item get_file_head => I<CODE>
+Run the sniffing alorithm.
 
-The code reference used to obtain first I<$n> bytes of the 
-entity sniffed.  The value of this parameter MUST be a
-reference to a subroutine that returns a string.
+The first argument must be a MIME type object (L<Web::MIME::Type>) or
+C<undef>.  If the resource in question is an HTTP response, the MIME
+type object created from the B<last> C<Content-Type> header value (see
+the MIME Sniffing Standard) should be specified.  If parsing of the
+header value returns C<undef>, or there is no C<Content-Type> header,
+C<undef> should be specified.
 
-This parameter MUST be specified.  If missing, an empty
-(zero-length) entity is assumed.
+The second arugment must be the resource header, i.e. first 1445 bytes
+of the response body (see the MIME Sniffing Standard for details).
 
-When invoked, the code receives a parameter I<$n> that 
-represents the number of bytes expected.  The code SHOULD
-return I<$n> bytes at the beginning of the entity.
-If more than I<$n> bytes are returned, then I<$n> + 1
-byte and later are discarded.  The code MAY return
-a string whose length is less than I<$n> bytes
-if no more bytes is available.
+The other arguments must be specified as key/value pairs from
+following options:
 
-=item has_http_content_encoding => I<boolean>
-
-I<This parameter is obsolete and has no effect.>
-
-=item http_content_type_byte => I<Content-Type-field-body>
-
-The byte sequence of the C<field-body> part of the HTTP
-C<Content-Type> header field of the entity.
-
-This parameter MUST be set to the byte sequence of
-the C<Content-Type> header field's C<field-body> of
-the entity if and only if it is transfered over HTTP
-and the HTTP response entity contains the C<Content-Type>
-header field.
+=over 4
 
 =item supported_image_types => {I<media-type> => I<boolean>, ...}
 
@@ -103,12 +68,29 @@ considered as supported.
 
 =back
 
+The method returns the computed MIME type.  The type is always
+represented in lowercase.
+
+B<In list context>, this method returns a list of 
+official type and sniffed type.  Official type is the media
+type as specified in the transfer protocol metadata,
+without any parameters and in lowercase.
+
 =back
 
-=head1 SEE ALSO
+=head1 SPECIFICATIONS
 
-HTML5 - Determining the type of a new resource in a browsing context
-<http://www.whatwg.org/specs/web-apps/current-work/#content-type-sniffing>
+MIME Sniffing Standard <https://mimesniff.spec.whatwg.org/>.
+
+HTML Standard <https://html.spec.whatwg.org/>.
+
+<track> Don't check Content-Type for <track>
+<https://www.w3.org/Bugs/Public/show_bug.cgi?id=13995>.
+
+=head1 HISTORY
+
+This module derived from the L<Whatpm::ContentType> module in the
+manakai-core package <https://github.com/wakaba/manakai>.
 
 =head1 AUTHOR
 

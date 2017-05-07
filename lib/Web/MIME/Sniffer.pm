@@ -134,47 +134,33 @@ sub new ($) {
   return bless {}, $_[0];
 } # new
 
-sub get_sniffed_type ($%) {
-  shift;
-  my %opt = @_;
-  $opt{get_file_head} ||= sub () { return '' };
+sub detect ($$$%) {
+  my ($self, $mime, undef, %args) = @_;
 
-  ## <http://www.whatwg.org/specs/web-apps/current-work/#content-type-sniffing>
-  
-  ## Step 1
-  if (defined $opt{http_content_type_byte}) {
-    ## ISSUE: Is leading LWS ignored?
-    if ($opt{http_content_type_byte} eq 'text/plain' or
-        $opt{http_content_type_byte} eq 'text/plain; charset=ISO-8859-1' or
-        $opt{http_content_type_byte} eq 'text/plain; charset=iso-8859-1' or
-        $opt{http_content_type_byte} eq 'text/plain; charset=UTF-8') {
-      ## Content-Type sniffing: text or binary
-      ## <http://www.whatwg.org/specs/web-apps/current-work/#content-type4>
+  if (defined $mime and $mime->apache_bug) { # XXX and is HTTP
+    ## <https://mimesniff.spec.whatwg.org/#rules-for-text-or-binary>
 
-      ## Step 1
-      my $bytes = substr $opt{get_file_head}->(512), 0, 512;
-
-      ## Step 2
-      ## Step 3
-      if (length $bytes >= 4) {
-        my $by = substr $bytes, 0, 4;
-        return ('text/plain', 'text/plain')
-            if $by =~ /^\xFE\xFF/ or
-                $by =~ /^\xFF\xFE/ or
-                #$by =~ /^\x00\x00\xFE\xFF/ or
-                $by =~ /^\xEF\xBB\xBF/;
-      }
-
-      ## Step 4
+    if (length $_[2] >= 2) {
+      my $by = substr $_[2], 0, 2;
       return ('text/plain', 'text/plain')
-          unless $bytes =~ /$binary_data_bytes/o;
+          if $by eq "\xFE\xFF" or $by eq "\xFF\xFE";
+    }
+
+    if (length $_[2] >= 3) {
+      my $by = substr $_[2], 0, 3;
+      return ('text/plain', 'text/plain')
+          if $by eq "\xEF\xBB\xBF";
+    }
+
+    return ('text/plain', 'text/plain')
+        unless $_[2] =~ /$binary_data_bytes/o;
 
       ## Step 5
       ROW: for my $row (@UnknownSniffingTable) {
         ## $row = [Mask, Pattern, Sniffed Type, Has leading WS flag, Security];
         next ROW unless $row->[4]; # Safe
         my $pattern_length = length $row->[1];
-        my $data = substr ($bytes, 0, $pattern_length);
+        my $data = substr ($_[2], 0, $pattern_length);
         return ('text/plain', $row->[2]) if $data eq $row->[1];
 
         ## NOTE: "WS" flag and mask are ignored, since "safe" rows
@@ -183,27 +169,9 @@ sub get_sniffed_type ($%) {
 
       ## Step 6
       return ('text/plain', 'application/octet-stream');
-    }
   }
 
-  ## Step 2
-  my $official_type = $opt{content_type_metadata};
-  if (defined $opt{http_content_type_byte}) {
-    my $lws = qr/(?>(?>\x0D\x0A)?[\x09\x20])*/;
-    my $token = qr/[\x21\x23-\x27\x2A\x2B\x2D\x2E\x30-\x39\x41-\x5A\x5E-\x7A\x7C\x7E]+/;
-    if ($opt{http_content_type_byte} =~ m#^$lws($token/$token)$lws(?>;$lws$token=(?>$token|"(?>[\x21\x23-\x5B\x5D-\x7E\x80-\xFF]|$lws|\\[\x00-\x7F])*")$lws)*\z#) {
-      ## Strip parameters
-      $official_type = $1;
-      $official_type =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-    }
-    ## If there is an error, no official type.
-  } elsif (defined $official_type) {
-    ## Strip parameters
-    if ($official_type =~ m#^[\x09\x0A\x0D\x20]*([^/;,\s]+/[^/;,\s]+)#) {
-      $official_type = $1;
-      $official_type =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-    }
-  }
+  my $official_type = defined $mime ? $mime->mime_type_portion : undef;
 
   ## Step 2 ("If") and Step 3
   if (not defined $official_type or
@@ -212,57 +180,50 @@ sub get_sniffed_type ($%) {
     ## Algorithm: "Content-Type sniffing: unknown type"
 
     ## NOTE: The "unknown" algorithm does not support HTML with BOM.
-
-    ## Step 1
-    my $bytes = substr $opt{get_file_head}->(512), 0, 512;
     
     ## Step 2
-    my $stream_length = length $bytes;
+    my $stream_length = length $_[2];
 
     ## Step 3
     ROW: for my $row (@UnknownSniffingTable) {
       ## $row = [Mask, Pattern, Sniffed Type, Has leading WS flag, Security];
       my $pos = 0;
       if ($row->[3]) {
-        $pos++ while substr ($bytes, $pos, 1) =~ /^[\x09\x0A\x0C\x0D\x20]/;
+        $pos++ while substr ($_[2], $pos, 1) =~ /^[\x09\x0A\x0C\x0D\x20]/;
       }
       my $pattern_length = length $row->[1];
       next ROW if $pos + $pattern_length > $stream_length;
-      my $data = substr ($bytes, $pos, $pattern_length) & $row->[0];
+      my $data = substr ($_[2], $pos, $pattern_length) & $row->[0];
       return ($official_type, $row->[2]) if $data eq $row->[1];
     }
 
     ## Step 4
     return ($official_type, 'text/plain')
-        unless $bytes =~ /$binary_data_bytes/o;
+        unless $_[2] =~ /$binary_data_bytes/o;
 
     ## Step 5
     return ($official_type, 'application/octet-stream');
   }
 
   ## Step 4
-  if ($official_type =~ /\+xml$/ or 
-      $official_type eq 'text/xml' or
-      $official_type eq 'application/xml') {
+  if ($mime->is_xml_mime_type) {
     return ($official_type, $official_type);
   }
 
   ## Step 5
-  if ($opt{supported_image_types}->{$official_type}) {
+  if ($args{supported_image_types}->{$official_type}) {
     ## Content-Type sniffing: image
     ## <http://www.whatwg.org/specs/web-apps/current-work/#content-type6>
 
     if ($official_type eq 'image/svg+xml') {
       return ($official_type, $official_type);
     }
-    
-    my $bytes = substr $opt{get_file_head}->(8), 0, 8;
 
     ## Table
     for my $row (@ImageSniffingTable) { # Pattern, Sniffed Type
       return ($official_type, $row->[1])
-          if substr ($bytes, 0, length $row->[0]) eq $row->[0] and
-              $opt{supported_image_types}->{$row->[1]};
+          if substr ($_[2], 0, length $row->[0]) eq $row->[0] and
+              $args{supported_image_types}->{$row->[1]};
     }
 
     ## Otherwise
@@ -274,30 +235,24 @@ sub get_sniffed_type ($%) {
     ## Content-Type sniffing: feed or HTML
     ## <http://www.whatwg.org/specs/web-apps/current-work/#content-type7>
 
-    ## Step 1
-    ## Step 2
-    my $bytes = substr $opt{get_file_head}->(512), 0, 512;
-
-    ## Step 3
-
     ## Step 4
-    pos ($bytes) = 0;
+    pos ($_[2]) = 0;
 
     ## Step 5
-    if (substr ($bytes, 0, 3) eq "\xEF\xBB\xBF") {
-      pos ($bytes) = 3; # skip UTF-8 BOM.
+    if (substr ($_[2], 0, 3) eq "\xEF\xBB\xBF") {
+      pos ($_[2]) = 3; # skip UTF-8 BOM.
     }
 
     ## Step 6-9
-    1 while $bytes =~ /\G(?:[\x09\x20\x0A\x0D]+|<!--.*?-->|<![^>]*>|<\?.*?\?>)/gcs;
-    return ($official_type, 'text/html') unless $bytes =~ /\G</gc;
+    1 while $_[2] =~ /\G(?:[\x09\x20\x0A\x0D]+|<!--.*?-->|<![^>]*>|<\?.*?\?>)/gcs;
+    return ($official_type, 'text/html') unless $_[2] =~ /\G</gc;
 
     ## Step 10
-    if ($bytes =~ /\Grss/gc) {
+    if ($_[2] =~ /\Grss/gc) {
       return ($official_type, 'application/rss+xml');
-    } elsif ($bytes =~ /\Gfeed/gc) {
+    } elsif ($_[2] =~ /\Gfeed/gc) {
       return ($official_type, 'application/atom+xml');
-    } elsif ($bytes and $bytes =~ /\Grdf:RDF/gc) {
+    } elsif ($_[2] and $_[2] =~ /\Grdf:RDF/gc) {
       # 
     } else {
       return ($official_type, 'text/html');
@@ -305,7 +260,7 @@ sub get_sniffed_type ($%) {
 
     ## Step 11
     ## ISSUE: Step 11 is not defined yet in the spec
-    if ($bytes =~ /\G([^>]+)/gc) {
+    if ($_[2] =~ /\G([^>]+)/gc) {
       my $by = $1;
       if ($by =~ m!xmlns[^>=]*=[\x20\x0A\x0D\x09]*["']http://www\.w3\.org/1999/02/22-rdf-syntax-ns#["']! and
           $by =~ m!xmlns[^>=]*=[\x20\x0A\x0D\x09]*["']http://purl\.org/rss/1\.0/["']!) {
@@ -319,7 +274,7 @@ sub get_sniffed_type ($%) {
 
   ## Step 8
   return ($official_type, $official_type);
-} # get_sniffed_type
+} # detect
 
 1;
 

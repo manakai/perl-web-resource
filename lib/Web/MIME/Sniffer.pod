@@ -12,11 +12,11 @@ Web::MIME::Sniffer - MIME type sniffer
   $sniffer->supported_image_types->{'image/jpeg'} = 1;
   $sniffer->supported_image_types->{'image/png'} = 1;
   $sniffer->supported_image_types->{'image/gif'} = 1;
-  my $sniffed_type = $sniffer->detect (
+  my $computed_mime = $sniffer->detect (
     $mime,
     (substr $response->body, 0, 1445),
   );
-  warn $sniffed_type;
+  warn $computed_mime->mime_type_portion;
 
 =head1 DESCRIPTION
 
@@ -56,7 +56,7 @@ C<image/png> or C<image/jpeg>.
 
 This hash reference is empty by default.
 
-=item $sniffed_type = $sniffer->detect ($mime, $bytes, $name => $value, ...)
+=item $mime = $sniffer->detect ($mime, $bytes)
 
 Run the sniffing alorithm.
 
@@ -70,22 +70,15 @@ C<undef> should be specified.
 The second arugment must be the resource header, i.e. first 1445 bytes
 of the response body (see the MIME Sniffing Standard for details).
 
-The other arguments must be specified as key/value pairs from
-following options:
+The method returns a MIME type object (L<Web::MIME::Type>)
+representing the computed MIME type.
 
-=over 4
-
-XXX
-
-=back
-
-The method returns the computed MIME type.  The type is always
-represented in lowercase.
-
-B<In list context>, this method returns a list of 
-official type and sniffed type.  Official type is the media
-type as specified in the transfer protocol metadata,
-without any parameters and in lowercase.
+Please note that when the computed MIME type is different from the
+supplied MIME type (i.e. the return value is different from the first
+argument), the computed MIME type does not have parameters included in
+the supplied MIME type.  Parameters, especially the C<charset>
+parameter, should be taken from the supplied MIME type, as defined by
+the relevant specifications.
 
 =back
 

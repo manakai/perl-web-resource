@@ -1012,13 +1012,10 @@ for my $v (
     $sniffer->supported_image_types->{$_} = 1 for qw(image/jpeg);
 
     my $st = $sniffer->detect (mime ($v->[1]), $v->[0]);
-    is $st, $v->[3], 'Text or binary: ' . $v->[4];
+    is $st->as_valid_mime_type_with_no_params, $v->[3], 'Text or binary: ' . $v->[4];
 
-    my ($ot, $st) = $sniffer->detect (mime ($v->[1]), $v->[0]);
-    is $st, $v->[3], 'Text or binary (list): ' . $v->[4];
-    is $ot, get_official ($v->[1]), 'Text or binary official: ' . $v->[4];
     done $c;
-  } n => 3, name => 'Text or binary';
+  } n => 1, name => 'Text or binary';
 
   for my $ct (undef, 'application/unknown', 'unknown/unknown',
               'text', '{content_type}', '') {
@@ -1027,20 +1024,10 @@ for my $v (
       my $sniffer = Web::MIME::Sniffer->new;
       $sniffer->supported_image_types->{$_} = 1 for qw(image/jpeg);
       my $st = $sniffer->detect ((defined $ct ? mime ($ct) : undef), $v->[0]);
-      is $st, $v->[5], 'Unknown type ('.($ct||'undef').'): ' . $v->[4];
+      is $st->as_valid_mime_type_with_no_params, $v->[5], 'Unknown type ('.($ct||'undef').'): ' . $v->[4];
       done $c;
     } n => 1, name => ['Unknown type', $ct];
   } # $ct
-
-  test {
-    my $c = shift;
-    my $sniffer = Web::MIME::Sniffer->new;
-    $sniffer->supported_image_types->{$_} = 1 for qw(image/jpeg);
-    my ($ot, $st) = $sniffer->detect (mime ('unknown/unknown'), $v->[0]);
-    is $st, $v->[5], 'Unknown type (list): ' . $v->[4];
-    is $ot, 'unknown/unknown', 'Unknown type (official): ' . $v->[4];
-    done $c;
-  } n => 2;
 
   for my $img_type (qw(image/png image/gif image/jpeg)) {
     test {
@@ -1049,13 +1036,13 @@ for my $v (
         my $sniffer = Web::MIME::Sniffer->new;
         $sniffer->supported_image_types->{$img_type} = 1;
         my $st = $sniffer->detect (mime ($img_type), $v->[0]);
-        is $st, $img_type, 'Image (only): ' . $v->[4];
+        is $st->as_valid_mime_type_with_no_params, $img_type, 'Image (only): ' . $v->[4];
       } $c, name => 'If it is the only supported type';
 
       test {
         my $sniffer = Web::MIME::Sniffer->new;
         my $st = $sniffer->detect (mime ($img_type), $v->[0]);
-        is $st, $img_type, 'Image (no): ' . $v->[4];
+        is $st->as_valid_mime_type_with_no_params, $img_type, 'Image (no): ' . $v->[4];
       } $c, name => 'If there is no supported type';
 
       test {
@@ -1064,7 +1051,7 @@ for my $v (
           image/png image/jpeg image/gif image/bmp image/vnd.microsoft.icon
         );
         my $st = $sniffer->detect (mime ($img_type), $v->[0]);
-        is $st, $v->[5] =~ m#^image/# ? $v->[5] : $img_type,
+        is $st->as_valid_mime_type_with_no_params, $v->[5] =~ m#^image/# ? $v->[5] : $img_type,
             'Image (all): ' . $v->[4];
       } $c, name => 'If all types are supported';
 
@@ -1075,43 +1062,23 @@ for my $v (
   test {
     my $c = shift;
     my $sniffer = Web::MIME::Sniffer->new;
-    $sniffer->supported_image_types->{$_} = 1 for qw(
-      image/png image/jpeg image/gif image/bmp image/vnd.microsoft.icon
-    );
-    my ($ot, $st) = $sniffer->detect (mime ('image/png'), $v->[0]);
-    is $st, $v->[5] =~ m#^image/# ? $v->[5] : 'image/png',
-        'Image (all list): ' . $v->[4];
-    is $ot, 'image/png', 'Image (official): ' . $v->[4];
-    done $c;
-  } n => 2;
-
-  test {
-    my $c = shift;
-    my $sniffer = Web::MIME::Sniffer->new;
     $sniffer->supported_image_types->{$_} = 1 for qw(image/jpeg);
 
     my $st = $sniffer->detect (mime ('text/html'), $v->[0]);
-    is $st, $v->[6], 'Feed or HTML: ' . $v->[4];
+    is $st->as_valid_mime_type_with_no_params, $v->[6], 'Feed or HTML: ' . $v->[4];
 
-    ## List context
-    my ($ot, $st) = $sniffer->detect (mime ('text/html'), $v->[0]);
-    is $st, $v->[6], 'Feed or HTML (list): ' . $v->[4];
-    is $ot, 'text/html', 'Feed or HTML (official): ' . $v->[4];
     done $c;
-  } n => 3, name => 'Feed or HTML';
+  } n => 1, name => 'Feed or HTML';
 
   test {
     my $c = shift;
     my $sniffer = Web::MIME::Sniffer->new;
-    my $st = $sniffer->detect (mime ('image/svg+xml'), $v->[0]);
-    is $st, 'image/svg+xml', 'SVG: ' . $v->[4];
 
-    ## List context
-    my ($ot, $st) = $sniffer->detect (mime ('image/svg+xml'), $v->[0]);
-    is $st, 'image/svg+xml', 'SVG (list): ' . $v->[4];
-    is $ot, 'image/svg+xml', 'SVG (official): ' . $v->[4];
+    my $st = $sniffer->detect (mime ('image/svg+xml'), $v->[0]);
+    is $st->as_valid_mime_type_with_no_params, 'image/svg+xml', 'SVG: ' . $v->[4];
+
     done $c;
-  } n => 3, name => 'image/svg+xml is always treated as image/svg+xml';
+  } n => 1, name => 'image/svg+xml is always treated as image/svg+xml';
 
   ## XXX We should test image sniffing rules standalone actually...
 }

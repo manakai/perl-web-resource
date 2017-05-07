@@ -2,6 +2,7 @@ package Web::MIME::Sniffer;
 use strict;
 use warnings;
 our $VERSION = '1.19';
+use Web::MIME::Type;
 
 ## Table in <http://www.whatwg.org/specs/web-apps/current-work/#content-type1>.
 ##
@@ -145,25 +146,29 @@ sub supported_audio_video_types ($) {
   return $_[0]->{supported_audio_video_types};
 } # supported_audio_video_types
 
-sub detect ($$$%) {
-  my ($self, $mime, undef, %args) = @_;
+sub _mime ($) {
+  return Web::MIME::Type->parse_web_mime_type ($_[0]);
+} # _mime
+
+sub detect ($$$) {
+  my ($self, $mime, undef) = @_;
 
   if (defined $mime and $mime->apache_bug) { # XXX and is HTTP
     ## <https://mimesniff.spec.whatwg.org/#rules-for-text-or-binary>
 
     if (length $_[2] >= 2) {
       my $by = substr $_[2], 0, 2;
-      return ('text/plain', 'text/plain')
+      return _mime 'text/plain'
           if $by eq "\xFE\xFF" or $by eq "\xFF\xFE";
     }
 
     if (length $_[2] >= 3) {
       my $by = substr $_[2], 0, 3;
-      return ('text/plain', 'text/plain')
+      return _mime 'text/plain'
           if $by eq "\xEF\xBB\xBF";
     }
 
-    return ('text/plain', 'text/plain')
+    return _mime 'text/plain'
         unless $_[2] =~ /$binary_data_bytes/o;
 
       ## Step 5
@@ -172,14 +177,14 @@ sub detect ($$$%) {
         next ROW unless $row->[4]; # Safe
         my $pattern_length = length $row->[1];
         my $data = substr ($_[2], 0, $pattern_length);
-        return ('text/plain', $row->[2]) if $data eq $row->[1];
+        return _mime $row->[2] if $data eq $row->[1];
 
         ## NOTE: "WS" flag and mask are ignored, since "safe" rows
         ## don't use them.
       }
 
       ## Step 6
-      return ('text/plain', 'application/octet-stream');
+      return _mime 'application/octet-stream';
   }
 
   my $official_type = defined $mime ? $mime->mime_type_portion : undef;
@@ -205,20 +210,20 @@ sub detect ($$$%) {
       my $pattern_length = length $row->[1];
       next ROW if $pos + $pattern_length > $stream_length;
       my $data = substr ($_[2], $pos, $pattern_length) & $row->[0];
-      return ($official_type, $row->[2]) if $data eq $row->[1];
+      return _mime $row->[2] if $data eq $row->[1];
     }
 
     ## Step 4
-    return ($official_type, 'text/plain')
+    return _mime 'text/plain'
         unless $_[2] =~ /$binary_data_bytes/o;
 
     ## Step 5
-    return ($official_type, 'application/octet-stream');
+    return _mime 'application/octet-stream';
   }
 
   ## Step 4
   if ($mime->is_xml_mime_type) {
-    return ($official_type, $official_type);
+    return $mime;
   }
 
   ## Step 5
@@ -227,18 +232,18 @@ sub detect ($$$%) {
     ## <http://www.whatwg.org/specs/web-apps/current-work/#content-type6>
 
     if ($official_type eq 'image/svg+xml') {
-      return ($official_type, $official_type);
+      return $mime;
     }
 
     ## Table
     for my $row (@ImageSniffingTable) { # Pattern, Sniffed Type
-      return ($official_type, $row->[1])
+      return _mime $row->[1]
           if substr ($_[2], 0, length $row->[0]) eq $row->[0] and
              $self->{supported_image_types}->{$row->[1]};
     }
 
     ## Otherwise
-    return ($official_type, $official_type);
+    return $mime;
   }
 
   ## Step 6
@@ -256,17 +261,17 @@ sub detect ($$$%) {
 
     ## Step 6-9
     1 while $_[2] =~ /\G(?:[\x09\x20\x0A\x0D]+|<!--.*?-->|<![^>]*>|<\?.*?\?>)/gcs;
-    return ($official_type, 'text/html') unless $_[2] =~ /\G</gc;
+    return _mime 'text/html' unless $_[2] =~ /\G</gc;
 
     ## Step 10
     if ($_[2] =~ /\Grss/gc) {
-      return ($official_type, 'application/rss+xml');
+      return _mime 'application/rss+xml';
     } elsif ($_[2] =~ /\Gfeed/gc) {
-      return ($official_type, 'application/atom+xml');
+      return _mime 'application/atom+xml';
     } elsif ($_[2] and $_[2] =~ /\Grdf:RDF/gc) {
       # 
     } else {
-      return ($official_type, 'text/html');
+      return _mime 'text/html';
     }
 
     ## Step 11
@@ -275,16 +280,15 @@ sub detect ($$$%) {
       my $by = $1;
       if ($by =~ m!xmlns[^>=]*=[\x20\x0A\x0D\x09]*["']http://www\.w3\.org/1999/02/22-rdf-syntax-ns#["']! and
           $by =~ m!xmlns[^>=]*=[\x20\x0A\x0D\x09]*["']http://purl\.org/rss/1\.0/["']!) {
-        return ($official_type, 'application/rss+xml');
+        return _mime 'application/rss+xml';
       }
     }
 
     ## Step 12
-    return ($official_type, 'text/html');
+    return _mime 'text/html';
   }
 
-  ## Step 8
-  return ($official_type, $official_type);
+  return $mime;
 } # detect
 
 1;

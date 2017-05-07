@@ -53,7 +53,7 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
           my $sniffer = Web::MIME::Sniffer->new;
           $sniffer->supported_image_types->{$_} = 1 for qw(image/jpeg);
 
-          my $content_type = defined $ct ? Web::MIME::Type->parse_web_mime_type ($ct) : undef;
+          my $content_type = defined $ct ? Web::MIME::Type->parse_web_mime_type ($ct, sub { }) : undef;
           my $st = $sniffer->detect ($content_type, $input_data);
           is $st->as_valid_mime_type_with_no_params, $x->($content_type);
 

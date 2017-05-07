@@ -171,20 +171,7 @@ sub detect ($$$) {
     return _mime 'text/plain'
         unless $_[2] =~ /$binary_data_bytes/o;
 
-      ## Step 5
-      ROW: for my $row (@UnknownSniffingTable) {
-        ## $row = [Mask, Pattern, Sniffed Type, Has leading WS flag, Security];
-        next ROW unless $row->[4]; # Safe
-        my $pattern_length = length $row->[1];
-        my $data = substr ($_[2], 0, $pattern_length);
-        return _mime $row->[2] if $data eq $row->[1];
-
-        ## NOTE: "WS" flag and mask are ignored, since "safe" rows
-        ## don't use them.
-      }
-
-      ## Step 6
-      return _mime 'application/octet-stream';
+    return _mime 'application/octet-stream';
   }
 
   my $official_type = defined $mime ? $mime->mime_type_portion : undef;

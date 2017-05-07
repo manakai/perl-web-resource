@@ -22,7 +22,7 @@ sub mime ($) {
   return Web::MIME::Type->parse_web_mime_type ($_[0], sub { }); # or undef
 } # mime
 
-for my $v (
+my @data = (
   # octet stream,
   # Content-Type field-body bytes, has Content-Encoding?,
   # "text or binary" expected, description,
@@ -1005,7 +1005,58 @@ for my $v (
     q<text/plain>,
     q<text/html>,
   ],
-) {
+);
+
+#XXX
+{
+  my $i = 5;
+  my $context = 'navigate';
+  my $path = path (__FILE__)->parent->parent->child
+      ("t_deps/tests/mime/sniffing/mime-sniffing-$context-$i.dat");
+  my $data = join "\n", map {
+    my $v = $_;
+    my $w = "#context $context\n#data\n";
+    my $x = $v->[0];
+    $x =~ s/([^\x20\x21\x22\x24-\x5B\x5D-\x7B\x7D\x7E])/sprintf '\\x%02X', ord $1/ge;
+    if (length $x) {
+      $w .= $x . "\n";
+    }
+    my $y = $v->[1];
+
+    if ($i == 1) {
+      $w .= "#content-type\n";
+      $w .= $y . "\n";
+      $w .= "#computed\n" . $v->[3] . "\n";
+    } elsif ($i == 2) {
+      $w .= "#content-type unknown\n";
+      $w .= "#computed\n" . $v->[5] . "\n";
+    } elsif ($i == 3) {
+      $w .= "#content-type image\n";
+      if ($v->[5] =~ m{^image/}) {
+        $w .= "#computed\n" . $v->[5] . "\n";
+      } else {
+        $w .= "#computed supplied\n";
+      }
+    } elsif ($i == 4) {
+      $w .= "#content-type text/html\n";
+      $w .= "#computed\n" . $v->[6] . "\n";
+    } elsif ($i == 5) {
+      $w .= "#content-type image/svg+xml\n";
+      $w .= "#computed\nimage/svg+xml\n";
+    }
+
+    if (length $v->[4]) {
+      $w .= "#name\n";
+      $w .= $v->[4] . "\n";
+    }
+    
+    $w;
+  } @data;
+  $path->spew_utf8 ($data);
+}
+die;
+
+for my $v (@data) {
   test {
     my $c = shift;
     my $sniffer = Web::MIME::Sniffer->new;

@@ -2347,6 +2347,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'iana' => 'permanent',
                                                               'iana_intended_usage' => 'common'
                                                             },
+                                          'vnd.capasystems-pg+json' => {
+                                                                       'iana' => 'permanent',
+                                                                       'iana_intended_usage' => 'limited use'
+                                                                     },
                                           'vnd.cendio.thinlinc.clientconf' => {
                                                                               'iana' => 'permanent',
                                                                               'iana_intended_usage' => 'limited use'
@@ -2523,6 +2527,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'limited use'
                                                                  },
+                                          'vnd.datapackage+json' => {
+                                                                    'iana' => 'permanent',
+                                                                    'iana_intended_usage' => 'common'
+                                                                  },
                                           'vnd.dataresource+json' => {
                                                                      'iana' => 'permanent',
                                                                      'iana_intended_usage' => 'common'
@@ -10851,7 +10859,8 @@ $Web::MIME::_TypeDefs::Type = {
                                           },
                                    'stata' => {},
                                    'strings' => {
-                                                'iana' => 'provisional'
+                                                'iana' => 'permanent',
+                                                'iana_intended_usage' => 'common'
                                               },
                                    'stylesheet' => {},
                                    'stylus' => {},

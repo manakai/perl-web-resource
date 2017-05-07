@@ -519,6 +519,38 @@ for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/type-c
   } n => 1, name => ['validate', @{$test->{data}->[0]}];
 });
 
+for my $input (
+  'text/plain',
+  'text/plain; charset=iso-8859-1',
+  'text/plain; charset=ISO-8859-1',
+  'text/plain; charset=UTF-8',
+) {
+  test {
+    my $c = shift;
+    my $mime = Web::MIME::Type->parse_web_mime_type ($input);
+    ok $mime->apache_bug;
+    done $c;
+  } n => 1;
+}
+
+for my $input (
+  'text/html',
+  'TEXT/PLAIN',
+  'text/plain; charset=utf-8',
+  'text/html; charset=UTF-8',
+  'text/plain;charset=UTF-8',
+  'application/octet-stream',
+  'text/plain; charset=utf-8;',
+  'text/plain; charset=utf-8; charset=iso-8859-1',
+) {
+  test {
+    my $c = shift;
+    my $mime = Web::MIME::Type->parse_web_mime_type ($input);
+    ok ! $mime->apache_bug;
+    done $c;
+  } n => 1;
+}
+
 run_tests;
 
 ## License: Public Domain.

@@ -25,8 +25,6 @@ Web::MIME::Type - MIME type object
 A C<Web::MIME::Type> object represents a MIME type (aka Internet Media
 Type), with or without parameters.
 
-XXX MIME Sniffing Standard is not supported yet.
-
 =head1 METHODS
 
 Following methods are available:
@@ -106,6 +104,11 @@ represented as a C<token> or a C<quoted-string> in the lexical form.
 Therefore, the method never returnes enclosing C<"> characters nor
 C<\> in C<quoted-pair>.
 
+=item $boolean = $t->apache_bug
+
+Return whether the "check-for-apache-bug flag" [MIMESNIFF] is set or
+not.
+
 =item I<BOOL> = I<$t>->is_javascript
 
 Returns whether the type represents JavaScript or not.
@@ -171,23 +174,38 @@ L<Whatpm::IMTChecker> module.  The L<Whatpm::IMTChecker> module is
 obsolete and removed from the manakai package in favor of the
 L<Message::MIME::Type> module.
 
-=head1 SEE ALSO
+=head1 SPECIFICATIONS
 
-RFC 2048 "Multipurpose Internet Mail Extensions (MIME) Part Two: Media
-Types" <http://tools.ietf.org/html/rfc2046>.
+=over 4
 
-RFC 2616 "Hypertext Transfer Protocol -- HTTP/1.1"
-<http://tools.ietf.org/html/rfc2616>.
+=item MIME
 
-RFC 3023 "XML Media Types" <http://tools.ietf.org/html/rfc3023>.
+RFC 2048, Multipurpose Internet Mail Extensions (MIME) Part Two: Media
+Types <https://tools.ietf.org/html/rfc2046>.
 
-RFC 4288 "Media Type Specifications and Registration Procedures"
-<http://tools.ietf.org/html/rfc4288>.
+=item HTTP
 
-HTML Standard
-<http://www.whatwg.org/specs/web-apps/current-work/complete.html>.
+RFC 7230, Hypertext Transfer Protocol (HTTP/1.1): Message Syntax and
+Routing <https://tools.ietf.org/html/rfc7230>.
 
-MIME Media Types <http://www.iana.org/assignments/media-types/>.
+=item MIMESNIFF
+
+MIME Sniffing Standard <https://mimesniff.spec.whatwg.org/>.
+
+=item MTREG
+
+RFC 4288, Media Type Specifications and Registration Procedures
+<https://tools.ietf.org/html/rfc4288>.
+
+=item XMLMT
+
+RFC 7303, XML Media Types <https://tools.ietf.org/html/rfc7303>.
+
+=item IANAREG
+
+MIME Media Types <https://www.iana.org/assignments/media-types/>.
+
+=back
 
 =head1 AUTHOR
 
@@ -195,7 +213,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2007-2013 Wakaba <wakaba@suikawiki.org>.
+Copyright 2007-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

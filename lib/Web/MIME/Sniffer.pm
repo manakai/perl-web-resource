@@ -131,8 +131,19 @@ my @ImageSniffingTable = (
 my $binary_data_bytes = qr/[\x00-\x08\x0B\x0E-\x1A\x1C-\x1F]/;
 
 sub new ($) {
-  return bless {}, $_[0];
+  return bless {
+    supported_image_types => {},
+    supported_audio_video_types => {},
+  }, $_[0];
 } # new
+
+sub supported_image_types ($) {
+  return $_[0]->{supported_image_types};
+} # supported_image_types
+
+sub supported_audio_video_types ($) {
+  return $_[0]->{supported_audio_video_types};
+} # supported_audio_video_types
 
 sub detect ($$$%) {
   my ($self, $mime, undef, %args) = @_;
@@ -211,7 +222,7 @@ sub detect ($$$%) {
   }
 
   ## Step 5
-  if ($args{supported_image_types}->{$official_type}) {
+  if ($self->{supported_image_types}->{$official_type}) {
     ## Content-Type sniffing: image
     ## <http://www.whatwg.org/specs/web-apps/current-work/#content-type6>
 
@@ -223,7 +234,7 @@ sub detect ($$$%) {
     for my $row (@ImageSniffingTable) { # Pattern, Sniffed Type
       return ($official_type, $row->[1])
           if substr ($_[2], 0, length $row->[0]) eq $row->[0] and
-              $args{supported_image_types}->{$row->[1]};
+             $self->{supported_image_types}->{$row->[1]};
     }
 
     ## Otherwise

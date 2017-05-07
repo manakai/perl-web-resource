@@ -9,13 +9,14 @@ Web::MIME::Sniffer - MIME type sniffer
   my $ct = $response->get_headers_by_name ('Content-Type')->[-1];
   my $mime = defined $ct ? Web::MIME::Type->parse_web_mime_type ($ct) : undef;
   my $sniffer = Web::MIME::Sniffer->new;
+  $sniffer->supported_image_types->{'image/jpeg'} = 1;
+  $sniffer->supported_image_types->{'image/png'} = 1;
+  $sniffer->supported_image_types->{'image/gif'} = 1;
   my $sniffed_type = $sniffer->detect (
     $mime,
     (substr $response->body, 0, 1445),
-    supported_image_types => {
-      'image/jpeg' => 1, 'image/png' => 1, 'image/gif' => 1, # for example
-    },
   );
+  warn $sniffed_type;
 
 =head1 DESCRIPTION
 
@@ -32,6 +33,28 @@ There are following methods:
 =item $sniffer = Web::MIME::Sniffer->new
 
 Create a new instance of the sniffer.
+
+=item $sniffer->supported_image_types->{$mime_type_portion} = $boolean
+
+Whether the application supports the MIME type as an image type or
+not.  This can affect the sniffing algorithm's result.
+
+The hash key must be a MIME type portion (type followed by a C</>
+followed by a subtype, without parameters) in lowercase, such as
+C<image/png> or C<image/jpeg>.
+
+This hash reference is empty by default.
+
+=item $sniffer->supported_audio_video_types->{$mime_type_portion} = $boolean
+
+Whether the application supports the MIME type as an audio or video
+type or not.  This can affect the sniffing algorithm's result.
+
+The hash key must be a MIME type portion (type followed by a C</>
+followed by a subtype, without parameters) in lowercase, such as
+C<image/png> or C<image/jpeg>.
+
+This hash reference is empty by default.
 
 =item $sniffed_type = $sniffer->detect ($mime, $bytes, $name => $value, ...)
 
@@ -52,19 +75,7 @@ following options:
 
 =over 4
 
-=item supported_image_types => {I<media-type> => I<boolean>, ...}
-
-A reference to the hash that contains the list of supported
-image types.
-
-This parameter MUST be set to a reference to the hash
-whose keys are Internet Media Types (without any parameter)
-and whose values are whether image formats with those Internet Media Types
-are supported or not.  A value MUST be true if and only
-if the Internet Media Type is supported.
-
-If this parameter is missing, then no image types are 
-considered as supported.
+XXX
 
 =back
 

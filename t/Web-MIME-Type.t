@@ -17,10 +17,11 @@ test {
 
   is $mt->type, 'text';
   is $mt->subtype, 'plain';
+  is $mt->mime_type_portion, 'text/plain';
   is $mt->as_valid_mime_type_with_no_params, 'text/plain';
   is $mt->as_valid_mime_type, 'text/plain';
   done $c;
-} n => 5, name => '_new_from_type_and_subtype';
+} n => 6, name => '_new_from_type_and_subtype';
 
 test {
   my $c = shift;
@@ -29,10 +30,11 @@ test {
 
   is $mt->type, 'text';
   is $mt->subtype, 'plain';
+  is $mt->mime_type_portion, 'text/plain';
   is $mt->as_valid_mime_type_with_no_params, 'text/plain';
   is $mt->as_valid_mime_type, 'text/plain';
   done $c;
-} n => 5, name => '_new_from_type_and_subtype_2';
+} n => 6, name => '_new_from_type_and_subtype_2';
 
 for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/types.dat'), {
   data => {is_prefixed => 1},
@@ -88,9 +90,10 @@ test {
   is $mt->type, 'image';
   $mt->type ('Audio');
   is $mt->type, 'audio';
+  is $mt->mime_type_portion, 'audio/png';
   is $mt->as_valid_mime_type, 'audio/png';
   done $c;
-} n => 3, name => 'type';
+} n => 4, name => 'type';
 
 test {
   my $c = shift;
@@ -98,9 +101,10 @@ test {
   is $mt->subtype, 'vrml';
   $mt->subtype ('BMP');
   is $mt->subtype, 'bmp';
+  is $mt->mime_type_portion, 'model/bmp';
   is $mt->as_valid_mime_type, 'model/bmp';
   done $c;
-} n => 3, name => 'subtype';
+} n => 4, name => 'subtype';
 
 test {
   my $c = shift;
@@ -283,8 +287,9 @@ test {
   my $mt = Web::MIME::Type->new_from_type_and_subtype ('text', 'css');
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
   is $mt->as_valid_mime_type, 'text/css';
+  is $mt->mime_type_portion, 'text/css';
   done $c;
-} n => 2, name => 'as_valid_1';
+} n => 3, name => 'as_valid_1';
 
 test {
   my $c = shift;
@@ -292,8 +297,9 @@ test {
   $mt->type ('NOT@TEXT');
   is $mt->as_valid_mime_type_with_no_params, undef;
   is $mt->as_valid_mime_type, undef;
+  is $mt->mime_type_portion, 'not@text/css';
   done $c;
-} n => 2, name => 'as_valid';
+} n => 3, name => 'as_valid';
 
 test {
   my $c = shift;
@@ -301,8 +307,9 @@ test {
   $mt->type ("\x{4e00}");
   is $mt->as_valid_mime_type_with_no_params, undef;
   is $mt->as_valid_mime_type, undef;
+  is $mt->mime_type_portion, "\x{4e00}/css";
   done $c;
-} n => 2, name => 'as_valid';
+} n => 3, name => 'as_valid';
 
 test {
   my $c = shift;
@@ -310,8 +317,9 @@ test {
   $mt->type ("a/b");
   is $mt->as_valid_mime_type_with_no_params, undef;
   is $mt->as_valid_mime_type, undef;
+  is $mt->mime_type_portion, 'a/b/css';
   done $c;
-} n => 2, name => 'as_valid';
+} n => 3, name => 'as_valid';
 
 test {
   my $c = shift;
@@ -319,8 +327,9 @@ test {
   $mt->type ('');
   is $mt->as_valid_mime_type_with_no_params, undef;
   is $mt->as_valid_mime_type, undef;
+  is $mt->mime_type_portion, '/css';
   done $c;
-} n => 2, name => 'as_valid';
+} n => 3, name => 'as_valid';
 
 test {
   my $c = shift;
@@ -328,8 +337,9 @@ test {
   $mt->subtype ('<NOCSS>');
   is $mt->as_valid_mime_type_with_no_params, undef;
   is $mt->as_valid_mime_type, undef;
+  is $mt->mime_type_portion, 'text/<nocss>';
   done $c;
-} n => 2, name => 'as_valid';
+} n => 3, name => 'as_valid';
 
 test {
   my $c = shift;
@@ -337,8 +347,9 @@ test {
   $mt->subtype ('');
   is $mt->as_valid_mime_type_with_no_params, undef;
   is $mt->as_valid_mime_type, undef;
+  is $mt->mime_type_portion, 'text/';
   done $c;
-} n => 2, name => 'as_valid';
+} n => 3, name => 'as_valid';
 
 test {
   my $c = shift;
@@ -346,8 +357,9 @@ test {
   $mt->subtype ("\x{FE00}");
   is $mt->as_valid_mime_type_with_no_params, undef;
   is $mt->as_valid_mime_type, undef;
+  is $mt->mime_type_portion, "text/\x{FE00}";
   done $c;
-} n => 2, name => 'as_valid';
+} n => 3, name => 'as_valid';
 
 test {
   my $c = shift;
@@ -355,8 +367,9 @@ test {
   $mt->param (abc => 'def');
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
   is $mt->as_valid_mime_type, 'text/css; abc=def';
+  is $mt->mime_type_portion, 'text/css';
   done $c;
-} n => 2, name => 'as_valid';
+} n => 3, name => 'as_valid';
 
 test {
   my $c = shift;
@@ -364,8 +377,9 @@ test {
   $mt->param (abc => 'def<xxyz>');
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
   is $mt->as_valid_mime_type, 'text/css; abc="def<xxyz>"';
+  is $mt->mime_type_portion, 'text/css';
   done $c;
-} n => 2, name => 'as_valid';
+} n => 3, name => 'as_valid';
 
 test {
   my $c = shift;

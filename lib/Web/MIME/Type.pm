@@ -267,6 +267,10 @@ sub is_xml_mime_type ($) {
 
 ## ------ Serialization ------
 
+sub mime_type_portion ($) {
+  return $_[0]->{type} . '/' . $_[0]->{subtype};
+} # mime_type_portion
+
 my $non_token = qr/[^\x21\x23-\x27\x2A\x2B\x2D\x2E\x30-\x39\x41-\x5A\x5E-\x7A\x7C\x7E]/;
 
 sub as_valid_mime_type_with_no_params ($) {

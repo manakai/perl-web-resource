@@ -11,6 +11,7 @@ Web::MIME::Type - MIME type object
   
   is $type->type, 'text';
   is $type->subtype, 'css';
+  is $type->mime_type_portion, 'text/css';
   is_deeply $type->attrs, ['charset'];
   is $type->param ('charset'), 'US-ASCII';
   
@@ -82,6 +83,17 @@ lowercase.
 On setting, it updates the C<subtype> part of the MIME type.  Note
 that the C<subtype> is ASCII case-insensitive and therefore normalized
 by the setter.
+
+=item $string = $t->mime_type_portion
+
+Return the MIME type portion of the MIME type, i.e. the
+C<type>/C<subtype> part of the MIME type (without parameter), in
+lowercase.
+
+Note that this method might not return a valid MIME type if an invalid
+value is specified when the MIME type is created (or through setters
+of C<type> and C<subtype> methods).  It can contain non-ASCII
+characters.
 
 =item [I<$a1>, I<$a2>, ...] = I<$t>->attrs
 

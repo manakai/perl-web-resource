@@ -162,10 +162,10 @@ sub detect ($$$) {
 
   my $official_type = defined $mime ? $mime->mime_type_portion : undef;
 
-  ## Step 2 ("If") and Step 3
   if (not defined $official_type or
       $official_type eq 'unknown/unknown' or
-      $official_type eq 'application/unknown') {
+      $official_type eq 'application/unknown' or
+      $official_type eq '*/*') {
     {
       my $computed = _table \@ScriptableSniffingTable, $_[2];
       return $computed if defined $computed;

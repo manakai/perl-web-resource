@@ -42,7 +42,7 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
         done $c;
       } n => 1, name => [$rel_path, $test->{name}->[0]];
     } elsif ($ct_type eq 'unknown') {
-      for my $ct (undef, 'application/unknown', 'unknown/unknown',
+      for my $ct (undef, 'application/unknown', 'unknown/unknown', '*/*',
                   'text', '{content_type}', '') {
         test {
           my $c = shift;

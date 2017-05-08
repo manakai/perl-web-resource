@@ -126,6 +126,13 @@ sub new ($) {
   }, $_[0];
 } # new
 
+sub is_http ($;$) {
+  if (@_ > 1) {
+    $_[0]->{is_http} = $_[1];
+  }
+  return $_[0]->{is_http};
+} # is_http
+
 sub supported_image_types ($) {
   return $_[0]->{supported_image_types};
 } # supported_image_types
@@ -177,7 +184,7 @@ sub detect ($$$) {
       $official_type eq '*/*') {
     $sniffer = 0b11100110001;
     undef $mime;
-  } elsif ($mime->apache_bug) { # XXX and is HTTP
+  } elsif ($mime->apache_bug and $self->is_http) {
     $sniffer = 0b00010000001;
   } elsif ($mime->is_xml_mime_type) {
     return $mime;

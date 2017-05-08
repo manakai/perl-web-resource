@@ -32,6 +32,7 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
       test {
         my $c = shift;
         my $sniffer = Web::MIME::Sniffer->new;
+        $sniffer->is_http (1) unless $test->{nonhttp};
         $sniffer->supported_image_types->{$_} = 1 for qw(image/jpeg);
 
         my $content_type = Web::MIME::Type->parse_web_mime_type
@@ -47,6 +48,7 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
         test {
           my $c = shift;
           my $sniffer = Web::MIME::Sniffer->new;
+          $sniffer->is_http (1) unless $test->{nonhttp};
           $sniffer->supported_image_types->{$_} = 1 for qw(image/jpeg);
 
           my $content_type = defined $ct ? Web::MIME::Type->parse_web_mime_type ($ct, sub { }) : undef;
@@ -65,12 +67,14 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
 
           test {
             my $sniffer = Web::MIME::Sniffer->new;
+            $sniffer->is_http (1) unless $test->{nonhttp};
             my $st = $sniffer->detect ($content_type, $input_data);
             is $st->as_valid_mime_type_with_no_params, $img_type;
           } $c, name => 'If there is no supported type';
 
           test {
             my $sniffer = Web::MIME::Sniffer->new;
+            $sniffer->is_http (1) unless $test->{nonhttp};
             $sniffer->supported_image_types->{$img_type} = 1;
             my $st = $sniffer->detect ($content_type, $input_data);
             is $st->as_valid_mime_type_with_no_params, $x->($content_type);
@@ -78,6 +82,7 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
 
           test {
             my $sniffer = Web::MIME::Sniffer->new;
+            $sniffer->is_http (1) unless $test->{nonhttp};
             $sniffer->supported_image_types->{$_} = 1 for qw(
               image/png image/jpeg image/gif image/bmp image/vnd.microsoft.icon
             );

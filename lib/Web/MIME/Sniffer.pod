@@ -56,6 +56,16 @@ C<image/png> or C<image/jpeg>.
 
 This hash reference is empty by default.
 
+=item $boolean = $sniffer->is_http
+
+=item $sniffer->is_http ($boolean)
+
+Get or set whether the response in question has been received via HTTP
+or not.  If the underlying protocol is HTTP or FTP over HTTP, this
+value should be set to true.  Otherwise, e.g. if the response is
+created from a C<data:> URL or from file system, this value should be
+set to false.  Default is false.
+
 =item $mime = $sniffer->detect ($mime, $bytes)
 
 Run the sniffing alorithm.

@@ -31,7 +31,8 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
     if ($ct_type eq '') {
       test {
         my $c = shift;
-        my $sniffer = Web::MIME::Sniffer->new;
+        my $sniffer = Web::MIME::Sniffer->new_from_context
+            ($test->{context}->[1]->[0]);
         $sniffer->is_http (1) unless $test->{nonhttp};
         $sniffer->supported_image_types->{$_} = 1 for qw(image/jpeg);
 
@@ -47,7 +48,8 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
                   'text', '{content_type}', '') {
         test {
           my $c = shift;
-          my $sniffer = Web::MIME::Sniffer->new;
+          my $sniffer = Web::MIME::Sniffer->new_from_context
+              ($test->{context}->[1]->[0]);
           $sniffer->is_http (1) unless $test->{nonhttp};
           $sniffer->supported_image_types->{$_} = 1 for qw(image/jpeg);
 
@@ -66,14 +68,16 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
           my $c = shift;
 
           test {
-            my $sniffer = Web::MIME::Sniffer->new;
+            my $sniffer = Web::MIME::Sniffer->new_from_context
+                ($test->{context}->[1]->[0]);
             $sniffer->is_http (1) unless $test->{nonhttp};
             my $st = $sniffer->detect ($content_type, $input_data);
             is $st->as_valid_mime_type_with_no_params, $img_type;
           } $c, name => 'If there is no supported type';
 
           test {
-            my $sniffer = Web::MIME::Sniffer->new;
+            my $sniffer = Web::MIME::Sniffer->new_from_context
+                ($test->{context}->[1]->[0]);
             $sniffer->is_http (1) unless $test->{nonhttp};
             $sniffer->supported_image_types->{$img_type} = 1;
             my $st = $sniffer->detect ($content_type, $input_data);
@@ -81,7 +85,8 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
           } $c, name => 'If it is the only supported type';
 
           test {
-            my $sniffer = Web::MIME::Sniffer->new;
+            my $sniffer = Web::MIME::Sniffer->new_from_context
+                ($test->{context}->[1]->[0]);
             $sniffer->is_http (1) unless $test->{nonhttp};
             $sniffer->supported_image_types->{$_} = 1 for qw(
               image/png image/jpeg image/gif image/bmp image/vnd.microsoft.icon

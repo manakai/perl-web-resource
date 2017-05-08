@@ -8,7 +8,7 @@ Web::MIME::Sniffer - MIME type sniffer
   use Web::MIME::Type;
   my $ct = $response->get_headers_by_name ('Content-Type')->[-1];
   my $mime = defined $ct ? Web::MIME::Type->parse_web_mime_type ($ct) : undef;
-  my $sniffer = Web::MIME::Sniffer->new;
+  my $sniffer = Web::MIME::Sniffer->new_from_context ('navigate');
   $sniffer->supported_image_types->{'image/jpeg'} = 1;
   $sniffer->supported_image_types->{'image/png'} = 1;
   $sniffer->supported_image_types->{'image/gif'} = 1;
@@ -30,9 +30,12 @@ There are following methods:
 
 =over 4
 
-=item $sniffer = Web::MIME::Sniffer->new
+=item $sniffer = Web::MIME::Sniffer->new_from_context ($context)
 
-Create a new instance of the sniffer.
+Create a new instance of the sniffer.  The argument must be one of
+followings:
+
+  navigate      For a normal navigation.
 
 =item $sniffer->supported_image_types->{$mime_type_portion} = $boolean
 

@@ -119,12 +119,13 @@ my @ImageSniffingTable = (
   ],
 );
 
-sub new ($) {
+sub new_from_context ($$) {
   return bless {
+    context => $_[1],
     supported_image_types => {},
     supported_audio_or_video_types => {},
   }, $_[0];
-} # new
+} # new_from_context
 
 sub is_http ($;$) {
   if (@_ > 1) {
@@ -178,21 +179,20 @@ sub detect ($$$) {
   # 0b00000000001 binary
 
   my $official_type = defined $mime ? $mime->mime_type_portion : undef;
-  if (not defined $official_type or
-      $official_type eq 'unknown/unknown' or
-      $official_type eq 'application/unknown' or
-      $official_type eq '*/*') {
-    $sniffer = 0b11100110001;
-    undef $mime;
-  } elsif ($mime->apache_bug and $self->is_http) {
-    $sniffer = 0b00010000001;
-  } elsif ($mime->is_xml_mime_type) {
-    return $mime;
-  } elsif ($official_type eq 'text/html') {
-    ## Content-Type sniffing: feed or HTML
-    ## <http://www.whatwg.org/specs/web-apps/current-work/#content-type7>
+  if ($self->{context} eq 'navigate') {
+    if (not defined $official_type or
+        $official_type eq 'unknown/unknown' or
+        $official_type eq 'application/unknown' or
+        $official_type eq '*/*') {
+      $sniffer = 0b11100110001;
+      undef $mime;
+    } elsif ($mime->apache_bug and $self->is_http) {
+      $sniffer = 0b00010000001;
+    } elsif ($mime->is_xml_mime_type) {
+      return $mime;
+    } elsif ($official_type eq 'text/html') {
+      # XXX these steps need to be updated
 
-    ## Step 4
     pos ($_[2]) = 0;
 
     ## Step 5
@@ -227,14 +227,21 @@ sub detect ($$$) {
 
     ## Step 12
     return _mime 'text/html';
-  } elsif ($self->{supported_image_types}->{$official_type} and
-           $mime->is_image) {
-    $sniffer = 0b00000100000;
-  } elsif ($self->{supported_audio_or_video_types}->{$official_type} and
-           $mime->is_audio_or_video) {
-    $sniffer = 0b00000010000;
+    } elsif ($self->{supported_image_types}->{$official_type} and
+             $mime->is_image) {
+      $sniffer = 0b00000100000;
+    } elsif ($self->{supported_audio_or_video_types}->{$official_type} and
+             $mime->is_audio_or_video) {
+      $sniffer = 0b00000010000;
+    } else {
+      #
+    }
+  # XXX audio_or_video
+  # XXX font
+  # XXX text_track
+  # XXX object
   } else {
-    #
+    die "Bad context |$self->{context}|";
   }
 
   if ($sniffer & 0b10000000000) {

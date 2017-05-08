@@ -121,6 +121,22 @@ sub _mime ($) {
   return Web::MIME::Type->parse_web_mime_type ($_[0]);
 } # _mime
 
+sub _table ($$) {
+  my $stream_length = length $_[1];
+  ROW: for my $row (@{$_[0]}) { # Pattern, Sniffed Type
+    ## $row = [Mask, Pattern, Sniffed Type, Has leading WS flag, Security];
+    my $pos = 0;
+    if ($row->[3]) {
+      $pos++ while substr ($_[1], $pos, 1) =~ /^[\x09\x0A\x0C\x0D\x20]/;
+    }
+    my $pattern_length = length $row->[1];
+    next ROW if $pos + $pattern_length > $stream_length;
+    my $data = substr ($_[1], $pos, $pattern_length) & $row->[0];
+    return _mime $row->[2] if $data eq $row->[1];
+  } # ROW
+  return undef;
+} # _table
+
 sub detect ($$$) {
   my ($self, $mime, undef) = @_;
 
@@ -130,29 +146,21 @@ sub detect ($$$) {
   if (not defined $official_type or
       $official_type eq 'unknown/unknown' or
       $official_type eq 'application/unknown') {
-    ## Algorithm: "Content-Type sniffing: unknown type"
-
-    ## NOTE: The "unknown" algorithm does not support HTML with BOM.
-    
-    ## Step 2
-    my $stream_length = length $_[2];
-
-    ## Step 3
-    ROW: for my $row (
-      @ScriptableSniffingTable,
-      @NonScriptableSniffingTable,
-      @BOMSniffingTable,
-      @ImageSniffingTable,
-    ) {
-      ## $row = [Mask, Pattern, Sniffed Type, Has leading WS flag, Security];
-      my $pos = 0;
-      if ($row->[3]) {
-        $pos++ while substr ($_[2], $pos, 1) =~ /^[\x09\x0A\x0C\x0D\x20]/;
-      }
-      my $pattern_length = length $row->[1];
-      next ROW if $pos + $pattern_length > $stream_length;
-      my $data = substr ($_[2], $pos, $pattern_length) & $row->[0];
-      return _mime $row->[2] if $data eq $row->[1];
+    {
+      my $computed = _table \@ScriptableSniffingTable, $_[2];
+      return $computed if defined $computed;
+    }
+    {
+      my $computed = _table \@NonScriptableSniffingTable, $_[2];
+      return $computed if defined $computed;
+    }
+    {
+      my $computed = _table \@BOMSniffingTable, $_[2];
+      return $computed if defined $computed;
+    }
+    {
+      my $computed = _table \@ImageSniffingTable, $_[2];
+      return $computed if defined $computed;
     }
 
     ## Step 4
@@ -231,25 +239,8 @@ sub detect ($$$) {
   }
 
   if ($self->{supported_image_types}->{$official_type}) {
-    ## Content-Type sniffing: image
-    ## <http://www.whatwg.org/specs/web-apps/current-work/#content-type6>
-
-    if ($official_type eq 'image/svg+xml') {
-      return $mime;
-    }
-
-    my $stream_length = length $_[2];
-    ROW: for my $row (@ImageSniffingTable) { # Pattern, Sniffed Type
-      ## $row = [Mask, Pattern, Sniffed Type, Has leading WS flag, Security];
-      my $pos = 0;
-      if ($row->[3]) {
-        $pos++ while substr ($_[2], $pos, 1) =~ /^[\x09\x0A\x0C\x0D\x20]/;
-      }
-      my $pattern_length = length $row->[1];
-      next ROW if $pos + $pattern_length > $stream_length;
-      my $data = substr ($_[2], $pos, $pattern_length) & $row->[0];
-      return _mime $row->[2] if $data eq $row->[1];
-    }
+    my $computed = _table \@ImageSniffingTable, $_[2];
+    return $computed if defined $computed;
 
     ## Otherwise
     return $mime;

@@ -9,10 +9,6 @@ use Test::HTCT::Parser;
 use Web::MIME::Type;
 use Web::MIME::Sniffer;
 
-sub mime ($) {
-  return Web::MIME::Type->parse_web_mime_type ($_[0], sub { }); # or undef
-} # mime
-
 my $test_data_path = path (__FILE__)->parent->parent->child
     ('t_deps/tests/mime/sniffing');
 for my $path ($test_data_path->children (qr/\.dat$/)) {

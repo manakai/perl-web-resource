@@ -64,6 +64,26 @@ our @BOMSniffingTable = (
   ],
 );
 
+our @BOM2SniffingTable = (
+  ## Mask, Pattern, Sniffed Type, Has leading "WS" flag, Security Flag
+  ## (1 = Safe, 0 = Otherwise)
+  [
+    "\xFF\xFF",
+    "\xFE\xFF", # UTF-16BE BOM
+    "text/plain", 0, 0,
+  ],
+  [
+    "\xFF\xFF",
+    "\xFF\xFE", # UTF-16LE BOM
+    "text/plain", 0, 0,
+  ],
+  [
+    "\xFF\xFF\xFF",
+    "\xEF\xBB\xBF", # UTF-8 BOM
+    "text/plain", 0, 0,
+  ],
+);
+
 my @ImageSniffingTable = (
   ## Mask, Pattern, Sniffed Type, Has leading "WS" flag, Security Flag
   ## (1 = Safe, 0 = Otherwise)
@@ -172,19 +192,8 @@ sub detect ($$$) {
   }
 
   if (defined $mime and $mime->apache_bug) { # XXX and is HTTP
-    ## <https://mimesniff.spec.whatwg.org/#rules-for-text-or-binary>
-
-    if (length $_[2] >= 2) {
-      my $by = substr $_[2], 0, 2;
-      return _mime 'text/plain'
-          if $by eq "\xFE\xFF" or $by eq "\xFF\xFE";
-    }
-
-    if (length $_[2] >= 3) {
-      my $by = substr $_[2], 0, 3;
-      return _mime 'text/plain'
-          if $by eq "\xEF\xBB\xBF";
-    }
+    my $computed = _table \@BOM2SniffingTable, $_[2];
+    return $computed if defined $computed;
 
     return _mime 'text/plain'
         unless $_[2] =~ /$binary_data_bytes/o;

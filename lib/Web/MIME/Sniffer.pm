@@ -4,15 +4,7 @@ use warnings;
 our $VERSION = '1.19';
 use Web::MIME::Type;
 
-## Table in <http://www.whatwg.org/specs/web-apps/current-work/#content-type1>.
-##
-## "User agents MAY support further types if desired, by implicitly adding
-## to the above table. However, user agents SHOULD NOT use any other patterns
-## for types already mentioned in the table above, as this could then be used
-## for privilege escalation (where, e.g., a server uses the above table to 
-## determine that content is not HTML and thus safe from XSS attacks, but
-## then a user agent detects it as HTML anyway and allows script to execute)."
-our @UnknownSniffingTable = (
+our @ScriptableSniffingTable = (
   ## Mask, Pattern, Sniffed Type, Has leading "WS" flag, Security Flag
   ## (1 = Safe, 0 = Otherwise)
   [ # <!DOCTYPE HTML
@@ -40,12 +32,21 @@ our @UnknownSniffingTable = (
     "\x25\x50\x44\x46\x2D",
     "application/pdf", 0, 0,
   ],
+);
+
+our @NonScriptableSniffingTable = (
+  ## Mask, Pattern, Sniffed Type, Has leading "WS" flag, Security Flag
+  ## (1 = Safe, 0 = Otherwise)
   [
     "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF",
     "\x25\x21\x50\x53\x2D\x41\x64\x6F\x62\x65\x2D",
     "application/postscript", 0, 1,
   ],
+);
 
+our @BOMSniffingTable = (
+  ## Mask, Pattern, Sniffed Type, Has leading "WS" flag, Security Flag
+  ## (1 = Safe, 0 = Otherwise)
   [
     "\xFF\xFF\x00\x00",
     "\xFE\xFF\x00\x00", # UTF-16BE BOM
@@ -53,7 +54,7 @@ our @UnknownSniffingTable = (
   ],
   [
     "\xFF\xFF\x00\x00",
-    "\xFF\xFE\x00\x00", # UTF-16LE BOM ## ISSUE: Spec wrong
+    "\xFF\xFE\x00\x00", # UTF-16LE BOM
     "text/plain", 0, 0,
   ],
   [
@@ -61,7 +62,11 @@ our @UnknownSniffingTable = (
     "\xEF\xBB\xBF\x00", # UTF-8 BOM
     "text/plain", 0, 0,
   ],
+);
 
+my @ImageSniffingTable = (
+  ## Mask, Pattern, Sniffed Type, Has leading "WS" flag, Security Flag
+  ## (1 = Safe, 0 = Otherwise)
   [
     "\xFF\xFF\xFF\xFF\xFF\xFF",
     "\x47\x49\x46\x38\x37\x61",
@@ -94,40 +99,6 @@ our @UnknownSniffingTable = (
   ],
 );
 
-## Table in <http://www.whatwg.org/specs/web-apps/current-work/#content-type2>.
-## 
-## NOTE: User agents are not allowed (at least in an explicit way) to add
-## rows to this table.
-my @ImageSniffingTable = (
-  ## Pattern, Sniffed Type
-  [
-    "\x47\x49\x46\x38\x37\x61",
-    "image/gif",
-  ],
-  [
-    "\x47\x49\x46\x38\x39\x61",
-    "image/gif",
-  ],
-  [
-    "\x89\x50\x4E\x47\x0D\x0A\x1A\x0A",
-    "image/png",
-  ],
-  [
-    "\xFF\xD8\xFF",
-    "image/jpeg",
-  ],
-  [
-    "\x42\x4D",
-    "image/bmp",
-  ],
-  [
-    "\x00\x00\x01\x00",
-    "image/vnd.microsoft.icon",
-  ],
-);
-## NOTE: Ensure |$bytes| to be longer than pattern when a new image type
-## is added to the table.
-
 ## NOTE: From section "Content-Type sniffing: text or binary".
 my $binary_data_bytes = qr/[\x00-\x08\x0B\x0E-\x1A\x1C-\x1F]/;
 
@@ -153,6 +124,45 @@ sub _mime ($) {
 sub detect ($$$) {
   my ($self, $mime, undef) = @_;
 
+  my $official_type = defined $mime ? $mime->mime_type_portion : undef;
+
+  ## Step 2 ("If") and Step 3
+  if (not defined $official_type or
+      $official_type eq 'unknown/unknown' or
+      $official_type eq 'application/unknown') {
+    ## Algorithm: "Content-Type sniffing: unknown type"
+
+    ## NOTE: The "unknown" algorithm does not support HTML with BOM.
+    
+    ## Step 2
+    my $stream_length = length $_[2];
+
+    ## Step 3
+    ROW: for my $row (
+      @ScriptableSniffingTable,
+      @NonScriptableSniffingTable,
+      @BOMSniffingTable,
+      @ImageSniffingTable,
+    ) {
+      ## $row = [Mask, Pattern, Sniffed Type, Has leading WS flag, Security];
+      my $pos = 0;
+      if ($row->[3]) {
+        $pos++ while substr ($_[2], $pos, 1) =~ /^[\x09\x0A\x0C\x0D\x20]/;
+      }
+      my $pattern_length = length $row->[1];
+      next ROW if $pos + $pattern_length > $stream_length;
+      my $data = substr ($_[2], $pos, $pattern_length) & $row->[0];
+      return _mime $row->[2] if $data eq $row->[1];
+    }
+
+    ## Step 4
+    return _mime 'text/plain'
+        unless $_[2] =~ /$binary_data_bytes/o;
+
+    ## Step 5
+    return _mime 'application/octet-stream';
+  }
+
   if (defined $mime and $mime->apache_bug) { # XXX and is HTTP
     ## <https://mimesniff.spec.whatwg.org/#rules-for-text-or-binary>
 
@@ -174,62 +184,7 @@ sub detect ($$$) {
     return _mime 'application/octet-stream';
   }
 
-  my $official_type = defined $mime ? $mime->mime_type_portion : undef;
-
-  ## Step 2 ("If") and Step 3
-  if (not defined $official_type or
-      $official_type eq 'unknown/unknown' or
-      $official_type eq 'application/unknown') {
-    ## Algorithm: "Content-Type sniffing: unknown type"
-
-    ## NOTE: The "unknown" algorithm does not support HTML with BOM.
-    
-    ## Step 2
-    my $stream_length = length $_[2];
-
-    ## Step 3
-    ROW: for my $row (@UnknownSniffingTable) {
-      ## $row = [Mask, Pattern, Sniffed Type, Has leading WS flag, Security];
-      my $pos = 0;
-      if ($row->[3]) {
-        $pos++ while substr ($_[2], $pos, 1) =~ /^[\x09\x0A\x0C\x0D\x20]/;
-      }
-      my $pattern_length = length $row->[1];
-      next ROW if $pos + $pattern_length > $stream_length;
-      my $data = substr ($_[2], $pos, $pattern_length) & $row->[0];
-      return _mime $row->[2] if $data eq $row->[1];
-    }
-
-    ## Step 4
-    return _mime 'text/plain'
-        unless $_[2] =~ /$binary_data_bytes/o;
-
-    ## Step 5
-    return _mime 'application/octet-stream';
-  }
-
-  ## Step 4
   if ($mime->is_xml_mime_type) {
-    return $mime;
-  }
-
-  ## Step 5
-  if ($self->{supported_image_types}->{$official_type}) {
-    ## Content-Type sniffing: image
-    ## <http://www.whatwg.org/specs/web-apps/current-work/#content-type6>
-
-    if ($official_type eq 'image/svg+xml') {
-      return $mime;
-    }
-
-    ## Table
-    for my $row (@ImageSniffingTable) { # Pattern, Sniffed Type
-      return _mime $row->[1]
-          if substr ($_[2], 0, length $row->[0]) eq $row->[0] and
-             $self->{supported_image_types}->{$row->[1]};
-    }
-
-    ## Otherwise
     return $mime;
   }
 
@@ -274,6 +229,40 @@ sub detect ($$$) {
     ## Step 12
     return _mime 'text/html';
   }
+
+  if ($self->{supported_image_types}->{$official_type}) {
+    ## Content-Type sniffing: image
+    ## <http://www.whatwg.org/specs/web-apps/current-work/#content-type6>
+
+    if ($official_type eq 'image/svg+xml') {
+      return $mime;
+    }
+
+    my $stream_length = length $_[2];
+    ROW: for my $row (@ImageSniffingTable) { # Pattern, Sniffed Type
+      ## $row = [Mask, Pattern, Sniffed Type, Has leading WS flag, Security];
+      my $pos = 0;
+      if ($row->[3]) {
+        $pos++ while substr ($_[2], $pos, 1) =~ /^[\x09\x0A\x0C\x0D\x20]/;
+      }
+      my $pattern_length = length $row->[1];
+      next ROW if $pos + $pattern_length > $stream_length;
+      my $data = substr ($_[2], $pos, $pattern_length) & $row->[0];
+      return _mime $row->[2] if $data eq $row->[1]
+          and $self->{supported_image_types}->{$row->[2]}; # XXX
+    }
+
+    ## Otherwise
+    return $mime;
+  }
+
+  # XXX audio or video
+
+  # XXX archive
+
+  # XXX font
+
+  # XXX text track
 
   return $mime;
 } # detect

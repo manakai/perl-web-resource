@@ -248,8 +248,7 @@ sub detect ($$$) {
       my $pattern_length = length $row->[1];
       next ROW if $pos + $pattern_length > $stream_length;
       my $data = substr ($_[2], $pos, $pattern_length) & $row->[0];
-      return _mime $row->[2] if $data eq $row->[1]
-          and $self->{supported_image_types}->{$row->[2]}; # XXX
+      return _mime $row->[2] if $data eq $row->[1];
     }
 
     ## Otherwise

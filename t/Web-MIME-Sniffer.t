@@ -96,7 +96,45 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
           } $c, name => 'If all types are supported';
 
           done $c;
-        } n => 3, name => [$rel_path, $img_type];
+        } n => 3, name => [$rel_path, $test->{name}->[0], $img_type];
+      } # $img_type
+    } elsif ($ct_type eq 'audio_or_video') {
+      for my $img_type (qw(audio/basic audio/aiff audio/mpeg)) {
+        my $content_type = Web::MIME::Type->parse_web_mime_type ($img_type);
+
+        test {
+          my $c = shift;
+
+          test {
+            my $sniffer = Web::MIME::Sniffer->new_from_context
+                ($test->{context}->[1]->[0]);
+            $sniffer->is_http (1) unless $test->{nonhttp};
+            my $st = $sniffer->detect ($content_type, $input_data);
+            is $st->as_valid_mime_type_with_no_params, $img_type;
+          } $c, name => 'If there is no supported type';
+
+          test {
+            my $sniffer = Web::MIME::Sniffer->new_from_context
+                ($test->{context}->[1]->[0]);
+            $sniffer->is_http (1) unless $test->{nonhttp};
+            $sniffer->supported_audio_or_video_types->{$img_type} = 1;
+            my $st = $sniffer->detect ($content_type, $input_data);
+            is $st->as_valid_mime_type_with_no_params, $x->($content_type);
+          } $c, name => 'If it is the only supported type';
+
+          test {
+            my $sniffer = Web::MIME::Sniffer->new_from_context
+                ($test->{context}->[1]->[0]);
+            $sniffer->is_http (1) unless $test->{nonhttp};
+            $sniffer->supported_audio_or_video_types->{$_} = 1 for qw(
+              audio/basic audio/aiff audio/mpeg
+            );
+            my $st = $sniffer->detect ($content_type, $input_data);
+            is $st->as_valid_mime_type_with_no_params, $x->($content_type);
+          } $c, name => 'If all types are supported';
+
+          done $c;
+        } n => 3, name => [$rel_path, $test->{name}->[0], $img_type];
       } # $img_type
     } else {
       die "Bad ct_type |$ct_type|";

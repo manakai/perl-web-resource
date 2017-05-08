@@ -7,26 +7,39 @@ use Web::MIME::Type;
 our @ScriptableSniffingTable = (
   ## Mask, Pattern, Sniffed Type, Has leading "WS" flag, Security Flag
   ## (1 = Safe, 0 = Otherwise)
-  [ # <!DOCTYPE HTML
-    "\xFF\xFF\xDF\xDF\xDF\xDF\xDF\xDF\xDF\xFF\xDF\xDF\xDF\xDF",
-    "\x3C\x21\x44\x4F\x43\x54\x59\x50\x45\x20\x48\x54\x4D\x4C",
+  [ # "<!DOCTYPE HTML "
+    "\xFF\xFF\xDF\xDF\xDF\xDF\xDF\xDF\xDF\xFF\xDF\xDF\xDF\xDF\xFF",
+    "\x3C\x21\x44\x4F\x43\x54\x59\x50\x45\x20\x48\x54\x4D\x4C\x20",
+    "text/html", 0, 0,
+  ],
+  [ # "<!DOCTYPE HTML>"
+    "\xFF\xFF\xDF\xDF\xDF\xDF\xDF\xDF\xDF\xFF\xDF\xDF\xDF\xDF\xFF",
+    "\x3C\x21\x44\x4F\x43\x54\x59\x50\x45\x20\x48\x54\x4D\x4C\x3E",
     "text/html", 0, 0,
   ],
   [
-    "\xFF\xDF\xDF\xDF\xDF",
-    "\x3C\x48\x54\x4D\x4C", # "<HTML"
+    "\xFF\xDF\xDF\xDF\xDF\xFF",
+    "\x3C\x48\x54\x4D\x4C\x20", # "<HTML "
     "text/html", 1, 0,
   ],
+  [
+    "\xFF\xDF\xDF\xDF\xDF\xFF",
+    "\x3C\x48\x54\x4D\x4C\x3E", # "<HTML>"
+    "text/html", 1, 0,
+  ],
+  # XXX
   [
     "\xFF\xDF\xDF\xDF\xDF",
     "\x3C\x48\x45\x41\x44", # "<HEAD"
     "text/html", 1, 0,
   ],
+  # XXX
   [
     "\xFF\xDF\xDF\xDF\xDF\xDF\xDF",
     "\x3C\x53\x43\x52\x49\x50\x54", # "<SCRIPT"
     "text/html", 1, 0,
   ],
+  # XXX more
   [
     "\xFF\xFF\xFF\xFF\xFF",
     "\x25\x50\x44\x46\x2D",
@@ -117,7 +130,23 @@ my @ImageSniffingTable = (
     "\x00\x00\x01\x00",
     "image/vnd.microsoft.icon", 0, 1,
   ],
+  # XXX update
 );
+
+my @AudioOrVideoSniffingTable = (
+  ## Mask, Pattern, Sniffed Type, Has leading "WS" flag, Security Flag
+  ## (1 = Safe, 0 = Otherwise)
+  [
+    "\xFF\xFF\xFF\xFF",
+    "\x2E\x73\x6E\x64",
+    "audio/basic", 0, 1,
+  ],
+  # XXX more
+);
+
+my @ArchiveSniffingTable;
+my @FontSniffingTable;
+my @TextTrackSniffingTable;
 
 sub new_from_context ($$) {
   return bless {
@@ -270,19 +299,33 @@ sub detect ($$$) {
   }
 
   if ($sniffer & 0b00000010000) {
-    # XXX audio or video
+    my $computed = _table \@AudioOrVideoSniffingTable, $_[2];
+    return $computed if defined $computed;
+
+    # XXX MP4
+    ## <https://mimesniff.spec.whatwg.org/#signature-for-mp4>
+
+    # XXX WebM
+    ## <https://mimesniff.spec.whatwg.org/#signature-for-webm>
+
+    # XXX MP3
+    ## <https://mimesniff.spec.whatwg.org/#signature-for-mp3-without-id3>
+
   }
 
   if ($sniffer & 0b00000001000) {
-    # XXX archive
+    my $computed = _table \@ArchiveSniffingTable, $_[2];
+    return $computed if defined $computed;
   }
 
   if ($sniffer & 0b00000000100) {
-    # XXX font
+    my $computed = _table \@FontSniffingTable, $_[2];
+    return $computed if defined $computed;
   }
 
   if ($sniffer & 0b00000000010) {
-    # XXX text track
+    my $computed = _table \@TextTrackSniffingTable, $_[2];
+    return $computed if defined $computed;
   }
 
   if ($sniffer & 0b00000000001) {

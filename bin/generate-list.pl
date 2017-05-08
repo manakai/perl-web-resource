@@ -23,7 +23,7 @@ for (keys %$json) {
     my $def = {};
     for my $key (qw(
       styling scripting_language text iana iana_intended_usage
-      obsolete limited_usage params syntax
+      obsolete limited_usage params syntax audiovideo image
     )) {
       $def->{$key} = $json->{$_}->{$key} if defined $json->{$_}->{$key};
     }

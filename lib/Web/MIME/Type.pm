@@ -224,6 +224,16 @@ sub is_javascript ($) {
   return 'javascript' eq (($self->_subtype_def or {})->{scripting_language} || '');
 } # is_javascript
 
+sub is_image ($) {
+  return $_[0]->{type} eq 'image';
+} # is_image
+
+sub is_audio_or_video ($) {
+  my $self = shift;
+  return 1 if $self->{type} eq 'audio' or $self->{type} eq 'video';
+  return (($self->_subtype_def or {})->{audiovideo});
+} # is_audio_or_video
+
 ## What is "text-based" media type is unclear.
 sub is_text_based ($) {
   my $self = shift;

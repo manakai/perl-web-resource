@@ -134,6 +134,15 @@ run within the Web browser's environment), such as JavaScript.
 
 Returns whether the type represents a styling language, such as CSS.
 
+=item $boolean = $t->is_image
+
+Return whether the MIME type is an image type [MIMESNIFF] or not.
+
+=item $boolean = $t->is_audio_or_video
+
+Return whether the MIME type is an audio or video type [MIMESNIFF] or
+not.
+
 =item I<BOOL> = I<$t>->is_text_based
 
 Returns whether the type represents a text-based format.

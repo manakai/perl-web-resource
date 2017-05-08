@@ -122,6 +122,38 @@ test {
   done $c;
 } n => 6, name => 'param';
 
+for my $input (
+  'text/plain',
+  'text/plain; charset=iso-8859-1',
+  'text/plain; charset=ISO-8859-1',
+  'text/plain; charset=UTF-8',
+) {
+  test {
+    my $c = shift;
+    my $mime = Web::MIME::Type->parse_web_mime_type ($input);
+    ok $mime->apache_bug;
+    done $c;
+  } n => 1;
+}
+
+for my $input (
+  'text/html',
+  'TEXT/PLAIN',
+  'text/plain; charset=utf-8',
+  'text/html; charset=UTF-8',
+  'text/plain;charset=UTF-8',
+  'application/octet-stream',
+  'text/plain; charset=utf-8;',
+  'text/plain; charset=utf-8; charset=iso-8859-1',
+) {
+  test {
+    my $c = shift;
+    my $mime = Web::MIME::Type->parse_web_mime_type ($input);
+    ok ! $mime->apache_bug;
+    done $c;
+  } n => 1;
+}
+
 ## ------ Properties ------
 
 for my $test (
@@ -279,6 +311,26 @@ test {
   }
   done $c;
 } n => 26, name => 'is_xmt';
+
+for my $test (
+  ['text/plain', 0, 0],
+  ['text/html', 0, 0],
+  ['audio/basic', 0, 1],
+  ['image/PNG', 1, 0],
+  ['image/svg+xml', 1, 0],
+  ['application/ogg', 0, 1],
+  ['image/gif', 1, 0],
+  ['video/mpeg', 0, 1],
+  ['application/smil', 0, 0],
+) {
+  test {
+    my $c = shift;
+    my $mt = Web::MIME::Type->parse_web_mime_type ($test->[0]);
+    is !! $mt->is_image, !! $test->[1], 'is_image';
+    is !! $mt->is_audio_or_video, !! $test->[2], 'is_audio_or_video';
+    done $c;
+  } n => 2, name => $test;
+}
 
 ## ------ Serialization ------
 
@@ -532,38 +584,6 @@ for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/type-c
     done $c;
   } n => 1, name => ['validate', @{$test->{data}->[0]}];
 });
-
-for my $input (
-  'text/plain',
-  'text/plain; charset=iso-8859-1',
-  'text/plain; charset=ISO-8859-1',
-  'text/plain; charset=UTF-8',
-) {
-  test {
-    my $c = shift;
-    my $mime = Web::MIME::Type->parse_web_mime_type ($input);
-    ok $mime->apache_bug;
-    done $c;
-  } n => 1;
-}
-
-for my $input (
-  'text/html',
-  'TEXT/PLAIN',
-  'text/plain; charset=utf-8',
-  'text/html; charset=UTF-8',
-  'text/plain;charset=UTF-8',
-  'application/octet-stream',
-  'text/plain; charset=utf-8;',
-  'text/plain; charset=utf-8; charset=iso-8859-1',
-) {
-  test {
-    my $c = shift;
-    my $mime = Web::MIME::Type->parse_web_mime_type ($input);
-    ok ! $mime->apache_bug;
-    done $c;
-  } n => 1;
-}
 
 run_tests;
 

@@ -1311,6 +1311,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  'iana_intended_usage' => 'common'
                                                                },
                                           'ogg' => {
+                                                   'audiovideo' => 1,
                                                    'iana' => 'permanent',
                                                    'iana_intended_usage' => 'common'
                                                  },

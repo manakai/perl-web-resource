@@ -45,7 +45,7 @@ C<image/png> or C<image/jpeg>.
 
 This hash reference is empty by default.
 
-=item $sniffer->supported_audio_video_types->{$mime_type_portion} = $boolean
+=item $sniffer->supported_audio_or_video_types->{$mime_type_portion} = $boolean
 
 Whether the application supports the MIME type as an audio or video
 type or not.  This can affect the sniffing algorithm's result.

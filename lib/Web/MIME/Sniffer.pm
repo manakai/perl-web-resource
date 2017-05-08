@@ -44,7 +44,7 @@ our @NonScriptableSniffingTable = (
   ],
 );
 
-our @BOMSniffingTable = (
+our @BOM1SniffingTable = (
   ## Mask, Pattern, Sniffed Type, Has leading "WS" flag, Security Flag
   ## (1 = Safe, 0 = Otherwise)
   [
@@ -119,13 +119,10 @@ my @ImageSniffingTable = (
   ],
 );
 
-## NOTE: From section "Content-Type sniffing: text or binary".
-my $binary_data_bytes = qr/[\x00-\x08\x0B\x0E-\x1A\x1C-\x1F]/;
-
 sub new ($) {
   return bless {
     supported_image_types => {},
-    supported_audio_video_types => {},
+    supported_audio_or_video_types => {},
   }, $_[0];
 } # new
 
@@ -133,9 +130,9 @@ sub supported_image_types ($) {
   return $_[0]->{supported_image_types};
 } # supported_image_types
 
-sub supported_audio_video_types ($) {
-  return $_[0]->{supported_audio_video_types};
-} # supported_audio_video_types
+sub supported_audio_or_video_types ($) {
+  return $_[0]->{supported_audio_or_video_types};
+} # supported_audio_or_video_types
 
 sub _mime ($) {
   return Web::MIME::Type->parse_web_mime_type ($_[0]);
@@ -160,53 +157,31 @@ sub _table ($$) {
 sub detect ($$$) {
   my ($self, $mime, undef) = @_;
 
-  my $official_type = defined $mime ? $mime->mime_type_portion : undef;
+  my $sniffer = 0;
+  # 0b10000000000 scriptable
+  # 0b01000000000 non-scriptable
+  # 0b00100000000 bom1
+  # 0b00010000000 bom2
+  # 0b00001000000 feed or html
+  # 0b00000100000 image
+  # 0b00000010000 audio or video
+  # 0b00000001000 archive
+  # 0b00000000100 font
+  # 0b00000000010 text track
+  # 0b00000000001 binary
 
+  my $official_type = defined $mime ? $mime->mime_type_portion : undef;
   if (not defined $official_type or
       $official_type eq 'unknown/unknown' or
       $official_type eq 'application/unknown' or
       $official_type eq '*/*') {
-    {
-      my $computed = _table \@ScriptableSniffingTable, $_[2];
-      return $computed if defined $computed;
-    }
-    {
-      my $computed = _table \@NonScriptableSniffingTable, $_[2];
-      return $computed if defined $computed;
-    }
-    {
-      my $computed = _table \@BOMSniffingTable, $_[2];
-      return $computed if defined $computed;
-    }
-    {
-      my $computed = _table \@ImageSniffingTable, $_[2];
-      return $computed if defined $computed;
-    }
-
-    ## Step 4
-    return _mime 'text/plain'
-        unless $_[2] =~ /$binary_data_bytes/o;
-
-    ## Step 5
-    return _mime 'application/octet-stream';
-  }
-
-  if (defined $mime and $mime->apache_bug) { # XXX and is HTTP
-    my $computed = _table \@BOM2SniffingTable, $_[2];
-    return $computed if defined $computed;
-
-    return _mime 'text/plain'
-        unless $_[2] =~ /$binary_data_bytes/o;
-
-    return _mime 'application/octet-stream';
-  }
-
-  if ($mime->is_xml_mime_type) {
+    $sniffer = 0b11100110001;
+    undef $mime;
+  } elsif ($mime->apache_bug) { # XXX and is HTTP
+    $sniffer = 0b00010000001;
+  } elsif ($mime->is_xml_mime_type) {
     return $mime;
-  }
-
-  ## Step 6
-  if ($official_type eq 'text/html') {
+  } elsif ($official_type eq 'text/html') {
     ## Content-Type sniffing: feed or HTML
     ## <http://www.whatwg.org/specs/web-apps/current-work/#content-type7>
 
@@ -245,25 +220,63 @@ sub detect ($$$) {
 
     ## Step 12
     return _mime 'text/html';
+  } elsif ($self->{supported_image_types}->{$official_type} and
+           $mime->is_image) {
+    $sniffer = 0b00000100000;
+  } elsif ($self->{supported_audio_or_video_types}->{$official_type} and
+           $mime->is_audio_or_video) {
+    $sniffer = 0b00000010000;
+  } else {
+    #
   }
 
-  if ($self->{supported_image_types}->{$official_type}) {
+  if ($sniffer & 0b10000000000) {
+    my $computed = _table \@ScriptableSniffingTable, $_[2];
+    return $computed if defined $computed;
+  }
+
+  if ($sniffer & 0b01000000000) {
+    my $computed = _table \@NonScriptableSniffingTable, $_[2];
+    return $computed if defined $computed;
+  }
+
+  if ($sniffer & 0b00100000000) {
+    my $computed = _table \@BOM1SniffingTable, $_[2];
+    return $computed if defined $computed;
+  }
+
+  if ($sniffer & 0b00010000000) {
+    my $computed = _table \@BOM2SniffingTable, $_[2];
+    return $computed if defined $computed;
+  }
+
+  if ($sniffer & 0b00000100000) {
     my $computed = _table \@ImageSniffingTable, $_[2];
     return $computed if defined $computed;
-
-    ## Otherwise
-    return $mime;
   }
 
-  # XXX audio or video
+  if ($sniffer & 0b00000010000) {
+    # XXX audio or video
+  }
 
-  # XXX archive
+  if ($sniffer & 0b00000001000) {
+    # XXX archive
+  }
 
-  # XXX font
+  if ($sniffer & 0b00000000100) {
+    # XXX font
+  }
 
-  # XXX text track
+  if ($sniffer & 0b00000000010) {
+    # XXX text track
+  }
 
-  return $mime;
+  if ($sniffer & 0b00000000001) {
+    return _mime 'application/octet-stream'
+        if $_[2] =~ /[\x00-\x08\x0B\x0E-\x1A\x1C-\x1F]/;
+  }
+
+  return $mime || _mime 'text/plain';
 } # detect
 
 1;

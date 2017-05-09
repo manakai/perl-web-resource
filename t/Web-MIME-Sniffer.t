@@ -58,7 +58,7 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
           is $st->as_valid_mime_type_with_no_params, $x->($content_type);
 
           done $c;
-        } n => 1, name => [$rel_path, $test->{name}->[0], $ct];
+        } n => 1, name => [$rel_path, $test->{name}->[0] || $test->{data}->[0], $ct];
       } # $ct
     } elsif ($ct_type eq 'image') {
       for my $img_type (qw(image/png image/gif image/jpeg image/x-icon)) {

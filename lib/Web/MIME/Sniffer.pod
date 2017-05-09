@@ -35,9 +35,12 @@ There are following methods:
 Create a new instance of the sniffer.  The argument must be one of
 followings:
 
-  navigate      For a normal navigation.
-  text_track    For a text track (e.g. fetching <track src>).
-  object        For fetching <object data>.
+  navigate       For a normal navigation.
+  image          For an image (e.g. fetching <img src>).
+  audio_or_video For an audio or video (e.g. fetching <video src>).
+  font           For a font (e.g. fetching Web Fonts data).
+  text_track     For a text track (e.g. fetching <track src>).
+  object         For fetching <object data>.
 
 =item $sniffer->supported_image_types->{$mime_type_portion} = $boolean
 

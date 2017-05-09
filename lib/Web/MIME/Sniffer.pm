@@ -115,8 +115,18 @@ sub detect ($$$) {
     } else {
       #
     }
-  # XXX audio_or_video
-  # XXX font
+  } elsif ($self->{context} eq 'image') {
+    unless (defined $mime and $mime->is_xml_mime_type) {
+      $sniffer = 0b00000100000;
+    }
+  } elsif ($self->{context} eq 'audio_or_video') {
+    unless (defined $mime and $mime->is_xml_mime_type) {
+      $sniffer = 0b00000010000;
+    }
+  } elsif ($self->{context} eq 'font') {
+    unless (defined $mime and $mime->is_xml_mime_type) {
+      $sniffer = 0b00000000100;
+    }
   } elsif ($self->{context} eq 'text_track') {
     unless (defined $mime and $mime->is_xml_mime_type) {
       $sniffer = 0b00000000010;

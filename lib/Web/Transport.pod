@@ -13,7 +13,7 @@ TCP (for IPv4 and IPv6), UNIX domain sockets, TLS (including SNI, OCSP
 stapling), HTTP (including Cookies,
 C<application/x-www-form-urlencoded>, C<multipart/form-data>, Basic
 authentication, OAuth 1.0, OAuth 2.0 Bearer, C<CONNECT>), SOCKS4,
-SOCKS5, DNS.
+SOCKS5, DNS, MIME types, MIME sniffing.
 
 =head1 MODULES
 
@@ -48,6 +48,10 @@ An environment variable based proxy manager.
 =item L<Web::MIME::Type>
 
 MIME types.
+
+=item L<Web::MIME::Sniffing>
+
+MIME type sniffing.
 
 =back
 
@@ -363,7 +367,7 @@ information.
 
 Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
 
-Copyright 2014-2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2014-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

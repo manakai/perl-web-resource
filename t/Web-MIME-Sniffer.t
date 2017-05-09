@@ -61,7 +61,7 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
         } n => 1, name => [$rel_path, $test->{name}->[0], $ct];
       } # $ct
     } elsif ($ct_type eq 'image') {
-      for my $img_type (qw(image/png image/gif image/jpeg)) {
+      for my $img_type (qw(image/png image/gif image/jpeg image/x-icon)) {
         my $content_type = Web::MIME::Type->parse_web_mime_type ($img_type);
 
         test {
@@ -90,6 +90,7 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
             $sniffer->is_http (1) unless $test->{nonhttp};
             $sniffer->supported_image_types->{$_} = 1 for qw(
               image/png image/jpeg image/gif image/bmp image/vnd.microsoft.icon
+              image/x-icon
             );
             my $st = $sniffer->detect ($content_type, $input_data);
             is $st->as_valid_mime_type_with_no_params, $x->($content_type);

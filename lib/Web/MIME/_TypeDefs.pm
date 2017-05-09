@@ -12600,4 +12600,136 @@ $Web::MIME::_TypeDefs::Type = {
                                            }
                             }
         };
+$Web::MIME::_TypeDefs::Sniffing = {
+          'archive' => [
+                       [
+                         qr/(?^:Rar\x20\x1A\x07\x00)/,
+                         'application/x-rar-compressed'
+                       ],
+                       [
+                         qr/(?^:PK\x03\x04)/,
+                         'application/zip'
+                       ],
+                       [
+                         qr/(?^:\x1F\x8B\x08)/,
+                         'application/x-gzip'
+                       ]
+                     ],
+          'audio_or_video' => [
+                              [
+                                qr/(?^:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WAVE)/,
+                                'audio/wave'
+                              ],
+                              [
+                                qr/(?^:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AVI\x20)/,
+                                'video/avi'
+                              ],
+                              [
+                                qr/(?^:OggS\x00)/,
+                                'application/ogg'
+                              ],
+                              [
+                                qr/(?^:\.snd)/,
+                                'audio/basic'
+                              ],
+                              [
+                                qr/(?^:ID3)/,
+                                'audio/mpeg'
+                              ],
+                              [
+                                qr/(?^:MThd\x00\x00\x00\x06)/,
+                                'audio/midi'
+                              ],
+                              [
+                                qr/(?^:FORM[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AIFF)/,
+                                'audio/aiff'
+                              ]
+                            ],
+          'bom1' => [
+                    [
+                      qr/(?^:(?:(?:\xFE\xFF|\xFF\xFE)[\x00-\xFF]|\xEF\xBB\xBF)[\x00-\xFF])/,
+                      'text/plain'
+                    ]
+                  ],
+          'bom2' => [
+                    [
+                      qr/(?^:(?:\xEF\xBB\xBF|\xFE\xFF|\xFF\xFE))/,
+                      'text/plain'
+                    ]
+                  ],
+          'font' => [
+                    [
+                      qr/(?^:ttcf)/,
+                      'font/collection'
+                    ],
+                    [
+                      qr/(?^:wOFF)/,
+                      'application/font-woff'
+                    ],
+                    [
+                      qr/(?^:[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]LP)/,
+                      'application/vnd.ms-fontobject'
+                    ],
+                    [
+                      qr/(?^:\x00\x01\x00\x00)/,
+                      'font/ttf'
+                    ],
+                    [
+                      qr/(?^:OTTO)/,
+                      'font/otf'
+                    ]
+                  ],
+          'image' => [
+                     [
+                       qr/(?^:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WEBPVP)/,
+                       'image/webp'
+                     ],
+                     [
+                       qr/(?^:\x89PNG\x0D\x0A\x1A\x0A)/,
+                       'image/png'
+                     ],
+                     [
+                       qr/(?^:\xFF\xD8\xFF)/,
+                       'image/jpeg'
+                     ],
+                     [
+                       qr/(?^:BM)/,
+                       'image/bmp'
+                     ],
+                     [
+                       qr/(?^:\x00\x00[\x01\x02]\x00)/,
+                       'image/x-icon'
+                     ],
+                     [
+                       qr/(?^:GIF8[79]a)/,
+                       'image/gif'
+                     ]
+                   ],
+          'non_scriptable' => [
+                              [
+                                qr/(?^:%!PS-Adobe-)/,
+                                'application/postscript'
+                              ]
+                            ],
+          'scriptable' => [
+                          [
+                            qr/(?^:%PDF-)/,
+                            'application/pdf'
+                          ],
+                          [
+                            qr/(?^:[\x09\x0A\x0C\x0D\x20]*<\?xml)/,
+                            'text/xml'
+                          ],
+                          [
+                            qr/(?^:(?:[\x09\x0A\x0C\x0D\x20]*<(?:[Ss](?:[Cc][Rr][Ii][Pp][Tt][\x20>]|[Tt][Yy][Ll][Ee][\x20>])|[Tt](?:[Aa][Bb][Ll][Ee][\x20>]|[Ii][Tt][Ll][Ee][\x20>])|[Hh](?:[\x20>]|[Ee][Aa][Dd][\x20>]|[Tt][Mm][Ll][\x20>])|[Bb](?:[\x20>]|[Oo][Dd][Yy][\x20>]|[Rr][\x20>])|[Ii][Ff][Rr][Aa][Mm][Ee][\x20>]|[Ff][Oo][Nn][Tt][\x20>]|[Dd][Ii][Vv][\x20>]|[Aa][\x20>]|[Pp][\x20>]|!--)|<![Dd][Oo][Cc][Tt][Yy][Pp][Ee]\x20[Hh][Tt][Mm][Ll][\x20>]))/,
+                            'text/html'
+                          ]
+                        ],
+          'text_track' => [
+                          [
+                            qr/(?^:WEBVTT)/,
+                            'text/vtt'
+                          ]
+                        ]
+        };
 1;

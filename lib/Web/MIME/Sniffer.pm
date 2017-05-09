@@ -41,6 +41,110 @@ sub _t ($$) {
   return undef;
 } # _t
 
+## <https://mimesniff.spec.whatwg.org/#signature-for-mp4>
+sub _mp4 ($) {
+  my $length = length $_[0];
+  return 0 if $length < 12;
+  my $box_size = unpack 'N', substr $_[0], 0, 4;
+  return 0 if $length < $box_size or ($box_size % 4) != 0;
+  return 0 unless "\x66\x74\x79\x70" eq substr $_[0], 4, 4;
+  return 1 if "\x6D\x70\x34" eq substr $_[0], 8, 3;
+  my $bytes_read = 16;
+  while ($bytes_read < $box_size) {
+    return 1 if "\x6D\x70\x34" eq substr $_[0], $bytes_read, 3;
+    $bytes_read += 4;
+  }
+  return 0;
+} # _mp4
+
+## <https://mimesniff.spec.whatwg.org/#signature-for-webm>
+sub _webm ($) {
+  my $length = length $_[0];
+  return 0 if $length < 4;
+  return 0 unless "\x1A\x45\xDF\xA3" eq substr $_[0], 0, 4;
+  my $iter = 4;
+  while ($iter < $length and $iter < 38) {
+    if ("\x42\x82" eq substr $_[0], $iter, 2) {
+      $iter += 2;
+      return 0 if $iter >= $length;
+      my $number_size = do { # parse a |vint|
+        my $mask = 128;
+        my $max_vint_length = 8;
+        my $number_size = 1;
+        while ($number_size < $max_vint_length and
+               $number_size < $length) {
+          last if $mask & ord substr $_[0], $iter + $number_size - 1, 1;
+          $mask >>= 1;
+          $number_size++;
+        }
+        #my $index = 0;
+        #my $parsed_number = ~$mask & ord substr $_[0], $iter + $index, 1;
+        #$index++;
+        #my $bytes_remaining = $number_size;
+        #while ($bytes_remaining) {
+        #  $parsed_number <<= 8;
+        #  $parsed_number |= ord substr $_[0], $iter + $index, 1;
+        #  $index++;
+        #  last if $index >= $length;
+        #  $bytes_remaining--;
+        #}
+        $number_size;
+      };
+      $iter += $number_size;
+      return 0 unless $iter < $length - 4;
+      { # matching a padded sequence
+        pos ($_[0]) = $iter;
+        return 1 if $_[0] =~ /\G\x00*\x77\x65\x62\x6D/g;
+      }
+    }
+    $iter++;
+  }
+  return 0;
+} # _webm
+
+sub _match_mp3_header ($$) {
+  my $length = length $_[0];
+  my $s = $_[1];
+  return 0 if $length < $s + 4;
+  return 0 if (ord substr $_[0], $s, 1) != 0xFF and
+      ((ord substr $_[0], $s + 1, 1) & 0xE0) != 0xE0;
+  return 0 unless 1 == (((ord substr $_[0], $s + 1, 1) & 0x06) >> 1);
+  return 0 if 15 == (((ord substr $_[0], $s + 2, 1) & 0xF0) >> 4);
+  return 0 if 3 == (((ord substr $_[0], $s + 2, 1) & 0x0C) >> 2);
+  return 1;
+} # _match_mp3_header
+
+## <https://mimesniff.spec.whatwg.org/#signature-for-mp3-without-id3>
+sub _mp3 ($) {
+  my $length = length $_[0];
+  my $s = 0;
+  return 0 unless _match_mp3_header $_[0], $s;
+  my $skipped_bytes = do {
+    ## parse an mp3 frame
+    my $version = ((ord substr $_[0], $s + 1, 1) & 0x18) >> 3;
+    my $bitrate_index = ((ord substr $_[0], $s + 2, 1) & 0xF0) >> 4;
+    my $bitrate;
+    if ($version & 0x01) {
+      $bitrate = $Web::MIME::_TypeDefs::MP3->{mp25rates}->[$bitrate_index];
+    } else {
+      $bitrate = $Web::MIME::_TypeDefs::MP3->{mp3rates}->[$bitrate_index];
+    }
+    my $samplerate_index = ((ord substr $_[0], $s + 2, 1) & 0x0C) >> 2;
+    my $samplerate = $Web::MIME::_TypeDefs::MP3->{samplerates}->[$samplerate_index];
+    my $pad = ((ord substr $_[0], $s + 2, 1) & 0x02) >> 1;
+
+    ## compute an mp3 frame size
+    my $scale = ($version & 1) == 0 ? 72 : 144;
+    my $size = int ($bitrate * $scale / $samplerate);
+    $size++ unless $pad == 0;
+    $size;
+  };
+  $s += 4;
+  return 0 if $skipped_bytes < 4 or $skipped_bytes > $length - $s;
+  $s += $skipped_bytes;
+  return _match_mp3_header $_[0], $s;
+} # _mp3
+
 sub detect ($$$) {
   my ($self, $mime, undef) = @_;
 
@@ -174,15 +278,9 @@ sub detect ($$$) {
     my $computed = _t $Web::MIME::_TypeDefs::Sniffing->{audio_or_video}, $_[2];
     return $computed if defined $computed;
 
-    # XXX MP4
-    ## <https://mimesniff.spec.whatwg.org/#signature-for-mp4>
-
-    # XXX WebM
-    ## <https://mimesniff.spec.whatwg.org/#signature-for-webm>
-
-    # XXX MP3
-    ## <https://mimesniff.spec.whatwg.org/#signature-for-mp3-without-id3>
-
+    return _mime 'video/mp4' if _mp4 $_[2];
+    return _mime 'video/webm' if _webm $_[2];
+    return _mime 'audio/mpeg' if _mp3 $_[2];
   }
 
   if ($sniffer & 0b00000001000) {

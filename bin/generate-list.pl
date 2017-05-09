@@ -54,6 +54,9 @@ print $value;
 my $value2 = Dumper $SniffingData;
 $value2 =~ s/\$VAR1\b/\$Web::MIME::_TypeDefs::Sniffing/g;
 print $value2;
+my $value3 = Dumper $sniffing->{mp3};
+$value3 =~ s/\$VAR1\b/\$Web::MIME::_TypeDefs::MP3/g;
+print $value3;
 print "1;\n";
 
 ## License: Public Domain.

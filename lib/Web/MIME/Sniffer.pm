@@ -145,6 +145,38 @@ sub _mp3 ($) {
   return _match_mp3_header $_[0], $s;
 } # _mp3
 
+## <https://mimesniff.spec.whatwg.org/#sniffing-a-mislabeled-feed>
+sub _feed_or_html ($) {
+  pos ($_[0]) = 0;
+
+  if (substr ($_[0], 0, 3) eq "\xEF\xBB\xBF") {
+    pos ($_[0]) = 3; # skip UTF-8 BOM.
+  }
+
+  1 while $_[0] =~ /\G(?:[\x09\x20\x0A\x0D]+|<!--.*?-->|<![^>]*>|<\?.*?\?>)/gcs;
+  return _mime 'text/html' unless $_[0] =~ /\G</gc;
+
+  if ($_[0] =~ /\Grss/gc) {
+    return _mime 'application/rss+xml';
+  } elsif ($_[0] =~ /\Gfeed/gc) {
+    return _mime 'application/atom+xml';
+  } elsif ($_[0] and $_[0] =~ /\Grdf:RDF/gc) {
+    # 
+  } else {
+    return _mime 'text/html';
+  }
+
+  if ($_[0] =~ /\G([^>]+)/gc) {
+    my $by = $1;
+    if ($by =~ m!xmlns[^>=]*=[\x20\x0A\x0D\x09]*["']http://www\.w3\.org/1999/02/22-rdf-syntax-ns#["']! and
+        $by =~ m!xmlns[^>=]*=[\x20\x0A\x0D\x09]*["']http://purl\.org/rss/1\.0/["']!) {
+      return _mime 'application/rss+xml';
+    }
+  }
+
+  return _mime 'text/html';
+} # _feed_or_html
+
 sub detect ($$$) {
   my ($self, $mime, undef) = @_;
 
@@ -153,7 +185,7 @@ sub detect ($$$) {
   # 0b01000000000 non-scriptable
   # 0b00100000000 bom1
   # 0b00010000000 bom2
-  # 0b00001000000 feed or html
+  # 0b00001000000 feed or html (unused)
   # 0b00000100000 image
   # 0b00000010000 audio or video
   # 0b00000001000 archive
@@ -174,42 +206,7 @@ sub detect ($$$) {
     } elsif ($mime->is_xml_mime_type) {
       return $mime;
     } elsif ($official_type eq 'text/html') {
-      # XXX these steps need to be updated
-
-    pos ($_[2]) = 0;
-
-    ## Step 5
-    if (substr ($_[2], 0, 3) eq "\xEF\xBB\xBF") {
-      pos ($_[2]) = 3; # skip UTF-8 BOM.
-    }
-
-    ## Step 6-9
-    1 while $_[2] =~ /\G(?:[\x09\x20\x0A\x0D]+|<!--.*?-->|<![^>]*>|<\?.*?\?>)/gcs;
-    return _mime 'text/html' unless $_[2] =~ /\G</gc;
-
-    ## Step 10
-    if ($_[2] =~ /\Grss/gc) {
-      return _mime 'application/rss+xml';
-    } elsif ($_[2] =~ /\Gfeed/gc) {
-      return _mime 'application/atom+xml';
-    } elsif ($_[2] and $_[2] =~ /\Grdf:RDF/gc) {
-      # 
-    } else {
-      return _mime 'text/html';
-    }
-
-    ## Step 11
-    ## ISSUE: Step 11 is not defined yet in the spec
-    if ($_[2] =~ /\G([^>]+)/gc) {
-      my $by = $1;
-      if ($by =~ m!xmlns[^>=]*=[\x20\x0A\x0D\x09]*["']http://www\.w3\.org/1999/02/22-rdf-syntax-ns#["']! and
-          $by =~ m!xmlns[^>=]*=[\x20\x0A\x0D\x09]*["']http://purl\.org/rss/1\.0/["']!) {
-        return _mime 'application/rss+xml';
-      }
-    }
-
-    ## Step 12
-    return _mime 'text/html';
+      return _feed_or_html $_[2];
     } elsif ($self->{supported_image_types}->{$official_type} and
              $mime->is_image) {
       $sniffer = 0b00000100000;

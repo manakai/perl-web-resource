@@ -117,8 +117,20 @@ sub detect ($$$) {
     }
   # XXX audio_or_video
   # XXX font
-  # XXX text_track
-  # XXX object
+  } elsif ($self->{context} eq 'text_track') {
+    unless (defined $mime and $mime->is_xml_mime_type) {
+      $sniffer = 0b00000000010;
+    }
+  } elsif ($self->{context} eq 'object') {
+    if (not defined $official_type or
+        $official_type eq 'unknown/unknown' or
+        $official_type eq 'application/unknown' or
+        $official_type eq '*/*') {
+      $sniffer = 0b11100110001;
+      undef $mime;
+    } elsif ($official_type eq 'text/plain') {
+      $sniffer = 0b00010000001;
+    }
   } else {
     die "Bad context |$self->{context}|";
   }

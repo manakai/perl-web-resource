@@ -21,7 +21,7 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
 
     my $x = sub {
       if (($test->{computed}->[1]->[0] || '') eq 'supplied') {
-        return $_[0]->as_valid_mime_type;
+        return defined $_[0] ? $_[0]->as_valid_mime_type : 'text/plain';
       } else {
         return $test->{computed}->[0];
       }
@@ -72,7 +72,11 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
                 ($test->{context}->[1]->[0]);
             $sniffer->is_http (1) unless $test->{nonhttp};
             my $st = $sniffer->detect ($content_type, $input_data);
-            is $st->as_valid_mime_type_with_no_params, $img_type;
+            if ($test->{context}->[1]->[0] eq 'text_track') {
+              is $st->as_valid_mime_type_with_no_params, $x->($content_type), 'computed type';
+            } else {
+              is $st->as_valid_mime_type_with_no_params, $img_type, 'computed type';
+            }
           } $c, name => 'If there is no supported type';
 
           test {
@@ -111,7 +115,11 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
                 ($test->{context}->[1]->[0]);
             $sniffer->is_http (1) unless $test->{nonhttp};
             my $st = $sniffer->detect ($content_type, $input_data);
-            is $st->as_valid_mime_type_with_no_params, $img_type;
+            if ($test->{context}->[1]->[0] eq 'text_track') {
+              is $st->as_valid_mime_type_with_no_params, $x->($content_type), 'computed type';
+            } else {
+              is $st->as_valid_mime_type_with_no_params, $img_type, 'computed type';
+            }
           } $c, name => 'If there is no supported type';
 
           test {
@@ -136,6 +144,21 @@ for my $path ($test_data_path->children (qr/\.dat$/)) {
 
           done $c;
         } n => 3, name => [$rel_path, $test->{name}->[0], $img_type];
+      } # $img_type
+    } elsif ($ct_type eq 'others') {
+      for my $img_type (qw(text/css audio/mpeg application/octet-stream
+                           image/png font/ttf)) {
+        my $content_type = Web::MIME::Type->parse_web_mime_type ($img_type);
+        test {
+          my $c = shift;
+          my $sniffer = Web::MIME::Sniffer->new_from_context
+              ($test->{context}->[1]->[0]);
+          $sniffer->is_http (1) unless $test->{nonhttp};
+          $sniffer->supported_audio_or_video_types->{$img_type} = 1;
+          my $st = $sniffer->detect ($content_type, $input_data);
+          is $st->as_valid_mime_type_with_no_params, $x->($content_type);
+          done $c;
+        } n => 1, name => [$rel_path, $test->{name}->[0], $img_type];
       } # $img_type
     } else {
       die "Bad ct_type |$ct_type|";

@@ -153,7 +153,7 @@ sub _feed_or_html ($) {
     pos ($_[0]) = 3; # skip UTF-8 BOM.
   }
 
-  1 while $_[0] =~ /\G(?:[\x09\x20\x0A\x0D]+|<!--.*?-->|<![^>]*>|<\?.*?\?>)/gcs;
+  1 while $_[0] =~ /\G(?:[\x09\x20\x0A\x0C\x0D]+|<!--.*?-->|<![^>]*>|<\?.*?\?>)/gcs;
   return _mime 'text/html' unless $_[0] =~ /\G</gc;
 
   if ($_[0] =~ /\Grss/gc) {
@@ -166,10 +166,10 @@ sub _feed_or_html ($) {
     return _mime 'text/html';
   }
 
-  if ($_[0] =~ /\G([^>]+)/gc) {
-    my $by = $1;
-    if ($by =~ m!xmlns[^>=]*=[\x20\x0A\x0D\x09]*["']http://www\.w3\.org/1999/02/22-rdf-syntax-ns#["']! and
-        $by =~ m!xmlns[^>=]*=[\x20\x0A\x0D\x09]*["']http://purl\.org/rss/1\.0/["']!) {
+  my $pos = pos $_[0];
+  if ($_[0] =~ m{\G.*?\Qhttp://www.w3.org/1999/02/22-rdf-syntax-ns#\E}gs) {
+    pos ($_[0]) = $pos;
+    if ($_[0] =~ m{\G.*?\Qhttp://purl.org/rss/1.0/\E}gs) {
       return _mime 'application/rss+xml';
     }
   }

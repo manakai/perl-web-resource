@@ -1512,6 +1512,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                            'iana' => 'permanent',
                                                            'iana_intended_usage' => 'common'
                                                          },
+                                          'protobuf' => {},
                                           'provenance+xml' => {
                                                               'iana' => 'permanent',
                                                               'iana_intended_usage' => 'common'
@@ -3260,6 +3261,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                         'iana' => 'permanent',
                                                                         'iana_intended_usage' => 'common'
                                                                       },
+                                          'vnd.hyper-item+json' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
                                           'vnd.hyperdrive+json' => {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'common'
@@ -7265,6 +7269,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                   }
                                                                      }
                                                        },
+                                          'x-protobuf' => {},
                                           'x-prt' => {},
                                           'x-psgi' => {},
                                           'x-pulse-download' => {},
@@ -12603,42 +12608,42 @@ $Web::MIME::_TypeDefs::Type = {
 $Web::MIME::_TypeDefs::Sniffing = {
           'archive' => [
                        [
-                         qr/(?:Rar\x20\x1A\x07\x00)/,
-                         'application/x-rar-compressed'
+                         qr/(?:\x1F\x8B\x08)/,
+                         'application/x-gzip'
                        ],
                        [
                          qr/(?:PK\x03\x04)/,
                          'application/zip'
                        ],
                        [
-                         qr/(?:\x1F\x8B\x08)/,
-                         'application/x-gzip'
+                         qr/(?:Rar\x20\x1A\x07\x00)/,
+                         'application/x-rar-compressed'
                        ]
                      ],
           'audio_or_video' => [
                               [
-                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WAVE)/,
-                                'audio/wave'
+                                qr/(?:MThd\x00\x00\x00\x06)/,
+                                'audio/midi'
                               ],
                               [
                                 qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AVI\x20)/,
                                 'video/avi'
                               ],
                               [
-                                qr/(?:OggS\x00)/,
-                                'application/ogg'
-                              ],
-                              [
-                                qr/(?:\.snd)/,
-                                'audio/basic'
-                              ],
-                              [
                                 qr/(?:ID3)/,
                                 'audio/mpeg'
                               ],
                               [
-                                qr/(?:MThd\x00\x00\x00\x06)/,
-                                'audio/midi'
+                                qr/(?:OggS\x00)/,
+                                'application/ogg'
+                              ],
+                              [
+                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WAVE)/,
+                                'audio/wave'
+                              ],
+                              [
+                                qr/(?:\.snd)/,
+                                'audio/basic'
                               ],
                               [
                                 qr/(?:FORM[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AIFF)/,
@@ -12663,10 +12668,6 @@ $Web::MIME::_TypeDefs::Sniffing = {
                       'font/collection'
                     ],
                     [
-                      qr/(?:wOFF)/,
-                      'application/font-woff'
-                    ],
-                    [
                       qr/(?:[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]LP)/,
                       'application/vnd.ms-fontobject'
                     ],
@@ -12677,17 +12678,13 @@ $Web::MIME::_TypeDefs::Sniffing = {
                     [
                       qr/(?:OTTO)/,
                       'font/otf'
+                    ],
+                    [
+                      qr/(?:wOFF)/,
+                      'application/font-woff'
                     ]
                   ],
           'image' => [
-                     [
-                       qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WEBPVP)/,
-                       'image/webp'
-                     ],
-                     [
-                       qr/(?:\x89PNG\x0D\x0A\x1A\x0A)/,
-                       'image/png'
-                     ],
                      [
                        qr/(?:\xFF\xD8\xFF)/,
                        'image/jpeg'
@@ -12697,8 +12694,16 @@ $Web::MIME::_TypeDefs::Sniffing = {
                        'image/bmp'
                      ],
                      [
+                       qr/(?:\x89PNG\x0D\x0A\x1A\x0A)/,
+                       'image/png'
+                     ],
+                     [
                        qr/(?:\x00\x00[\x01\x02]\x00)/,
                        'image/x-icon'
+                     ],
+                     [
+                       qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WEBPVP)/,
+                       'image/webp'
                      ],
                      [
                        qr/(?:GIF8[79]a)/,

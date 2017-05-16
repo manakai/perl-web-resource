@@ -213,10 +213,11 @@ sub close ($) {
 sub abort ($;%) {
   my ($self, %args) = @_;
   my $client = $self->{client};
+  warn "Abort " . ref $client; # XXX
   if (defined $client and not ref $client eq __PACKAGE__ . '::Aborted') {
     $self->{client} = bless {}, __PACKAGE__ . '::Aborted';
     return $client->abort (message => $args{message})->then (sub {
-      warn "$self->{parent_id}: @{[__PACKAGE__]}: Aborted @{[scalar gmtime]}\n"
+      warn "$self->{parent_id}: @{[__PACKAGE__]}: Aborted (@{[$args{message} || '(no message)']}) @{[scalar gmtime]}\n"
           if $self->debug;
     });
   }

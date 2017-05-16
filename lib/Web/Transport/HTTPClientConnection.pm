@@ -488,7 +488,7 @@ sub _process_rbuf_eof ($$;%) {
       $$ref = '';
     } else { # empty
       $self->{exit} = {failed => 1,
-                       message => "Connection closed without response",
+                       message => $args{error_message} || "Connection closed without response",
                        errno => $args{errno},
                        can_retry => !$args{abort} && !$self->{response_received}};
     }
@@ -499,7 +499,7 @@ sub _process_rbuf_eof ($$;%) {
       $self->_ev ('dataend', {});
       if ($self->{response}->{version} eq '1.1') {
         $self->{exit} = {failed => 1,
-                         message => "Connection truncated",
+                         message => $args{error_message} || "Connection truncated",
                          errno => $args{errno}};
       } else {
         $self->{exit} = {};
@@ -540,7 +540,7 @@ sub _process_rbuf_eof ($$;%) {
     $self->{exit} = {failed => $args{abort}};
   } elsif ($self->{state} eq 'before response header') {
     $self->{exit} = {failed => 1,
-                     message => "Connection closed within response headers",
+                     message => $args{error_message} || "Connection closed within response headers",
                      errno => $args{errno}};
   } elsif ($self->{state} eq 'before ws frame' or
            $self->{state} eq 'ws data' or
@@ -602,7 +602,10 @@ sub connect ($) {
         } else {
           $self->_process_rbuf ($self->{rbuf}, eof => 1);
           $self->_process_rbuf_eof
-              ($self->{rbuf}, abort => $data->{failed}, errno => $data->{errno});
+              ($self->{rbuf},
+               abort => $data->{failed},
+               errno => $data->{errno},
+               error_message => $data->{message});
         }
         $transport->abort;
       } else { # not failure

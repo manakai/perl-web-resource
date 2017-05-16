@@ -205,12 +205,26 @@ sub close ($) {
     my $client = delete $self->{client};
     return $client->close if defined $client;
   })->then (sub {
-    warn "$self->{parent_id}: @{[__PACKAGE__]}: Closed @{[scalar gmtime]}\n" if $self->debug;
+    warn "$self->{parent_id}: @{[__PACKAGE__]}: Closed @{[scalar gmtime]}\n"
+        if $self->debug;
   });
 } # close
 
+sub abort ($;%) {
+  my ($self, %args) = @_;
+  my $client = $self->{client};
+  if (defined $client and not ref $client eq __PACKAGE__ . '::Aborted') {
+    $self->{client} = bless {}, __PACKAGE__ . '::Aborted';
+    return $client->abort (message => $args{message})->then (sub {
+      warn "$self->{parent_id}: @{[__PACKAGE__]}: Aborted @{[scalar gmtime]}\n"
+          if $self->debug;
+    });
+  }
+  return Promise->resolve;
+} # abort
+
 sub DESTROY ($) {
-  $_[0]->close (message => "Aborted by DESTROY of $_[0]");
+  $_[0]->abort (message => "Aborted by DESTROY of $_[0]");
 
   local $@;
   eval { die };
@@ -219,11 +233,25 @@ sub DESTROY ($) {
 
 } # DESTROY
 
+package Web::Transport::ConnectionClient::Aborted;
+
+sub connect { Promise->resolve }
+sub is_active { 1 }
+
+sub request {
+  return Promise->resolve
+      ([undef, {failed => 1,
+                message => "This connection has been aborted"}]);
+}
+
+sub close { Promise->resolve }
+sub abort { Promise->resolve }
+
 1;
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

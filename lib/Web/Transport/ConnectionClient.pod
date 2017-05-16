@@ -104,8 +104,21 @@ whenever the client has sent some request.
 If the connection is in use, it is closed only after any current and
 enqueued request are processed.
 
-The method returns a promise, which is resolved once any connection
-has closed.
+This method returns a promise, which is resolved once any connection
+has been closed.
+
+=item $promise = $client->abort (message => $string)
+
+Close any existing connection, aborting any currently processing or
+queued requests and responses.  The client object is neuted.
+
+An optional name/value pair whose name is C<message> can be a
+character string which should contain the reason of the aborting.
+This message is only used for the aid of the debugging and is never
+sent to the remote server.
+
+This method returns a promise, which is resolved once any connection
+has been closed.
 
 =item $client->proxy_manager ($pm)
 
@@ -197,7 +210,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

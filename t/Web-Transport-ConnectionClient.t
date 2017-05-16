@@ -2995,6 +2995,7 @@ test {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->debug (2);
     my $p = $client->request (url => $url);
     my $message = rand;
     (promised_sleep 1)->then (sub {
@@ -3027,6 +3028,7 @@ test {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
     my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->debug (2);
     my $p = $client->request (url => $url);
     my $p2 = $client->request (url => $url);
     my $message = rand;

@@ -74,7 +74,7 @@ test-main-main:
 test-main-server:
 	$(PERL) sketch/server.pl &
 	sleep 1
-	$(PROVE) t/httpserver/*.t
+	$(PROVE) t/httpserver/client.t http://localhost:8522
 	-curl http://localhost:8522/end
 
 ## License: Public Domain.

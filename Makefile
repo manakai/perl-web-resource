@@ -57,14 +57,16 @@ local/http-status-codes.json:
 
 PROVE = ./prove
 
-test: test-deps test-abort #test-main test-main-server
+test: test-deps test-abort #test-main
 
 test-abort:
 	$(PROVE) t/Web-Transport-ConnectionClient.t
 
 test-deps: deps
 
-test-main:
+test-main: test-main-main test-main-server
+
+test-main-main:
 	$(PROVE) t/*.t
 	$(PROVE) t/real/*.t
 

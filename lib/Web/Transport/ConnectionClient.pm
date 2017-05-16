@@ -213,9 +213,14 @@ sub close ($) {
 sub abort ($;%) {
   my ($self, %args) = @_;
   my $client = $self->{client};
-  warn "Abort " . ref $client; # XXX
-  if (defined $client and not ref $client eq __PACKAGE__ . '::Aborted') {
-    $self->{client} = bless {}, __PACKAGE__ . '::Aborted';
+  if (defined $client and ref $client eq __PACKAGE__ . '::Aborted') {
+    undef $client;
+  } else {
+    $self->{client} = bless {
+      message => $args{message},
+    }, __PACKAGE__ . '::Aborted';
+  }
+  if (defined $client) {
     return $client->abort (message => $args{message})->then (sub {
       warn "$self->{parent_id}: @{[__PACKAGE__]}: Aborted (@{[$args{message} || '(no message)']}) @{[scalar gmtime]}\n"
           if $self->debug;
@@ -242,7 +247,7 @@ sub is_active { 1 }
 sub request {
   return Promise->resolve
       ([undef, {failed => 1,
-                message => "This connection has been aborted"}]);
+                message => $_[0]->{message} || "This connection has been aborted"}]);
 }
 
 sub close { Promise->resolve }

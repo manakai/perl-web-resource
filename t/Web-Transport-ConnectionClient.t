@@ -3062,6 +3062,36 @@ test {
   });
 } n => 4, name => 'abort';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /foo"
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $p = $client->request (url => $url);
+    my $message = rand;
+    return $client->abort (message => $message)->then (sub {
+      return $p;
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, $message;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'abort';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

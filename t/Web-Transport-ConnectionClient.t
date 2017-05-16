@@ -3060,7 +3060,7 @@ test {
       undef $c;
     });
   });
-} n => 4, name => 'abort';
+} n => 4, name => 'abort 2';
 
 test {
   my $c = shift;

@@ -104,6 +104,7 @@ sub _connect ($$) {
       warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n" if $self->debug;
     }
   })->then (sub {
+    return $self->{client} if $self->{aborted};
     $self->{client} = Web::Transport::ClientBareConnection->new_from_url
         ($url_record);
     $self->{client}->parent_id ($self->{parent_id});
@@ -202,6 +203,7 @@ sub close ($) {
   my $queue = delete $self->{queue};
   return Promise->resolve unless defined $queue;
   return $queue->then (sub {
+    return if $self->{aborted};
     my $client = delete $self->{client};
     return $client->close if defined $client;
   })->then (sub {
@@ -219,6 +221,7 @@ sub abort ($;%) {
     $self->{client} = bless {
       message => $args{message},
     }, __PACKAGE__ . '::Aborted';
+    $self->{aborted} = 1;
   }
   if (defined $client) {
     return $client->abort (message => $args{message})->then (sub {

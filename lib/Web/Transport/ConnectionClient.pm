@@ -107,6 +107,7 @@ sub _connect ($$) {
 
   $self->{client} = Web::Transport::ClientBareConnection->new_from_url
         ($url_record);
+warn "client set ($self->{client})";
   $self->{client}->parent_id ($self->{parent_id});
   $self->{client}->proxy_manager ($self->proxy_manager);
   $self->{client}->resolver ($self->resolver);
@@ -115,6 +116,7 @@ sub _connect ($$) {
   $self->{client}->last_resort_timeout ($self->last_resort_timeout);
 
   if (defined $client) {
+warn "old client abort ($client)";
     return $client->abort;
   } else {
     return Promise->resolve;
@@ -159,6 +161,7 @@ sub request ($%) {
     my $max = $self->max_size;
     my $no_cache = $args{superreload};
     my $then = sub {
+warn "invoke requet ($self->{client})";
       return $self->{client}->request ($method, $url_record, $header_list, $body_ref, $no_cache, ! 'ws', sub {
         if (defined $_[2]) {
           push @$body, \($_[2]);
@@ -218,16 +221,19 @@ sub close ($) {
 
 sub abort ($;%) {
   my ($self, %args) = @_;
+warn "abort ($self->{client} $self->{aborted})";
   my $client = $self->{client};
   if ($self->{aborted}) {
     undef $client;
   } else {
+warn "client replaced";
     $self->{client} = bless {
       message => $args{message},
     }, __PACKAGE__ . '::Aborted';
     $self->{aborted} = 1;
   }
   if (defined $client) {
+warn "invoke abort";
     return $client->abort (message => $args{message})->then (sub {
       warn "$self->{parent_id}: @{[__PACKAGE__]}: Aborted (@{[$args{message} || '(no message)']}) @{[scalar gmtime]}\n"
           if $self->debug;

@@ -336,7 +336,7 @@ sub close ($) {
 
 sub abort ($;%) {
   my $self = shift;
-  return unless defined $self->{http};
+  return Promise->resolve unless defined $self->{http};
   return $self->{http}->abort (@_)->then (sub {
     delete $self->{http};
     delete $self->{connect_promise};

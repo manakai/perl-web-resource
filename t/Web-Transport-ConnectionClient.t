@@ -116,7 +116,7 @@ test {
   eval {
     Web::Transport::ConnectionClient->new_from_url;
   };
-  ok $@;
+  like $@, qr{^No URL is specified at \Q@{[__FILE__]}\E line @{[__LINE__-2]}};
   done $c;
 } n => 1, name => 'new_from_url no url';
 

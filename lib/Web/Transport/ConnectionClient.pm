@@ -11,6 +11,7 @@ use Web::Transport::Response;
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
 sub new_from_url ($$) {
+  croak "No URL is specified" unless defined $_[1];
   my $origin = $_[1]->get_origin;
   croak "The URL does not have a tuple origin" if $origin->is_opaque;
   return bless {

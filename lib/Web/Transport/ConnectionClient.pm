@@ -96,25 +96,29 @@ sub _connect ($$) {
     return Promise->resolve ($self->{client});
   }
 
-  return Promise->resolve->then (sub {
-    if (defined $self->{client}) {
-      warn "$self->{parent_id}: @{[__PACKAGE__]}: Current connection is no longer active @{[scalar gmtime]}\n" if $self->debug;
-      return $self->{client}->abort;
-    } else {
-      warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n" if $self->debug;
-    }
-  })->then (sub {
-    return $self->{client} if $self->{aborted};
-    $self->{client} = Web::Transport::ClientBareConnection->new_from_url
+  my $client = delete $self->{client};
+  if (defined $client) {
+    warn "$self->{parent_id}: @{[__PACKAGE__]}: Current connection is no longer active @{[scalar gmtime]}\n"
+        if $self->debug;
+  } else {
+    warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n"
+        if $self->debug;
+  }
+
+  $self->{client} = Web::Transport::ClientBareConnection->new_from_url
         ($url_record);
-    $self->{client}->parent_id ($self->{parent_id});
-    $self->{client}->proxy_manager ($self->proxy_manager);
-    $self->{client}->resolver ($self->resolver);
-    $self->{client}->tls_options ($self->tls_options);
-    $self->{client}->debug ($self->debug);
-    $self->{client}->last_resort_timeout ($self->last_resort_timeout);
-    return $self->{client};
-  });
+  $self->{client}->parent_id ($self->{parent_id});
+  $self->{client}->proxy_manager ($self->proxy_manager);
+  $self->{client}->resolver ($self->resolver);
+  $self->{client}->tls_options ($self->tls_options);
+  $self->{client}->debug ($self->debug);
+  $self->{client}->last_resort_timeout ($self->last_resort_timeout);
+
+  if (defined $client) {
+    return $client->abort;
+  } else {
+    return Promise->resolve;
+  }
 } # _connect
 
 sub request ($%) {
@@ -155,7 +159,7 @@ sub request ($%) {
     my $max = $self->max_size;
     my $no_cache = $args{superreload};
     my $then = sub {
-      return $_[0]->request ($method, $url_record, $header_list, $body_ref, $no_cache, ! 'ws', sub {
+      return $self->{client}->request ($method, $url_record, $header_list, $body_ref, $no_cache, ! 'ws', sub {
         if (defined $_[2]) {
           push @$body, \($_[2]);
           if ($max >= 0) {
@@ -215,7 +219,7 @@ sub close ($) {
 sub abort ($;%) {
   my ($self, %args) = @_;
   my $client = $self->{client};
-  if (defined $client and ref $client eq __PACKAGE__ . '::Aborted') {
+  if ($self->{aborted}) {
     undef $client;
   } else {
     $self->{client} = bless {

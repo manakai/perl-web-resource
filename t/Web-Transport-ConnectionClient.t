@@ -981,7 +981,7 @@ test {
       test {
         isa_ok $res, 'Web::Transport::Response';
         ok $res->is_network_error;
-        is $res->network_error_message, 'Connection closed without response';
+        is $res->network_error_message, 'Last-resort timeout (0.5)';
         is $res->body_bytes, undef;
         ok ! $res->incomplete;
       } $c;
@@ -1118,7 +1118,7 @@ test {
         is $res1->body_bytes, 'hoge';
 
         ok $res2->is_network_error;
-        is $res2->network_error_message, 'Connection closed without response';
+        is $res2->network_error_message, 'Last-resort timeout (0.5)';
         is $res2->body_bytes, undef;
       } $c;
     })->then (sub{

@@ -57,11 +57,13 @@ local/http-status-codes.json:
 
 PROVE = ./prove
 
-test: test-deps test-main test-main-server
+test: test-deps test-main
 
 test-deps: deps
 
-test-main:
+test-main: test-main-main test-main-server
+
+test-main-main:
 	$(PROVE) t/*.t
 	$(PROVE) t/real/*.t
 

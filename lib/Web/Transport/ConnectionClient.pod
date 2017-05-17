@@ -25,7 +25,19 @@ Web::Transport::ConnectionClient - A connection-oriented HTTP client
 =head1 DESCRIPTION
 
 The C<Web::Transport::ConnectionClient> module is a
-connection-oriented HTTP client.
+connection-oriented HTTP client.  It represents an HTTP connection
+between this client and an HTTP server and provides API to send
+requests and receive responses.
+
+It establishes an HTTP connection to the server when a request is
+sent.  The connection is persisted until it is requested to close the
+connection by the application (via e.g. the C<close> method) or the
+server has closed the connection such that subsequent requests can
+reuse the connection.  When a new request is asked to be sent
+nevertheless the connection has been closed by the server, another
+connection is established.  In this way a
+C<Web::Transport::ConnectionClient> object can be used until it is
+explicitly closed by C<close> or C<abort>.
 
 It can only be used to send requests to a specific origin.  It does
 not support HTTP redirects by design.
@@ -159,6 +171,9 @@ method.
 
 Get or set the maximum size of the (uncompressed) body of the
 response, in bytes.  The initial value is -1, i.e. no limit is set.
+
+If a non-negative number is specified and the response body is greater
+than the value, the connection is aborted as soon as possible.
 
 This option must be set before the first invocation of the C<request>
 method.

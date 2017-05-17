@@ -107,6 +107,8 @@ CRLF
 CRLF
 CRLF
 #result
+{{eof}}
+#result-apache
 {{414h}}{{eof}}
 #result-nginx
 {{414body}}{{eof}}
@@ -117,7 +119,7 @@ CRLF
 CRLF
 CRLF
 #result
-{{414h}}{{eof}}
+{{414h|}}{{eof}}
 #result-nginx
 {{414body}}{{eof}}
 

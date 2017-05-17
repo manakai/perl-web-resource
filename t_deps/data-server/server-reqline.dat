@@ -3,14 +3,14 @@
 CRLF
 CRLF
 #result
-{{400body}}{{eof}}
+{{400body|400h}}{{eof}}
 
 #input
 "GET  HTTP/1.0"CRLF
 CRLF
 CRLF
 #result
-{{400body}}{{eof}}
+{{400body|400h}}{{eof}}
 
 #input
 "GET /404\x09HTTP/1.0"CRLF
@@ -56,7 +56,7 @@ CRLF
 CRLF
 CRLF
 #result
-{{400body}}{{eof}}
+{{400body|400h}}{{eof}}
 #result-apache
 {{404nohosth}}{{eof}}
 
@@ -67,7 +67,7 @@ CRLF
 CRLF
 CRLF
 #result
-{{400body}}{{eof}}
+{{400body|400h}}{{eof}}
 #result-apache
 {{404nohosth}}{{eof}}
 
@@ -78,7 +78,7 @@ CRLF
 CRLF
 CRLF
 #result
-{{400body}}{{eof}}
+{{400body|400h}}{{eof}}
 
 #name
 0x00 in method
@@ -87,7 +87,7 @@ CRLF
 CRLF
 CRLF
 #result
-{{400body}}{{eof}}
+{{400body|400h}}{{eof}}
 
 #name
 0x0D in method
@@ -96,7 +96,7 @@ CRLF
 CRLF
 CRLF
 #result
-{{400body}}{{eof}}
+{{400body|400h}}{{eof}}
 #result-apache
 {{404nohosth}}{{eof}}
 

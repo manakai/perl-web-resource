@@ -931,7 +931,8 @@ sub _receive_done ($) {
   $con->{disable_timer} = 1;
   delete $con->{unread_length};
   delete $con->{ws_timer};
-  if ($stream->{close_after_response}) {
+  if ($stream->{close_after_response} or
+      $stream->{connection}->{write_closed}) { # _send_done already called with close_after_response
     $con->{state} = 'end';
   } else {
     $con->{state} = 'after request';
@@ -971,7 +972,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

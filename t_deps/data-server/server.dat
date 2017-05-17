@@ -1402,9 +1402,9 @@ receive "</html>"
 {{404h}}{{405body}}{{eof}}
 
 #name
-bad protocol-version - http/1.1
+bad protocol-version - http/1.1 (lowercase)
 #input
-"GET /404 http/1.1"CRLF
+"GET /404l http/1.1"CRLF
 "Host:"
 hostport
 CRLF

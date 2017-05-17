@@ -167,6 +167,7 @@ my $proxy_to_transport = sub {
 
 sub connect ($%) {
   my ($self, %args) = @_;
+  # XXX $self->abort should cancel ongoing connect
   return $self->{connect_promise} ||= do {
     ## Establish a transport
 
@@ -216,6 +217,9 @@ sub connect ($%) {
           not $url_record->scheme eq 'https' and
           not $url_record->scheme eq 'ftp') {
         die "Bad URL scheme |@{[$url_record->scheme]}|\n";
+      }
+      if (defined $self->{aborted}) {
+        die "$self->{aborted}\n";
       }
       $self->{http} = Web::Transport::HTTPClientConnection->new
           (transport => $_[0], cb => sub { }, debug => $debug);
@@ -336,8 +340,12 @@ sub close ($) {
 
 sub abort ($;%) {
   my $self = shift;
+  my %args = @_;
+  if (not defined $self->{aborted}) {
+    $self->{aborted} = defined $args{message} ? $args{message} : 'Aborted';
+  }
   return Promise->resolve unless defined $self->{http};
-  return $self->{http}->abort (@_)->then (sub {
+  return $self->{http}->abort (%args)->then (sub {
     delete $self->{http};
     delete $self->{connect_promise};
     return undef;

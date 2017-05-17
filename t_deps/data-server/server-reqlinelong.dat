@@ -53,7 +53,7 @@ CRLF
 CRLF
 CRLF
 #result
-{{414h}}{{eof}}
+{{414h|}}{{eof}}
 #result-nginx
 {{414body}}{{eof}}
 
@@ -63,7 +63,7 @@ CRLF
 CRLF
 CRLF
 #result
-{{414h}}{{eof}}
+{{414h|}}{{eof}}
 #result-nginx
 {{414body}}{{eof}}
 
@@ -87,7 +87,7 @@ HTTP/1.0 8178
 CRLF
 CRLF
 #result
-{{414h}}{{eof}}
+{{414h|}}{{eof}}
 #result-nginx
 {{414body}}{{eof}}
 
@@ -97,7 +97,7 @@ CRLF
 CRLF
 CRLF
 #result
-{{414h}}{{eof}}
+{{414h|}}{{eof}}
 #result-nginx
 {{414body}}{{eof}}
 
@@ -107,9 +107,7 @@ CRLF
 CRLF
 CRLF
 #result
-{{eof}}
-#result-apache
-{{414h}}{{eof}}
+{{414h|}}{{eof}}
 #result-nginx
 {{414body}}{{eof}}
 
@@ -131,6 +129,6 @@ HEAD
 CRLF
 CRLF
 #result
-{{414h}}{{eof}}
+{{414h|}}{{eof}}
 #result-nginx
 {{414body}}{{eof}}

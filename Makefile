@@ -68,7 +68,7 @@ test-main-main:
 	$(PROVE) t/real/*.t
 
 test-main-server:
-	$(PERL) sketch/server.pl &
+	$(PERL) t_deps/bin/rawserver.pl &
 	sleep 1
 	$(PERL) t/httpserver/client.t http://localhost:8522
 	-curl http://localhost:8522/end

@@ -190,6 +190,7 @@ sub create ($$) {
          http_authorization => undef,
          body_ref => (defined $args->{body} ? \($args->{body}) : undef),
          container => $container,
+         clock => $args->{protocol_clock},
          oauth_consumer_key => $args->{oauth1}->[0],
          oauth_callback => $args->{oauth_callback},
          client_shared_secret => $args->{oauth1}->[1],
@@ -217,15 +218,8 @@ sub create ($$) {
 
   if (defined $args->{aws4}) {
     require Web::Transport::AWS;
-
-    # XXX
-    my $clock = $args->{clock} || do {
-      require Web::DateTime::Clock;
-      Web::DateTime::Clock->realtime_clock;
-    };
-
     Web::Transport::AWS->aws4 (
-      clock => $clock,
+      clock => $args->{protocol_clock},
       method => $method,
       url => $url_record,
       header_list => $header_list, # to be modified!

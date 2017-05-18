@@ -102,7 +102,7 @@ test {
         (defined $test->{target} ? (url => Web::URL->parse_string ($test->{target}, $url)) : ()),
         aws4 => [$access_key_id, $secret_access_key, $region, $service],
         aws4_signed_headers => {RANGE => 1, date => 1},
-        clock => sub { timegm_nocheck (0, 0, 0, 24, 5-1, 2013) },
+        protocol_clock => sub { timegm_nocheck (0, 0, 0, 24, 5-1, 2013) },
         headers => $test->{headers},
         body => $test->{body},
       )->then (sub {

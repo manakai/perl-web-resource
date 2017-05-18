@@ -14,7 +14,10 @@ use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 sub new ($%) {
   my ($class, %args) = @_;
   return Promise->resolve->then (sub {
-
+    $args{protocol_clock} ||=  do {
+      require Web::DateTime::Clock;
+      Web::DateTime::Clock->realtime_clock;
+    };
     my ($method, $url_record, $header_list, $body_ref)
         = Web::Transport::RequestConstructor->create
             ({%args, get_only => 1, no_body => 1});
@@ -46,11 +49,17 @@ sub new ($%) {
            Web::DateTime::Clock->monotonic_clock);
     };
 
+    $args{protocol_clock} ||= do {
+      require Web::DateTime::Clock;
+      Web::DateTime::Clock->realtime_clock;
+    };
+
     $self->{client} = Web::Transport::ClientBareConnection->new_from_url
         ($url_record);
     $self->{client}->parent_id ($self->{parent_id});
     $self->{client}->proxy_manager ($args{proxy_manager});
     $self->{client}->resolver ($args{resolver});
+    $self->{client}->protocol_clock ($args{protocol_clock});
     $self->{client}->tls_options ($args{tls_options});
     $self->{client}->debug ($args{debug});
 
@@ -156,7 +165,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

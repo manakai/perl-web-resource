@@ -156,6 +156,20 @@ Initially, a resolver using system's name resolution API
 This option must be set before the first invocation of the C<request>
 method.
 
+=item $client->protocol_clock ($clock)
+
+=item $clock = $client->protocol_clock
+
+Get or set the clock object used for various protocol-level date-time
+operations (e.g. obtaining timestamps used in authentications).
+Initially, a clock of C<< Web::DateTime::Clock->realtime_clock >> is
+set.
+
+Please note that this clock cannot alter the value used in OpenSSL.
+
+This option must be set before the first invocation of the C<request>
+method.
+
 =item $client->tls_options ({...})
 
 =item $hashref = $client->tls_options

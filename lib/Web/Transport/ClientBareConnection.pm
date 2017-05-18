@@ -30,6 +30,13 @@ sub resolver ($;$) {
   return $_[0]->{resolver};
 } # resolver
 
+sub protocol_clock ($;$) {
+  if (@_ > 1) {
+    $_[0]->{protocol_clock} = $_[1];
+  }
+  return $_[0]->{protocol_clock};
+} # protocol_clock
+
 sub parent_id ($;$) {
   if (@_ > 1) {
     $_[0]->{parent_id} = $_[1];
@@ -60,7 +67,7 @@ sub last_resort_timeout ($;$) {
 
 my $proxy_to_transport = sub {
   ## create a transport for a proxy configuration
-  my ($tid, $proxy, $url_record, $resolver, $no_cache, $debug) = @_;
+  my ($tid, $proxy, $url_record, $resolver, $clock, $no_cache, $debug) = @_;
 
   ## 1. If $proxy->{protocol} is not supported, return null.
 
@@ -93,7 +100,8 @@ my $proxy_to_transport = sub {
             (%{$proxy->{tls_options} or {}},
              si_host => $proxy->{host},
              sni_host => $proxy->{host},
-             transport => $transport);
+             transport => $transport,
+             protocol_clock => $clock);
       }
       if ($url_record->scheme eq 'https') {
         # XXX HTTP version
@@ -185,7 +193,9 @@ sub connect ($%) {
         if (@$proxies) {
           my $proxy = shift @$proxies;
           my $tid = $parent_id . '.' . ++$self->{tid};
-          return $proxy_to_transport->($tid, $proxy, $url_record, $resolver, $args{no_cache}, $debug)->catch (sub {
+          return $proxy_to_transport->($tid, $proxy, $url_record, $resolver,
+                                       $self->protocol_clock,
+                                       $args{no_cache}, $debug)->catch (sub {
             if (@$proxies) {
               return $get->();
             } else {
@@ -204,7 +214,8 @@ sub connect ($%) {
               (%{$self->{tls_options}},
                si_host => $url_record->host,
                sni_host => $url_record->host,
-               transport => $_[0]);
+               transport => $_[0],
+               protocol_clock => $clock);
         }
         return $transport;
       }, sub {

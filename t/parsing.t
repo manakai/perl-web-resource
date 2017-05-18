@@ -148,7 +148,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             ca_file => Test::Certificates->ca_path ('cert.pem'),
             sni_host => Web::Host->parse_string ($server->{host}),
             si_host => Web::Host->parse_string ($server->{host}),
-            clock => sub { return $time },
+            protocol_clock => sub { return $time },
           );
         }
 

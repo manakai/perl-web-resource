@@ -136,7 +136,8 @@ my @NonceAlphabet = ('A'..'Z', 'a'..'z', '0'..'9');
 sub authenticate ($%) {
   my (undef, %args) = @_;
 
-  $args{oauth_timestamp} = time unless defined $args{oauth_timestamp};
+  $args{oauth_timestamp} = $args{clock}->()
+      unless defined $args{oauth_timestamp};
   $args{oauth_nonce} = '';
   $args{oauth_nonce} .= $NonceAlphabet[rand @NonceAlphabet] for 0..30+rand 14;
   $args{oauth_signature_method} = 'HMAC-SHA1';

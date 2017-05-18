@@ -19,7 +19,7 @@ sub resolve ($$;%) {
     my $time1;
     if ($args{debug}) {
       require Web::DateTime::Clock;
-      $clock = Web::DateTime::Clock->realtime_clock;
+      $clock = Web::DateTime::Clock->monotonic_clock;
       $time1 = $clock->();
       warn sprintf "%s: Resolving |%s|...\n", __PACKAGE__, $host->stringify;
     }

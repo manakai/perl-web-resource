@@ -59,6 +59,16 @@ sub resolver ($;$) {
   };
 } # resolver
 
+sub protocol_clock ($;$) {
+  if (@_ > 1) {
+    $_[0]->{protocol_clock} = $_[1];
+  }
+  return $_[0]->{protocol_clock} ||= do {
+    require Web::DateTime::Clock;
+    Web::DateTime::Clock->realtime_clock;
+  };
+} # protocol_clock
+
 sub tls_options ($;$) {
   if (@_ > 1) {
     $_[0]->{tls_options} = $_[1];
@@ -110,6 +120,7 @@ sub _connect ($$) {
   $self->{client}->parent_id ($self->{parent_id});
   $self->{client}->proxy_manager ($self->proxy_manager);
   $self->{client}->resolver ($self->resolver);
+  $self->{client}->protocol_clock ($self->protocol_clock);
   $self->{client}->tls_options ($self->tls_options);
   $self->{client}->debug ($self->debug);
   $self->{client}->last_resort_timeout ($self->last_resort_timeout);
@@ -132,6 +143,7 @@ sub request ($%) {
 
     $args{base_url} ||= $self->{base_url};
     $args{path_prefix} = $self->{path_prefix} if not defined $args{path_prefix};
+    $args{protocol_clock} = $self->protocol_clock;
     my ($method, $url_record, $header_list, $body_ref)
         = Web::Transport::RequestConstructor->create (\%args);
     if (ref $method) { # error

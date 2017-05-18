@@ -215,7 +215,7 @@ sub connect ($%) {
                si_host => $url_record->host,
                sni_host => $url_record->host,
                transport => $_[0],
-               protocol_clock => $clock);
+               protocol_clock => $self->protocol_clock);
         }
         return $transport;
       }, sub {

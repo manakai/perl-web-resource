@@ -23,7 +23,8 @@ unless (defined $port) {
 }
 my $hostport = $url->hostport;
 
-my $test_data_path = path (__FILE__)->parent->parent->parent->child ('t_deps/data-server');
+my $test_data_path = path (__FILE__)->parent->parent->parent->child
+    ('t_deps/tests/http/parsing/serverresponses');
 
 my $Texts = {};
 

@@ -96,13 +96,14 @@ test {
       return $client->close->then ($close);
     } promised_for {
       my $test = shift;
+      $client->protocol_clock
+          (sub { return timegm_nocheck (0, 0, 0, 24, 5-1, 2013) });
       return $client->request (
         method => $test->{method},
         path => $test->{path},
         (defined $test->{target} ? (url => Web::URL->parse_string ($test->{target}, $url)) : ()),
         aws4 => [$access_key_id, $secret_access_key, $region, $service],
         aws4_signed_headers => {RANGE => 1, date => 1},
-        protocol_clock => sub { timegm_nocheck (0, 0, 0, 24, 5-1, 2013) },
         headers => $test->{headers},
         body => $test->{body},
       )->then (sub {

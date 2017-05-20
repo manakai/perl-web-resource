@@ -549,7 +549,7 @@ sub _process_rbuf_eof ($$;%) {
   }
 
   $self->{no_new_request} = 1;
-  $self->{request_state} = 'sent';
+  $self->{request_state} = 'sent' if $args{abort};
   $self->_receive_done;
 } # _process_rbuf_eof
 
@@ -831,7 +831,7 @@ sub _receive_done ($) {
   } else {
     $self->_both_done;
   }
-} # _receive_Done
+} # _receive_done
 
 # XXX ::Stream::
 sub _both_done ($) {
@@ -863,7 +863,7 @@ sub _both_done ($) {
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -2987,6 +2987,33 @@ test {
 test {
   my $c = shift;
   server_as_cv (q{
+    receive "GET /"
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->request (url => $url, body => "x" x (1*1024*1024))->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, "abc";
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'large request data rejected by server';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
     receive "GET /foo"
     "HTTP/1.0 203 Hoe"CRLF
     CRLF

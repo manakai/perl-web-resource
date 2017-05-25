@@ -12615,42 +12615,42 @@ $Web::MIME::_TypeDefs::Sniffing = {
                          'application/x-gzip'
                        ],
                        [
-                         qr/(?:Rar\x20\x1A\x07\x00)/,
-                         'application/x-rar-compressed'
-                       ],
-                       [
                          qr/(?:PK\x03\x04)/,
                          'application/zip'
+                       ],
+                       [
+                         qr/(?:Rar\x20\x1A\x07\x00)/,
+                         'application/x-rar-compressed'
                        ]
                      ],
           'audio_or_video' => [
                               [
-                                qr/(?:\.snd)/,
-                                'audio/basic'
-                              ],
-                              [
-                                qr/(?:FORM[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AIFF)/,
-                                'audio/aiff'
-                              ],
-                              [
-                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AVI\x20)/,
-                                'video/avi'
-                              ],
-                              [
-                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WAVE)/,
-                                'audio/wave'
+                                qr/(?:MThd\x00\x00\x00\x06)/,
+                                'audio/midi'
                               ],
                               [
                                 qr/(?:OggS\x00)/,
                                 'application/ogg'
                               ],
                               [
+                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WAVE)/,
+                                'audio/wave'
+                              ],
+                              [
+                                qr/(?:FORM[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AIFF)/,
+                                'audio/aiff'
+                              ],
+                              [
                                 qr/(?:ID3)/,
                                 'audio/mpeg'
                               ],
                               [
-                                qr/(?:MThd\x00\x00\x00\x06)/,
-                                'audio/midi'
+                                qr/(?:\.snd)/,
+                                'audio/basic'
+                              ],
+                              [
+                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AVI\x20)/,
+                                'video/avi'
                               ]
                             ],
           'bom1' => [
@@ -12667,50 +12667,50 @@ $Web::MIME::_TypeDefs::Sniffing = {
                   ],
           'font' => [
                     [
-                      qr/(?:OTTO)/,
-                      'font/otf'
-                    ],
-                    [
                       qr/(?:wOFF)/,
                       'application/font-woff'
+                    ],
+                    [
+                      qr/(?:[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]LP)/,
+                      'application/vnd.ms-fontobject'
                     ],
                     [
                       qr/(?:\x00\x01\x00\x00)/,
                       'font/ttf'
                     ],
                     [
-                      qr/(?:ttcf)/,
-                      'font/collection'
+                      qr/(?:OTTO)/,
+                      'font/otf'
                     ],
                     [
-                      qr/(?:[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]LP)/,
-                      'application/vnd.ms-fontobject'
+                      qr/(?:ttcf)/,
+                      'font/collection'
                     ]
                   ],
           'image' => [
+                     [
+                       qr/(?:\x89PNG\x0D\x0A\x1A\x0A)/,
+                       'image/png'
+                     ],
                      [
                        qr/(?:GIF8[79]a)/,
                        'image/gif'
                      ],
                      [
-                       qr/(?:\x00\x00[\x01\x02]\x00)/,
-                       'image/x-icon'
-                     ],
-                     [
-                       qr/(?:BM)/,
-                       'image/bmp'
+                       qr/(?:\xFF\xD8\xFF)/,
+                       'image/jpeg'
                      ],
                      [
                        qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WEBPVP)/,
                        'image/webp'
                      ],
                      [
-                       qr/(?:\x89PNG\x0D\x0A\x1A\x0A)/,
-                       'image/png'
+                       qr/(?:BM)/,
+                       'image/bmp'
                      ],
                      [
-                       qr/(?:\xFF\xD8\xFF)/,
-                       'image/jpeg'
+                       qr/(?:\x00\x00[\x01\x02]\x00)/,
+                       'image/x-icon'
                      ]
                    ],
           'non_scriptable' => [

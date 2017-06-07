@@ -105,6 +105,7 @@ sub _status_and_headers ($) {
 my $cb = sub {
   my $server = shift;
   my $app = shift;
+  my $state = shift;
   my $env;
   my $method;
   my $status;
@@ -124,6 +125,7 @@ my $cb = sub {
       $env->{'psgi.run_once'} = 0;
       $env->{'psgi.nonblocking'} = 1;
       $env->{'psgi.streaming'} = 1;
+      $env->{'manakai.server.state'} = $state if defined $state;
       $method = $env->{REQUEST_METHOD};
       if ($method eq 'CONNECT') {
         $self->send_response_headers
@@ -185,10 +187,11 @@ sub new_from_app_and_ae_tcp_server_args ($$$;%) {
          host => Web::Host->parse_string ($aeargs->[1]), port => $aeargs->[2],
          parent_id => $args{parent_id});
   }
+  my $state = $args{state};
   $self->{connection} = Web::Transport::HTTPServerConnection->new (cb => sub {
     my ($sc, $type) = @_;
     if ($type eq 'startstream') {
-      return $cb->($self, $app);
+      return $cb->($self, $app, $state);
     }
   }, transport => $socket);
   $self->{completed_cv} = AE::cv;
@@ -415,7 +418,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

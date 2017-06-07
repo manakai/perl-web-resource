@@ -58,7 +58,7 @@ sub server ($$;$%) {
     my $server = tcp_server $host, $port, sub {
       $cv->begin;
       $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args
-          ($app, [@_], parent_id => $args{parent_id});
+          ($app, [@_], parent_id => $args{parent_id}, state => $args{state});
       $con->onexception ($onexception) if defined $onexception;
       if (exists $args{max}) {
         $con->max_request_body_length ($args{max});
@@ -2115,11 +2115,62 @@ test {
   }, undef, parent_id => 'hogefuga');
 } n => 1, name => 'custom ID';
 
+test {
+  my $c = shift;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    my $ok = defined $env->{'manakai.server.state'} ? 1 : 0;
+    return [200, [], [$ok]];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 200;
+        is $res->body_bytes, "0";
+      } $c;
+    });
+  }, undef, state => undef);
+} n => 2, name => 'no state object';
+
+test {
+  my $c = shift;
+  my $obj = {x => 0};
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    my $o = $env->{'manakai.server.state'};
+    $o->{x}++;
+    return [200, [], [''.$o]];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 200;
+        is $res->body_bytes, ''.$obj;
+        is $obj->{x}, 1;
+      } $c;
+      return $client->request (url => $origin);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        is $obj->{x}, 2;
+      } $c;
+    });
+  }, undef, state => $obj);
+} n => 4, name => 'state object';
+
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

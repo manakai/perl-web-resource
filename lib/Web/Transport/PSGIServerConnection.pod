@@ -38,10 +38,21 @@ received by the C<AnyEvent::Socket::tcp_server>'s callback.  That is,
 the filehandle of the socket, the remote host, and the remote port (if
 TCP).  The socket can be of a TCP or UNIX socket domain.
 
-Additionally, options can be specified as key/value pairs.  The
-C<parent_id> argument, if any, specifies the short string that
+Additionally, options can be specified as key/value pairs.
+
+The C<parent_id> option, if any, specifies the short string that
 identifies the "parent" context in which the connection appears, which
 will be used in debug outputs.
+
+The C<state> option, if any, specifies the "server state" object which
+is shared among the PSGI application invocations on a same server
+session.  (The definition of the "server session" is server
+application dependent.)  The object is accessible as the
+C<manakai.server.state> field value of the PSGI environment hash
+reference given to the PSGI applications.  This object can be used to
+store objects whose lifetimes are longer than a request-response
+processing, such as connections to the database server.  See the
+manakai PSGI extensions specification for more information.
 
 =item $con->onexception ($code)
 
@@ -124,10 +135,16 @@ Web Transport Processing
 RFC 3875, The Common Gateway Interface (CGI) Version 1.1
 <https://tools.ietf.org/html/rfc3875>.
 
-PSGI <http://search.cpan.org/dist/PSGI/PSGI.pod>.
+PSGI <https://github.com/plack/psgi-specs/blob/master/PSGI.pod>.
+
+PSGI::Extensions
+<https://github.com/plack/psgi-specs/blob/master/PSGI/Extensions.pod>.
 
 C<psgix.exit_guard>
 <https://github.com/kazeburo/Twiggy-Prefork#psgi-extensions>.
+
+manakai PSGI extensions
+<https://wiki.suikawiki.org/n/manakai%20PSGI%20extensions>.
 
 =head1 AUTHOR
 
@@ -135,7 +152,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

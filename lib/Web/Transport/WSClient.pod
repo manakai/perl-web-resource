@@ -104,6 +104,15 @@ default, a resolver using system's name resolution API
 (L<Web::Transport::PlatformResolver>) wrapped by DNS caching
 (L<Web::Transport::CachedResolver>) is set as the resolver.
 
+Please note that this clock cannot alter the value used in OpenSSL.
+
+=item protocol_clock => $clock
+
+Specify the clock object used for various protocol-level date-time
+operations (e.g. obtaining timestamps used in authentications).  A
+clock of C<< Web::DateTime::Clock->realtime_clock >> is used by
+default.
+
 =item tls_options => {...}
 
 XXX
@@ -170,7 +179,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

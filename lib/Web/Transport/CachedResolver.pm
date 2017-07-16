@@ -35,12 +35,7 @@ sub resolve ($$;%) {
     }
 
     if (defined $cached and defined $cached->[2]) {
-      my $clock;
-      my $time1;
       if ($DEBUG > 1) {
-        require Web::DateTime::Clock;
-        $clock = Web::DateTime::Clock->realtime_clock;
-        $time1 = $clock->();
         warn sprintf "%s: Waiting for cache of |%s|...\n",
             __PACKAGE__, $host->stringify;
       }
@@ -48,10 +43,10 @@ sub resolve ($$;%) {
         if ($DEBUG > 1) {
           if (defined $_[0]) {
             warn sprintf "%s: Using cache: |%s| (elapsed %.3f s)\n",
-                __PACKAGE__, $_[0]->stringify, $clock->() - $time1;
+                __PACKAGE__, $_[0]->stringify, $self->{clock}->() - $now;
           } else {
             warn sprintf "%s: Using cache: null (elapsed %.3f s)\n",
-                __PACKAGE__, $clock->() - $time1;
+                __PACKAGE__, $self->{clock}->() - $now;
           }
         }
         return $_[0];
@@ -78,7 +73,7 @@ sub resolve ($$;%) {
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -23,7 +23,8 @@ unless (defined $port) {
 }
 my $hostport = $url->hostport;
 
-my $test_data_path = path (__FILE__)->parent->parent->parent->child ('t_deps/data-server');
+my $test_data_path = path (__FILE__)->parent->parent->parent->child
+    ('t_deps/tests/http/parsing/serverresponses');
 
 my $Texts = {};
 
@@ -36,7 +37,7 @@ my $HTMLBody = sub { return qr{<$Something(?:$_[0])$Something</html>\x0D?
 for (
   ['400', q{400 Bad Request}, '400'],
   ['404', q{404 Not Found}, '404'],
-  ['404nohost', q{404 Not Found|301 Moved Permanently}, '404|301'],
+  ['404nohost', q{404 Not Found|301 Moved Permanently|400 Bad Request}, '404|301|400'],
   ['405', q{405 (?:Method |)Not Allowed|501 Not Implemented}, '405|501'],
   ['408', q{408 Request Timeout}, '408'],
   ['411', q{411 Length Required}, '411'],
@@ -110,8 +111,12 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
       my $expected = $expected_o;
       $expected =~ s{\{\{([\w|]+)\}\}}{
         '(' . (join '|', map { "(?:$_)" } map {
-          $Texts->{$_} // die "Unknown text |$_|";
-        } split /\|/, $1) . ')';
+          if ($_ eq '') {
+            '';
+          } else {
+            $Texts->{$_} // die "Unknown text |$_|";
+          }
+        } split /\|/, $1, -1) . ')';
       }ge;
       $expected = qr/\A(?:$expected)\z/;
 
@@ -218,7 +223,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

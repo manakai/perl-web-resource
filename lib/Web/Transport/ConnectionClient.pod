@@ -25,7 +25,19 @@ Web::Transport::ConnectionClient - A connection-oriented HTTP client
 =head1 DESCRIPTION
 
 The C<Web::Transport::ConnectionClient> module is a
-connection-oriented HTTP client.
+connection-oriented HTTP client.  It represents an HTTP connection
+between this client and an HTTP server and provides API to send
+requests and receive responses.
+
+It establishes an HTTP connection to the server when a request is
+sent.  The connection is persisted until it is requested to close the
+connection by the application (via e.g. the C<close> method) or the
+server has closed the connection such that subsequent requests can
+reuse the connection.  When a new request is asked to be sent
+nevertheless the connection has been closed by the server, another
+connection is established.  In this way a
+C<Web::Transport::ConnectionClient> object can be used until it is
+explicitly closed by C<close> or C<abort>.
 
 It can only be used to send requests to a specific origin.  It does
 not support HTTP redirects by design.
@@ -104,8 +116,21 @@ whenever the client has sent some request.
 If the connection is in use, it is closed only after any current and
 enqueued request are processed.
 
-The method returns a promise, which is resolved once any connection
-has closed.
+This method returns a promise, which is resolved once any connection
+has been closed.
+
+=item $promise = $client->abort (message => $string)
+
+Close any existing connection, aborting any currently processing or
+queued requests and responses.  The client object is neuted.
+
+An optional name/value pair whose name is C<message> can be a
+character string which should contain the reason of the aborting.
+This message is only used for the aid of the debugging and is never
+sent to the remote server.
+
+This method returns a promise, which is resolved once any connection
+has been closed.
 
 =item $client->proxy_manager ($pm)
 
@@ -131,6 +156,20 @@ Initially, a resolver using system's name resolution API
 This option must be set before the first invocation of the C<request>
 method.
 
+=item $client->protocol_clock ($clock)
+
+=item $clock = $client->protocol_clock
+
+Get or set the clock object used for various protocol-level date-time
+operations (e.g. obtaining timestamps used in authentications).
+Initially, a clock of C<< Web::DateTime::Clock->realtime_clock >> is
+set.
+
+Please note that this clock cannot alter the value used in OpenSSL.
+
+This option must be set before the first invocation of the C<request>
+method.
+
 =item $client->tls_options ({...})
 
 =item $hashref = $client->tls_options
@@ -146,6 +185,9 @@ method.
 
 Get or set the maximum size of the (uncompressed) body of the
 response, in bytes.  The initial value is -1, i.e. no limit is set.
+
+If a non-negative number is specified and the response body is greater
+than the value, the connection is aborted as soon as possible.
 
 This option must be set before the first invocation of the C<request>
 method.
@@ -197,7 +239,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -11,6 +11,7 @@ use Web::Transport::Response;
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
 sub new_from_url ($$) {
+  croak "No URL is specified" unless defined $_[1];
   my $origin = $_[1]->get_origin;
   croak "The URL does not have a tuple origin" if $origin->is_opaque;
   return bless {
@@ -58,6 +59,16 @@ sub resolver ($;$) {
   };
 } # resolver
 
+sub protocol_clock ($;$) {
+  if (@_ > 1) {
+    $_[0]->{protocol_clock} = $_[1];
+  }
+  return $_[0]->{protocol_clock} ||= do {
+    require Web::DateTime::Clock;
+    Web::DateTime::Clock->realtime_clock;
+  };
+} # protocol_clock
+
 sub tls_options ($;$) {
   if (@_ > 1) {
     $_[0]->{tls_options} = $_[1];
@@ -95,24 +106,30 @@ sub _connect ($$) {
     return Promise->resolve ($self->{client});
   }
 
-  return Promise->resolve->then (sub {
-    if (defined $self->{client}) {
-      warn "$self->{parent_id}: @{[__PACKAGE__]}: Current connection is no longer active @{[scalar gmtime]}\n" if $self->debug;
-      return $self->{client}->abort;
-    } else {
-      warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n" if $self->debug;
-    }
-  })->then (sub {
-    $self->{client} = Web::Transport::ClientBareConnection->new_from_url
+  my $client = delete $self->{client};
+  if (defined $client) {
+    warn "$self->{parent_id}: @{[__PACKAGE__]}: Current connection is no longer active @{[scalar gmtime]}\n"
+        if $self->debug;
+  } else {
+    warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n"
+        if $self->debug;
+  }
+
+  $self->{client} = Web::Transport::ClientBareConnection->new_from_url
         ($url_record);
-    $self->{client}->parent_id ($self->{parent_id});
-    $self->{client}->proxy_manager ($self->proxy_manager);
-    $self->{client}->resolver ($self->resolver);
-    $self->{client}->tls_options ($self->tls_options);
-    $self->{client}->debug ($self->debug);
-    $self->{client}->last_resort_timeout ($self->last_resort_timeout);
-    return $self->{client};
-  });
+  $self->{client}->parent_id ($self->{parent_id});
+  $self->{client}->proxy_manager ($self->proxy_manager);
+  $self->{client}->resolver ($self->resolver);
+  $self->{client}->protocol_clock ($self->protocol_clock);
+  $self->{client}->tls_options ($self->tls_options);
+  $self->{client}->debug ($self->debug);
+  $self->{client}->last_resort_timeout ($self->last_resort_timeout);
+
+  if (defined $client) {
+    return $client->abort;
+  } else {
+    return Promise->resolve;
+  }
 } # _connect
 
 sub request ($%) {
@@ -126,6 +143,7 @@ sub request ($%) {
 
     $args{base_url} ||= $self->{base_url};
     $args{path_prefix} = $self->{path_prefix} if not defined $args{path_prefix};
+    $args{protocol_clock} = $self->protocol_clock;
     my ($method, $url_record, $header_list, $body_ref)
         = Web::Transport::RequestConstructor->create (\%args);
     if (ref $method) { # error
@@ -153,7 +171,7 @@ sub request ($%) {
     my $max = $self->max_size;
     my $no_cache = $args{superreload};
     my $then = sub {
-      return $_[0]->request ($method, $url_record, $header_list, $body_ref, $no_cache, ! 'ws', sub {
+      return $self->{client}->request ($method, $url_record, $header_list, $body_ref, $no_cache, ! 'ws', sub {
         if (defined $_[2]) {
           push @$body, \($_[2]);
           if ($max >= 0) {
@@ -201,15 +219,37 @@ sub close ($) {
   my $queue = delete $self->{queue};
   return Promise->resolve unless defined $queue;
   return $queue->then (sub {
+    return if $self->{aborted};
     my $client = delete $self->{client};
     return $client->close if defined $client;
   })->then (sub {
-    warn "$self->{parent_id}: @{[__PACKAGE__]}: Closed @{[scalar gmtime]}\n" if $self->debug;
+    warn "$self->{parent_id}: @{[__PACKAGE__]}: Closed @{[scalar gmtime]}\n"
+        if $self->debug;
   });
 } # close
 
+sub abort ($;%) {
+  my ($self, %args) = @_;
+  my $client = $self->{client};
+  if ($self->{aborted}) {
+    undef $client;
+  } else {
+    $self->{client} = bless {
+      message => $args{message},
+    }, __PACKAGE__ . '::Aborted';
+    $self->{aborted} = 1;
+  }
+  if (defined $client) {
+    return $client->abort (message => $args{message})->then (sub {
+      warn "$self->{parent_id}: @{[__PACKAGE__]}: Aborted (@{[$args{message} || '(no message)']}) @{[scalar gmtime]}\n"
+          if $self->debug;
+    });
+  }
+  return Promise->resolve;
+} # abort
+
 sub DESTROY ($) {
-  $_[0]->close (message => "Aborted by DESTROY of $_[0]");
+  $_[0]->abort (message => "Aborted by DESTROY of $_[0]");
 
   local $@;
   eval { die };
@@ -218,11 +258,25 @@ sub DESTROY ($) {
 
 } # DESTROY
 
+package Web::Transport::ConnectionClient::Aborted;
+
+sub connect { Promise->resolve }
+sub is_active { 1 }
+
+sub request {
+  return Promise->resolve
+      ([undef, {failed => 1,
+                message => $_[0]->{message} || "This connection has been aborted"}]);
+}
+
+sub close { Promise->resolve }
+sub abort { Promise->resolve }
+
 1;
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

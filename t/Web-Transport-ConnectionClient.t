@@ -7,6 +7,7 @@ use Test::More;
 use Test::X1;
 use Test::Certificates;
 use Promise;
+use Promised::Flow;
 use AnyEvent::Util qw(run_cmd);
 use Web::Transport::ConnectionClient;
 use Web::Host;
@@ -116,7 +117,7 @@ test {
   eval {
     Web::Transport::ConnectionClient->new_from_url;
   };
-  ok $@;
+  like $@, qr{^No URL is specified at \Q@{[__FILE__]}\E line @{[__LINE__-2]}};
   done $c;
 } n => 1, name => 'new_from_url no url';
 
@@ -476,7 +477,7 @@ test {
         ok ! $res1->is_error;
         is $res1->status_line, '201 OK ?';
         is $res1->header ('Hoge'), undef;
-        is $res1->header ('X-Hoge'), '4';
+        is $res1->header ('X-Hoge'), '4, 5';
         is $res1->header ('Content-length'), '4';
         is $res1->body_bytes, 'hoge';
         is $res1->content, 'hoge';
@@ -519,7 +520,7 @@ test {
         ok $res1->is_error;
         is $res1->status_line, '404 OK ?';
         is $res1->header ('Hoge'), undef;
-        is $res1->header ('X-Hoge'), '4';
+        is $res1->header ('X-Hoge'), '4, 5';
         is $res1->header ('Content-length'), '4';
         is $res1->body_bytes, 'hoge';
         is $res1->content, 'hoge';
@@ -980,7 +981,7 @@ test {
       test {
         isa_ok $res, 'Web::Transport::Response';
         ok $res->is_network_error;
-        is $res->network_error_message, 'Connection closed without response';
+        is $res->network_error_message, 'Last-resort timeout (0.5)';
         is $res->body_bytes, undef;
         ok ! $res->incomplete;
       } $c;
@@ -1117,7 +1118,7 @@ test {
         is $res1->body_bytes, 'hoge';
 
         ok $res2->is_network_error;
-        is $res2->network_error_message, 'Connection closed without response';
+        is $res2->network_error_message, 'Last-resort timeout (0.5)';
         is $res2->body_bytes, undef;
       } $c;
     })->then (sub{
@@ -2911,12 +2912,292 @@ test {
   });
 } n => 3, name => 'request options - params with undef value only';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /foo"
+    receive "_S_", start capture
+    receive "_E_", end capture
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    showcapturedlength
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $length = 5_000_000;
+    my $url = Web::URL->parse_string (qq{http://host2.test:$server->{port}/foo});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->resolver (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1');
+    my $data = '';
+    my @alpha = ('0'..'9','A'..'Z','a'..'z');
+    $data .= $alpha[rand @alpha] for 1..$length;
+    return $client->request (url => $url, body => '_S_' . $data . '_E_')->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is length $res->body_bytes, length ('_S_' . $data . '_E_');
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'large request data, plain HTTP over TCP';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    starttls host=host2.test
+    receive "GET /foo"
+    receive "_S_", start capture
+    receive "_E_", end capture
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    showcapturedlength
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $length = 5_000_000;
+    my $url = Web::URL->parse_string (qq{https://host2.test:$server->{port}/foo});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->resolver (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1');
+    $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+    my $data = '';
+    my @alpha = ('0'..'9','A'..'Z','a'..'z');
+    $data .= $alpha[rand @alpha] for 1..$length;
+    return $client->request (url => $url, body => '_S_' . $data . '_E_')->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is length $res->body_bytes, length ('_S_' . $data . '_E_');
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'large request data, HTTPS';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /"
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    $client->request (url => $url, body => "x" x (1*1024*1024))->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+        is $res->body_bytes, "abc";
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'large request data rejected by server';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /foo"
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $p = $client->request (url => $url);
+    my $message = rand;
+    (promised_sleep 1)->then (sub {
+      return $client->abort (message => $message);
+    })->then (sub {
+      return $p;
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, $message;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'abort';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /foo"
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $p = $client->request (url => $url);
+    my $p2 = $client->request (url => $url);
+    my $message = rand;
+    (promised_sleep 1)->then (sub {
+      return $client->abort (message => $message);
+    })->then (sub {
+      return $p;
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, $message;
+      } $c;
+      return $p2;
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, $message;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->catch (sub {
+      my $error = $_[0];
+      test {
+        ok 0, 'No exception';
+        is $error, undef, 'exception';
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'abort 2';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /foo"
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $p = $client->request (url => $url);
+    my $message = rand;
+    return $client->abort (message => $message)->then (sub {
+      return $p;
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, $message;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'abort';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /foo"
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $p = $client->request (url => $url);
+    (promised_sleep 1)->then (sub {
+      return $client->abort;
+    })->then (sub {
+      return $p;
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'Aborted';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'abort';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET /foo"
+    "HTTP/1.0 203 Hoe"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{https://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    {
+      package test::proxyForAbort4;
+      use Promised::Flow;
+      sub get_proxies_for_url {
+        return promised_sleep (2)->then (sub {
+          return [{protocol => 'tcp'}];
+        });
+      }
+    }
+    $client->proxy_manager (bless {}, 'test::proxyForAbort4');
+    my $p = $client->request (url => $url);
+    my $message = rand;
+    (promised_sleep 1)->then (sub {
+      return $client->abort (message => $message);
+    })->then (sub {
+      return $p;
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, $message;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'abort 4 - abort should work even when $client->abort is invoked during $client->{client}->connect is ongoing';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

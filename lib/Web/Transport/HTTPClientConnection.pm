@@ -488,7 +488,7 @@ sub _process_rbuf_eof ($$;%) {
       $$ref = '';
     } else { # empty
       $self->{exit} = {failed => 1,
-                       message => "Connection closed without response",
+                       message => $args{error_message} || "Connection closed without response",
                        errno => $args{errno},
                        can_retry => !$args{abort} && !$self->{response_received}};
     }
@@ -499,7 +499,7 @@ sub _process_rbuf_eof ($$;%) {
       $self->_ev ('dataend', {});
       if ($self->{response}->{version} eq '1.1') {
         $self->{exit} = {failed => 1,
-                         message => "Connection truncated",
+                         message => $args{error_message} || "Connection truncated",
                          errno => $args{errno}};
       } else {
         $self->{exit} = {};
@@ -540,7 +540,7 @@ sub _process_rbuf_eof ($$;%) {
     $self->{exit} = {failed => $args{abort}};
   } elsif ($self->{state} eq 'before response header') {
     $self->{exit} = {failed => 1,
-                     message => "Connection closed within response headers",
+                     message => $args{error_message} || "Connection closed within response headers",
                      errno => $args{errno}};
   } elsif ($self->{state} eq 'before ws frame' or
            $self->{state} eq 'ws data' or
@@ -549,7 +549,7 @@ sub _process_rbuf_eof ($$;%) {
   }
 
   $self->{no_new_request} = 1;
-  $self->{request_state} = 'sent';
+  $self->{request_state} = 'sent' if $args{abort};
   $self->_receive_done;
 } # _process_rbuf_eof
 
@@ -602,7 +602,10 @@ sub connect ($) {
         } else {
           $self->_process_rbuf ($self->{rbuf}, eof => 1);
           $self->_process_rbuf_eof
-              ($self->{rbuf}, abort => $data->{failed}, errno => $data->{errno});
+              ($self->{rbuf},
+               abort => $data->{failed},
+               errno => $data->{errno},
+               error_message => $data->{message});
         }
         $transport->abort;
       } else { # not failure
@@ -828,7 +831,7 @@ sub _receive_done ($) {
   } else {
     $self->_both_done;
   }
-} # _receive_Done
+} # _receive_done
 
 # XXX ::Stream::
 sub _both_done ($) {
@@ -860,7 +863,7 @@ sub _both_done ($) {
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

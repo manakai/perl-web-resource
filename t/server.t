@@ -1290,15 +1290,15 @@ test {
     Connection => 'upgrade',
     'Sec-WebSocket-Version' => 13,
     'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF==',
-    'Content-Length' => 42,
-  })->then (sub {
+    'Content-Length' => 4,
+  }, body => 'abcd')->then (sub {
     my $res = $_[0];
     test {
-      ok $invoked;
-      is $res->status, 201;
-      is $res->status_text, 'OK';
-      is $res->header ('Connection'), undef;
-      is $res->body_bytes, q{};
+      ok ! $invoked;
+      is $res->status, 400;
+      is $res->status_text, 'Bad Request';
+      is $res->header ('Connection'), 'close';
+      like $res->body_bytes, qr{400};
     } $c;
   }, sub {
     test {
@@ -1310,7 +1310,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 5, name => 'WS handshake with Content-Length - not handshake response (no request body, timeout)', timeout => 120;
+} n => 5, name => 'WS handshake with Content-Length - not handshake response';
 
 test {
   my $c = shift;
@@ -1739,8 +1739,8 @@ test {
     Connection => 'upgrade',
     'Sec-WebSocket-Version' => 13,
     'Sec-WebSocket-Key' => 'abcdef1234567890ABCDEF==',
-    'Content-Length' => '43abx',
-  })->then (sub {
+    'Content-Length' => '4abx',
+  }, body => 'abcd')->then (sub {
     my $res = $_[0];
     test {
       ok ! $invoked;

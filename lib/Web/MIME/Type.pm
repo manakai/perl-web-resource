@@ -1,9 +1,7 @@
 package Web::MIME::Type;
 use strict;
 use warnings;
-our $VERSION = '3.0';
-
-# XXX Implement MIME sniffing spec
+our $VERSION = '4.0';
 
 ## ------ Instantiation ------
 
@@ -40,6 +38,7 @@ my $HTTPToken = qr/[\x21\x23-\x27\x2A\x2B\x2D\x2E\x30-\x39\x41-\x5A\x5E-\x7A\x7C
 my $lws0 = qr/(?>(?>\x0D\x0A)?[\x09\x20])*/;
 my $HTTP11QS = qr/"(?>[\x20\x21\x23-\x5B\x5D-\x7E]|\x0D\x0A[\x09\x20]|\x5C[\x00-\x7F])*"/;
 
+# XXX This does not implement MIMESNIFF's steps yet...
 ## Web Applications 1.0 "valid MIME type"'s "MUST".
 sub parse_web_mime_type ($$;$) {
   my ($class, $value, $onerror) = @_;
@@ -47,6 +46,15 @@ sub parse_web_mime_type ($$;$) {
     my %args = @_;
     warn sprintf "$args{type} at position $args{index}\n";
   };
+
+  ## <https://mimesniff.spec.whatwg.org/#supplied-mime-type-detection-algorithm>
+  my $apache_bug;
+  if ($value eq "\x74\x65\x78\x74\x2F\x70\x6C\x61\x69\x6E" or
+      $value eq "\x74\x65\x78\x74\x2F\x70\x6C\x61\x69\x6E\x3B\x20\x63\x68\x61\x72\x73\x65\x74\x3D\x49\x53\x4F\x2D\x38\x38\x35\x39\x2D\x31" or
+      $value eq "\x74\x65\x78\x74\x2F\x70\x6C\x61\x69\x6E\x3B\x20\x63\x68\x61\x72\x73\x65\x74\x3D\x69\x73\x6F\x2D\x38\x38\x35\x39\x2D\x31" or
+      $value eq "\x74\x65\x78\x74\x2F\x70\x6C\x61\x69\x6E\x3B\x20\x63\x68\x61\x72\x73\x65\x74\x3D\x55\x54\x46\x2D\x38") {
+    $apache_bug = 1;
+  }
 
   $value =~ /\G$lws0/ogc;
 
@@ -80,6 +88,7 @@ sub parse_web_mime_type ($$;$) {
   $value =~ /\G$lws0/ogc;
 
   my $self = $class->new_from_type_and_subtype ($type, $subtype);
+  $self->{apache_bug} = 1 if $apache_bug;
 
   while ($value =~ /\G;/gc) {
     $value =~ /\G$lws0/ogc;
@@ -176,6 +185,10 @@ sub attrs ($) {
   return [sort {$a cmp $b} keys %{$self->{params}}];
 } # attrs
 
+sub apache_bug ($) {
+  return $_[0]->{apache_bug};
+} # apache_bug
+
 ## ------ Type properties ------
 
 sub _type_def ($) {
@@ -210,6 +223,16 @@ sub is_javascript ($) {
   my $self = shift;
   return 'javascript' eq (($self->_subtype_def or {})->{scripting_language} || '');
 } # is_javascript
+
+sub is_image ($) {
+  return $_[0]->{type} eq 'image';
+} # is_image
+
+sub is_audio_or_video ($) {
+  my $self = shift;
+  return 1 if $self->{type} eq 'audio' or $self->{type} eq 'video';
+  return (($self->_subtype_def or {})->{audiovideo});
+} # is_audio_or_video
 
 ## What is "text-based" media type is unclear.
 sub is_text_based ($) {
@@ -253,6 +276,10 @@ sub is_xml_mime_type ($) {
 } # is_xml_mime_type
 
 ## ------ Serialization ------
+
+sub mime_type_portion ($) {
+  return $_[0]->{type} . '/' . $_[0]->{subtype};
+} # mime_type_portion
 
 my $non_token = qr/[^\x21\x23-\x27\x2A\x2B\x2D\x2E\x30-\x39\x41-\x5A\x5E-\x7A\x7C\x7E]/;
 
@@ -301,15 +328,16 @@ sub validate ($$;%) {
 
   ## NOTE: Attribute duplication are not error, though its semantics
   ## is not defined.  See
-  ## <http://suika.suikawiki.org/gate/2005/sw/%E5%AA%92%E4%BD%93%E5%9E%8B/%E5%BC%95%E6%95%B0>.
+  ## <https://suika.suikawiki.org/gate/2005/sw/%E5%AA%92%E4%BD%93%E5%9E%8B/%E5%BC%95%E6%95%B0>.
   ## However, a Web::MIME::Type object cannot represent duplicate
   ## attributes and is reported in the parsing phase.
 
   my $type = $self->type;
   my $subtype = $self->subtype;
 
-  ## NOTE: RFC 2045 (MIME), RFC 2616 (HTTP/1.1), and RFC 4288 (IMT
-  ## registration) have different requirements on type and subtype names.
+  ## NOTE: RFC 2045 (MIME), RFC 7230 (HTTP/1.1), and RFC 4288 (IMT
+  ## registration) have different requirements on type and subtype
+  ## names.
   my $type_syntax_error;
   my $subtype_syntax_error;
   if ($type !~ /\A[A-Za-z0-9!#\$&.+^_-]{1,127}\z/) {
@@ -404,7 +432,7 @@ sub validate ($$;%) {
               }
             } elsif ($param_def->{syntax} eq 'token') { # RFC 2046
               ## NOTE: Though the definition of |token| differs in RFC
-              ## 2046 and in RFC 2616, parameters are defined in terms
+              ## 2046 and in RFC 7230, parameters are defined in terms
               ## of MIME RFCs such that this should be checked against
               ## MIME's definition.  Use of "{" and "}" in HTTP
               ## contexts is rejected anyway at the parsing phase.
@@ -497,7 +525,7 @@ sub validate ($$;%) {
 
 =head1 LICENSE
 
-Copyright 2007-2013 Wakaba <wakaba@suikawiki.org>.
+Copyright 2007-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -338,7 +338,7 @@ They require L<AnyEvent> and L<Net::SSLeay>.  The L<Net::SSLeay>
 module requires OpenSSL or equivalent (e.g. LibreSSL).  For Web
 compatibility and security, OpenSSL version must be latest enough.
 
-They also require following modules (which are submodules of this Git
+They require following modules (which are submodules of this Git
 repository):
 
 =over 4
@@ -350,6 +350,17 @@ repository):
 =item modules from perl-web-encodings package <https://github.com/manakai/perl-web-encodings>, e.g. L<Web::Encoding>
 
 =item modules from perl-web-datetime package <https://github.com/manakai/perl-web-datetime>, e.g. L<Web::DateTime::Parser>
+
+=back
+
+Additionally, modules L<Web::Transport::TCPStream> require following
+modules (which are also submodules of this Git repository):
+
+=over 4
+
+=item modules from perl-web-dom package <https://github.com/manakai/perl-web-dom>, e.g. L<Web::DOM::Error>
+
+=item modules from perl-streams package <https://github.com/manakai/perl-streams>, e.g. L<ArrayBuffer> and L<DataView>
 
 =back
 

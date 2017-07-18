@@ -1,4 +1,4 @@
-package TCPTransport;
+package Web::Transport::TCPStream;
 use strict;
 use warnings;
 our $VERSION = '2.0';
@@ -12,9 +12,9 @@ use Promised::Flow;
 use Streams::IOError;
 use Web::DOM::Error;
 use Web::DOM::TypeError;
-use Web::Host;
 use DataView;
 use Streams;
+use Web::Host;
 
 push our @CARP_NOT, qw(
   ReadableStream ReadableStreamBYOBRequest WritableStream
@@ -290,7 +290,8 @@ sub create ($$) {
   });
 } # create
 
-package TCPTransport::Reset;
+## For tests only
+package Web::Transport::TCPStream::Reset;
 use Web::DOM::Exception;
 push our @ISA, qw(Web::DOM::Exception);
 

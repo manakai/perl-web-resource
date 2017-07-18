@@ -1,18 +1,15 @@
-use strict;use strict;
+use strict;
 use warnings;
 use Path::Tiny;
-use lib glob path (__FILE__)->parent->parent->child ('js');
-use lib glob path (__FILE__)->parent->parent->parent->child ('perl-streams/lib');
-
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
-use TCPTransport;
 use Web::Host;
 use AnyEvent::Socket qw(tcp_server);
 use DataView;
 use ArrayBuffer;
 use Promised::Flow;
+use Web::Transport::TCPStream;
 
 sub dv ($) {
   return DataView->new (ArrayBuffer->new_from_scalarref (\($_[0])));
@@ -56,7 +53,7 @@ sub dv ($) {
 
 test {
   my $c = shift;
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     port => 3223,
   })->catch (sub {
     my $e = $_[0];
@@ -75,7 +72,7 @@ test {
 test {
   my $c = shift;
   my $host = Web::Host->parse_string ("hoge.test");
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => 3223,
   })->catch (sub {
@@ -99,7 +96,7 @@ for my $value (
   test {
     my $c = shift;
     my $host = Web::Host->parse_string ("127.0.0.33");
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       host => $host,
       port => $value,
     })->catch (sub {
@@ -120,7 +117,7 @@ for my $value (
 test {
   my $c = shift;
   my $host = Web::Host->parse_string ('127.0.53.53');
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => 3223,
   })->catch (sub {
@@ -140,7 +137,7 @@ test {
 test {
   my $c = shift;
   my $host = Web::Host->parse_string ('127.0.0.44');
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => 322355,
   })->catch (sub {
@@ -156,7 +153,7 @@ test {
 
 test {
   my $c = shift;
-  TCPTransport->create ({server => 1})->catch (sub {
+  Web::Transport::TCPStream->create ({server => 1})->catch (sub {
     my $e = $_[0];
     test {
       is $e->name, 'TypeError';
@@ -178,7 +175,7 @@ test {
   my $destroyed = 0;
 
   my $server = tcp_server undef, $port, sub {
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       server => 1,
       fh => $_[0],
       host => Web::Host->parse_string ($_[1]),
@@ -200,7 +197,7 @@ test {
     });
   }; # $server
 
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => $port,
   })->then (sub {
@@ -257,7 +254,7 @@ test {
 
   my $destroyed = 0;
   my $server = tcp_server undef, $port, sub {
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       server => 1,
       fh => $_[0],
       host => Web::Host->parse_string ($_[1]),
@@ -278,7 +275,7 @@ test {
     });
   }; # $server
 
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => $port,
   })->then (sub {
@@ -340,7 +337,7 @@ test {
 
   my $destroyed = 0;
   my $server = tcp_server undef, $port, sub {
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       server => 1,
       fh => $_[0],
       host => Web::Host->parse_string ($_[1]),
@@ -361,7 +358,7 @@ test {
     });
   }; # $server
 
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => $port,
   })->then (sub {
@@ -426,7 +423,7 @@ test {
 
   my $destroyed = 0;
   my $server = tcp_server undef, $port, sub {
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       server => 1,
       fh => $_[0],
       host => Web::Host->parse_string ($_[1]),
@@ -454,7 +451,7 @@ test {
     });
   }; # $server
 
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => $port,
   })->then (sub {
@@ -513,7 +510,7 @@ test {
 
   my $destroyed = 0;
   my $server = tcp_server undef, $port, sub {
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       server => 1,
       fh => $_[0],
       host => Web::Host->parse_string ($_[1]),
@@ -541,7 +538,7 @@ test {
     });
   }; # $server
 
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => $port,
   })->then (sub {
@@ -603,7 +600,7 @@ test {
 
   my $destroyed = 0;
   my $server = tcp_server undef, $port, sub {
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       server => 1,
       fh => $_[0],
       host => Web::Host->parse_string ($_[1]),
@@ -640,7 +637,7 @@ test {
     });
   }; # $server
 
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => $port,
   })->then (sub {
@@ -722,7 +719,7 @@ test {
 
   my $destroyed = 0;
   my $server = tcp_server undef, $port, sub {
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       server => 1,
       fh => $_[0],
       host => Web::Host->parse_string ($_[1]),
@@ -752,7 +749,7 @@ test {
     });
   }; # $server
 
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => $port,
   })->then (sub {
@@ -800,7 +797,7 @@ test {
 
   my $destroyed = 0;
   my $server = tcp_server undef, $port, sub {
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       server => 1,
       fh => $_[0],
       host => Web::Host->parse_string ($_[1]),
@@ -827,7 +824,7 @@ test {
     });
   }; # $server
 
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => $port,
   })->then (sub {
@@ -876,7 +873,7 @@ test {
 
   my $destroyed = 0;
   my $server = tcp_server undef, $port, sub {
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       server => 1,
       fh => $_[0],
       host => Web::Host->parse_string ($_[1]),
@@ -904,7 +901,7 @@ test {
     });
   }; # $server
 
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => $port,
   })->then (sub {
@@ -925,7 +922,7 @@ test {
         return if $v->{done};
         $result .= $v->{value}->manakai_to_string;
         if ($result =~ /^abcdeff/) {
-          $w->abort (TCPTransport::Reset->new);
+          $w->abort (Web::Transport::TCPStream::Reset->new);
         }
         return $try->();
       });
@@ -935,7 +932,7 @@ test {
       my $e = $_[0];
       test {
         like $result, qr{^abcdeff};
-        isa_ok $e, 'TCPTransport::Reset';
+        isa_ok $e, 'Web::Transport::TCPStream::Reset';
         is $e->name, 'AbortError';
         ok $e->message;
         is $e->file_name, __FILE__;
@@ -969,7 +966,7 @@ test {
   my $destroyed = 0;
   my $got = '';
   my $server = tcp_server undef, $port, sub {
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       server => 1,
       fh => $_[0],
       host => Web::Host->parse_string ($_[1]),
@@ -988,7 +985,7 @@ test {
           $got .= $_[0]->{value}->manakai_to_string;
           $w->write ($_[0]->{value});
           if ($got =~ /^abcdeff/) {
-            $w->abort (TCPTransport::Reset->new);
+            $w->abort (Web::Transport::TCPStream::Reset->new);
           }
           return $read->();
         });
@@ -997,7 +994,7 @@ test {
     });
   }; # $server
 
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => $port,
   })->then (sub {
@@ -1051,7 +1048,7 @@ test {
 
 test {
   my $c = shift;
-  ok $Web::DOM::Error::L1ObjectClass->{'TCPTransport::Reset'};
+  ok $Web::DOM::Error::L1ObjectClass->{'Web::Transport::TCPStream::Reset'};
   done $c;
 } n => 1, name => 'Perl Error Object Interface Level 1';
 
@@ -1063,7 +1060,7 @@ test {
 
   my $destroyed = 0;
   my $server = tcp_server undef, $port, sub {
-    TCPTransport->create ({
+    Web::Transport::TCPStream->create ({
       server => 1,
       fh => $_[0],
       host => Web::Host->parse_string ($_[1]),
@@ -1091,7 +1088,7 @@ test {
     });
   }; # $server
 
-  TCPTransport->create ({
+  Web::Transport::TCPStream->create ({
     host => $host,
     port => $port,
   })->then (sub {
@@ -1154,3 +1151,12 @@ test {
 } n => 5, name => 'bad write';
 
 run_tests;
+
+=head1 LICENSE
+
+Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

@@ -30,3 +30,9 @@
 	path = t_deps/tests
 	url = https://github.com/wakaba/tests-web
 	track = master
+[submodule "modules/streams"]
+	path = modules/streams
+	url = https://github.com/manakai/perl-streams
+[submodule "modules/web-dom"]
+	path = modules/web-dom
+	url = https://github.com/manakai/perl-web-dom

@@ -1,9 +1,11 @@
 AnyEvent
 AnyEvent::Handle
+AnyEvent::Util
 AnyEvent::Socket
 Digest::SHA
 MIME::Base64
 Net::SSLeay
+Socket
 
 # (Perl)
 #Errno

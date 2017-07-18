@@ -57,8 +57,8 @@ sub create ($$) {
   my ($class, $args) = @_;
 
   return _tep "Bad |fh|" if $args->{server} and not defined $args->{fh};
-  if ($class eq 'Unix') {
-    $args->{type} = 'UNIX';
+  if ($class eq 'Web::Transport::UnixStream') {
+    $args->{type} = 'Unix';
     if (not defined $args->{fh}) {
       $args->{addr} = 'unix/';
       return _tep "Bad |path|" unless defined $args->{path};

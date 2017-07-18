@@ -1,18 +1,15 @@
-use strict;use strict;
+use strict;
 use warnings;
 use Path::Tiny;
-use lib glob path (__FILE__)->parent->parent->child ('js');
-use lib glob path (__FILE__)->parent->parent->parent->child ('perl-streams/lib');
-
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
-use Unix;
 use Web::Host;
 use AnyEvent::Socket qw(tcp_server);
 use DataView;
 use ArrayBuffer;
 use Promised::Flow;
+use Web::Transport::UnixStream;
 
 sub dv ($) {
   return DataView->new (ArrayBuffer->new_from_scalarref (\($_[0])));
@@ -38,7 +35,7 @@ sub unix_server ($$) {
 
 test {
   my $c = shift;
-  Unix->create ({server => 1})->catch (sub {
+  Web::Transport::UnixStream->create ({server => 1})->catch (sub {
     my $e = $_[0];
     test {
       is $e->name, 'TypeError';
@@ -53,7 +50,7 @@ test {
 
 test {
   my $c = shift;
-  Unix->create ({})->catch (sub {
+  Web::Transport::UnixStream->create ({})->catch (sub {
     my $e = $_[0];
     test {
       is $e->name, 'TypeError';
@@ -74,7 +71,7 @@ test {
   my $destroyed = 0;
 
   my $server = unix_server $path, sub {
-    Unix->create ({
+    Web::Transport::UnixStream->create ({
       server => 1,
       fh => $_[0],
     })->then (sub {
@@ -93,7 +90,7 @@ test {
     });
   }; # $server
 
-  Unix->create ({
+  Web::Transport::UnixStream->create ({
     path => $path,
   })->then (sub {
     my $info = $_[0];
@@ -148,7 +145,7 @@ test {
 
   my $destroyed = 0;
   my $server = unix_server $path, sub {
-    Unix->create ({
+    Web::Transport::UnixStream->create ({
       server => 1,
       fh => $_[0],
     })->then (sub {
@@ -167,7 +164,7 @@ test {
     });
   }; # $server
 
-  Unix->create ({
+  Web::Transport::UnixStream->create ({
     path => $path,
   })->then (sub {
     my $info = $_[0];
@@ -227,7 +224,7 @@ test {
 
   my $destroyed = 0;
   my $server = unix_server $path, sub {
-    Unix->create ({
+    Web::Transport::UnixStream->create ({
       server => 1,
       fh => $_[0],
     })->then (sub {
@@ -246,7 +243,7 @@ test {
     });
   }; # $server
 
-  Unix->create ({
+  Web::Transport::UnixStream->create ({
     path => $path,
   })->then (sub {
     my $info = $_[0];
@@ -309,7 +306,7 @@ test {
 
   my $destroyed = 0;
   my $server = unix_server $path, sub {
-    Unix->create ({
+    Web::Transport::UnixStream->create ({
       server => 1,
       fh => $_[0],
     })->then (sub {
@@ -335,7 +332,7 @@ test {
     });
   }; # $server
 
-  Unix->create ({
+  Web::Transport::UnixStream->create ({
     path => $path,
   })->then (sub {
     my $info = $_[0];
@@ -345,8 +342,8 @@ test {
     $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
     $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
-    $w->write (\"abcdef");
-    $w->write (\"foo bar 123");
+    $w->write (dv "abcdef");
+    $w->write (dv "foo bar 123");
     $w->close;
 
     my @result;
@@ -392,7 +389,7 @@ test {
 
   my $destroyed = 0;
   my $server = unix_server $path, sub {
-    Unix->create ({
+    Web::Transport::UnixStream->create ({
       server => 1,
       fh => $_[0],
     })->then (sub {
@@ -418,7 +415,7 @@ test {
     });
   }; # $server
 
-  Unix->create ({
+  Web::Transport::UnixStream->create ({
     path => $path,
   })->then (sub {
     my $info = $_[0];
@@ -428,8 +425,8 @@ test {
     $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
     $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
-    $w->write (\"abcdef");
-    $w->write (\"foo bar 123");
+    $w->write (dv "abcdef");
+    $w->write (dv "foo bar 123");
     $w->close;
 
     my @result;
@@ -478,7 +475,7 @@ test {
 
   my $destroyed = 0;
   my $server = unix_server $path, sub {
-    Unix->create ({
+    Web::Transport::UnixStream->create ({
       server => 1,
       fh => $_[0],
     })->then (sub {
@@ -503,7 +500,7 @@ test {
           my $value = $dv->manakai_to_string;
           $buffer .= $value;
           while ($buffer =~ s/^([^\x0A]*)\x0A//) {
-            $w->write (\(($1 - 1) . "\x0A")) if $1 > 0;
+            $w->write (dv (($1 - 1) . "\x0A")) if $1 > 0;
             ($w->close, undef $w) if $1 <= 0;
           }
           return $read->();
@@ -513,7 +510,7 @@ test {
     });
   }; # $server
 
-  Unix->create ({
+  Web::Transport::UnixStream->create ({
     path => $path,
   })->then (sub {
     my $info = $_[0];
@@ -526,9 +523,9 @@ test {
     push @done, $r->closed;
 
     my $start = 1 + int rand 100;
-    $w->write (\$start);
+    $w->write (dv $start);
     Promise->resolve->then (sub {
-      $w->write (\"\x0A");
+      $w->write (dv "\x0A");
     });
 
     my @received;
@@ -546,7 +543,7 @@ test {
         $buffer .= $value;
         while ($buffer =~ s/^([^\x0A]*)\x0A//) {
           push @received, $1;
-          $w->write (\(($1 - 1) . "\x0A")) if $1 > 0;
+          $w->write (dv (($1 - 1) . "\x0A")) if $1 > 0;
           ($w->close, undef $w) if $1 <= 0;
         }
 
@@ -587,3 +584,12 @@ test {
 } n => 2, name => 'a line-oriented interactive server';
 
 run_tests;
+
+=head1 LICENSE
+
+Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

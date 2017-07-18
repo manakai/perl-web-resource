@@ -1,9 +1,9 @@
-package Unix;
+package Web::Transport::UnixStream;
 use strict;
 use warnings;
 our $VERSION = '2.0';
-use TCPTransport;
-push our @ISA, qw(TCPTransport);
+use Web::Transport::TCPStream;
+push our @ISA, qw(Web::Transport::TCPStream);
 
 1;
 

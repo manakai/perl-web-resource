@@ -353,14 +353,15 @@ repository):
 
 =back
 
-Additionally, modules L<Web::Transport::TCPStream> require following
-modules (which are also submodules of this Git repository):
+Additionally, modules L<Web::Transport::TCPStream> and
+L<Web::Transport::UnixStream> require following modules (which are
+also submodules of this Git repository):
 
 =over 4
 
 =item modules from perl-web-dom package <https://github.com/manakai/perl-web-dom>, e.g. L<Web::DOM::Error>
 
-=item modules from perl-streams package <https://github.com/manakai/perl-streams>, e.g. L<ArrayBuffer> and L<DataView>
+=item modules from perl-streams package <https://github.com/manakai/perl-streams>, e.g. L<ArrayBuffer> and L<ReadableStream>
 
 =back
 

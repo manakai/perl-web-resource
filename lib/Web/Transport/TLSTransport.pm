@@ -642,6 +642,7 @@ sub debug_info ($) {
 
 1;
 
+## This module partially derived from AnyEvent.
 ## <http://cpansearch.perl.org/src/MLEHMANN/AnyEvent-7.11/COPYING>
 ## > This module is licensed under the same terms as perl itself.
 

@@ -353,9 +353,10 @@ repository):
 
 =back
 
-Additionally, modules L<Web::Transport::TCPStream> and
-L<Web::Transport::UnixStream> require following modules (which are
-also submodules of this Git repository):
+Additionally, modules L<Web::Transport::TCPStream>,
+L<Web::Transport::UnixStream>, and L<Web::Transport::TLSStream>
+require following modules (which are also submodules of this Git
+repository):
 
 =over 4
 

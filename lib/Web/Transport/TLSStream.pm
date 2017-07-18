@@ -1,22 +1,23 @@
-package TLS;
+package Web::Transport::TLSStream;
 use strict;
 use warnings;
 our $VERSION = '2.0';
+use Streams::IOError;
+use Web::DOM::Error;
+use Web::DOM::TypeError;
+use ArrayBuffer;
+use DataView;
+use Streams::Devel;
 use AnyEvent;
 use Promise;
 use Promised::Flow;
 use Net::SSLeay;
 use AnyEvent::TLS;
 use Web::Transport::OCSP;
-use ArrayBuffer;
-use DataView;
-use Streams::IOError;
-use Web::DOM::Error;
-use Web::DOM::TypeError;
-use Streams::Devel;
 
 push our @CARP_NOT, qw(
-  Web::DOM::Error Web::DOM::TypeError Streams::IOError TLS::OpenSSLError
+  Web::DOM::Error Web::DOM::TypeError Streams::IOError
+  Web::Transport::TLSStream::OpenSSLError
 );
 
 # XXX alert stream
@@ -189,10 +190,10 @@ sub create ($$) {
       undef $wc;
     }
 
-  if (defined $tls) {
-    Net::SSLeay::set_quiet_shutdown ($tls, 1);
-    Net::SSLeay::shutdown ($tls);
-  }
+    if (defined $tls) {
+      Net::SSLeay::set_quiet_shutdown ($tls, 1);
+      Net::SSLeay::shutdown ($tls);
+    }
     if (defined $t_w) {
       $t_w->abort ($_[0]);
       undef $t_w;
@@ -222,7 +223,7 @@ sub create ($$) {
         if ($r == ERROR_SYSCALL) {
           return $abort->(Streams::IOError->new ($!));
         } elsif ($r != ERROR_WANT_READ and $r != ERROR_SYSCALL) {
-          return $abort->(TLS::OpenSSLError->new_current);
+          return $abort->(Web::Transport::TLSStream::OpenSSLError->new_current);
         } else {
           $retry = 1;
         }
@@ -263,8 +264,7 @@ sub create ($$) {
           note_buffer_copy length $read, "TLS", "TLS reader";
           my $src = ArrayBuffer->new_from_scalarref (\$read);
           $src->manakai_label ('TLS reader');
-          $rc->enqueue (DataView->new ($src))
-              if defined $rc;
+          $rc->enqueue (DataView->new ($src)) if defined $rc;
           $acted = 1;
           next;
         }
@@ -278,7 +278,7 @@ sub create ($$) {
         if ($r == ERROR_SYSCALL) {
           return $abort->(Streams::IOError->new ($!));
         } elsif ($r != ERROR_WANT_READ and $r != ERROR_SYSCALL) {
-          return $abort->(TLS::OpenSSLError->new_current);
+          return $abort->(Web::Transport::TLSStream::OpenSSLError->new_current);
         }
         last;
       }
@@ -405,7 +405,7 @@ sub create ($$) {
 
   $args->{parent}->{class}->create ($args->{parent})->then (sub {
     $info->{parent} = $_[0];
-    $info->{layered_type} .= '/' . $_[0]->{parent}->{layered_type};
+    $info->{layered_type} .= '/' . $info->{parent}->{layered_type};
     #XXX $self->{id} = $self->{transport}->id . 's';
 
     $t_r = (delete $info->{parent}->{read_stream})->get_reader ('byob');
@@ -622,7 +622,7 @@ sub create ($$) {
   });
 } # start
 
-package TLS::OpenSSLError;
+package Web::Transport::TLSStream::OpenSSLError;
 use Web::DOM::Exception;
 push our @ISA, qw(Web::DOM::Exception);
 
@@ -635,7 +635,7 @@ sub new_current ($) {
   return $self;
 } # new_current
 
-package Web::Transport::TLSTransport::Certificate;
+package Web::Transport::TLSStream::Certificate;
 
 sub debug_info ($) {
   my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
@@ -684,10 +684,10 @@ sub debug_info ($) {
 
 1;
 
+## This module partially derived from AnyEvent.
 ## <http://cpansearch.perl.org/src/MLEHMANN/AnyEvent-7.11/COPYING>
 ## > This module is licensed under the same terms as perl itself.
 
-# XXX if destroy is called before establishment
 # XXX Web compatibility of service identity check
 
 =head1 LICENSE

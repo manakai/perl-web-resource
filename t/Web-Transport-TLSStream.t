@@ -1,21 +1,18 @@
-use strict;use strict;
+use strict;
 use warnings;
 use Path::Tiny;
-use lib glob path (__FILE__)->parent->parent->child ('js');
-use lib glob path (__FILE__)->parent->parent->parent->child ('perl-streams/lib');
-use lib glob path (__FILE__)->parent->parent->parent->child ('http/t_deps/lib');
-
+use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
-use TCPTransport;
-use TLS;
+use Test::Certificates;
 use Web::Host;
-use AnyEvent::Socket qw(tcp_server);
 use DataView;
 use ArrayBuffer;
 use Promised::Flow;
-use Test::Certificates;
+use AnyEvent::Socket qw(tcp_server);
+use Web::Transport::TCPStream;
+use Web::Transport::TLSStream;
 
 sub dv ($) {
   return DataView->new (ArrayBuffer->new_from_scalarref (\($_[0])));
@@ -58,13 +55,13 @@ sub dv ($) {
 }
 
 sub create_tls_server ($$$) {
-  return TLS->create ({
+  return Web::Transport::TLSStream->create ({
     server => 1,
       ca_file => Test::Certificates->ca_path ('cert.pem'),
       cert_file => Test::Certificates->cert_path ('cert-chained.pem'),
       key_file => Test::Certificates->cert_path ('key.pem'),
       parent => {
-        class => 'TCPTransport',
+        class => 'Web::Transport::TCPStream',
         server => 1,
         fh => $_[0],
         host => Web::Host->parse_string ($_[1]),
@@ -74,12 +71,12 @@ sub create_tls_server ($$$) {
 } # create_tls_server
 
 sub create_tls_client ($$) {
-  return TLS->create ({
+  return Web::Transport::TLSStream->create ({
     sni_host => Web::Host->parse_string (Test::Certificates->cert_name),
     si_host => Web::Host->parse_string (Test::Certificates->cert_name),
     ca_file => Test::Certificates->ca_path ('cert.pem'),
     parent => {
-      class => 'TCPTransport',
+      class => 'Web::Transport::TCPStream',
       host => $_[0],
       port => $_[1],
     },
@@ -88,10 +85,10 @@ sub create_tls_client ($$) {
 
 test {
   my $c = shift;
-  TLS->create ({
+  Web::Transport::TLSStream->create ({
     ca_file => Test::Certificates->ca_path ('cert.pem'),
     parent => {
-      class => 'TCPTransport',
+      class => 'Web::Transport::TCPStream',
       host => Web::Host->parse_string ('127.0.0.44'),
       port => 41333,
     },
@@ -110,7 +107,7 @@ test {
 
 test {
   my $c = shift;
-  TLS->create ({
+  Web::Transport::TLSStream->create ({
     host => Web::Host->parse_string (Test::Certificates->cert_name),
     ca_file => Test::Certificates->ca_path ('cert.pem'),
   })->catch (sub {
@@ -128,7 +125,7 @@ test {
 
 test {
   my $c = shift;
-  TLS->create ({
+  Web::Transport::TLSStream->create ({
     host => Web::Host->parse_string (Test::Certificates->cert_name),
     ca_file => Test::Certificates->ca_path ('cert.pem'),
     parent => {},
@@ -647,7 +644,7 @@ test {
 
 test {
   my $c = shift;
-  ok $Web::DOM::Error::L1ObjectClass->{'TLS::OpenSSLError'};
+  ok $Web::DOM::Error::L1ObjectClass->{'Web::Transport::TLSStream::OpenSSLError'};
   done $c;
 } n => 1, name => 'Perl Error Object Interface Level 1';
 
@@ -827,3 +824,12 @@ test {
 
 Test::Certificates->wait_create_cert;
 run_tests;
+
+=head1 LICENSE
+
+Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

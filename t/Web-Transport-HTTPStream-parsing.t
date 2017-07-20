@@ -285,14 +285,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                    $test_type eq 'largerequest-second') {
             my $try_count = 0;
             my $try; $try = sub {
-              my $req = $get_req->(
-                method => _a $test->{method}->[1]->[0],
-                target => _a $test->{url}->[1]->[0],
-                headers => [['Content-Length' => $test_type eq 'largerequest-second' ? 1024*1024 : 0]],
-              );
-              if ($test_type eq 'largerequest-second') {
-                $req->{body} = 'x' x (1024*1024);
-              }
               unless ($http->is_active) {
                 return $http->close->then (sub {
                   $tparams = {
@@ -308,13 +300,29 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               }
               return $http->create_stream->then (sub {
                 my $stream = $_[0];
+                my $req = $get_req->(
+                  method => _a $test->{method}->[1]->[0],
+                  target => _a $test->{url}->[1]->[0],
+                  headers => [['Content-Length' => $test_type eq 'largerequest-second' ? 1024*1024 : 0]],
+                );
                 return $stream->send_request ($req, cb => $onev->($req))->then (sub {
-                  #XXX
-                  $http->send_data (\('x' x (1024*1024))) if $test_type eq 'largerequest-second';
+                  my $reqbody = $stream->{request}->{body_stream}->get_writer;
+                  if ($test_type eq 'largerequest-second') {
+                    $reqbody->write
+                        (DataView->new (ArrayBuffer->new_from_scalarref
+                                            (\('x' x (1024*1024)))));
+                    $reqbody->write
+                        (DataView->new (ArrayBuffer->new_from_scalarref
+                                            (\('x' x (1024*1024)))));
+                  }
                   if ($req->{method} eq 'CONNECT') {
                     for (@{$test->{'tunnel-send'} or []}) {
-                      $http->send_data (\_a $_->[0]);
+                      $reqbody->write
+                          (DataView->new
+                               (ArrayBuffer->new_from_scalarref
+                                    (\_a $_->[0])));
                     }
+                    $reqbody->close;
                   }
 
                   my $result = {
@@ -328,8 +336,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                     $result->{error} = $_[0];
                   })->then (sub {
                     return $req->{done};
-                  })->then (sub {
-                    return $result;
                   })->then (sub {
                     unless ($try_count++) {
                       return Promise->new (sub {
@@ -345,7 +351,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                         return $try->() if $try_count < 10;
                       }
                     }
-                    if ($result->{can_retry}) {
+                    if (defined $result->{error} and
+                        $result->{error}->{can_retry}) {
                       return $try->() if $try_count < 10;
                     }
                     return $result;

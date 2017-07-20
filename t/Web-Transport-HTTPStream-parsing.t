@@ -201,9 +201,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             }
             if ($type eq 'headers') {
               $result->{response} = $_[2];
-              if ($req->{method} eq 'CONNECT') {
-                $req->{_tunnel}->();
-              }
               if ($flag) {
                 $result->{ws_established} = 1;
                 if ($test_type eq 'ws' and $test->{'ws-send'}) {
@@ -260,8 +257,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               return Promise->from_cv ($server->{after_server_close_cv});
             });
           }
-          $req->{tunnel} = Promise->new (sub { $req->{_tunnel} = $_[0] })
-              if $req->{method} eq 'CONNECT';
           return $req;
         }; # $get_req
 
@@ -317,11 +312,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   #XXX
                   $http->send_data (\('x' x (1024*1024))) if $test_type eq 'largerequest-second';
                   if ($req->{method} eq 'CONNECT') {
-                    $req->{tunnel}->then (sub {
-                      for (@{$test->{'tunnel-send'} or []}) {
-                        $http->send_data (\_a $_->[0]);
-                      }
-                    });
+                    for (@{$test->{'tunnel-send'} or []}) {
+                      $http->send_data (\_a $_->[0]);
+                    }
                   }
 
                   my $result = {
@@ -373,16 +366,20 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             return $http->create_stream->then (sub {
               my $stream = $_[0];
               return $stream->send_request ($req, cb => $onev->($req))->then (sub {
-                # XXX
+                my $reqbody = $stream->{request}->{body_stream}->get_writer;
                 if ($test_type eq 'largerequest') {
-                  $http->send_data (\('x' x 1024)) for 1..1024;
+                  $reqbody->write
+                      (DataView->new
+                           (ArrayBuffer->new_from_scalarref (\('x' x 1024))))
+                          for 1..1024;
                 }
                 if ($req->{method} eq 'CONNECT') {
-                  $req->{tunnel}->then (sub {
-                    for (@{$test->{'tunnel-send'} or []}) {
-                      $http->send_data (\_a $_->[0]);
-                    }
-                  });
+                  for (@{$test->{'tunnel-send'} or []}) {
+                    $reqbody->write
+                        (DataView->new
+                             (ArrayBuffer->new_from_scalarref (\_a $_->[0])));
+                  }
+                  $reqbody->close;
                 }
                 my $result = {
                   response => $stream->{response},

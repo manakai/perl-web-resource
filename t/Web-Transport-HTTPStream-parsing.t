@@ -1,11 +1,6 @@
 use strict;
 use warnings;
 use Path::Tiny;
-
-#XXX
-use lib glob path (__FILE__)->parent->parent->child ('../perl-streams/lib');
-
-
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
@@ -121,13 +116,10 @@ sub rsread ($$) {
   my $r = $rs->get_reader ('byob');
   my $result = '';
   my $run; $run = sub {
-warn "read...";
     return $r->read (DataView->new (ArrayBuffer->new (1024)))->then (sub {
-warn "read.";
       return if $_[0]->{done};
       $result .= $_[0]->{value}->manakai_to_string;
       $result .= '(boundary)' if $test->{boundary};
-warn "rsread <$result>";
       return $run->();
     });
   }; # $run

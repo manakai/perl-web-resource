@@ -2,13 +2,14 @@ package Web::Transport::HTTPStream;
 use strict;
 use warnings;
 our $VERSION = '1.0';
+use Web::Encoding;
 
 sub new ($$) {
   return Web::Transport::HTTPStream::ClientConnection->new ($_[1]); # XXX
 } # new
 
 sub new_XXXserver ($$) {
-  return Web::Transport::HTTPStream::ServerConnection->new (%{$_[1]}); # XXX
+  return Web::Transport::HTTPStream::ServerConnection->new ($_[1]); # XXX
 } # new_XXXserver
 
 sub MAX_BYTES () { 2**31-1 }
@@ -1607,7 +1608,6 @@ sub connect ($) {
           warn "$id: R: EOF\n";
         }
 
-warn "reader closed";
         $self->_process_rbuf (undef);
         $self->_process_rbuf_eof;
         unless ($self->{state} eq 'tunnel sending') {
@@ -1636,7 +1636,7 @@ warn "reader closed";
                errno => $data->{errno},
                error_message => $data->{message});
         }
-        $self->{writer}->abort ('XXX'); # XXX ?
+        $self->{writer}->abort ('XXX'); # XXX ? also reader?
 
         return undef;
       }),
@@ -1678,7 +1678,7 @@ warn "reader closed";
     }
     $self->{info} = {};
     $self->_con_ev ('openconnection', $error);
-    $self->{writer}->abort ('XXX') if defined $self->{writer};
+    $self->{writer}->abort ('XXX') if defined $self->{writer}; # XXX and reader?
     $onclosed->();
     die $error;
   });
@@ -1697,7 +1697,7 @@ sub abort ($;%) {
   $self->{no_new_request} = 1;
   $self->{request_state} = 'sent';
   delete $self->{to_be_sent_length};
-  $self->{writer}->abort ($args{message}) if defined $self->{writer};
+  $self->{writer}->abort ($args{message}) if defined $self->{writer}; # XXX and reader?
 
   return $self->{closed};
 } # abort
@@ -1754,7 +1754,7 @@ sub _both_done ($) {
   if ($self->{no_new_request}) {
     $self->{writer}->close->catch (sub { }); # can fail
     $self->{timer} = AE::timer 1, 0, sub {
-      $self->{writer}->abort ("HTTP completion timer (1)");
+      $self->{writer}->abort ("HTTP completion timer (1)"); # XXX and reader?
     };
     $self->{state} = 'stopped';
   } else {
@@ -1995,73 +1995,99 @@ BEGIN {
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
 
-sub new ($%) {
-  my ($class, %args) = @_;
+sub new ($$) {
+  my ($class, $args) = @_;
   my $self = bless {DEBUG => DEBUG, is_server => 1,
-                    id => $args{transport}->id, req_id => 0,
-                    transport => $args{transport},
+                    #XXX id => $args{transport}->id, req_id => 0,
+                    #XXX transport => $args{transport},
                     rbuf => '', state => 'initial',
-                    con_cb => $args{cb}}, $class;
-  $self->{DEBUG} = $args{debug} if defined $args{debug};
-  my $closed;
-  my $close_p = Promise->new (sub { $closed = $_[0] });
-  $self->{closed} = promised_cleanup {
-    delete $self->{timer};
-  } $args{transport}->start (sub {
-    my ($transport, $type) = @_;
-    if ($type eq 'readdata') {
-      if ($self->{disable_timer}) {
-        delete $self->{timer};
-      } else {
-        $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
-      }
-      $self->_ondata ($_[2]);
-    } elsif ($type eq 'readeof') {
-      my $data = $_[2];
-      if ($self->{DEBUG}) {
-        my $id = $transport->id;
-        if (defined $data->{message}) {
-          warn "$id: R: EOF (@{[_e4d_t $data->{message}]})\n";
+                    con_cb => $args->{cb}}, $class;
+  $self->{DEBUG} = $args->{debug} if defined $args->{debug};
+
+  $self->{closed} = $args->{parent}->{class}->create ($args->{parent})->then (sub {
+    my $info = $_[0];
+
+    my $tinfo = $info;
+    if ($info->{type} eq 'TLS') {
+      $self->{url_scheme} = 'https';
+      $tinfo = $tinfo->{parent};
+    } else { # TCP or Unix
+      $self->{url_scheme} = 'http';
+    }
+    if ($tinfo->{type} eq 'TCP') {
+      $self->{url_hostport} = $tinfo->{local_host}->to_ascii . ':' . $tinfo->{local_port};
+    } else { # Unix
+      $self->{url_hostport} = '0.0.0.0';
+    }
+
+    $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
+    $self->{info} = {};
+    $self->_con_ev ('openconnection', {}); # XXX
+
+    $self->{reader} = $info->{read_stream}->get_reader ('byob');
+    $self->{writer} = $info->{write_stream}->get_writer;
+
+    my $read; $read = sub {
+      return $self->{reader}->read (DataView->new (ArrayBuffer->new (1024*3)))->then (sub { # XXX
+        return if $_[0]->{done};
+
+        if ($self->{disable_timer}) {
+          delete $self->{timer};
         } else {
-          warn "$id: R: EOF\n";
+          $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
         }
+        $self->_ondata ($_[0]->{value});
+
+        return $read->();
+      });
+    }; # $read;
+    $read->()->catch (sub { })->then (sub { undef $read });
+
+    my $p1 = $self->{reader}->closed->then (sub {
+      if ($self->{DEBUG}) {
+        my $id = ''; # XXX $transport->id;
+        warn "$id: R: EOF\n";
       }
       delete $self->{timer};
-      $self->_oneof ($data);
-    } elsif ($type eq 'writeeof') {
+      $self->_oneof (undef);
+    }, sub {
       if ($self->{DEBUG}) {
-        my $data = $_[2];
-        my $id = $transport->id;
-        if (defined $data->{message}) {
-          warn "$id: S: EOF (@{[_e4d_t $data->{message}]})\n";
-        } else {
-          warn "$id: S: EOF\n";
-        }
+        my $id = ''; # XXX $transport->id;
+        warn "$id: R: EOF (@{[_e4d_t $_[0]]})\n";
+      }
+      delete $self->{timer};
+      $self->_oneof ($_[0]);
+    });
+
+    my $p2 = $self->{writer}->closed->then (sub {
+      if ($self->{DEBUG}) {
+        my $id = ''; # XXX $transport->id;
+        warn "$id: S: EOF\n";
       }
       $self->{write_closed} = 1;
       if (defined $self->{sending_stream}) {
         $self->{sending_stream}->_send_done;
       }
-    } elsif ($type eq 'open') {
-      $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
-      $self->{info} = {};
-      $self->_con_ev ('openconnection', {});
-    } elsif ($type eq 'close') {
-      $closed->();
-    }
+    }, sub {
+      if ($self->{DEBUG}) {
+        my $id = ''; # XXX $transport->id;
+        warn "$id: S: EOF (@{[_e4d_t $_[0]]})\n";
+      }
+      $self->{write_closed} = 1;
+      if (defined $self->{sending_stream}) {
+        $self->{sending_stream}->_send_done;
+      }
+    });
+
+    return Promise->all ([$p1, $p2]);
+  })->catch (sub {
+    my $error = Web::DOM::Error->wrap ($_[0]);
+    $self->{info} = {};
+    #XXX $self->_con_ev ('openconnection', $error);
+    $self->{exit} = $error; # XXX$error->{exit};
+    die $error;
   })->then (sub {
-    return $close_p;
-  }, sub {
-    my $error = $_[0];
-    if (ref $error eq 'HASH' and $error->{failed}) {
-      $self->{info} = {};
-      $self->_con_ev ('openconnection', $error);
-      $self->{exit} = $error->{exit};
-    } else {
-      die $error;
-    }
-  })->then (sub {
-    $self->_con_ev ('closeconnection', $self->{exit} || {});
+    $self->_con_ev ('closeconnection', $self->{exit} || {}); # XXX
   });
   return $self;
 } # new
@@ -2074,26 +2100,11 @@ sub server_header ($;$) {
 } # server_header
 
 sub _url_scheme ($) {
-  my $self = $_[0];
-  my $transport = $self->{transport};
-  if ($transport->type eq 'TLS') {
-    return 'https';
-  } else { # TCP or UNIXDomainSocket
-    return 'http';
-  }
+  return $_[0]->{url_scheme};
 } # _url_scheme
 
 sub _url_hostport ($) {
-  my $self = $_[0];
-  my $transport = $self->{transport};
-  if ($transport->type eq 'TLS') {
-    $transport = $transport->{transport};
-  }
-  if ($transport->type eq 'TCP') {
-    return $transport->info->{local_host}->to_ascii . ':' . $transport->{info}->{local_port};
-  } else { # UNIXDomainSocket
-    return '0.0.0.0';
-  }
+  return $_[0]->{url_hostport};
 } # _url_hostport
 
 sub _new_stream ($) {
@@ -2101,7 +2112,7 @@ sub _new_stream ($) {
   my $req = $self->{stream} = bless {
     is_server => 1, DEBUG => $self->{DEBUG},
     connection => $self,
-    id => $self->{id} . '.' . ++$self->{req_id},
+    id => '', # XXX $self->{id} . '.' . ++$self->{req_id},
     request => {
       headers => [],
       # method target_url version
@@ -2113,7 +2124,8 @@ sub _new_stream ($) {
 } # _new_stream
 
 sub _ondata ($$) {
-  my ($self, $inref) = @_;
+  my ($self, $in) = @_;
+  my $inref = \($in->manakai_to_string); # XXX
   while (1) {
     #warn "[$self->{state}] |$self->{rbuf}|";
     if ($self->{state} eq 'initial') {
@@ -2304,8 +2316,8 @@ sub _ondata ($$) {
 } # _ondata
 
 sub _oneof ($$) {
-  my ($self, $exit) = @_;
-  $self->{write_closed} = 1 if $exit->{failed};
+  my ($self, $error) = @_;
+  $self->{write_closed} = 1 if defined $error;
   if ($self->{state} eq 'initial' or
       $self->{state} eq 'before request-line') {
     if ($self->{write_closed}) {
@@ -2326,16 +2338,16 @@ sub _oneof ($$) {
     if (defined $self->{unread_length}) {
       # $self->{unread_length} > 0
       $self->{stream}->{incomplete} = 1;
-      $exit = {failed => 1, message => 'Connection closed'}
-          unless $exit->{failed};
+      $error = {failed => 1, message => 'Connection closed'} # XXX
+          unless defined $error;
     }
     $self->{stream}->_ev ('dataend');
-    $self->{exit} = $exit;
+    $self->{exit} = $error;
     $self->{stream}->_receive_done;
   } elsif ($self->{state} eq 'before ws frame' or
            $self->{state} eq 'ws data' or
            $self->{state} eq 'ws terminating') {
-    $self->{exit} = $exit;
+    $self->{exit} = {failed => 1, message => $error}; # XXX
     return $self->_ws_received_eof (\'');
   } elsif ($self->{state} eq 'ws handshaking') {
     return $self->{stream}->_fatal;
@@ -2346,12 +2358,12 @@ sub _oneof ($$) {
       $stream->{request}->{method} = 'GET';
       return $stream->_fatal;
     } else {
-      $self->{transport}->push_shutdown unless $self->{write_closed};
+      $self->{writer}->close unless $self->{write_closed};
       $self->{write_closed} = 1;
       $self->{state} = 'end';
     }
   } elsif ($self->{state} eq 'end') {
-    $self->{transport}->push_shutdown unless $self->{write_closed};
+    $self->{writer}->close unless $self->{write_closed};
     $self->{write_closed} = 1;
   } else {
     die "Bad state |$self->{state}|";
@@ -2587,7 +2599,9 @@ sub _request_headers ($) {
 sub _timeout ($) {
   my $self = $_[0];
   delete $self->{timer};
-  $self->{transport}->abort (message => "Read timeout ($ReadTimeout)");
+  my $error = "Read timeout ($ReadTimeout)"; # XXX
+  $self->{writer}->abort ($error);
+  $self->{reader}->cancel ($error);
 } # _timeout
 
 sub closed ($) {
@@ -2596,7 +2610,8 @@ sub closed ($) {
 
 sub abort ($) {
   my ($self, %args) = @_;
-  $self->{transport}->abort (%args);
+  $self->{writer}->abort ($args{message}); # XXX
+  $self->{reader}->cancel ($args{message}); # XXX
   $self->{write_closed} = 1;
   if (defined $self->{stream}) {
     $self->{stream}->_send_done;
@@ -2613,9 +2628,11 @@ sub close_after_current_stream ($) {
     $self->{sending_stream}->{close_after_response} = 1;
   } else {
     unless ($self->{write_closed}) {
-      $self->{transport}->push_promise->then (sub {
-        $self->{transport}->abort
-            (message => 'Close by |close_after_current_stream|');
+      $self->{writer}->write (DataView->new (ArrayBuffer->new))->then (sub {
+        return if $self->{write_closed};
+        my $error = 'Close by |close_after_current_stream|'; # XXX
+        $self->{writer}->abort ($error);
+        $self->{reader}->cancel ($error);
       });
     }
     $self->{write_closed} = 1;
@@ -2764,7 +2781,7 @@ sub send_response_headers ($$$;%) {
       }
     }
 
-    $con->{transport}->push_write (\$res);
+    $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)));
   } else {
     if ($stream->{DEBUG}) {
       warn "$stream->{id}: Response headers skipped (HTTP/0.9) @{[scalar gmtime]}\n";
@@ -2781,7 +2798,7 @@ sub send_response_headers ($$$;%) {
   }
 } # send_response_headers
 
-sub send_response_data ($$) {
+sub send_response_data ($$) { # XXX
   my ($req, $ref) = @_;
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   my $wm = $req->{write_mode} || '';
@@ -2790,13 +2807,15 @@ sub send_response_data ($$) {
       warn "$req->{id}: S: @{[_e4d $_]}\n";
     }
   }
-  my $transport = $req->{connection}->{transport};
+  my $writer = $req->{connection}->{writer};
   if ($wm eq 'chunked') {
     if (length $$ref) {
       ## Note that some clients fail to parse chunks if there are TCP
       ## segment boundaries within a chunk (which is smaller than
       ## MSS).
-      $transport->push_write (\sprintf "%X\x0D\x0A%s\x0D\x0A", length $$ref, $$ref); # string copy!
+      $writer->write
+          (DataView->new (ArrayBuffer->new_from_scalarref
+                              (\sprintf "%X\x0D\x0A%s\x0D\x0A", length $$ref, $$ref))); # XXX string copy!
     }
   } elsif ($wm eq 'raw' or $wm eq 'ws') {
     croak "Not writable for now"
@@ -2812,7 +2831,7 @@ sub send_response_data ($$) {
             length $$ref, $req->{to_be_sent_length};
       }
     }
-    $transport->push_write ($ref);
+    $writer->write (DataView->new (ArrayBuffer->new_from_scalarref ($ref)));
     if ($wm eq 'raw' and
         defined $req->{to_be_sent_length} and $req->{to_be_sent_length} <= 0) {
       $req->close_response;
@@ -2840,8 +2859,8 @@ sub close_response ($;%) {
         if $stream->{request}->{method} eq 'CONNECT';
     if ($stream->{write_mode} eq 'chunked') {
       # XXX trailer headers
-      my $transport = $stream->{connection}->{transport};
-      $transport->push_write (\"0\x0D\x0A\x0D\x0A");
+      $stream->{connection}->{writer}->write
+          (DataView->new (ArrayBuffer->new_from_scalarref (\"0\x0D\x0A\x0D\x0A")));
       $stream->_send_done;
     } elsif (defined $stream->{write_mode} and $stream->{write_mode} eq 'ws') {
       $stream->close (%args);
@@ -2849,6 +2868,7 @@ sub close_response ($;%) {
       $stream->_send_done;
     }
   }
+  return;
 } # close_response
 
 sub abort ($;%) {
@@ -2887,8 +2907,8 @@ sub _send_done ($) {
   my $stream = $_[0];
   delete $stream->{connection}->{sending_stream};
   if (delete $stream->{close_after_response}) {
-    my $transport = $stream->{connection}->{transport};
-    $transport->push_shutdown if not $stream->{connection}->{write_closed};
+    $stream->{connection}->{writer}->close
+        if not $stream->{connection}->{write_closed};
     $stream->{connection}->{write_closed} = 1;
   }
   $stream->{write_mode} = 'sent';
@@ -2927,7 +2947,7 @@ sub _both_done ($) {
   return unless defined $con;
 
   if (delete $stream->{close_after_response}) {
-    $con->{transport}->push_shutdown unless $con->{write_closed};
+    $con->{writer}->close unless $con->{write_closed};
     $con->{write_closed} = 1;
     $con->{state} = 'end';
   }

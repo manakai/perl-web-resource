@@ -5,19 +5,23 @@ use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Web::Host;
 use Web::URL;
-use Web::Transport::TCPTransport;
-use Web::Transport::UNIXDomainSocketTransport;
-use Web::Transport::ConnectionClient;
-use Web::Transport::WSClient;
+use Web::Transport::TCPStream;
+use Web::Transport::UnixStream;
+use Web::Transport::TLSStream;
 use Web::Transport::HTTPStream;
 use AnyEvent::Socket;
+use AnyEvent;
+use Promised::Flow;
 use Test::Certificates;
 use Test::X1;
 use Test::More;
-use AnyEvent;
-use Promised::Flow;
+use Web::Transport::TCPTransport;
+use Web::Transport::UNIXDomainSocketTransport;
+use Web::Transport::TLSTransport;
+use Web::Transport::ConnectionClient;
+use Web::Transport::WSClient;
 
-$Web::Transport::HTTPStream::ServerConnection::ReadTimeout = 10;
+$Web::Transport::HTTPStream::ServerConnection::ReadTimeout = 3;
 my $GlobalCV = AE::cv;
 
 {
@@ -101,11 +105,13 @@ my $HandleRequestHeaders = {};
   }; # $con_cb
 
   our $server = tcp_server $host, $port, sub {
-    my $tcp = Web::Transport::TCPTransport->new
-        (fh => $_[0],
-         host => Web::Host->parse_string ($_[1]), port => $_[2]);
     my $con = Web::Transport::HTTPStream->new_XXXserver
-        ({transport => $tcp, cb => $con_cb});
+        ({parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2]
+         }, cb => $con_cb});
     $GlobalCV->begin;
     promised_cleanup { $GlobalCV->end } $con->closed;
   };
@@ -123,24 +129,31 @@ my $HandleRequestHeaders = {};
   my $cert_args = {host => 'tlstestserver.test'};
   Test::Certificates->wait_create_cert ($cert_args);
   our $tls_server = tcp_server $host, $tls_port, sub {
-    my $tcp = Web::Transport::TCPTransport->new
-        (fh => $_[0],
-         host => Web::Host->parse_string ($_[1]), port => $_[2]);
-    my $tls = Web::Transport::TLSTransport->new
-        (server => 1, transport => $tcp,
-         ca_file => Test::Certificates->ca_path ('cert.pem'),
-         cert_file => Test::Certificates->cert_path ('cert-chained.pem', $cert_args),
-         key_file => Test::Certificates->cert_path ('key.pem', $cert_args));
     my $con = Web::Transport::HTTPStream->new_XXXserver
-        ({transport => $tls, cb => $con_cb});
+        ({parent => {
+           class => 'Web::Transport::TLSStream',
+           server => 1,
+           parent => {
+             class => 'Web::Transport::TCPStream',
+             server => 1,
+             fh => $_[0],
+             host => Web::Host->parse_string ($_[1]), port => $_[2],
+           },
+           ca_file => Test::Certificates->ca_path ('cert.pem'),
+           cert_file => Test::Certificates->cert_path ('cert-chained.pem', $cert_args),
+           key_file => Test::Certificates->cert_path ('key.pem', $cert_args),
+         }, cb => $con_cb});
     $GlobalCV->begin;
     promised_cleanup { $GlobalCV->end } $con->closed;
   };
 
   our $unix_server = tcp_server 'unix/', $UnixPath, sub {
     my $con = Web::Transport::HTTPStream->new_XXXserver
-        ({transport => Web::Transport::UNIXDomainSocketTransport->new (fh => $_[0]),
-          cb => $con_cb});
+        ({parent => {
+            class => 'Web::Transport::UnixStream',
+            server => 1,
+            fh => $_[0],
+         }, cb => $con_cb});
     $GlobalCV->begin;
     promised_cleanup { $GlobalCV->end } $con->closed;
   };
@@ -2521,9 +2534,9 @@ test {
       $self->send_response_headers
           ({status => 101, status_text => 'Switched!'});
     };
+    $error = $@;
     $self->send_response_headers
         ({status => 200, status_text => 'O.K.'});
-    $error = $@;
     $self->send_response_data (\"abcde");
     $self->close_response;
     $serverreq = $self;

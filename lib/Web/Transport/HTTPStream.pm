@@ -453,31 +453,6 @@ sub _debug_handshake_done ($$) {
   }
 } # _debug_handshake_done
 
-sub _con_ev ($$) {
-  my ($self, $type) = @_;
-  if ($self->{DEBUG}) {
-    my $id = $self->{id};
-    if ($type eq 'openconnection') {
-      warn "$id: $type @{[scalar gmtime]}\n";
-      $self->_debug_handshake_done ($_[2]);
-    } elsif ($type eq 'startstream') {
-      my $req = $_[2];
-      warn "$id: ========== @{[ref $self]}\n";
-      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
-    } elsif ($type eq 'endstream') {
-      my $req = $_[2];
-      warn "$id: $type $req->{id} @{[scalar gmtime]}\n";
-      warn "$id: ========== @{[ref $self]}\n";
-    } else {
-      warn "$id: $type @{[scalar gmtime]}\n";
-    }
-  }
-  # XXX
-  my $return = $self->{con_cb}->(@_) if defined $self->{con_cb};
-  delete $self->{con_cb} if $type eq 'closeconnection';
-  return $return;
-} # _con_ev
-
 sub DESTROY ($) {
   $_[0]->abort if $_[0]->{is_server} and defined $_[0]->{transport}; # XXX
 
@@ -842,7 +817,6 @@ sub new ($$) {
                     DEBUG => DEBUG}, shift;
   $self->{args} = $_[0];
   $self->{DEBUG} = delete $self->{args}->{debug} if defined $self->{args}->{debug};
-  $self->{con_cb} = (delete $self->{args}->{cb}) || sub { };
   return $self;
 } # new_from_cb
 
@@ -1580,10 +1554,9 @@ sub connect ($) {
 
   my $onclosed;
   my $closed = Promise->new (sub { $onclosed = $_[0] });
-  $self->{closed} = $closed;
-  $closed->then (sub {
-    $self->_con_ev ('closeconnection');
+  $self->{closed} = $closed->then (sub {
     $self->_terminate;
+    return undef;
   });
 
   if ($self->{DEBUG}) {
@@ -1596,7 +1569,10 @@ sub connect ($) {
     my $info = $_[0];
 
     $self->{info} = {};
-    $self->_con_ev ('openconnection', {});
+    if ($self->{DEBUG}) { # XXX
+      warn "$self->{id}: openconnection @{[scalar gmtime]}\n";
+      $self->_debug_handshake_done ({});
+    }
 
     $self->{reader} = $info->{read_stream}->get_reader ('byob');
     $self->{writer} = $info->{write_stream}->get_writer;
@@ -1677,7 +1653,10 @@ sub connect ($) {
       $error = {failed => 1, message => ''.$error};
     }
     $self->{info} = {};
-    $self->_con_ev ('openconnection', $error);
+    if ($self->{DEBUG}) { # XXX
+      warn "$self->{id}: openconnection @{[scalar gmtime]}\n";
+      $self->_debug_handshake_done ($error);
+    }
     $self->{writer}->abort ('XXX') if defined $self->{writer}; # XXX and reader?
     $onclosed->();
     die $error;
@@ -1835,7 +1814,11 @@ sub send_request ($$;%) {
   }
 
   $req->{id} = $con->{id} . '.' . ++$con->{req_id};
-  $con->_con_ev ('startstream', $req);
+  if ($con->{DEBUG}) { # XXX
+    warn "$con->{id}: ========== @{[ref $con]}\n";
+    warn "$con->{id}: startstream $req->{id} @{[scalar gmtime]}\n";
+  }
+
   my $cb = $args{cb} || sub { };
   $con->{cb} = $cb;
 
@@ -1956,9 +1939,10 @@ sub send_request ($$;%) {
     });
   }
   $con->_read;
-  $req_done->then (sub {
-    $con->_con_ev ('endstream', $req); # XXX
-  });
+  $req_done->then (sub { # XXX
+    warn "$con->{id}: endstream $req->{id} @{[scalar gmtime]}\n";
+    warn "$con->{id}: ========== @{[ref $con]}\n";
+  }) if $con->{DEBUG};
   return $sent->then (sub {
     $stream->{request} = $req;
     $stream->{response} = $res;
@@ -2001,9 +1985,20 @@ sub new ($$) {
                     id => rand,
                     #XXX id => $args{transport}->id, req_id => 0,
                     #XXX transport => $args{transport},
-                    rbuf => '', state => 'initial',
-                    con_cb => $args->{cb}}, $class;
+                    rbuf => '', state => 'initial'}, $class;
   $self->{DEBUG} = $args->{debug} if defined $args->{debug};
+
+  $self->{received_streams} = ReadableStream->new ({
+    start => sub {
+      $self->{stream_controller} = $_[1];
+    },
+    close => sub {
+      # XXX close after
+    },
+    cancel => sub {
+      # XXX abort
+    },
+  });
 
   $self->{closed} = $args->{parent}->{class}->create ($args->{parent})->then (sub {
     my $info = $_[0];
@@ -2023,7 +2018,10 @@ sub new ($$) {
 
     $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
     $self->{info} = {};
-    $self->_con_ev ('openconnection', {}); # XXX
+    if ($self->{DEBUG}) { # XXX
+      warn "$self->{id}: openconnection @{[scalar gmtime]}\n";
+      $self->_debug_handshake_done ({});
+    }
 
     $self->{reader} = $info->{read_stream}->get_reader ('byob');
     $self->{writer} = $info->{write_stream}->get_writer;
@@ -2084,11 +2082,13 @@ sub new ($$) {
   })->catch (sub {
     my $error = Web::DOM::Error->wrap ($_[0]);
     $self->{info} = {};
-    #XXX $self->_con_ev ('openconnection', $error);
+    if ($self->{DEBUG}) { # XXX
+      warn "$self->{id}: openconnection @{[scalar gmtime]}\n";
+      $self->_debug_handshake_done ($error);
+    }
+
     $self->{exit} = $error; # XXX$error->{exit};
     die $error;
-  })->then (sub {
-    $self->_con_ev ('closeconnection', $self->{exit} || {}); # XXX
   });
   return $self;
 } # new
@@ -2113,18 +2113,29 @@ sub _url_hostport ($) {
 } # _url_hostport
 
 sub _new_stream ($) {
-  my $self = $_[0];
-  my $req = $self->{stream} = bless {
-    is_server => 1, DEBUG => $self->{DEBUG},
-    connection => $self,
-    id => $self->{id} . '.' . ++$self->{req_id},
+  my $con = $_[0];
+  my $req = $con->{stream} = bless {
+    is_server => 1, DEBUG => $con->{DEBUG},
+    connection => $con,
+    id => $con->{id} . '.' . ++$con->{req_id},
     request => {
       headers => [],
       # method target_url version
     },
     # cb target
   }, 'Web::Transport::HTTPStream::ServerStream'; # XXX
-  $req->{cb} = $self->_con_ev ('startstream', $req);
+
+  if ($con->{DEBUG}) { # XXX
+    warn "$con->{id}: ========== @{[ref $con]}\n";
+    warn "$con->{id}: startstream $req->{id} @{[scalar gmtime]}\n";
+  }
+
+  $req->{cb} = sub { }; # XXX
+  $con->{stream_controller}->enqueue ($req);
+  $req->{request_received} = Promise->new (sub {
+    $req->{request_received_resolve} = $_[0];
+  });
+
   return $req;
 } # _new_stream
 
@@ -2589,7 +2600,7 @@ sub _request_headers ($) {
     $self->{unread_length} = $l;
     $self->{state} = 'request body';
   }
-  $stream->_ev ('headers', $stream->{request});
+  (delete $stream->{request_received_resolve})->(); # 'headers' for $stream->{request} # XXX debug
   $stream->_ev ('datastart');
   if ($l == 0 and not $stream->{request}->{method} eq 'CONNECT') {
     $stream->_ev ('dataend');
@@ -2608,6 +2619,10 @@ sub _timeout ($) {
   $self->{writer}->abort ($error);
   $self->{reader}->cancel ($error);
 } # _timeout
+
+sub received_streams ($) {
+  return $_[0]->{received_streams};
+} # received_streams
 
 sub closed ($) {
   return $_[0]->{closed};
@@ -2628,13 +2643,10 @@ sub close_after_current_stream ($) {
   my $self = $_[0];
 
   if (defined $self->{stream}) {
-warn 1;
     $self->{stream}->{close_after_response} = 1;
   } elsif (defined $self->{sending_stream}) {
-warn 2;
     $self->{sending_stream}->{close_after_response} = 1;
   } else {
-warn 3;
     unless ($self->{write_closed}) {
       $self->{writer}->write (DataView->new (ArrayBuffer->new))->then (sub {
         my $error = 'Close by |close_after_current_stream|'; # XXX
@@ -2663,6 +2675,10 @@ BEGIN {
   *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
+
+sub request_ready ($) {
+  return $_[0]->{request_received};
+} # request_ready
 
 sub send_response_headers ($$$;%) {
   my ($stream, $response, %args) = @_;
@@ -2883,6 +2899,8 @@ sub abort ($;%) {
   $stream->{connection}->abort (@_) if defined $stream->{connection};
 } # abort
 
+# XXX closed
+
 sub _send_error ($$$;$) {
   my ($stream, $status, $status_text, $headers) = @_;
   my $res = qq{<!DOCTYPE html><html>
@@ -2960,8 +2978,10 @@ sub _both_done ($) {
   }
   delete $con->{disable_timer};
   $stream->_ev ('complete', $con->{exit} || {});
-  $con->_con_ev ('endstream', $stream);
-
+  if ($con->{DEBUG}) { #XXX
+    warn "$con->{id}: endstream $stream->{id} @{[scalar gmtime]}\n";
+    warn "$con->{id}: ========== @{[ref $con]}\n";
+  }
   $con->{timer} = AE::timer $ReadTimeout, 0, sub { $con->_timeout };
   delete $stream->{connection};
 } # _both_done

@@ -67,42 +67,40 @@ my $HandleRequestHeaders = {};
   $Origin = Web::URL->parse_string ("http://$host:$port");
   $WSOrigin = Web::URL->parse_string ("ws://$host:$port");
 
-  my $cb = sub {
-    my ($self, $type) = @_;
-    if ($type eq 'headers') {
-      my $req = $_[2];
-      my $handler = $HandleRequestHeaders->{$req->{target_url}->path} ||
-                    $HandleRequestHeaders->{$req->{target_url}->hostport};
-      if (defined $handler) {
-        $self->{body} = '';
-        $handler->($self, $req);
-      } elsif ($req->{target_url}->path eq '/') {
-        $self->send_response_headers
-            ({status => 404, status_text => 'Not Found (/)'}, close => 1);
-        $self->close_response;
-      } else {
-        die "No handler for |@{[$req->{target_url}->stringify]}|";
-      }
-    } elsif ($type eq 'data') {
-      $self->{body} .= $_[2];
-      $self->{ondata}->($_[2], $_[3]) if $self->{ondata};
-    } elsif ($type eq 'text') {
-      $self->{text} .= $_[2];
-    } elsif ($type eq 'dataend' or $type eq 'textend' or
-             $type eq 'ping' or $type eq 'complete') {
-      $self->{$type}->($_[2], $_[3]) if $self->{$type};
-      if ($type eq 'complete') {
-        delete $self->{$_} for qw(ondata dataend textend ping complete);
-      }
-    }
-  }; # $cb
-
-  my $con_cb = sub {
-    my ($self, $type) = @_;
-    if ($type eq 'startstream') {
-      return $cb;
-    }
-  }; # $con_cb
+  my $server_process = sub {
+    my $con = $_[0];
+    $con->received_streams->get_reader->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      $stream->request_ready->then (sub {
+        my $req = $stream->{request};
+        my $handler = $HandleRequestHeaders->{$req->{target_url}->path} ||
+                      $HandleRequestHeaders->{$req->{target_url}->hostport};
+        if (defined $handler) {
+          $stream->{body} = '';
+          $handler->($stream, $req);
+        } elsif ($req->{target_url}->path eq '/') {
+          $stream->send_response_headers
+              ({status => 404, status_text => 'Not Found (/)'}, close => 1);
+          $stream->close_response;
+        } else {
+          die "No handler for |@{[$req->{target_url}->stringify]}|";
+        }
+      });
+      $stream->closed->then (sub { # XXX
+        $stream->{complete}->($_[2], $_[3]) if $stream->{complete};
+        delete $stream->{$_} for qw(ondata dataend textend ping complete);
+      });
+    });
+    #} elsif ($type eq 'data') {
+    #  $self->{body} .= $_[2];
+    #  $self->{ondata}->($_[2], $_[3]) if $self->{ondata};
+    #} elsif ($type eq 'text') {
+    #  $self->{text} .= $_[2];
+    #} elsif ($type eq 'dataend' or $type eq 'textend' or
+    #         $type eq 'ping') {
+    #  $self->{$type}->($_[2], $_[3]) if $self->{$type};
+  }; # $server_process
 
   our $server = tcp_server $host, $port, sub {
     my $con = Web::Transport::HTTPStream->new_XXXserver
@@ -111,7 +109,8 @@ my $HandleRequestHeaders = {};
            server => 1,
            fh => $_[0],
            host => Web::Host->parse_string ($_[1]), port => $_[2]
-         }, cb => $con_cb});
+         }});
+    $server_process->($con);
     $GlobalCV->begin;
     promised_cleanup { $GlobalCV->end } $con->closed;
   };
@@ -142,7 +141,8 @@ my $HandleRequestHeaders = {};
            ca_file => Test::Certificates->ca_path ('cert.pem'),
            cert_file => Test::Certificates->cert_path ('cert-chained.pem', $cert_args),
            key_file => Test::Certificates->cert_path ('key.pem', $cert_args),
-         }, cb => $con_cb});
+         }});
+    $server_process->($con);
     $GlobalCV->begin;
     promised_cleanup { $GlobalCV->end } $con->closed;
   };
@@ -153,7 +153,8 @@ my $HandleRequestHeaders = {};
             class => 'Web::Transport::UnixStream',
             server => 1,
             fh => $_[0],
-         }, cb => $con_cb});
+         }});
+    $server_process->($con);
     $GlobalCV->begin;
     promised_cleanup { $GlobalCV->end } $con->closed;
   };

@@ -49,25 +49,6 @@ test {
   my $port = find_listenable_port;
   my $origin = Web::URL->parse_string ("http://$host:$port");
 
-  my $cb = sub {
-    my ($self, $type) = @_;
-    if ($type eq 'headers') {
-      my $req = $_[2];
-      my $path = $req->{target_url}->path;
-
-      $self->send_response_headers
-          ({status => 210, status_text => $self->{id}});
-      $self->close_response;
-    }
-  }; # $cb
-
-  my $con_cb = sub {
-    my ($self, $type) = @_;
-    if ($type eq 'startstream') {
-      return $cb;
-    }
-  }; # $con_cb
-
   my $con;
   my $server = tcp_server $host, $port, sub {
     my $x = Web::Transport::HTTPStream->new_XXXserver
@@ -76,7 +57,19 @@ test {
            server => 1,
            fh => $_[0],
            host => Web::Host->parse_string ($_[1]), port => $_[2],
-         }, cb => $con_cb});
+         }});
+    $x->received_streams->get_reader->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->request_ready->then (sub {
+        my $path = $stream->{request}->{target_url}->path;
+
+        $stream->send_response_headers
+            ({status => 210, status_text => $stream->{id}});
+        $stream->close_response;
+      });
+    });
+
     $con ||= $x;
   }; # $server
 
@@ -124,30 +117,6 @@ test {
   my $response_header_sent;
   my $after_response_header = Promise->new (sub { $response_header_sent = $_[0] });
 
-  my $cb = sub {
-    my ($self, $type) = @_;
-    if ($type eq 'headers') {
-      my $req = $_[2];
-      my $path = $req->{target_url}->path;
-      if ($path eq '/404') {
-        $self->send_response_headers
-            ({status => 404, status_text => $self->{id}});
-        $self->close_response;
-      } else {
-        $self->send_response_headers
-            ({status => 210, status_text => $self->{id}});
-        $response_header_sent->($self);
-      }
-    }
-  }; # $cb
-
-  my $con_cb = sub {
-    my ($self, $type) = @_;
-    if ($type eq 'startstream') {
-      return $cb;
-    }
-  }; # $con_cb
-
   my $con;
   my $server = tcp_server $host, $port, sub {
     my $x = Web::Transport::HTTPStream->new_XXXserver
@@ -156,7 +125,24 @@ test {
            server => 1,
            fh => $_[0],
            host => Web::Host->parse_string ($_[1]), port => $_[2],
-         }, cb => $con_cb});
+         }});
+    $x->received_streams->get_reader->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->request_ready->then (sub {
+        my $path = $stream->{request}->{target_url}->path;
+        if ($path eq '/404') {
+          $stream->send_response_headers
+              ({status => 404, status_text => $stream->{id}});
+          $stream->close_response;
+        } else {
+          $stream->send_response_headers
+              ({status => 210, status_text => $stream->{id}});
+          $response_header_sent->($stream);
+        }
+      });
+    });
+
     $con ||= $x;
   }; # $server
 
@@ -209,29 +195,6 @@ test {
   my $response_header_sent;
   my $after_response_header = Promise->new (sub { $response_header_sent = $_[0] });
 
-  my $cb = sub {
-    my ($self, $type) = @_;
-warn "XXX $type";
-    if ($type eq 'headers') {
-      my $req = $_[2];
-      my $path = $req->{target_url}->path;
-      if ($path eq '/404') {
-        $self->send_response_headers
-            ({status => 404, status_text => $self->{id}});
-        $self->close_response;
-      } else {
-        $response_header_sent->($self);
-      }
-    }
-  }; # $cb
-
-  my $con_cb = sub {
-    my ($self, $type) = @_;
-    if ($type eq 'startstream') {
-      return $cb;
-    }
-  }; # $con_cb
-
   my $con;
   my $server = tcp_server $host, $port, sub {
     my $x = Web::Transport::HTTPStream->new_XXXserver
@@ -240,7 +203,21 @@ warn "XXX $type";
            server => 1,
            fh => $_[0],
            host => Web::Host->parse_string ($_[1]), port => $_[2],
-         }, cb => $con_cb});
+         }});
+    $x->received_streams->get_reader->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->request_ready->then (sub {
+        my $path = $stream->{request}->{target_url}->path;
+        if ($path eq '/404') {
+          $stream->send_response_headers
+              ({status => 404, status_text => $stream->{id}});
+          $stream->close_response;
+        } else {
+          $response_header_sent->($stream);
+        }
+      });
+    });
     $con ||= $x;
   }; # $server
 

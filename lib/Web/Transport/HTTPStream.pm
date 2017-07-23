@@ -1998,6 +1998,7 @@ BEGIN {
 sub new ($$) {
   my ($class, $args) = @_;
   my $self = bless {DEBUG => DEBUG, is_server => 1,
+                    id => rand,
                     #XXX id => $args{transport}->id, req_id => 0,
                     #XXX transport => $args{transport},
                     rbuf => '', state => 'initial',
@@ -2092,6 +2093,10 @@ sub new ($$) {
   return $self;
 } # new
 
+sub id ($) { # XXX
+  return $_[0]->{id};
+} # id
+
 sub server_header ($;$) {
   if (@_ > 1) {
     $_[0]->{server_header} = $_[1];
@@ -2112,7 +2117,7 @@ sub _new_stream ($) {
   my $req = $self->{stream} = bless {
     is_server => 1, DEBUG => $self->{DEBUG},
     connection => $self,
-    id => '', # XXX $self->{id} . '.' . ++$self->{req_id},
+    id => $self->{id} . '.' . ++$self->{req_id},
     request => {
       headers => [],
       # method target_url version
@@ -2623,16 +2628,18 @@ sub close_after_current_stream ($) {
   my $self = $_[0];
 
   if (defined $self->{stream}) {
+warn 1;
     $self->{stream}->{close_after_response} = 1;
   } elsif (defined $self->{sending_stream}) {
+warn 2;
     $self->{sending_stream}->{close_after_response} = 1;
   } else {
+warn 3;
     unless ($self->{write_closed}) {
       $self->{writer}->write (DataView->new (ArrayBuffer->new))->then (sub {
-        return if $self->{write_closed};
         my $error = 'Close by |close_after_current_stream|'; # XXX
         $self->{writer}->abort ($error);
-        $self->{reader}->cancel ($error);
+        $self->{reader}->cancel ($error)->catch (sub { });
       });
     }
     $self->{write_closed} = 1;

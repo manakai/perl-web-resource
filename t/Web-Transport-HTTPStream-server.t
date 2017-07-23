@@ -80,9 +80,10 @@ my $HandleRequestHeaders = {};
           $stream->{body} = '';
           $handler->($stream, $req);
         } elsif ($req->{target_url}->path eq '/') {
-          $stream->send_response_headers
-              ({status => 404, status_text => 'Not Found (/)'}, close => 1);
-          $stream->close_response;
+          return $stream->send_response
+              ({status => 404, status_text => 'Not Found (/)'}, close => 1)->then (sub {
+            return $stream->{response}->{body}->get_writer->close;
+          });
         } else {
           die "No handler for |@{[$req->{target_url}->stringify]}|";
         }
@@ -164,11 +165,12 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga'],
-        ]}, close => 1);
-    $self->close_response;
+        ]}, close => 1)->then (sub {
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -198,13 +200,13 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga2'],
-        ]}, close => 1);
-    $self->send_response_data (\'abcde');
-    $self->close_response;
-    $self->close_response;
+        ]}, close => 1)->then (sub {
+      $self->send_response_data (\'abcde');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -233,13 +235,14 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge3'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga3'],
-        ]});
-    $self->send_response_data (\'');
-    $self->send_response_data (\'abcde3');
-    $self->close_response;
+        ]})->then (sub {
+      $self->send_response_data (\'');
+      $self->send_response_data (\'abcde3');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -271,15 +274,16 @@ test {
   my $rand = rand;
   $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga4'],
-        ]});
-    eval {
-      $self->send_response_data (\'abcde4');
-    };
-    $x = $@;
-    $self->close_response;
+        ]})->then (sub {
+      eval {
+        $self->send_response_data (\'abcde4');
+      };
+      $x = $@;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -311,15 +315,16 @@ test {
   my $rand = rand;
   $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 204, status_text => 'OK', headers => [
           ['Hoge', 'Fuga4'],
-        ]});
-    eval {
-      $self->send_response_data (\'abcde4');
-    };
-    $x = $@;
-    $self->close_response;
+        ]})->then (sub {
+      eval {
+        $self->send_response_data (\'abcde4');
+      };
+      $x = $@;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -349,20 +354,22 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge5'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga5'],
-        ]});
-    $self->close_response;
+        ]})->then (sub {
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
   $HandleRequestHeaders->{'/hoge6'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 200, status_text => 'OK', headers => [
           ['Hoge', 'Fuga6'],
-        ]});
-    $self->send_response_data (\'abcde6');
-    $self->close_response;
+        ]})->then (sub {
+      $self->send_response_data (\'abcde6');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -402,15 +409,16 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge7'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 200, status_text => 'OK', headers => [
           ['Hoge', 'Fuga7'],
-        ]});
-    eval {
-      $self->send_response_data (\'abcde7');
-    };
-    $x = $@;
-    $self->close_response;
+        ]})->then (sub {
+      eval {
+        $self->send_response_data (\'abcde7');
+      };
+      $x = $@;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -441,7 +449,7 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge8'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga8'],
         ]}, content_length => 12);
@@ -482,7 +490,7 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge11'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga11'],
         ]}, content_length => 12);
@@ -521,7 +529,7 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge14'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga14'],
         ]}, content_length => 8);
@@ -529,7 +537,7 @@ test {
   };
   $HandleRequestHeaders->{'/hoge15'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    $self->send_response
         ({status => 202, status_text => 'OK', headers => [
           ['Hoge', 'Fuga15'],
         ]}, content_length => 10);
@@ -574,7 +582,7 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge16'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga16'],
         ]}, content_length => 0);
@@ -613,12 +621,13 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga17'],
-        ]}, content_length => 10);
-    $self->send_response_data (\'abc17');
-    $self->close_response;
+        ]}, content_length => 10)->then (sub {
+      $self->send_response_data (\'abc17');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -666,7 +675,7 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge18'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga18'],
         ]}, content_length => 5);
@@ -688,12 +697,13 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge19'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga19'],
-        ]});
-    $self->send_response_data (\'abc19');
-    $self->close_response;
+        ]})->then (sub {
+      $self->send_response_data (\'abc19');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET /hoge19\x0D\x0A})->then (sub {
@@ -711,12 +721,13 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge20'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga19'],
-        ]});
-    $self->send_response_data (\'abc19');
-    $self->close_response;
+        ]})->then (sub {
+      $self->send_response_data (\'abc19');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{HEAD /hoge20\x0D\x0A})->then (sub {
@@ -737,14 +748,15 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge21'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga21'],
-        ]});
-    $self->send_response_data (\'abc21');
-    $self->send_response_data (\'abc');
-    $self->send_response_data (\'xyz');
-    $self->close_response;
+        ]})->then (sub {
+      $self->send_response_data (\'abc21');
+      $self->send_response_data (\'abc');
+      $self->send_response_data (\'xyz');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET /hoge21\x0D\x0A})->then (sub {
@@ -762,12 +774,13 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge22'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga22'],
-        ]}, content_length => 10);
-    $self->send_response_data (\'abc22');
-    $self->close_response;
+        ]}, content_length => 10)->then (sub {
+      $self->send_response_data (\'abc22');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET /hoge22 HTTP/1.0\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -791,16 +804,18 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge23'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga23'],
-        ]}, close => 1);
-    $self->send_response_data (\'abc23');
-    $self->close_response;
-    eval {
-      $self->send_response_data (\'xyz');
-    };
-    $x = $@;
+        ]}, close => 1)->then (sub {
+      $self->send_response_data (\'abc23');
+      return $self->{response}->{body}->get_writer->close;
+    })->then (sub {
+      eval {
+        $self->send_response_data (\'xyz');
+      };
+      $x = $@;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -831,7 +846,7 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge24'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga24'],
         ]}, content_length => 12);
@@ -872,15 +887,16 @@ test {
   my $rand = rand;
   $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga25'],
-        ]}, content_length => 5);
-    eval {
-      $self->send_response_data (\'abcde');
-    };
-    $x = $@;
-    $self->close_response;
+        ]}, content_length => 5)->then (sub {
+      eval {
+        $self->send_response_data (\'abcde');
+      };
+      $x = $@;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -913,15 +929,16 @@ test {
   my $rand = rand;
   $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 204, status_text => 'OK', headers => [
           ['Hoge', 'Fuga25'],
-        ]}, content_length => 5);
-    eval {
-      $self->send_response_data (\'abcde');
-    };
-    $x = $@;
-    $self->close_response;
+        ]}, content_length => 5)->then (sub {
+      eval {
+        $self->send_response_data (\'abcde');
+      };
+      $x = $@;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -953,15 +970,16 @@ test {
   my $x;
   $HandleRequestHeaders->{'/hoge26'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga26'],
-        ]}, content_length => 0);
-    eval {
-      $self->send_response_data (\'abcde');
-    };
-    $x = $@;
-    $self->close_response;
+        ]}, content_length => 0)->then (sub {
+      eval {
+        $self->send_response_data (\'abcde');
+      };
+      $x = $@;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -992,14 +1010,15 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'/hoge27'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga27'],
-        ]});
-    $self->send_response_data (\'abc');
-    $self->send_response_data (\'');
-    $self->send_response_data (\'xyz');
-    $self->close_response;
+        ]})->then (sub {
+      $self->send_response_data (\'abc');
+      $self->send_response_data (\'');
+      $self->send_response_data (\'xyz');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET /hoge27 HTTP/1.0\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -1021,14 +1040,15 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'hoge28'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga28'],
-        ]});
-    $self->send_response_data (\'abc');
-    $self->send_response_data (\'');
-    $self->send_response_data (\'xyz');
-    $self->close_response;
+        ]})->then (sub {
+      $self->send_response_data (\'abc');
+      $self->send_response_data (\'');
+      $self->send_response_data (\'xyz');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT hoge28 HTTP/1.0\x0D\x0Aconnection:keep-alive\x0D\x0AHost: hoge28\x0D\x0A\x0D\x0A})->then (sub {
@@ -1050,14 +1070,15 @@ test {
   my $c = shift;
   $HandleRequestHeaders->{'hoge29'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga29'],
-        ]});
-    $self->send_response_data (\'abc');
-    $self->send_response_data (\'');
-    $self->send_response_data (\'xyz');
-    $self->close_response;
+        ]})->then (sub {
+      $self->send_response_data (\'abc');
+      $self->send_response_data (\'');
+      $self->send_response_data (\'xyz');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT hoge29 HTTP/1.1\x0D\x0AHost: hoge29\x0D\x0A\x0D\x0A})->then (sub {
@@ -1079,15 +1100,16 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{'hoge30'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga30'],
-        ]});
-    $self->send_response_data (\'abc');
-    $self->send_response_data (\'');
-    $self->send_response_data (\'xyz');
-    $self->close_response;
-    $serverreq = $self;
+        ]})->then (sub {
+      $self->send_response_data (\'abc');
+      $self->send_response_data (\'');
+      $self->send_response_data (\'xyz');
+      $serverreq = $self;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT hoge30 HTTP/1.1\x0D\x0AHost: hoge30\x0D\x0Acontent-length:3\x0D\x0A\x0D\x0Aabcabc})->then (sub {
@@ -1110,15 +1132,16 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{'/hoge31'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga31'],
-        ]});
-    $self->send_response_data (\'abc');
-    $self->send_response_data (\'');
-    $self->send_response_data (\'xyz');
-    $self->close_response;
-    $serverreq = $self;
+        ]})->then (sub {
+      $self->send_response_data (\'abc');
+      $self->send_response_data (\'');
+      $self->send_response_data (\'xyz');
+      $serverreq = $self;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT /hoge31 HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0Acontent-length:3ab\x0D\x0A\x0D\x0Aabcabc})->then (sub {
@@ -1146,15 +1169,16 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{'/hoge32'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 200, status_text => 'OK', headers => [
           ['Hoge', 'Fuga32'],
-        ]});
-    $self->send_response_data (\'abc');
-    $self->send_response_data (\'');
-    $self->send_response_data (\'xyz');
-    $self->close_response;
-    $serverreq = $self;
+        ]})->then (sub {
+      $self->send_response_data (\'abc');
+      $self->send_response_data (\'');
+      $self->send_response_data (\'xyz');
+      $serverreq = $self;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   Web::Transport::WSClient->new (
@@ -1178,12 +1202,14 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{'/hoge33'} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 101, status_text => 'OK', headers => [
           ['Hoge', 'Fuga33'],
-        ]});
-    $self->close_response (status => 5678);
-    $serverreq = $self;
+        ]})->then (sub {
+      $serverreq = $self;
+      # XXX (status => 5678);
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   Web::Transport::WSClient->new (
@@ -1213,10 +1239,11 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0);
-    $self->close_response;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1253,10 +1280,11 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0);
-    $self->close_response;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1292,10 +1320,11 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0);
-    $self->close_response;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1333,11 +1362,12 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0, close => 1);
-    $self->close_response;
-    $serverreq = $self;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0, close => 1)->then (sub {
+      $serverreq = $self;
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1376,11 +1406,12 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0, close => 1);
-    $self->close_response;
-    $serverreq = $self;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0, close => 1)->then (sub {
+      $serverreq = $self;
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1436,10 +1467,11 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0);
-    $self->close_response;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $url = Web::URL->parse_string (q<ftp://hoge/>);
@@ -1483,10 +1515,11 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0);
-    $self->close_response;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1528,10 +1561,11 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0);
-    $self->close_response;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1571,10 +1605,11 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0);
-    $self->close_response;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1614,10 +1649,11 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0);
-    $self->close_response;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1656,10 +1692,11 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0);
-    $self->close_response;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1699,10 +1736,11 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0);
-    $self->close_response;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1741,10 +1779,11 @@ test {
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, content_length => 0);
-    $self->close_response;
-    $invoked = 1;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
+      $invoked = 1;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -1785,16 +1824,19 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->send_binary_header (5);
-    $self->send_response_data (\"abcde");
-    $serverreq = $self;
-    $self->{dataend} = sub {
-      if ($self->{body} =~ /stuvw/) {
-        $self->close_response (status => 5678);
-      }
-    };
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $self->send_binary_header (5);
+      $self->send_response_data (\"abcde");
+      $serverreq = $self;
+      #XXX
+      $self->{dataend} = sub {
+        if ($self->{body} =~ /stuvw/) {
+          #XXX$self->close_response (status => 5678);
+          return $self->{response}->{body}->get_writer->close;
+        }
+      };
+    });
   };
 
   my $received = '';
@@ -1834,16 +1876,18 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->send_text_header (5);
-    $self->send_response_data (\"abcde");
-    $serverreq = $self;
-    $self->{textend} = sub {
-      if ($self->{text} =~ /stuvw/) {
-        $self->close_response (status => 5678, reason => 'abc');
-      }
-    };
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $self->send_text_header (5);
+      $self->send_response_data (\"abcde");
+      $serverreq = $self;
+      $self->{textend} = sub { # XXX
+        if ($self->{text} =~ /stuvw/) {
+          $self->close_response (status => 5678, reason => 'abc');
+          return $self->{response}->{body}->get_writer->close;
+        }
+      };
+    });
   };
 
   my $received = '';
@@ -1885,15 +1929,17 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->send_ping (data => "abbba");
-    $serverreq = $self;
-    $self->{ping} = sub {
-      if ($_[1]) {
-        $self->close_response (status => 5678, reason => $_[0]);
-      }
-    };
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $self->send_ping (data => "abbba");
+      $serverreq = $self;
+      $self->{ping} = sub {
+        if ($_[1]) {
+          #XXX $self->close_response (status => 5678, reason => $_[0]);
+          return $self->{response}->{body}->get_writer->close;
+        }
+      };
+    });
   };
 
   my $received = '';
@@ -1925,14 +1971,16 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $serverreq = $self;
-    $self->{ping} = sub {
-      unless ($_[1]) {
-        $self->close_response (status => 5678, reason => $_[0]);
-      }
-    };
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $serverreq = $self;
+      $self->{ping} = sub {
+        unless ($_[1]) {
+          #XXX $self->close_response (status => 5678, reason => $_[0]);
+          return $self->{response}->{body}->get_writer->close;
+        }
+      };
+    });
   };
 
   my $received = '';
@@ -1965,15 +2013,17 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->send_binary_header (5);
-    eval {
-      $self->send_response_data (\"abcdef");
-    };
-    $error = $@;
-    $self->send_response_data (\"12345");
-    $self->close_response (status => 5678);
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $self->send_binary_header (5);
+      eval {
+        $self->send_response_data (\"abcdef");
+      };
+      $error = $@;
+      $self->send_response_data (\"12345");
+      #XXX $self->close_response (status => 5678);
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $received = '';
@@ -2004,15 +2054,17 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->send_text_header (5);
-    eval {
-      $self->send_response_data (\"abcdef");
-    };
-    $error = $@;
-    $self->send_response_data (\"12345");
-    $self->close_response (status => 5678);
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $self->send_text_header (5);
+      eval {
+        $self->send_response_data (\"abcdef");
+      };
+      $error = $@;
+      $self->send_response_data (\"12345");
+      #XXX $self->close_response (status => 5678);
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $received = '';
@@ -2043,16 +2095,18 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->send_text_header (5);
-    $self->send_response_data (\"123");
-    eval {
-      $self->send_response_data (\"abcdef");
-    };
-    $error = $@;
-    $self->send_response_data (\"45");
-    $self->close_response (status => 5678);
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $self->send_text_header (5);
+      $self->send_response_data (\"123");
+      eval {
+        $self->send_response_data (\"abcdef");
+      };
+      $error = $@;
+      $self->send_response_data (\"45");
+      #XXX $self->close_response (status => 5678);
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $received = '';
@@ -2083,14 +2137,16 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->send_text_header (0);
-    eval {
-      $self->send_response_data (\"abcdef");
-    };
-    $error = $@;
-    $self->close_response (status => 5678);
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $self->send_text_header (0);
+      eval {
+        $self->send_response_data (\"abcdef");
+      };
+      $error = $@;
+      #XXX $self->close_response (status => 5678);
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $received = '';
@@ -2121,15 +2177,17 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    eval {
-      $self->send_response_data (\"abcdef");
-    };
-    $self->send_text_header (1);
-    $self->send_response_data (\"1");
-    $error = $@;
-    $self->close_response (status => 5678);
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      eval {
+        $self->send_response_data (\"abcdef");
+      };
+      $self->send_text_header (1);
+      $self->send_response_data (\"1");
+      $error = $@;
+      #XXX $self->close_response (status => 5678);
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $received = '';
@@ -2160,16 +2218,18 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->send_binary_header (5);
-    $self->send_response_data (\"123");
-    eval {
-      $self->send_text_header (4);
-    };
-    $self->send_response_data (\"45");
-    $error = $@;
-    $self->close_response (status => 5678);
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $self->send_binary_header (5);
+      $self->send_response_data (\"123");
+      eval {
+        $self->send_text_header (4);
+      };
+      $self->send_response_data (\"45");
+      $error = $@;
+      #XXX $self->close_response (status => 5678);
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $received = '';
@@ -2200,16 +2260,18 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->send_binary_header (5);
-    $self->send_response_data (\"123");
-    eval {
-      $self->send_binary_header (4);
-    };
-    $self->send_response_data (\"45");
-    $error = $@;
-    $self->close_response (status => 5678);
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $self->send_binary_header (5);
+      $self->send_response_data (\"123");
+      eval {
+        $self->send_binary_header (4);
+      };
+      $self->send_response_data (\"45");
+      $error = $@;
+      #XXX $self->close_response (status => 5678);
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $received = '';
@@ -2239,11 +2301,13 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->send_binary_header (5);
-    $self->send_response_data (\"123");
-    $self->close_response (status => 4056);
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $self->send_binary_header (5);
+      $self->send_response_data (\"123");
+      #XXX $self->close_response (status => 4056);
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $received = '';
@@ -2273,13 +2337,16 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->close_response (status => 4056);
-    eval {
-      $self->send_binary_header (5);
-    };
-    $error = $@;
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      #XXX $self->close_response (status => 4056);
+      return $self->{response}->{body}->get_writer->close;
+    })->then (sub {
+      eval {
+        $self->send_binary_header (5);
+      };
+      $error = $@;
+    });
   };
 
   my $received = '';
@@ -2309,10 +2376,11 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 101, status_text => 'Switched!'});
-    $self->close_response (status => 4056);
-    $self->close_response (status => 5678);
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      #XXX $self->close_response (status => 4056);
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $received = '';
@@ -2357,15 +2425,17 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 200, status_text => 'Switched!'});
-    $self->send_response_data (\"abcde");
-    $serverreq = $self;
-    $self->{ondata} = sub {
-      if ($self->{body} =~ /stuvw/) {
-        $self->close_response (status => 5678, reason => 'abc');
-      }
-    };
+    return $self->send_response
+        ({status => 200, status_text => 'Switched!'})->then (sub {
+      $self->send_response_data (\"abcde");
+      $serverreq = $self;
+      $self->{ondata} = sub { # XXX
+        if ($self->{body} =~ /stuvw/) {
+          #XXX $self->close_response (status => 5678, reason => 'abc');
+          return $self->{response}->{body}->get_writer->close;
+        }
+      };
+    });
   };
 
   my $url = Web::URL->parse_string ("/$path.test", $Origin);
@@ -2417,15 +2487,17 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 200, status_text => 'Switched!'});
-    $self->send_response_data (\"abcde");
-    $serverreq = $self;
-    $self->{ondata} = sub {
-      if ($self->{body} =~ /stuvw/) {
-        $self->close_response (status => 5678, reason => 'abc');
-      }
-    };
+    return $self->send_response
+        ({status => 200, status_text => 'Switched!'})->then (sub {
+      $self->send_response_data (\"abcde");
+      $serverreq = $self;
+      $self->{ondata} = sub { # XXX
+        if ($self->{body} =~ /stuvw/) {
+          # XXX $self->close_response (status => 5678, reason => 'abc');
+          return $self->{response}->{body}->get_writer->close;
+        }
+      };
+    });
   };
 
   my $url = Web::URL->parse_string ("/$path.test", $Origin);
@@ -2473,16 +2545,18 @@ test {
   my $serverreq;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 200, status_text => 'Switched!',
-          headers => [['Content-Length', '12']]});
-    $self->send_response_data (\"abcde");
-    $serverreq = $self;
-    $self->{ondata} = sub {
-      if ($self->{body} =~ /stuvw/) {
-        $self->close_response (status => 5678, reason => 'abc');
-      }
-    };
+          headers => [['Content-Length', '12']]})->then (sub {
+      $self->send_response_data (\"abcde");
+      $serverreq = $self;
+      $self->{ondata} = sub { # XXX
+        if ($self->{body} =~ /stuvw/) {
+          # XXX $self->close_response (status => 5678, reason => 'abc');
+          return $self->{response}->{body}->get_writer->close;
+        }
+      };
+    });
   };
 
   my $url = Web::URL->parse_string ("/$path.test", $Origin);
@@ -2531,16 +2605,18 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
+    # XXX
     eval {
-      $self->send_response_headers
+      $self->send_response
           ({status => 101, status_text => 'Switched!'});
     };
     $error = $@;
-    $self->send_response_headers
-        ({status => 200, status_text => 'O.K.'});
-    $self->send_response_data (\"abcde");
-    $self->close_response;
-    $serverreq = $self;
+    return $self->send_response
+        ({status => 200, status_text => 'O.K.'})->then (sub {
+      $self->send_response_data (\"abcde");
+      $serverreq = $self;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $url = Web::URL->parse_string ("/$path", $Origin);
@@ -2584,7 +2660,7 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    $self->send_response
         ({status => 201, status_text => 'o'}, close => 1, content_length => 0);
   };
 
@@ -2604,10 +2680,11 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\'ok!');
-    $self->close_response;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\'ok!');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET /$path\x0D\x0A})->then (sub {
@@ -2626,10 +2703,11 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET http://@{[$Origin->hostport]}/$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -2648,10 +2726,11 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\'ok!');
-    $self->close_response;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\'ok!');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET http://foo/$path\x0D\x0A})->then (sub {
@@ -2671,11 +2750,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET @{[$Origin->hostport]} HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -2696,11 +2776,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET * HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -2721,11 +2802,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET http://hoge$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -2746,11 +2828,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET mailto://@{[$Origin->hostport]}/$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -2771,11 +2854,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET https://@{[$Origin->hostport]}/$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -2796,11 +2880,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET https://foobar/$path HTTP/1.1\x0D\x0AHost: foobar\x0D\x0A\x0D\x0A})->then (sub {
@@ -2821,11 +2906,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET https://foobar/$path HTTP/1.1\x0D\x0AHost: foobar:443\x0D\x0A\x0D\x0A})->then (sub {
@@ -2846,11 +2932,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET ftp://foobar/$path HTTP/1.1\x0D\x0AHost: foobar\x0D\x0A\x0D\x0A})->then (sub {
@@ -2871,11 +2958,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET ftp://foobar:21/$path HTTP/1.1\x0D\x0AHost: foobar\x0D\x0A\x0D\x0A})->then (sub {
@@ -2896,11 +2984,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET ftp://foobar:80/$path HTTP/1.1\x0D\x0AHost: foobar\x0D\x0A\x0D\x0A})->then (sub {
@@ -2921,11 +3010,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET http://foobar:21/$path HTTP/1.1\x0D\x0AHost: foobar:021\x0D\x0A\x0D\x0A})->then (sub {
@@ -2946,11 +3036,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET bad://foobar:21/$path HTTP/1.1\x0D\x0AHost: foobar:21\x0D\x0A\x0D\x0A})->then (sub {
@@ -2971,11 +3062,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET javascript://foobar/$path HTTP/1.1\x0D\x0AHost: foobar\x0D\x0A\x0D\x0A})->then (sub {
@@ -2996,11 +3088,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"//$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET //$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -3021,11 +3114,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path%80%FE%AC%FE"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET /$path\x80\xFE\xAC\xFE HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -3046,11 +3140,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path%80%FE%AC%FE"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET http://@{[$Origin->hostport]}/$path\x80\xFE\xAC\xFE HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -3071,11 +3166,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET /$path#abcde HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -3096,11 +3192,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{OPTIONS  /$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -3121,11 +3218,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{OPTIONS http://@{[$Origin->hostport]}/$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -3146,11 +3244,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{OPTIONS $path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -3197,11 +3296,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT $path.test HTTP/1.1\x0D\x0AHost: $path.test\x0D\x0A\x0D\x0A})->then (sub {
@@ -3222,11 +3322,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT $path.test HTTP/1.1\x0D\x0AHost: $path.test2\x0D\x0A\x0D\x0A})->then (sub {
@@ -3247,11 +3348,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT /$path.test HTTP/1.1\x0D\x0AHost: /$path.test\x0D\x0A\x0D\x0A})->then (sub {
@@ -3272,11 +3374,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT http://$path.test HTTP/1.1\x0D\x0AHost: $path.test\x0D\x0A\x0D\x0A})->then (sub {
@@ -3297,11 +3400,12 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->send_response_data (\($req->{target_url}->stringify));
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $self->send_response_data (\($req->{target_url}->stringify));
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT $path.test:80 HTTP/1.1\x0D\x0AHost: $path.test\x0D\x0A\x0D\x0A})->then (sub {
@@ -3322,10 +3426,11 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.xn--4gq.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT $path.\xE4\xB8\x80.test HTTP/1.1\x0D\x0AHost: $path.xn--4gq.test\x0D\x0A\x0D\x0A})->then (sub {
@@ -3346,10 +3451,11 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.xn--4gq.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT $path.xn--4gq.test HTTP/1.1\x0D\x0AHost: $path.\xE4\xB8\x80.test\x0D\x0A\x0D\x0A})->then (sub {
@@ -3370,10 +3476,11 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT $path.test HTTP/1.0\x0D\x0A\x0D\x0A})->then (sub {
@@ -3394,10 +3501,11 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{CONNECT $path.test HTTP/1.1\x0D\x0A\x0D\x0A})->then (sub {
@@ -3418,10 +3526,11 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET /$path.test HTTP/1.0\x0D\x0A\x0D\x0A})->then (sub {
@@ -3442,10 +3551,11 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => 'o'}, close => 1);
-    $self->close_response;
-    $invoked++;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   rawtcp (qq{GET /$path.test HTTP/1.1\x0D\x0A\x0D\x0A})->then (sub {
@@ -3493,7 +3603,7 @@ test {
   my $exit;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    $self->send_response
         ({status => 101, status_text => 'Switched!'});
     $self->send_binary_header (5);
     $self->send_response_data (\"abcde");
@@ -3549,7 +3659,7 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'});
+    $self->send_response ({status => 201, status_text => 'OK'});
     $self->send_response_data (\'abcde');
     promised_sleep (1)->then (sub { $self->abort });
   };
@@ -3581,7 +3691,7 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'},
+    $self->send_response ({status => 201, status_text => 'OK'},
                                   content_length => 10);
     $self->send_response_data (\'abcde');
     promised_sleep (1)->then (sub { $self->abort });
@@ -3669,9 +3779,10 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'});
-    $self->send_response_data (\'abcde');
-    $self->close_response;
+    return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
+      $self->send_response_data (\'abcde');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $tcp = Web::Transport::TCPTransport->new
@@ -3743,9 +3854,10 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'});
-    $self->send_response_data (\'abcde');
-    $self->close_response;
+    return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
+      $self->send_response_data (\'abcde');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $tcp = Web::Transport::TCPTransport->new
@@ -3783,9 +3895,10 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'});
-    #$self->send_response_data (\'abcde');
-    #$self->close_response;
+    return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
+      #$self->send_response_data (\'abcde');
+      #return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $tcp = Web::Transport::TCPTransport->new
@@ -3861,9 +3974,10 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'});
-    $self->send_response_data (\'abcde');
-    $self->close_response;
+    return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
+      $self->send_response_data (\'abcde');
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $tcp = Web::Transport::TCPTransport->new
@@ -3901,7 +4015,7 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'});
+    $self->send_response ({status => 201, status_text => 'OK'});
     $self->send_response_data (\'abcde');
   };
 
@@ -3941,11 +4055,12 @@ test {
   my $url;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'},
-                                  close => 1);
-    $self->send_response_data (\'abcde');
-    $self->close_response;
-    $url = $req->{target_url};
+    return $self->send_response ({status => 201, status_text => 'OK'},
+                                  close => 1)->then (sub {
+      $self->send_response_data (\'abcde');
+      $url = $req->{target_url};
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $tcp = Web::Transport::UNIXDomainSocketTransport->new (path => $UnixPath);
@@ -3983,11 +4098,12 @@ test {
   my $url;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'},
-                                  close => 1);
-    $self->send_response_data (\'abcde');
-    $self->close_response;
-    $url = $req->{target_url};
+    return $self->send_response ({status => 201, status_text => 'OK'},
+                                  close => 1)->then (sub {
+      $self->send_response_data (\'abcde');
+      $url = $req->{target_url};
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $tcp = Web::Transport::TCPTransport->new
@@ -4026,11 +4142,12 @@ test {
   my $url;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'},
-                                  close => 1);
-    $self->send_response_data (\'abcde');
-    $self->close_response;
-    $url = $req->{target_url};
+    return $self->send_response ({status => 201, status_text => 'OK'},
+                                  close => 1)->then (sub {
+      $self->send_response_data (\'abcde');
+      $url = $req->{target_url};
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $tcp = Web::Transport::TCPTransport->new
@@ -4070,11 +4187,12 @@ test {
   my $url;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'},
-                                  close => 1);
-    $self->send_response_data (\'abcde');
-    $self->close_response;
-    $url = $req->{target_url};
+    return $self->send_response ({status => 201, status_text => 'OK'},
+                                  close => 1)->then (sub {
+      $self->send_response_data (\'abcde');
+      $url = $req->{target_url};
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $tcp = Web::Transport::UNIXDomainSocketTransport->new (path => $UnixPath);
@@ -4112,13 +4230,14 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga2'],
-        ]}, close => 1);
-    $self->send_response_data (\'abcde');
-    $self->close_response;
-    $invoked++;
+        ]}, close => 1)->then (sub {
+      $self->send_response_data (\'abcde');
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $origin = $Origin->stringify;
@@ -4150,13 +4269,14 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga2'],
-        ]}, close => 1);
-    $self->send_response_data (\'abcde');
-    $self->close_response;
-    $invoked++;
+        ]}, close => 1)->then (sub {
+      $self->send_response_data (\'abcde');
+      $invoked++;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($TLSOrigin);
@@ -4186,13 +4306,14 @@ test {
   my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
+    return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga2'],
-        ]}, close => 1);
-    $self->send_response_data (\'abcde');
-    $self->close_response;
-    $invoked++; 
+        ]}, close => 1)->then (sub {
+      $self->send_response_data (\'abcde');
+      $invoked++; 
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($TLSOrigin);
@@ -4223,11 +4344,12 @@ test {
   my $url;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'},
-                                  close => 1);
-    $self->send_response_data (\'abcde');
-    $self->close_response;
-    $url = $req->{target_url};
+    return $self->send_response ({status => 201, status_text => 'OK'},
+                                  close => 1)->then (sub {
+      $self->send_response_data (\'abcde');
+      $url = $req->{target_url};
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $data = '';
@@ -4271,11 +4393,12 @@ test {
   my $url;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers ({status => 201, status_text => 'OK'},
-                                  close => 1);
-    $self->send_response_data (\'abcde');
-    $self->close_response;
-    $url = $req->{target_url};
+    return $self->send_response ({status => 201, status_text => 'OK'},
+                                  close => 1)->then (sub {
+      $self->send_response_data (\'abcde');
+      $url = $req->{target_url};
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $data = '';
@@ -4322,9 +4445,10 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $self->{connection}->server_header ('Hoge/1.4.6');
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, close => 1);
-    $self->close_response;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, close => 1)->then (sub {
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -4351,9 +4475,10 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $self->{connection}->server_header ("\x{3000}a\x00");
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, close => 1);
-    $self->close_response;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, close => 1)->then (sub {
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -4380,9 +4505,10 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $self->{connection}->server_header (undef);
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, close => 1);
-    $self->close_response;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, close => 1)->then (sub {
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -4410,9 +4536,10 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $self->{connection}->server_header ("");
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, close => 1);
-    $self->close_response;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, close => 1)->then (sub {
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -4439,9 +4566,10 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $self->{connection}->server_header ("0");
-    $self->send_response_headers
-        ({status => 201, status_text => 'OK'}, close => 1);
-    $self->close_response;
+    return $self->send_response
+        ({status => 201, status_text => 'OK'}, close => 1)->then (sub {
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -4470,7 +4598,7 @@ test {
     my ($self, $req) = @_;
     $self->{connection}->server_header ("ab\x0Dvd");
     eval {
-      $self->send_response_headers
+      $self->send_response
           ({status => 201, status_text => 'OK'}, close => 1);
     };
     $error = $@;
@@ -4504,7 +4632,7 @@ test {
     my ($self, $req) = @_;
     $self->{connection}->server_header ("ab\x0Avd");
     eval {
-      $self->send_response_headers
+      $self->send_response
           ({status => 201, status_text => 'OK'}, close => 1);
     };
     $error = $@;
@@ -4537,7 +4665,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     eval {
-      $self->send_response_headers
+      $self->send_response
           ({status => 201, status_text => 'OK', headers => [
             ["\x00", 'hoge'],
           ]}, close => 1);
@@ -4563,7 +4691,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => 'send_response_headers bad header name';
+} n => 2, name => 'send_response bad header name';
 
 test {
   my $c = shift;
@@ -4572,7 +4700,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     eval {
-      $self->send_response_headers
+      $self->send_response
           ({status => 201, status_text => 'OK', headers => [
             ["", 'hoge'],
           ]}, close => 1);
@@ -4598,7 +4726,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => 'send_response_headers bad header name';
+} n => 2, name => 'send_response bad header name';
 
 test {
   my $c = shift;
@@ -4607,7 +4735,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     eval {
-      $self->send_response_headers
+      $self->send_response
           ({status => 201, status_text => 'OK', headers => [
             ["Foo", "x\x0Ab"],
           ]}, close => 1);
@@ -4633,7 +4761,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => 'send_response_headers bad header value';
+} n => 2, name => 'send_response bad header value';
 
 test {
   my $c = shift;
@@ -4642,7 +4770,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     eval {
-      $self->send_response_headers
+      $self->send_response
           ({status => 201, status_text => 'OK', headers => [
             [(substr "a\x{5000}", 0, 1), 'hoge'],
           ]}, close => 1);
@@ -4668,7 +4796,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => 'send_response_headers bad header name';
+} n => 2, name => 'send_response bad header name';
 
 test {
   my $c = shift;
@@ -4677,7 +4805,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     eval {
-      $self->send_response_headers
+      $self->send_response
           ({status => 201, status_text => 'OK', headers => [
             ["X", (substr "a\x{5000}", 0, 1)],
           ]}, close => 1);
@@ -4703,7 +4831,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => 'send_response_headers bad header value';
+} n => 2, name => 'send_response bad header value';
 
 test {
   my $c = shift;
@@ -4712,7 +4840,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     eval {
-      $self->send_response_headers
+      $self->send_response
           ({status => 201, status_text => "a\x0Db"}, close => 1);
     };
     $error = $@;
@@ -4736,7 +4864,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => 'send_response_headers bad status text';
+} n => 2, name => 'send_response bad status text';
 
 test {
   my $c = shift;
@@ -4745,7 +4873,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     eval {
-      $self->send_response_headers
+      $self->send_response
           ({status => 201, status_text => "a\x{5000}b"}, close => 1);
     };
     $error = $@;
@@ -4769,7 +4897,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => 'send_response_headers bad status text';
+} n => 2, name => 'send_response bad status text';
 
 test {
   my $c = shift;
@@ -4777,21 +4905,23 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => "OK"}, close => 1);
-    eval {
-      $self->send_response_headers
-          ({status => 202, status_text => "Not OK"}, close => 1);
-    };
-    $error = $@;
-    $self->close_response;
+    return $self->send_response
+        ({status => 201, status_text => "OK"}, close => 1)->then (sub {
+      #XXX
+      eval {
+        $self->send_response
+            ({status => 202, status_text => "Not OK"}, close => 1);
+      };
+      $error = $@;
+      return $self->{response}->{body}->get_writer->close;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^\|send_response_headers\| is invoked twice at @{[__FILE__]} line @{[__LINE__-11]}};
+      like $error, qr{^\|send_response\| is invoked twice at @{[__FILE__]} line @{[__LINE__-11]}};
       is $res->status, 201;
     } $c;
   }, sub {
@@ -4804,7 +4934,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => 'send_response_headers after headers';
+} n => 2, name => 'send_response after headers';
 
 test {
   my $c = shift;
@@ -4843,7 +4973,7 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->close_response;
+    $self->close_response;# XXX
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -4870,13 +5000,15 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => "OK"}, close => 1);
-    $self->close_response;
-    eval {
-      $self->send_response_data (\"abc");
-    };
-    $error = $@;
+    return $self->send_response
+        ({status => 201, status_text => "OK"}, close => 1)->then (sub {
+      return $self->{response}->{body}->get_writer->close;
+    })->then (sub {
+      eval {
+        $self->send_response_data (\"abc");
+      };
+      $error = $@;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
@@ -4904,21 +5036,24 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $self->send_response_headers
-        ({status => 201, status_text => "OK"}, close => 1);
-    $self->close_response;
-    eval {
-      $self->send_response_headers
-          ({status => 202, status_text => "Not OK"}, close => 1);
-    };
-    $error = $@;
+    return $self->send_response
+        ({status => 201, status_text => "OK"}, close => 1)->then (sub {
+      return $self->{response}->{body}->get_writer->close;
+    })->then (sub {
+      # XXX
+      eval {
+        $self->send_response
+            ({status => 202, status_text => "Not OK"}, close => 1);
+      };
+      $error = $@;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^\|send_response_headers\| is invoked twice at @{[__FILE__]} line @{[__LINE__-10]}};
+      like $error, qr{^\|send_response\| is invoked twice at @{[__FILE__]} line @{[__LINE__-10]}};
       is $res->status, 201;
     } $c;
   }, sub {
@@ -4931,7 +5066,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => 'send_response_headers after close';
+} n => 2, name => 'send_response after close';
 
 Test::Certificates->wait_create_cert;
 $GlobalCV->begin;

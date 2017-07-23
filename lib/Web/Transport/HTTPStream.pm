@@ -476,6 +476,39 @@ BEGIN {
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
 
+sub _end_of_headers ($) {
+  my $self = $_[0];
+  my $read_stream = ReadableStream->new ({
+    type => 'bytes',
+    auto_allocate_chunk_size => 1024*2,
+    start => sub {
+      $self->{receive_controller} = $_[1];
+      return undef;
+    },
+    pull => sub {
+      return $self->_read;
+    },
+    cancel => sub {
+      delete $self->{receive_controller};
+      return $self->abort (message => defined $_[1] ? $_[1] : 'HTTP reader cancelled');
+    },
+  });
+  $self->{receiving}->{body} = $read_stream;
+  (delete $self->{receiving}->{end_of_headers})->();
+} # _end_of_headers
+
+sub _receive_bytes_done ($) {
+  my $self = $_[0];
+  my $rc = delete $self->{receive_controller};
+  return undef unless defined $rc;
+  $rc->close;
+  my $req = $rc->byob_request;
+  if (defined $req) {
+    $req->manakai_respond_with_new_view (DataView->new (ArrayBuffer->new));
+  }
+  return undef;
+} # _receive_bytes_done
+
 sub send_text_header ($$) {
   my ($self, $length) = @_;
   croak "Data is utf8-flagged" if utf8::is_utf8 $_[2];
@@ -819,40 +852,6 @@ sub new ($$) {
   $self->{DEBUG} = delete $self->{args}->{debug} if defined $self->{args}->{debug};
   return $self;
 } # new_from_cb
-
-sub _end_of_headers ($) {
-  my $self = $_[0];
-  my $read_stream = ReadableStream->new ({
-    type => 'bytes',
-    auto_allocate_chunk_size => 1024*2,
-    start => sub {
-      $self->{receive_controller} = $_[1];
-      return undef;
-    },
-    pull => sub {
-      return $self->_read;
-    },
-    cancel => sub {
-      delete $self->{receive_controller};
-      return $self->abort (message => defined $_[1] ? $_[1] : 'HTTP reader cancelled');
-    },
-  });
-  $self->{response}->{body} = $read_stream;
-  (delete $self->{response}->{end_of_headers})->();
-} # _end_of_headers
-
-sub _receive_bytes_done ($) {
-  my $self = $_[0];
-  my $rc = delete $self->{receive_controller};
-  return undef unless defined $rc;
-  $rc->close;
-  my $req = $rc->byob_request;
-  if (defined $req) {
-    $req->manakai_respond_with_new_view (DataView->new (ArrayBuffer->new));
-  }
-#  $req->respond (0) if defined $req;
-  return undef;
-} # _receive_bytes_done
 
 my $BytesDataStates = {
   'response body' => 1,
@@ -1728,6 +1727,7 @@ sub _both_done ($) {
   my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
   delete $self->{request};
   delete $self->{response};
+  delete $self->{receiving};
   delete $self->{request_state};
   delete $self->{to_be_sent_length};
   if ($self->{no_new_request}) {
@@ -1945,7 +1945,7 @@ sub send_request ($$;%) {
   }) if $con->{DEBUG};
   return $sent->then (sub {
     $stream->{request} = $req;
-    $stream->{response} = $res;
+    $stream->{response} = $stream->{receiving} = $res;
     $stream->{closed} = $stream_closed;
     return $r_end_of_headers;
   }); ## could be rejected when connection aborted
@@ -2132,8 +2132,16 @@ sub _new_stream ($) {
 
   $req->{cb} = sub { }; # XXX
   $con->{stream_controller}->enqueue ($req);
-  $req->{request_received} = Promise->new (sub {
-    $req->{request_received_resolve} = $_[0];
+
+  my ($r_end_of_headers, $s_end_of_headers) = promised_cv;
+  my ($resolve_stream, $reject_stream);
+  $req->{receiving} = $req->{request};
+  $req->{receiving}->{end_of_headers} = $s_end_of_headers;
+  $req->{request_received} = $r_end_of_headers;
+
+  $req->{closed} = Promise->new (sub {
+    $req->{closed_resolve} = $_[0];
+    $req->{closed_reject} = $_[1];
   });
 
   return $req;
@@ -2236,8 +2244,7 @@ sub _ondata ($$) {
         $stream->_receive_done;
         $stream->_send_error (414, 'Request-URI Too Large')
             unless $self->{write_closed};
-        $stream->close_response;
-        return;
+        return $stream->{response}->{body}->get_writer->close;
       } else {
         return;
       }
@@ -2281,7 +2288,9 @@ sub _ondata ($$) {
       }
 
       if (not defined $self->{unread_length}) { # CONNECT data
-        $self->{stream}->_ev ('data', $$ref);
+        $self->{stream}->{receive_controller}->enqueue
+            (TypedArray::Uint8Array->new
+                 (ArrayBuffer->new_from_scalarref ($ref)));
         return;
       }
 
@@ -2293,8 +2302,10 @@ sub _ondata ($$) {
           $self->{state} = 'ws handshaking';
           $self->{stream}->{close_after_response} = 1;
         }
-        $self->{stream}->_ev ('data', $$ref);
-        $self->{stream}->_ev ('dataend');
+        $self->{stream}->{receive_controller}->enqueue
+            (TypedArray::Uint8Array->new
+                 (ArrayBuffer->new_from_scalarref ($ref)));
+        $self->{stream}->_receive_bytes_done;
         unless (defined $self->{stream}->{ws_key}) {
           $self->{stream}->_receive_done;
         }
@@ -2304,15 +2315,20 @@ sub _ondata ($$) {
         if (defined $self->{stream}->{ws_key}) {
           $self->{state} = 'ws handshaking';
         }
-        $self->{stream}->_ev ('data', substr ($$ref, 0, $self->{unread_length}));
-        $self->{stream}->_ev ('dataend');
+        $self->{stream}->{receive_controller}->enqueue
+            (TypedArray::Uint8Array->new
+                 (ArrayBuffer->new_from_scalarref ($ref),
+                  0, $self->{unread_length}));
+        $self->{stream}->_receive_bytes_done;
         unless (defined $self->{stream}->{ws_key}) {
           $self->{stream}->_receive_done;
         }
         return;
       } else { # unread_length > $in_length
         $self->{unread_length} -= $in_length;
-        $self->{stream}->_ev ('data', $$ref);
+        $self->{stream}->{receive_controller}->enqueue
+            (TypedArray::Uint8Array->new
+                 (ArrayBuffer->new_from_scalarref ($ref)));
         return;
       }
     } elsif ($self->{state} eq 'before ws frame' or
@@ -2357,7 +2373,7 @@ sub _oneof ($$) {
       $error = {failed => 1, message => 'Connection closed'} # XXX
           unless defined $error;
     }
-    $self->{stream}->_ev ('dataend');
+    $self->{stream}->_receive_bytes_done;
     $self->{exit} = $error;
     $self->{stream}->_receive_done;
   } elsif ($self->{state} eq 'before ws frame' or
@@ -2559,7 +2575,7 @@ sub _request_headers ($) {
           ['Upgrade', 'websocket'],
           ['Sec-WebSocket-Version', '13'],
         ]) unless $self->{write_closed};
-        $stream->close_response;
+        $stream->{response}->{body}->get_writer->close;
       } else {
         $stream->_fatal;
       }
@@ -2574,7 +2590,7 @@ sub _request_headers ($) {
   if (@{$headers{'transfer-encoding'} or []}) {
     $stream->_receive_done;
     $stream->_send_error (411, 'Length Required') unless $self->{write_closed};
-    $stream->close_response;
+    $stream->{response}->{body}->get_writer->close; # XXX
     return 0;
   }
 
@@ -2600,10 +2616,9 @@ sub _request_headers ($) {
     $self->{unread_length} = $l;
     $self->{state} = 'request body';
   }
-  (delete $stream->{request_received_resolve})->(); # 'headers' for $stream->{request} # XXX debug
-  $stream->_ev ('datastart');
+  $stream->_end_of_headers;
   if ($l == 0 and not $stream->{request}->{method} eq 'CONNECT') {
-    $stream->_ev ('dataend');
+    $stream->_receive_bytes_done;
     unless (defined $stream->{ws_key}) {
       $stream->_receive_done;
     }
@@ -2680,7 +2695,7 @@ sub request_ready ($) {
   return $_[0]->{request_received};
 } # request_ready
 
-sub send_response_headers ($$$;%) {
+sub send_response ($$$;%) {
   my ($stream, $response, %args) = @_;
   croak "|send_response_headers| is invoked twice"
       if defined $stream->{write_mode};
@@ -2811,15 +2826,54 @@ sub send_response_headers ($$$;%) {
     }
   }
 
+  $stream->{response} = {};
+  $stream->{response}->{body} = WritableStream->new ({
+    write => sub {
+      # XXX
+    },
+    close => sub {
+      return unless defined $stream->{connection};
+      if (not defined $stream->{write_mode}) {
+        return $stream->abort (message => 'Closed without response');
+      } elsif (defined $stream->{to_be_sent_length} and
+               $stream->{to_be_sent_length} > 0) {
+        carp sprintf "Truncated end of sent data (%d more bytes expected)",
+            $stream->{to_be_sent_length}; # XXX
+        $stream->{close_after_response} = 1;
+        $stream->_send_done;
+      } else {
+        $stream->{close_after_response} = 1
+            if $stream->{request}->{method} eq 'CONNECT';
+        if ($stream->{write_mode} eq 'chunked') {
+          # XXX trailer headers
+          my $p = $stream->{connection}->{writer}->write
+              (DataView->new (ArrayBuffer->new_from_scalarref (\"0\x0D\x0A\x0D\x0A")));
+          $stream->_send_done;
+          return $p;
+        } elsif (defined $stream->{write_mode} and $stream->{write_mode} eq 'ws') {
+          return $stream->close; # XXX $args
+        } else {
+          $stream->_send_done;
+        }
+      }
+      return;
+    }, # close
+    abort => sub {
+      # XXX
+    },
+  });
+
   $stream->{close_after_response} = 1 if $close;
   $stream->{write_mode} = $write_mode;
   if ($done) {
     delete $stream->{to_be_sent_length};
-    $stream->close_response;
+    $stream->{response}->{body}->get_writer->close;
   } else {
     $stream->{to_be_sent_length} = $to_be_sent if defined $to_be_sent;
   }
-} # send_response_headers
+
+  return Promise->resolve;
+} # send_response
 
 sub send_response_data ($$) { # XXX
   my ($req, $ref) = @_;
@@ -2857,7 +2911,7 @@ sub send_response_data ($$) { # XXX
     $writer->write (DataView->new (ArrayBuffer->new_from_scalarref ($ref)));
     if ($wm eq 'raw' and
         defined $req->{to_be_sent_length} and $req->{to_be_sent_length} <= 0) {
-      $req->close_response;
+      return $req->{response}->{body}->get_writer->close;
     }
   } elsif ($wm eq 'void') {
     #
@@ -2866,40 +2920,18 @@ sub send_response_data ($$) { # XXX
   }
 } # send_response_data
 
-sub close_response ($;%) {
-  my ($stream, %args) = @_;
-  return unless defined $stream->{connection};
-  if (not defined $stream->{write_mode}) {
-    $stream->abort (message => 'Closed without response');
-  } elsif (defined $stream->{to_be_sent_length} and
-           $stream->{to_be_sent_length} > 0) {
-    carp sprintf "Truncated end of sent data (%d more bytes expected)",
-        $stream->{to_be_sent_length};
-    $stream->{close_after_response} = 1;
-    $stream->_send_done;
-  } else {
-    $stream->{close_after_response} = 1
-        if $stream->{request}->{method} eq 'CONNECT';
-    if ($stream->{write_mode} eq 'chunked') {
-      # XXX trailer headers
-      $stream->{connection}->{writer}->write
-          (DataView->new (ArrayBuffer->new_from_scalarref (\"0\x0D\x0A\x0D\x0A")));
-      $stream->_send_done;
-    } elsif (defined $stream->{write_mode} and $stream->{write_mode} eq 'ws') {
-      $stream->close (%args);
-    } else {
-      $stream->_send_done;
-    }
-  }
-  return;
-} # close_response
+sub _read {
+  # XXX
+} # _read
 
 sub abort ($;%) {
   my $stream = shift;
   $stream->{connection}->abort (@_) if defined $stream->{connection};
 } # abort
 
-# XXX closed
+sub closed ($) {
+  return $_[0]->{closed};
+} # closed
 
 sub _send_error ($$$;$) {
   my ($stream, $status, $status_text, $headers) = @_;
@@ -2925,7 +2957,7 @@ sub _fatal ($) {
   $con->{state} = 'end';
   $con->{rbuf} = '';
   $req->_send_error (400, 'Bad Request') unless $con->{write_closed};
-  $req->close_response;
+  $req->{response}->{body}->get_writer->close; # XXX
 } # _fatal
 
 sub _send_done ($) {
@@ -2977,7 +3009,14 @@ sub _both_done ($) {
     $con->{state} = 'end';
   }
   delete $con->{disable_timer};
-  $stream->_ev ('complete', $con->{exit} || {});
+  my $error = $con->{exit} || {};
+  if ($error->{failed}) { # XXX
+    $stream->{closed_reject}->($error);
+  } else {
+    $stream->{closed_resolve}->();
+  }
+  delete $stream->{closed_resolve};
+  delete $stream->{closed_reject};
   if ($con->{DEBUG}) { #XXX
     warn "$con->{id}: endstream $stream->{id} @{[scalar gmtime]}\n";
     warn "$con->{id}: ========== @{[ref $con]}\n";

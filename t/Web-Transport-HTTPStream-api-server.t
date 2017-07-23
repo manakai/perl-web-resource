@@ -64,9 +64,10 @@ test {
       return $stream->request_ready->then (sub {
         my $path = $stream->{request}->{target_url}->path;
 
-        $stream->send_response_headers
-            ({status => 210, status_text => $stream->{id}});
-        $stream->close_response;
+        $stream->send_response
+            ({status => 210, status_text => $stream->{id}})->then (sub {
+          return $stream->{response}->{body}->get_writer->close;
+        });
       });
     });
 
@@ -132,13 +133,15 @@ test {
       return $stream->request_ready->then (sub {
         my $path = $stream->{request}->{target_url}->path;
         if ($path eq '/404') {
-          $stream->send_response_headers
-              ({status => 404, status_text => $stream->{id}});
-          $stream->close_response;
+          $stream->send_response
+              ({status => 404, status_text => $stream->{id}})->then (sub {
+            return $stream->{response}->{body}->get_writer->close;
+          });
         } else {
-          $stream->send_response_headers
-              ({status => 210, status_text => $stream->{id}});
-          $response_header_sent->($stream);
+          $stream->send_response
+              ({status => 210, status_text => $stream->{id}})->then (sub {
+            $response_header_sent->($stream);
+          });
         }
       });
     });
@@ -153,7 +156,7 @@ test {
     my $stream = $_[0];
     promised_sleep (1)->then (sub {
       $stream->send_response_data (\"abcde");
-      $stream->close_response;
+      return $stream->{response}->{body}->get_writer->close;
     });
     return $con->close_after_current_stream;
   })->then (sub {
@@ -210,9 +213,10 @@ test {
       return $stream->request_ready->then (sub {
         my $path = $stream->{request}->{target_url}->path;
         if ($path eq '/404') {
-          $stream->send_response_headers
-              ({status => 404, status_text => $stream->{id}});
-          $stream->close_response;
+          $stream->send_response
+              ({status => 404, status_text => $stream->{id}})->then (sub {
+            return $stream->{response}->{body}->get_writer->close;
+          });
         } else {
           $response_header_sent->($stream);
         }
@@ -227,10 +231,11 @@ test {
   $after_response_header->then (sub {
     my $stream = $_[0];
     promised_sleep (1)->then (sub {
-      $stream->send_response_headers
-          ({status => 210, status_text => $stream->{id}});
-      $stream->send_response_data (\"abcde");
-      $stream->close_response;
+      return $stream->send_response
+          ({status => 210, status_text => $stream->{id}})->then (sub {
+        $stream->send_response_data (\"abcde");
+        return $stream->{response}->{body}->get_writer->close;
+      });
     });
     return $con->close_after_current_stream;
   })->then (sub {

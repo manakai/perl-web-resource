@@ -1992,8 +1992,8 @@ sub new ($$) {
     start => sub {
       $self->{stream_controller} = $_[1];
     },
-    close => sub {
-      # XXX close after
+    pull => sub {
+      return $self->_read if defined $self->{reader};
     },
     cancel => sub {
       # XXX abort
@@ -2026,21 +2026,7 @@ sub new ($$) {
     $self->{reader} = $info->{read_stream}->get_reader ('byob');
     $self->{writer} = $info->{write_stream}->get_writer;
 
-    my $read; $read = sub {
-      return $self->{reader}->read (DataView->new (ArrayBuffer->new (1024*3)))->then (sub { # XXX
-        return if $_[0]->{done};
-
-        if ($self->{disable_timer}) {
-          delete $self->{timer};
-        } else {
-          $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
-        }
-        $self->_ondata ($_[0]->{value});
-
-        return $read->();
-      });
-    }; # $read;
-    $read->()->catch (sub { })->then (sub { undef $read });
+    $self->_read;
 
     my $p1 = $self->{reader}->closed->then (sub {
       if ($self->{DEBUG}) {
@@ -2059,24 +2045,20 @@ sub new ($$) {
     });
 
     my $p2 = $self->{writer}->closed->then (sub {
+      delete $self->{writer};
       if ($self->{DEBUG}) {
         my $id = ''; # XXX $transport->id;
         warn "$id: S: EOF\n";
       }
-      $self->{write_closed} = 1;
-      if (defined $self->{sending_stream}) {
-        $self->{sending_stream}->_send_done;
-      }
+      $self->{sending_stream}->_send_done if defined $self->{sending_stream};
     }, sub {
+      delete $self->{writer};
       if ($self->{DEBUG}) {
         my $id = ''; # XXX $transport->id;
         warn "$id: S: EOF (@{[_e4d_t $_[0]]})\n";
       }
-      $self->{write_closed} = 1;
-      if (defined $self->{sending_stream}) {
-        $self->{sending_stream}->_send_done;
-      }
-    });
+      $self->{sending_stream}->_send_done if defined $self->{sending_stream};
+    }); # underlying writer closed
 
     return Promise->all ([$p1, $p2]);
   })->catch (sub {
@@ -2147,9 +2129,28 @@ sub _new_stream ($) {
   return $req;
 } # _new_stream
 
+sub _read ($) {
+  my $self = $_[0];
+  my $read; $read = sub {
+    return $self->{reader}->read (DataView->new (ArrayBuffer->new (1024*3)))->then (sub { # XXX
+      return if $_[0]->{done};
+
+      if ($self->{disable_timer}) {
+        delete $self->{timer};
+      } else {
+        $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
+      }
+      $self->_ondata ($_[0]->{value});
+
+      return $read->();
+    });
+  }; # $read;
+  return $read->()->catch (sub { })->then (sub { undef $read });
+} # _read
+
 sub _ondata ($$) {
   my ($self, $in) = @_;
-  my $inref = \($in->manakai_to_string); # XXX
+  my $inref = \($in->manakai_to_string); # string copy!
   while (1) {
     #warn "[$self->{state}] |$self->{rbuf}|";
     if ($self->{state} eq 'initial') {
@@ -2242,9 +2243,7 @@ sub _ondata ($$) {
         $stream->{request}->{method} = 'GET';
         $stream->{request}->{version} = 1.1;
         $stream->_receive_done;
-        $stream->_send_error (414, 'Request-URI Too Large')
-            unless $self->{write_closed};
-        return $stream->{response}->{body}->get_writer->close;
+        return $stream->_send_error (414, 'Request-URI Too Large');
       } else {
         return;
       }
@@ -2349,10 +2348,10 @@ sub _ondata ($$) {
 
 sub _oneof ($$) {
   my ($self, $error) = @_;
-  $self->{write_closed} = 1 if defined $error;
+  delete $self->{writer} if defined $error;
   if ($self->{state} eq 'initial' or
       $self->{state} eq 'before request-line') {
-    if ($self->{write_closed}) {
+    if (not defined $self->{writer}) {
       delete $self->{timer};
       $self->{state} = 'end';
       return;
@@ -2390,13 +2389,13 @@ sub _oneof ($$) {
       $stream->{request}->{method} = 'GET';
       return $stream->_fatal;
     } else {
-      $self->{writer}->close unless $self->{write_closed};
-      $self->{write_closed} = 1;
+      $self->{writer}->close if defined $self->{writer};
+      delete $self->{writer};
       $self->{state} = 'end';
     }
   } elsif ($self->{state} eq 'end') {
-    $self->{writer}->close unless $self->{write_closed};
-    $self->{write_closed} = 1;
+    $self->{writer}->close if defined $self->{writer};
+    delete $self->{writer};
   } else {
     die "Bad state |$self->{state}|";
   }
@@ -2574,8 +2573,7 @@ sub _request_headers ($) {
         $stream->_send_error (426, 'Upgrade Required', [
           ['Upgrade', 'websocket'],
           ['Sec-WebSocket-Version', '13'],
-        ]) unless $self->{write_closed};
-        $stream->{response}->{body}->get_writer->close;
+        ]);
       } else {
         $stream->_fatal;
       }
@@ -2589,8 +2587,7 @@ sub _request_headers ($) {
   ## Transfer-Encoding:
   if (@{$headers{'transfer-encoding'} or []}) {
     $stream->_receive_done;
-    $stream->_send_error (411, 'Length Required') unless $self->{write_closed};
-    $stream->{response}->{body}->get_writer->close; # XXX
+    $stream->_send_error (411, 'Length Required');
     return 0;
   }
 
@@ -2639,42 +2636,39 @@ sub received_streams ($) {
   return $_[0]->{received_streams};
 } # received_streams
 
-sub closed ($) {
-  return $_[0]->{closed};
-} # closed
-
 sub abort ($) {
   my ($self, %args) = @_;
   $self->{writer}->abort ($args{message}); # XXX
   $self->{reader}->cancel ($args{message}); # XXX
-  $self->{write_closed} = 1;
-  if (defined $self->{stream}) {
-    $self->{stream}->_send_done;
-  }
+  delete $self->{writer};
+  $self->{stream}->_send_done if defined $self->{stream};
   return $self->{closed};
 } # abort
 
 sub close_after_current_stream ($) {
   my $self = $_[0];
-
   if (defined $self->{stream}) {
     $self->{stream}->{close_after_response} = 1;
   } elsif (defined $self->{sending_stream}) {
     $self->{sending_stream}->{close_after_response} = 1;
   } else {
-    unless ($self->{write_closed}) {
-      $self->{writer}->write (DataView->new (ArrayBuffer->new))->then (sub {
+    if (defined $self->{writer}) {
+      my $w = $self->{writer};
+      $w->write (DataView->new (ArrayBuffer->new))->then (sub {
         my $error = 'Close by |close_after_current_stream|'; # XXX
-        $self->{writer}->abort ($error);
+        $w->abort ($error);
         $self->{reader}->cancel ($error)->catch (sub { });
       });
+      delete $self->{writer};
     }
-    $self->{write_closed} = 1;
     $self->{state} = 'end';
   }
-
   return $self->{closed};
 } # close_after_current_stream
+
+sub closed ($) {
+  return $_[0]->{closed};
+} # closed
 
 package Web::Transport::HTTPStream::ServerStream;
 push our @ISA, qw(Web::Transport::HTTPStream::Stream);
@@ -2795,7 +2789,7 @@ sub send_response ($$$;%) {
     croak "Header value of |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[1];
   }
 
-  if ($stream->{connection}->{write_closed}) {
+  if (not defined $stream->{connection}->{writer}) {
     ## Connection aborted (typically by client) before the application
     ## sends the headers
     $write_mode = 'void';
@@ -2829,8 +2823,53 @@ sub send_response ($$$;%) {
   $stream->{response} = {};
   $stream->{response}->{body} = WritableStream->new ({
     write => sub {
-      # XXX
-    },
+      my $chunk = $_[1]; # XXX must be an ArrayBufferView
+      return Promise->resolve->then (sub {
+        my $wm = $stream->{write_mode} || '';
+        my $dv = UNIVERSAL::isa ($chunk, 'DataView')
+            ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $chunk->byte_length);
+        if ($stream->{DEBUG} > 1) {
+          for (split /\x0A/, $dv->manakai_to_string, -1) {
+            warn "$stream->{id}: S: @{[_e4d $_]}\n";
+          }
+        }
+        my $writer = $stream->{connection}->{writer};
+        if ($wm eq 'chunked') {
+          if ($dv->byte_length) {
+            ## Note that some clients fail to parse chunks if there
+            ## are TCP segment boundaries within a chunk (which is
+            ## smaller than MSS).
+            $writer->write
+                (DataView->new (ArrayBuffer->new_from_scalarref
+                                    (\sprintf "%X\x0D\x0A%s\x0D\x0A", $dv->byte_length, $dv->manakai_to_string))); # XXX string copy!
+          }
+        } elsif ($wm eq 'raw' or $wm eq 'ws') {
+          croak "Not writable for now"
+              if $wm eq 'ws' and
+                  (not $stream->{connection}->{ws_state} eq 'OPEN' or
+                   not defined $stream->{to_be_sent_length} or
+                   $stream->{to_be_sent_length} <= 0);
+          if (defined $stream->{to_be_sent_length}) {
+            if ($stream->{to_be_sent_length} >= $dv->byte_length) {
+              $stream->{to_be_sent_length} -= $dv->byte_length;
+            } else {
+              croak sprintf "Data too long (given %d bytes whereas only %d bytes allowed)",
+                  $dv->byte_length, $stream->{to_be_sent_length};
+            }
+          }
+          $writer->write ($dv);
+          if ($wm eq 'raw' and
+              defined $stream->{to_be_sent_length} and
+              $stream->{to_be_sent_length} <= 0) {
+            return; #XXX $stream->{response}->{body}->get_writer->close;
+          }
+        } elsif ($wm eq 'void') {
+          #
+        } else {
+          croak "Not writable for now ($wm)";
+        }
+      }); # XXX catch
+    }, # write
     close => sub {
       return unless defined $stream->{connection};
       if (not defined $stream->{write_mode}) {
@@ -2867,7 +2906,7 @@ sub send_response ($$$;%) {
   $stream->{write_mode} = $write_mode;
   if ($done) {
     delete $stream->{to_be_sent_length};
-    $stream->{response}->{body}->get_writer->close;
+    #XXX $stream->{response}->{body}->get_writer->close;
   } else {
     $stream->{to_be_sent_length} = $to_be_sent if defined $to_be_sent;
   }
@@ -2875,53 +2914,8 @@ sub send_response ($$$;%) {
   return Promise->resolve;
 } # send_response
 
-sub send_response_data ($$) { # XXX
-  my ($req, $ref) = @_;
-  croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
-  my $wm = $req->{write_mode} || '';
-  if ($req->{DEBUG} > 1) {
-    for (split /\x0A/, $$ref, -1) {
-      warn "$req->{id}: S: @{[_e4d $_]}\n";
-    }
-  }
-  my $writer = $req->{connection}->{writer};
-  if ($wm eq 'chunked') {
-    if (length $$ref) {
-      ## Note that some clients fail to parse chunks if there are TCP
-      ## segment boundaries within a chunk (which is smaller than
-      ## MSS).
-      $writer->write
-          (DataView->new (ArrayBuffer->new_from_scalarref
-                              (\sprintf "%X\x0D\x0A%s\x0D\x0A", length $$ref, $$ref))); # XXX string copy!
-    }
-  } elsif ($wm eq 'raw' or $wm eq 'ws') {
-    croak "Not writable for now"
-        if $wm eq 'ws' and
-            (not $req->{connection}->{ws_state} eq 'OPEN' or
-             not defined $req->{to_be_sent_length} or
-             $req->{to_be_sent_length} <= 0);
-    if (defined $req->{to_be_sent_length}) {
-      if ($req->{to_be_sent_length} >= length $$ref) {
-        $req->{to_be_sent_length} -= length $$ref;
-      } else {
-        croak sprintf "Data too long (given %d bytes whereas only %d bytes allowed)",
-            length $$ref, $req->{to_be_sent_length};
-      }
-    }
-    $writer->write (DataView->new (ArrayBuffer->new_from_scalarref ($ref)));
-    if ($wm eq 'raw' and
-        defined $req->{to_be_sent_length} and $req->{to_be_sent_length} <= 0) {
-      return $req->{response}->{body}->get_writer->close;
-    }
-  } elsif ($wm eq 'void') {
-    #
-  } else {
-    croak "Not writable for now ($wm)";
-  }
-} # send_response_data
-
-sub _read {
-  # XXX
+sub _read ($) {
+  return $_[0]->{connection}->_read;
 } # _read
 
 sub abort ($;%) {
@@ -2935,19 +2929,25 @@ sub closed ($) {
 
 sub _send_error ($$$;$) {
   my ($stream, $status, $status_text, $headers) = @_;
+  return if not defined $stream->{writer};
+
   my $res = qq{<!DOCTYPE html><html>
 <head><title>$status $status_text</title></head>
 <body>$status $status_text};
   #$res .= Carp::longmess;
   $res .= qq{</body></html>\x0A};
-  $stream->send_response_headers
+  $stream->send_response
       ({status => $status, status_text => $status_text,
         headers => [
           @{$headers or []},
           ['Content-Type' => 'text/html; charset=utf-8'],
-        ]}, close => 1, content_length => length $res);
-  $stream->send_response_data (\$res)
-      unless $stream->{request}->{method} eq 'HEAD';
+        ]}, close => 1, content_length => length $res)->then (sub {
+    my $w = $stream->{response}->{body}->get_writer;
+    $w->write (DataView->new (ArrayBuffer->new_from_scalarref ($res)))
+        unless $stream->{request}->{method} eq 'HEAD';
+    return $w->close;
+  });
+  return;
 } # _send_error
 
 sub _fatal ($) {
@@ -2956,8 +2956,7 @@ sub _fatal ($) {
   $req->_receive_done;
   $con->{state} = 'end';
   $con->{rbuf} = '';
-  $req->_send_error (400, 'Bad Request') unless $con->{write_closed};
-  $req->{response}->{body}->get_writer->close; # XXX
+  return $req->_send_error (400, 'Bad Request');
 } # _fatal
 
 sub _send_done ($) {
@@ -2965,8 +2964,8 @@ sub _send_done ($) {
   delete $stream->{connection}->{sending_stream};
   if (delete $stream->{close_after_response}) {
     $stream->{connection}->{writer}->close
-        if not $stream->{connection}->{write_closed};
-    $stream->{connection}->{write_closed} = 1;
+        if defined $stream->{connection}->{writer};
+    delete $stream->{connection}->{writer};
   }
   $stream->{write_mode} = 'sent';
   delete $stream->{to_be_sent_length};
@@ -2987,7 +2986,7 @@ sub _receive_done ($) {
   delete $con->{unread_length};
   delete $con->{ws_timer};
   if ($stream->{close_after_response} or
-      $stream->{connection}->{write_closed}) { # _send_done already called with close_after_response
+      not defined $stream->{connection}->{writer}) { # _send_done already called with close_after_response
     $con->{state} = 'end';
   } else {
     $con->{state} = 'after request';
@@ -3004,8 +3003,8 @@ sub _both_done ($) {
   return unless defined $con;
 
   if (delete $stream->{close_after_response}) {
-    $con->{writer}->close unless $con->{write_closed};
-    $con->{write_closed} = 1;
+    $con->{writer}->close if defined $con->{writer};
+    delete $con->{writer};
     $con->{state} = 'end';
   }
   delete $con->{disable_timer};

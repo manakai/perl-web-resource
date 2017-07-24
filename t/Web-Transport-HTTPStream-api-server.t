@@ -42,6 +42,10 @@ use Web::Transport::HTTPStream;
   } # find_listenable_port
 }
 
+sub d ($) {
+  return DataView->new (ArrayBuffer->new_from_scalarref (\($_[0])));
+} # d
+
 test {
   my $c = shift;
 
@@ -155,8 +159,9 @@ test {
   $after_response_header->then (sub {
     my $stream = $_[0];
     promised_sleep (1)->then (sub {
-      $stream->send_response_data (\"abcde");
-      return $stream->{response}->{body}->get_writer->close;
+      my $w = $stream->{response}->{body}->get_writer;
+      $w->write (d "abcde");
+      return $w->close;
     });
     return $con->close_after_current_stream;
   })->then (sub {
@@ -233,8 +238,9 @@ test {
     promised_sleep (1)->then (sub {
       return $stream->send_response
           ({status => 210, status_text => $stream->{id}})->then (sub {
-        $stream->send_response_data (\"abcde");
-        return $stream->{response}->{body}->get_writer->close;
+        my $w = $stream->{response}->{body}->get_writer;
+        $w->write (d "abcde");
+        return $w->close;
       });
     });
     return $con->close_after_current_stream;

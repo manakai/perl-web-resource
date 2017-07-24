@@ -71,30 +71,35 @@ my $HandleRequestHeaders = {};
 
   my $server_process = sub {
     my $con = $_[0];
-    $con->received_streams->get_reader->read->then (sub {
-      return if $_[0]->{done};
-      my $stream = $_[0]->{value};
-      $stream->request_ready->then (sub {
-        my $req = $stream->{request};
-        my $handler = $HandleRequestHeaders->{$req->{target_url}->path} ||
-                      $HandleRequestHeaders->{$req->{target_url}->hostport};
-        if (defined $handler) {
-          $stream->{body} = '';
-          $handler->($stream, $req);
-        } elsif ($req->{target_url}->path eq '/') {
-          return $stream->send_response
-              ({status => 404, status_text => 'Not Found (/)'}, close => 1)->then (sub {
-            return $stream->{response}->{body}->get_writer->close;
-          });
-        } else {
-          die "No handler for |@{[$req->{target_url}->stringify]}|";
-        }
+    my $req_reader = $con->received_streams->get_reader;
+    my $run; $run = sub {
+      return $req_reader->read->then (sub {
+        return 0 if $_[0]->{done};
+        my $stream = $_[0]->{value};
+        $stream->request_ready->then (sub {
+          my $req = $stream->{request};
+          my $handler = $HandleRequestHeaders->{$req->{target_url}->path} ||
+                        $HandleRequestHeaders->{$req->{target_url}->hostport};
+          if (defined $handler) {
+            $stream->{body} = '';
+            $handler->($stream, $req);
+          } elsif ($req->{target_url}->path eq '/') {
+            return $stream->send_response
+                ({status => 404, status_text => 'Not Found (/)'}, close => 1)->then (sub {
+              return $stream->{response}->{body}->get_writer->close;
+            });
+          } else {
+            die "No handler for |@{[$req->{target_url}->stringify]}|";
+          }
+        });
+        $stream->closed->then (sub { # XXX
+          $stream->{complete}->($_[2], $_[3]) if $stream->{complete};
+          delete $stream->{$_} for qw(ondata dataend textend ping complete);
+        });
+        return $run->();
       });
-      $stream->closed->then (sub { # XXX
-        $stream->{complete}->($_[2], $_[3]) if $stream->{complete};
-        delete $stream->{$_} for qw(ondata dataend textend ping complete);
-      });
-    });
+    }; # $run
+    $run->()->then (sub { undef $run }, sub { undef $run });
     #} elsif ($type eq 'data') {
     #  $self->{body} .= $_[2];
     #  $self->{ondata}->($_[2], $_[3]) if $self->{ondata};
@@ -279,6 +284,7 @@ test {
 test {
   my $c = shift;
   my $x;
+  my $y;
   my $rand = rand;
   $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
@@ -287,11 +293,13 @@ test {
           ['Hoge', 'Fuga4'],
         ]})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      eval {
-        $w->write (d 'abcde4');
-      };
-      $x = $@;
-      return $w->close;
+      return $w->write (d 'abcde4')->catch (sub {
+        $x = $_[0];
+      })->then (sub {
+        return $w->close;
+      })->catch (sub {
+        $y = $_[0];
+      });
     });
   };
 
@@ -304,7 +312,8 @@ test {
       is $res->header ('Hoge'), 'Fuga4';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-15]}};
+      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
+      like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
     test {
@@ -316,11 +325,12 @@ test {
     done $c;
     undef $c;
   });
-} n => 6, name => 'no payload body (304) but data';
+} n => 7, name => 'no payload body (304) but data';
 
 test {
   my $c = shift;
   my $x;
+  my $y;
   my $rand = rand;
   $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
@@ -329,11 +339,12 @@ test {
           ['Hoge', 'Fuga4'],
         ]})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      eval {
-        $w->write (d 'abcde4');
-      };
-      $x = $@;
-      return $w->close;
+      return $w->write (d 'abcde4')->catch (sub {
+        $x = $_[0];
+        return $w->close;
+      })->catch (sub {
+        $y = $_[0];
+      });
     });
   };
 
@@ -346,7 +357,8 @@ test {
       is $res->header ('Hoge'), 'Fuga4';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-15]}};
+      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
+      like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
     test {
@@ -358,7 +370,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 6, name => 'no payload body (204) but data';
+} n => 7, name => 'no payload body (204) but data';
 
 test {
   my $c = shift;
@@ -418,6 +430,7 @@ test {
 test {
   my $c = shift;
   my $x;
+  my $y;
   $HandleRequestHeaders->{'/hoge7'} = sub {
     my ($self, $req) = @_;
     return $self->send_response
@@ -425,11 +438,12 @@ test {
           ['Hoge', 'Fuga7'],
         ]})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      eval {
-        $w->write (d 'abcde7');
-      };
-      $x = $@;
-      return $w->close;
+      $w->write (d 'abcde7')->catch (sub {
+        $x = $_[0];
+        return $w->close;
+      })->catch (sub {
+        $y = $_[0];
+      });
     });
   };
 
@@ -442,7 +456,8 @@ test {
       is $res->header ('Hoge'), 'Fuga7';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-15]}};
+      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
+      like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
     test {
@@ -454,7 +469,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 6, name => 'no payload body (HEAD) but data';
+} n => 7, name => 'no payload body (HEAD) but data';
 
 test {
   my $c = shift;
@@ -469,10 +484,9 @@ test {
       $w->write (d 'abcde8');
       $w->write (d '');
       $w->write (d 'abcde9');
-      eval {
-        $w->write (d 'abcde10');
-      };
-      $x = $@;
+      $w->write (d 'abcde10')->catch (sub {
+        $x = $_[0];
+      });
     });
   };
 
@@ -485,7 +499,7 @@ test {
       is $res->header ('Hoge'), 'Fuga8';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, 'abcde8abcde9';
-      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-14]}};
+      like $x, qr{^TypeError: Byte length 7 is greater than expected length 0 at}; # XXX location
     } $c;
   }, sub {
     test {
@@ -497,11 +511,13 @@ test {
     done $c;
     undef $c;
   });
-} n => 6, name => 'with Content-Length';
+} n => 6, name => 'with Content-Length 1';
 
 test {
   my $c = shift;
   my $x;
+  my $y;
+  my $p;
   $HandleRequestHeaders->{'/hoge11'} = sub {
     my ($self, $req) = @_;
     return $self->send_response
@@ -510,11 +526,12 @@ test {
         ]}, content_length => 12)->then (sub {
       my $w = $self->{response}->{body}->get_writer;
       $w->write (d 'abcd11');
-      eval {
-        $w->write (d 'abcde12');
-      };
-      $x = $@;
-      $w->write (d 'abcd13');
+      $p = $w->write (d 'abcde12')->catch (sub {
+        $x = $_[0];
+        return $w->write (d 'abcd13');
+      })->catch (sub {
+        $y = $_[0];
+      });
     });
   };
 
@@ -522,12 +539,13 @@ test {
   $http->request (path => ['hoge11'])->then (sub {
     my $res = $_[0];
     test {
-      is $res->status, 201;
-      is $res->status_text, 'OK';
-      is $res->header ('Hoge'), 'Fuga11';
-      is $res->header ('Connection'), undef;
-      is $res->body_bytes, 'abcd11abcd13';
-      like $x, qr{^Data too long \(given 7 bytes whereas only 6 bytes allowed\) at .+ line @{[__LINE__-15]}};
+      ok $res->is_network_error;
+    } $c;
+    return $p;
+  })->then (sub {
+    test {
+      like $x, qr{^TypeError: Byte length 7 is greater than expected length 6 at}; # XXX location
+      like $y, qr{^TypeError: Byte length 7 is greater than expected length 6 at}; # XXX location
     } $c;
   }, sub {
     test {
@@ -539,10 +557,11 @@ test {
     done $c;
     undef $c;
   });
-} n => 6, name => 'with Content-Length';
+} n => 3, name => 'with Content-Length 2';
 
 test {
   my $c = shift;
+  my @w;
   $HandleRequestHeaders->{'/hoge14'} = sub {
     my ($self, $req) = @_;
     return $self->send_response
@@ -551,6 +570,7 @@ test {
         ]}, content_length => 8)->then (sub {
       my $w = $self->{response}->{body}->get_writer;
       $w->write (d 'abcdef14');
+      push @w, $w;
     });
   };
   $HandleRequestHeaders->{'/hoge15'} = sub {
@@ -561,6 +581,7 @@ test {
         ]}, content_length => 10)->then (sub {
       my $w = $self->{response}->{body}->get_writer;
       $w->write (d 'abcdefgh15');
+      push @w, $w;
     });
   };
 
@@ -590,27 +611,29 @@ test {
       ok 0;
     } $c;
   })->then (sub {
+    return promised_map { $_[0]->close } \@w;
+  })->then (sub {
     return $http->close;
   })->then (sub {
     done $c;
     undef $c;
   });
-} n => 12, name => 'with Content-Length';
+} n => 12, name => 'with Content-Length 3';
 
 test {
   my $c = shift;
+  my $p;
   my $x;
   $HandleRequestHeaders->{'/hoge16'} = sub {
     my ($self, $req) = @_;
-    return $self->send_response
+    $p = $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga16'],
         ]}, content_length => 0)->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      eval {
-        $w->write (d 'abcde16');
-      };
-      $x = $@;
+      return $w->write (d 'abcde16')->catch (sub {
+        $x = $_[0];
+      });
     });
   };
 
@@ -624,7 +647,11 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '0';
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-15]}};
+    } $c;
+    return $p;
+  })->then (sub {
+    test {
+      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line \Q@{[__LINE__-18]}\E};
     } $c;
   }, sub {
     test {
@@ -696,6 +723,7 @@ sub rawtcp ($) {
 
 test {
   my $c = shift;
+  my @w;
   $HandleRequestHeaders->{'/hoge18'} = sub {
     my ($self, $req) = @_;
     return $self->send_response
@@ -704,6 +732,7 @@ test {
         ]}, content_length => 5)->then (sub {
       my $w = $self->{response}->{body}->get_writer;
       $w->write (d 'abc18');
+      push @w, $w;
     });
   };
 
@@ -712,6 +741,8 @@ test {
     test {
       is $data, q{abc18};
     } $c;
+  })->then (sub {
+    return $w[0]->close;
   })->then (sub {
     done $c;
     undef $c;
@@ -840,10 +871,9 @@ test {
       my $w = $self->{response}->{body}->get_writer;
       $w->write (d 'abc23');
       $w->close;
-      eval {
-        $w->write (d 'xyz');
-      };
-      $x = $@;
+      $w->write (d 'xyz')->catch (sub {
+        $x = $_[0];
+      });
     });
   };
 
@@ -856,7 +886,7 @@ test {
       is $res->header ('Hoge'), 'Fuga23';
       is $res->header ('Connection'), 'close';
       is $res->body_bytes, 'abc23';
-      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-14]}};
+      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
     } $c;
   }, sub {
     test {
@@ -873,48 +903,7 @@ test {
 test {
   my $c = shift;
   my $x;
-  $HandleRequestHeaders->{'/hoge24'} = sub {
-    my ($self, $req) = @_;
-    return $self->send_response
-        ({status => 201, status_text => 'OK', headers => [
-          ['Hoge', 'Fuga24'],
-        ]}, content_length => 12)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
-      $w->write (d 'abcd24');
-      eval {
-        $w->write (d "\x{5000}");
-      };
-      $x = $@;
-      $w->write (d 'abcdee');
-    });
-  };
-
-  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
-  $http->request (path => ['hoge24'])->then (sub {
-    my $res = $_[0];
-    test {
-      is $res->status, 201;
-      is $res->status_text, 'OK';
-      is $res->header ('Hoge'), 'Fuga24';
-      is $res->header ('Connection'), undef;
-      is $res->body_bytes, 'abcd24abcdee';
-      like $x, qr{^Data is utf8-flagged at .+ line @{[__LINE__-15]}};
-    } $c;
-  }, sub {
-    test {
-      ok 0;
-    } $c;
-  })->then (sub {
-    return $http->close;
-  })->then (sub {
-    done $c;
-    undef $c;
-  });
-} n => 6, name => 'send utf8 data';
-
-test {
-  my $c = shift;
-  my $x;
+  my $y;
   my $rand = rand;
   $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
@@ -923,11 +912,12 @@ test {
           ['Hoge', 'Fuga25'],
         ]}, content_length => 5)->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      eval {
-        $w->write (d 'abcde');
-      };
-      $x = $@;
-      return $w->close;
+      return $w->write (d 'abcde')->catch (sub {
+        $x = $_[0];
+        return $w->close;
+      })->catch (sub {
+        $y = $_[0];
+      });
     });
   };
 
@@ -941,7 +931,8 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '5';
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-16]}};
+      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
+      like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
     } $c;
   }, sub {
     test {
@@ -953,11 +944,12 @@ test {
     done $c;
     undef $c;
   });
-} n => 7, name => '304 with Content-Length';
+} n => 8, name => '304 with Content-Length';
 
 test {
   my $c = shift;
   my $x;
+  my $y;
   my $rand = rand;
   $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
@@ -966,11 +958,12 @@ test {
           ['Hoge', 'Fuga25'],
         ]}, content_length => 5)->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      eval {
-        $w->write (d 'abcde');
-      };
-      $x = $@;
-      return $w->close;
+      return $w->write (d 'abcde')->catch (sub {
+        $x = $_[0];
+        return $w->close;
+      })->catch (sub {
+        $y = $_[0];
+      });
     });
   };
 
@@ -984,7 +977,8 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '5';
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-16]}};
+      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
+      like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
     } $c;
   }, sub {
     test {
@@ -996,7 +990,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 7, name => '204 with Content-Length';
+} n => 8, name => '204 with Content-Length';
 
 test {
   my $c = shift;
@@ -1008,11 +1002,9 @@ test {
           ['Hoge', 'Fuga26'],
         ]}, content_length => 0)->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      eval {
-        $w->write (d 'abcde');
-      };
-      $x = $@;
-      return $w->close;
+      return $w->write (d 'abcde')->catch (sub {
+        $x = $_[0];
+      });
     });
   };
 
@@ -1026,7 +1018,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '0';
       is $res->body_bytes, '';
-      like $x, qr{^Not writable for now.* at .+ line @{[__LINE__-16]}};
+      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
     } $c;
   }, sub {
     test {
@@ -5010,12 +5002,10 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => "OK"}, close => 1)->then (sub {
-      #XXX
-      eval {
-        $self->send_response
+      return $self->send_response
             ({status => 202, status_text => "Not OK"}, close => 1);
-      };
-      $error = $@;
+    })->catch (sub {
+      $error = $_[0];
       return $self->{response}->{body}->get_writer->close;
     });
   };
@@ -5024,7 +5014,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^\|send_response\| is invoked twice at @{[__FILE__]} line @{[__LINE__-11]}};
+      like $error, qr{^TypeError: \|send_response\| is invoked twice at \Q@{[__FILE__]}\E line \Q@{[__LINE__-12]}\E};
       is $res->status, 201;
     } $c;
   }, sub {
@@ -5045,72 +5035,13 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    eval {
-    #XXX  $w->write (d "abc");
-    };
-    $error = $@;
-    $self->abort;
-  };
-
-  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
-  $http->request (path => [$path])->then (sub {
-    my $res = $_[0];
-    test {
-      like $error, qr{^Not writable for now.* at @{[__FILE__]} line @{[__LINE__-10]}};
-      ok $res->is_network_error;
-    } $c;
-  }, sub {
-    test {
-      ok 0;
-    } $c;
-  })->then (sub {
-    return $http->close;
-  })->then (sub {
-    done $c;
-    undef $c;
-  });
-} n => 2, name => 'send_response_data without headers';
-
-test {
-  my $c = shift;
-  my $path = rand;
-  $HandleRequestHeaders->{"/$path"} = sub {
-    my ($self, $req) = @_;
-    $self->close_response;# XXX
-  };
-
-  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
-  $http->request (path => [$path])->then (sub {
-    my $res = $_[0];
-    test {
-      ok $res->is_network_error;
-    } $c;
-  }, sub {
-    test {
-      ok 0;
-    } $c;
-  })->then (sub {
-    return $http->close;
-  })->then (sub {
-    done $c;
-    undef $c;
-  });
-} n => 1, name => 'close_response without headers';
-
-test {
-  my $c = shift;
-  my $path = rand;
-  my $error;
-  $HandleRequestHeaders->{"/$path"} = sub {
-    my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => "OK"}, close => 1)->then (sub {
       my $w = $self->{response}->{body}->get_writer;
       return $w->close->then (sub {
-        eval {
-          $w->write (d "abc");
-        };
-        $error = $@;
+        return $w->write (d "abc");
+      })->catch (sub {
+        $error = $_[0];
       });
     });
   };
@@ -5119,7 +5050,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Not writable for now.* at @{[__FILE__]} line @{[__LINE__-9]}};
+      like $error, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line \Q@{[__LINE__-11]}\E};
       is $res->status, 201;
     } $c;
   }, sub {
@@ -5144,12 +5075,10 @@ test {
         ({status => 201, status_text => "OK"}, close => 1)->then (sub {
       return $self->{response}->{body}->get_writer->close;
     })->then (sub {
-      # XXX
-      eval {
-        $self->send_response
-            ({status => 202, status_text => "Not OK"}, close => 1);
-      };
-      $error = $@;
+      return $self->send_response
+          ({status => 202, status_text => "Not OK"}, close => 1);
+    })->catch (sub {
+      $error = $_[0];
     });
   };
 
@@ -5157,7 +5086,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^\|send_response\| is invoked twice at @{[__FILE__]} line @{[__LINE__-10]}};
+      like $error, qr{^TypeError: \|send_response\| is invoked twice at \Q@{[__FILE__]}\E line \Q@{[__LINE__-11]}\E};
       is $res->status, 201;
     } $c;
   }, sub {
@@ -5181,7 +5110,7 @@ $HandleRequestHeaders = {};
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

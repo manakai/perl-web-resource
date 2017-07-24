@@ -62,8 +62,9 @@ test {
            fh => $_[0],
            host => Web::Host->parse_string ($_[1]), port => $_[2],
          }});
-    $x->received_streams->get_reader->read->then (sub {
-      return if $_[0]->{done};
+    my $r = $x->received_streams->get_reader;
+    $r->read->then (sub {
+      return 0 if $_[0]->{done};
       my $stream = $_[0]->{value};
       return $stream->request_ready->then (sub {
         my $path = $stream->{request}->{target_url}->path;
@@ -72,7 +73,7 @@ test {
             ({status => 210, status_text => $stream->{id}})->then (sub {
           return $stream->{response}->{body}->get_writer->close;
         });
-      });
+      })->then (sub { return 1 });
     });
 
     $con ||= $x;

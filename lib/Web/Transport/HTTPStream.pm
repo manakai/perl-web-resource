@@ -453,6 +453,13 @@ sub _debug_handshake_done ($$) {
   }
 } # _debug_handshake_done
 
+sub _terminate ($) {
+  my $self = $_[0];
+  delete $self->{reader};
+  delete $self->{writer};
+  delete $self->{timer};
+} # _terminate
+
 sub DESTROY ($) {
   $_[0]->abort if $_[0]->{is_server} and defined $_[0]->{transport}; # XXX
 
@@ -819,6 +826,7 @@ use MIME::Base64 qw(encode_base64);
 use Digest::SHA qw(sha1);
 use Errno qw(ECONNRESET);
 use Web::DOM::Error;
+use Web::DOM::TypeError;
 use AnyEvent;
 use AnyEvent::Socket;
 use Promise;
@@ -1742,13 +1750,6 @@ sub _both_done ($) {
   }
 } # _both_done
 
-sub _terminate ($) {
-  my $self = $_[0];
-  delete $self->{reader};
-  delete $self->{writer};
-  delete $self->{timer};
-} # _terminate
-
 # XXX can_create_stream is_active && (if h1: no current request)
 
 sub create_stream ($) {
@@ -1997,8 +1998,9 @@ sub new ($$) {
     },
     cancel => sub {
       # XXX abort
+      
     },
-  });
+  }); # received_streams
 
   $self->{closed} = $args->{parent}->{class}->create ($args->{parent})->then (sub {
     my $info = $_[0];
@@ -2033,6 +2035,7 @@ sub new ($$) {
         my $id = ''; # XXX $transport->id;
         warn "$id: R: EOF\n";
       }
+warn "XXX error";
       delete $self->{timer};
       $self->_oneof (undef);
     }, sub {
@@ -2048,6 +2051,7 @@ sub new ($$) {
       delete $self->{writer};
       if ($self->{DEBUG}) {
         my $id = ''; # XXX $transport->id;
+warn "XXX2";
         warn "$id: S: EOF\n";
       }
       $self->{sending_stream}->_send_done if defined $self->{sending_stream};
@@ -2060,7 +2064,14 @@ sub new ($$) {
       $self->{sending_stream}->_send_done if defined $self->{sending_stream};
     }); # underlying writer closed
 
-    return Promise->all ([$p1, $p2]);
+    return Promise->all ([$p1, $p2])->then (sub {
+      my $p;
+      $p = $self->{stream_controller}->close
+          if defined $self->{stream_controller};
+      delete $self->{stream_controller};
+      $self->_terminate;
+      return $p;
+    });
   })->catch (sub {
     my $error = Web::DOM::Error->wrap ($_[0]);
     $self->{info} = {};
@@ -2070,7 +2081,13 @@ sub new ($$) {
     }
 
     $self->{exit} = $error; # XXX$error->{exit};
-    die $error;
+    my $p;
+    $p = $self->{stream_controller}->close
+        if defined $self->{stream_controller};
+    $self->_terminate;
+    return Promise->resolve ($p)->then (sub {
+      die $error;
+    });
   });
   return $self;
 } # new
@@ -2678,6 +2695,7 @@ use MIME::Base64 qw(encode_base64);
 use Web::Encoding;
 use Web::DateTime;
 use Web::DateTime::Clock;
+push our @CARP_NOT, qw(Web::DOM::TypeError WritableStream);
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
@@ -2691,8 +2709,9 @@ sub request_ready ($) {
 
 sub send_response ($$$;%) {
   my ($stream, $response, %args) = @_;
-  croak "|send_response_headers| is invoked twice"
-      if defined $stream->{write_mode};
+  return Promise->reject
+      (Web::DOM::TypeError->new ("|send_response| is invoked twice"))
+          if defined $stream->{write_mode};
 
   my $con = $stream->{connection};
   my $close = $args{close} ||
@@ -2824,26 +2843,31 @@ sub send_response ($$$;%) {
   $stream->{response}->{body} = WritableStream->new ({
     write => sub {
       my $chunk = $_[1]; # XXX must be an ArrayBufferView
-      return Promise->resolve->then (sub {
-        my $wm = $stream->{write_mode} || '';
-        my $dv = UNIVERSAL::isa ($chunk, 'DataView')
-            ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $chunk->byte_length);
+      my $wm = $stream->{write_mode} || '';
+      # XXX error location
+      if ($wm eq 'chunked') {
+        return Promise->resolve->then (sub {
+          my $dv = UNIVERSAL::isa ($chunk, 'DataView')
+              ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $chunk->byte_length); # or throw
+          if ($dv->byte_length) {
+            ## Note that some clients fail to parse chunks if there
+            ## are TCP segment boundaries within a chunk (which is
+            ## smaller than MSS).
         if ($stream->{DEBUG} > 1) {
           for (split /\x0A/, $dv->manakai_to_string, -1) {
             warn "$stream->{id}: S: @{[_e4d $_]}\n";
           }
         }
         my $writer = $stream->{connection}->{writer};
-        if ($wm eq 'chunked') {
-          if ($dv->byte_length) {
-            ## Note that some clients fail to parse chunks if there
-            ## are TCP segment boundaries within a chunk (which is
-            ## smaller than MSS).
             $writer->write
                 (DataView->new (ArrayBuffer->new_from_scalarref
                                     (\sprintf "%X\x0D\x0A%s\x0D\x0A", $dv->byte_length, $dv->manakai_to_string))); # XXX string copy!
           }
-        } elsif ($wm eq 'raw' or $wm eq 'ws') {
+        }); # XXX catch
+      } elsif ($wm eq 'raw' or $wm eq 'ws') {
+        return Promise->resolve->then (sub {
+          my $dv = UNIVERSAL::isa ($chunk, 'DataView')
+              ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $chunk->byte_length); # or throw
           croak "Not writable for now"
               if $wm eq 'ws' and
                   (not $stream->{connection}->{ws_state} eq 'OPEN' or
@@ -2853,60 +2877,50 @@ sub send_response ($$$;%) {
             if ($stream->{to_be_sent_length} >= $dv->byte_length) {
               $stream->{to_be_sent_length} -= $dv->byte_length;
             } else {
-              croak sprintf "Data too long (given %d bytes whereas only %d bytes allowed)",
-                  $dv->byte_length, $stream->{to_be_sent_length};
+              die Web::DOM::TypeError->new
+                  (sprintf "Byte length %d is greater than expected length %d",
+                       $dv->byte_length, $stream->{to_be_sent_length});
             }
           }
+        if ($stream->{DEBUG} > 1) {
+          for (split /\x0A/, $dv->manakai_to_string, -1) {
+            warn "$stream->{id}: S: @{[_e4d $_]}\n";
+          }
+        }
+        my $writer = $stream->{connection}->{writer};
           $writer->write ($dv);
           if ($wm eq 'raw' and
               defined $stream->{to_be_sent_length} and
               $stream->{to_be_sent_length} <= 0) {
-            return; #XXX $stream->{response}->{body}->get_writer->close;
+            return $stream->_close_stream;
           }
-        } elsif ($wm eq 'void') {
-          #
-        } else {
-          croak "Not writable for now ($wm)";
-        }
-      }); # XXX catch
+        })->catch (sub {
+          $stream->abort (message => $_[0]); # XXX
+          die $_[0];
+        });
+      } elsif ($wm eq 'void') {
+        #
+      } else {
+        return Promise->reject
+            (Web::DOM::TypeError->new ("Response body is not writable"));
+        # XXX catch
+      }
     }, # write
     close => sub {
-      return unless defined $stream->{connection};
-      if (not defined $stream->{write_mode}) {
-        return $stream->abort (message => 'Closed without response');
-      } elsif (defined $stream->{to_be_sent_length} and
-               $stream->{to_be_sent_length} > 0) {
-        carp sprintf "Truncated end of sent data (%d more bytes expected)",
-            $stream->{to_be_sent_length}; # XXX
-        $stream->{close_after_response} = 1;
-        $stream->_send_done;
-      } else {
-        $stream->{close_after_response} = 1
-            if $stream->{request}->{method} eq 'CONNECT';
-        if ($stream->{write_mode} eq 'chunked') {
-          # XXX trailer headers
-          my $p = $stream->{connection}->{writer}->write
-              (DataView->new (ArrayBuffer->new_from_scalarref (\"0\x0D\x0A\x0D\x0A")));
-          $stream->_send_done;
-          return $p;
-        } elsif (defined $stream->{write_mode} and $stream->{write_mode} eq 'ws') {
-          return $stream->close; # XXX $args
-        } else {
-          $stream->_send_done;
-        }
-      }
-      return;
+      return $stream->_close_stream;
     }, # close
     abort => sub {
       # XXX
     },
-  });
+  }); # response body
 
   $stream->{close_after_response} = 1 if $close;
   $stream->{write_mode} = $write_mode;
   if ($done) {
     delete $stream->{to_be_sent_length};
-    #XXX $stream->{response}->{body}->get_writer->close;
+    my $w = $stream->{response}->{body}->get_writer;
+    $w->close;
+    $w->release_lock;
   } else {
     $stream->{to_be_sent_length} = $to_be_sent if defined $to_be_sent;
   }
@@ -2929,7 +2943,7 @@ sub closed ($) {
 
 sub _send_error ($$$;$) {
   my ($stream, $status, $status_text, $headers) = @_;
-  return if not defined $stream->{writer};
+  return $stream->_close_stream if not defined $stream->{connection}->{writer};
 
   my $res = qq{<!DOCTYPE html><html>
 <head><title>$status $status_text</title></head>
@@ -2943,7 +2957,7 @@ sub _send_error ($$$;$) {
           ['Content-Type' => 'text/html; charset=utf-8'],
         ]}, close => 1, content_length => length $res)->then (sub {
     my $w = $stream->{response}->{body}->get_writer;
-    $w->write (DataView->new (ArrayBuffer->new_from_scalarref ($res)))
+    $w->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)))
         unless $stream->{request}->{method} eq 'HEAD';
     return $w->close;
   });
@@ -2958,6 +2972,35 @@ sub _fatal ($) {
   $con->{rbuf} = '';
   return $req->_send_error (400, 'Bad Request');
 } # _fatal
+
+sub _close_stream ($) {
+  my $stream = $_[0];
+  return unless defined $stream->{connection};
+  if (not defined $stream->{write_mode}) {
+    return $stream->abort (message => 'Closed without response');
+  } elsif (defined $stream->{to_be_sent_length} and
+           $stream->{to_be_sent_length} > 0) {
+    carp sprintf "Truncated end of sent data (%d more bytes expected)",
+        $stream->{to_be_sent_length}; # XXX
+    $stream->{close_after_response} = 1;
+    $stream->_send_done;
+  } else {
+    $stream->{close_after_response} = 1
+        if $stream->{request}->{method} eq 'CONNECT';
+    if ($stream->{write_mode} eq 'chunked') {
+      # XXX trailer headers
+      my $p = $stream->{connection}->{writer}->write
+          (DataView->new (ArrayBuffer->new_from_scalarref (\"0\x0D\x0A\x0D\x0A")));
+      $stream->_send_done;
+      return $p;
+    } elsif (defined $stream->{write_mode} and $stream->{write_mode} eq 'ws') {
+      return $stream->close; # XXX $args
+    } else {
+      $stream->_send_done;
+    }
+  }
+  return;
+} # _close_stream
 
 sub _send_done ($) {
   my $stream = $_[0];

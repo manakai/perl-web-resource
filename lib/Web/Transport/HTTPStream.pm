@@ -2035,7 +2035,6 @@ sub new ($$) {
         my $id = ''; # XXX $transport->id;
         warn "$id: R: EOF\n";
       }
-warn "XXX error";
       delete $self->{timer};
       $self->_oneof (undef);
     }, sub {
@@ -2051,7 +2050,6 @@ warn "XXX error";
       delete $self->{writer};
       if ($self->{DEBUG}) {
         my $id = ''; # XXX $transport->id;
-warn "XXX2";
         warn "$id: S: EOF\n";
       }
       $self->{sending_stream}->_send_done if defined $self->{sending_stream};
@@ -2741,7 +2739,8 @@ sub send_response ($$$;%) {
       $ws = 1;
       $write_mode = 'ws';
     } else {
-      croak "1xx response not supported";
+      return Promise->reject
+          (Web::DOM::TypeError->new ("1xx response not supported"));
     }
   } else {
     if (defined $args{content_length}) {
@@ -3056,6 +3055,10 @@ sub _both_done ($) {
     $stream->{closed_reject}->($error);
   } else {
     $stream->{closed_resolve}->();
+  }
+  if (defined $stream->{receiving} and
+      defined $stream->{receiving}->{end_of_headers}) {
+    $stream->{receiving}->{end_of_headers}->(Promise->reject ($error)); # XXX
   }
   delete $stream->{closed_resolve};
   delete $stream->{closed_reject};

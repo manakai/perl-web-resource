@@ -312,7 +312,7 @@ test {
       is $res->header ('Hoge'), 'Fuga4';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
+      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
@@ -357,7 +357,7 @@ test {
       is $res->header ('Hoge'), 'Fuga4';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
+      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
@@ -456,7 +456,7 @@ test {
       is $res->header ('Hoge'), 'Fuga7';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
+      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
@@ -499,7 +499,7 @@ test {
       is $res->header ('Hoge'), 'Fuga8';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, 'abcde8abcde9';
-      like $x, qr{^TypeError: Byte length 7 is greater than expected length 0 at}; # XXX location
+      like $x, qr{^TypeError: Response body is not writable at}; # XXX location
     } $c;
   }, sub {
     test {
@@ -651,7 +651,7 @@ test {
     return $p;
   })->then (sub {
     test {
-      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line \Q@{[__LINE__-18]}\E};
+      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line \Q@{[__LINE__-18]}\E};
     } $c;
   }, sub {
     test {
@@ -931,7 +931,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '5';
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
+      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
     } $c;
   }, sub {
@@ -950,10 +950,11 @@ test {
   my $c = shift;
   my $x;
   my $y;
+  my $p;
   my $rand = rand;
   $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
-    return $self->send_response
+    $p = $self->send_response
         ({status => 204, status_text => 'OK', headers => [
           ['Hoge', 'Fuga25'],
         ]}, content_length => 5)->then (sub {
@@ -977,8 +978,12 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '5';
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
-      like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
+    } $c;
+    return $p;
+  })->then (sub {
+    test {
+      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
+      like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-22]}};
     } $c;
   }, sub {
     test {
@@ -1018,7 +1023,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '0';
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Response body is not writable at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
+      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
     } $c;
   }, sub {
     test {
@@ -2650,14 +2655,12 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    # XXX
-    eval {
-      $self->send_response
-          ({status => 101, status_text => 'Switched!'});
-    };
-    $error = $@;
     return $self->send_response
-        ({status => 200, status_text => 'O.K.'})->then (sub {
+        ({status => 101, status_text => 'Switched!'})->catch (sub {
+      $error = $_[0];
+      return $self->send_response
+          ({status => 200, status_text => 'O.K.'});
+    })->then (sub {
       my $w = $self->{response}->{body}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
@@ -2682,7 +2685,7 @@ test {
   })->then (sub {
     my ($res, $result) = @{$_[0]};
     test {
-      like $error, qr{^1xx response not supported at @{[__FILE__]} line @{[__LINE__-28]}};
+      like $error, qr{^TypeError: 1xx response not supported at @{[__FILE__]} line @{[__LINE__-20]}};
       is $serverreq->{body}, '';
       is $received, 'abcde(end)';
       ok ! $result->{failed};

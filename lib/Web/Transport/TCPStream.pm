@@ -79,6 +79,7 @@ sub create ($$) {
   #$args->{id} = (defined $args->{id} ? $args->{id} : (defined $args->{parent_id} ? $args->{parent_id} : $$) . '.' . ++$Web::Transport::NextID);
 
   my $fh;
+  my ($r_fh_closed, $s_fh_closed) = promised_cv;
   my $read_active = 1;
   my $rcancel = sub { };
   my $wc;
@@ -111,6 +112,7 @@ sub create ($$) {
             $wc = $wcancel = undef;
           }
           undef $fh;
+          $s_fh_closed->();
           return 0;
         }
         return 1;
@@ -119,13 +121,19 @@ sub create ($$) {
         $rc->close;
         $req->respond (0);
         $read_active = $rcancel = undef;
-        undef $fh unless defined $wc;
+        unless (defined $wc) {
+          undef $fh;
+          $s_fh_closed->();
+        }
         return 0;
       }
       return 1;
     }, sub {
       $read_active = $rcancel = undef;
-      undef $fh unless defined $wc;
+      unless (defined $wc) {
+        undef $fh;
+        $s_fh_closed->();
+      }
       return 0;
     });
   }; # $pull
@@ -155,7 +163,8 @@ sub create ($$) {
       }
       shutdown $fh, 2; # can result in EPIPE
       undef $fh;
-    },
+      $s_fh_closed->();
+    }, # cancel
   });
   my $write_stream = WritableStream->new ({
     start => sub {
@@ -188,14 +197,17 @@ sub create ($$) {
         } $fh, \$wcancel;
       })->catch (sub {
         my $e = $_[0];
-        $wc->error ($e);
-        $wcancel->() if defined $wcancel;
-        $wc = $wcancel = undef;
+        if (defined $wc) {
+          $wc->error ($e);
+          $wcancel->() if defined $wcancel;
+          $wc = $wcancel = undef;
+        }
         if ($read_active) {
           $rcancel->($e);
           $read_active = $rcancel = undef;
         }
         undef $fh;
+        $s_fh_closed->();
         die $e;
       });
     }, # write
@@ -203,7 +215,10 @@ sub create ($$) {
       shutdown $fh, 1; # can result in EPIPE
       $wcancel->() if defined $wcancel;
       $wc = $wcancel = undef;
-      undef $fh unless $read_active;
+      unless ($read_active) {
+        undef $fh;
+        $s_fh_closed->();
+      }
       return undef;
     }, # close
     abort => sub {
@@ -217,6 +232,7 @@ sub create ($$) {
           $read_active = $rcancel = undef;
         }
         undef $fh;
+        $s_fh_closed->();
         return undef;
       }
 
@@ -229,6 +245,7 @@ sub create ($$) {
       }
       shutdown $fh, 2; # can result in EPIPE
       undef $fh;
+      $s_fh_closed->();
     }, # abort
   });
 
@@ -273,6 +290,7 @@ sub create ($$) {
 
     $info->{read_stream} = $read_stream;
     $info->{write_stream} = $write_stream;
+    $info->{closed} = $r_fh_closed;
     return $info;
   })->catch (sub {
     my $error = Web::DOM::Error->wrap ($_[0]);
@@ -286,6 +304,7 @@ sub create ($$) {
       $wc = $wcancel = undef;
     }
     undef $fh;
+    $s_fh_closed->();
     die $error;
   });
 } # create

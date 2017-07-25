@@ -294,6 +294,106 @@ test {
   my $port = find_listenable_port;
   my $host = Web::Host->parse_string ('127.0.0.1');
 
+  my @s;
+  my @c;
+
+  my $destroyed = 0;
+  my $server = tcp_server undef, $port, sub {
+    create_tls_server ($_[0], $_[1], $_[2])->then (sub {
+      my $info = $_[0];
+
+      my $w = $info->{write_stream}->get_writer;
+      my $r = $info->{read_stream}->get_reader;
+
+      $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+
+      $w->write (dv "abc");
+      $w->write (dv "xyz");
+      $w->close;
+
+      $r->closed->then (sub {
+        push @s, 'r close';
+      });
+      $w->closed->then (sub {
+        push @s, 'w close';
+      });
+      promised_wait_until { $r->read->then (sub { $_[0]->{done} }) };
+      $info->{closed}->then (sub {
+        push @s, 'i close';
+      });
+    });
+  }; # $server
+
+  create_tls_client ($host, $port)->then (sub {
+    my $info = $_[0];
+    my $w = $info->{write_stream}->get_writer;
+    my $r = $info->{read_stream}->get_reader ('byob');
+    my @result;
+
+    $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+
+    $r->read (dv "x" x 10)->then (sub {
+      my $v = $_[0];
+      push @result, $v->{value} unless $v->{done};
+    });
+
+    my $try; $try = sub {
+      return $r->read (dv "x" x 10)->then (sub {
+        my $v = $_[0];
+        return if $v->{done};
+        push @result, $v->{value};
+        return $try->();
+      });
+    };
+
+    $w->close;
+
+    $r->closed->then (sub { push @c, 'r close' });
+    $w->closed->then (sub { push @c, 'w close' });
+    $info->{closed}->then (sub { push @c, 'i close' });
+
+    return $try->()->then (sub {
+      my $result = join '', map {
+        $_->manakai_to_string;
+      } @result;
+      test {
+        is $result, "abcxyz";
+      } $c;
+      undef $try;
+    });
+  })->catch (sub {
+    my $e = $_[0];
+    test {
+      ok 0, $e;
+    } $c;
+  })->then (sub {
+    return promised_wait_until { $destroyed == 4 and @s >= 3 and @c >= 3 } timeout => 3;
+  })->then (sub {
+    test {
+      is $destroyed, 4;
+      is 0+@s, 3;
+      like $s[0], qr{^[wr] close$};
+      like $s[1], qr{^[wr] close$};
+      is $s[2], "i close";
+      is 0+@c, 3;
+      like $c[0], qr{^[wr] close$};
+      like $c[1], qr{^[wr] close$};
+      is $c[2], "i close";
+    } $c;
+    done $c;
+    undef $c;
+    undef $server;
+  });
+} n => 10, name => 'a server returning constant data byob 3';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+
   my $destroyed = 0;
   my $server = tcp_server undef, $port, sub {
     create_tls_server ($_[0], $_[1], $_[2])->then (sub {

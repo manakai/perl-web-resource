@@ -139,6 +139,7 @@ sub create ($$) {
 
   my $rc;
   my $wc;
+  my ($r_closed, $s_closed) = promised_cv;
 
   my $wview;
   my $wresolve;
@@ -174,6 +175,7 @@ sub create ($$) {
     undef $rbio;
     undef $wbio;
     undef $tls_ctx;
+    $s_closed->();
   }; # $close
 
   my $abort = sub {
@@ -402,12 +404,15 @@ sub create ($$) {
       $abort->(defined $_[1] ? $_[1] : "$class writer aborted");
     },
   });
+  my ($r_parent_closed, $s_parent_closed) = promised_cv;
+  $info->{closed} = Promise->all ([$r_closed, $r_parent_closed]);
 
   $args->{parent}->{class}->create ($args->{parent})->then (sub {
     $info->{parent} = $_[0];
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};
     #XXX $self->{id} = $self->{transport}->id . 's';
 
+    $info->{parent}->{closed}->then ($s_parent_closed);
     $t_r = (delete $info->{parent}->{read_stream})->get_reader ('byob');
     $t_w = (delete $info->{parent}->{write_stream})->get_writer;
     $t_read = sub {

@@ -511,7 +511,7 @@ sub _receive_bytes_done ($) {
   $rc->close;
   my $req = $rc->byob_request;
   if (defined $req) {
-    $req->manakai_respond_with_new_view (DataView->new (ArrayBuffer->new));
+    $req->manakai_respond_with_new_view (DataView->new (ArrayBuffer->new (0)));
   }
   return undef;
 } # _receive_bytes_done
@@ -1619,7 +1619,7 @@ sub connect ($) {
                errno => $data->{errno},
                error_message => $data->{message});
         }
-        $self->{writer}->abort ('XXX'); # XXX ? also reader?
+        $self->{writer}->abort ('XXX 2'); # XXX ? also reader?
 
         return undef;
       }),
@@ -1664,7 +1664,7 @@ sub connect ($) {
       warn "$self->{id}: openconnection @{[scalar gmtime]}\n";
       $self->_debug_handshake_done ($error);
     }
-    $self->{writer}->abort ('XXX') if defined $self->{writer}; # XXX and reader?
+    $self->{writer}->abort ('XXX 1') if defined $self->{writer}; # XXX and reader?
     $onclosed->();
     die $error;
   });
@@ -1866,6 +1866,9 @@ sub send_request ($$;%) {
   my $sent = $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\$header)));
   $con->{request}->{body_stream} = WritableStream->new ({
+    start => sub {
+      $con->{request}->{body_stream_controller} = $_[1];
+    },
     write => sub {
       my $chunk = $_[1];
       return Promise->resolve->then (sub {
@@ -2062,7 +2065,7 @@ sub new ($$) {
       $self->{sending_stream}->_send_done if defined $self->{sending_stream};
     }); # underlying writer closed
 
-    return Promise->all ([$p1, $p2])->then (sub {
+    return Promise->all ([$p1, $p2, $info->{closed}])->then (sub {
       my $p;
       $p = $self->{stream_controller}->close
           if defined $self->{stream_controller};
@@ -2840,7 +2843,11 @@ sub send_response ($$$;%) {
 
   $stream->{response} = {};
   $stream->{response}->{body} = WritableStream->new ({
+    start => sub {
+      $stream->{response}->{body_stream_controller} = $_[1];
+    },
     write => sub {
+warn "XXX reqsponse body write";
       my $chunk = $_[1]; # XXX must be an ArrayBufferView
       my $wm = $stream->{write_mode} || '';
       # XXX error location
@@ -2894,6 +2901,7 @@ sub send_response ($$$;%) {
             return $stream->_close_stream;
           }
         })->catch (sub {
+          delete $stream->{response}->{body_stream_controller};
           $stream->abort (message => $_[0]); # XXX
           die $_[0];
         });
@@ -2974,6 +2982,8 @@ sub _fatal ($) {
 
 sub _close_stream ($) {
   my $stream = $_[0];
+  delete $stream->{response}->{body_stream_controller}
+      if defined $stream->{response};
   return unless defined $stream->{connection};
   if (not defined $stream->{write_mode}) {
     return $stream->abort (message => 'Closed without response');
@@ -3012,6 +3022,12 @@ sub _send_done ($) {
   $stream->{write_mode} = 'sent';
   delete $stream->{to_be_sent_length};
   $stream->{send_done} = 1;
+  if (defined $stream->{response} and
+      defined $stream->{response}->{body_stream_controller}) {
+    my $error = Web::DOM::TypeError->new ("Response body is aborted by an error");
+    $stream->{response}->{body_stream_controller}->error ($error);
+    delete $stream->{response}->{body_stream_controller};
+  }
   if ($stream->{receive_done}) {
     $stream->_both_done;
   }
@@ -3051,7 +3067,7 @@ sub _both_done ($) {
   }
   delete $con->{disable_timer};
   my $error = $con->{exit} || {};
-  if ($error->{failed}) { # XXX
+  if (eval { $error->{failed} }) { # XXX
     $stream->{closed_reject}->($error);
   } else {
     $stream->{closed_resolve}->();

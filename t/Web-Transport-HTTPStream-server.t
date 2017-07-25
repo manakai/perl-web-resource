@@ -82,6 +82,16 @@ my $HandleRequestHeaders = {};
                         $HandleRequestHeaders->{$req->{target_url}->hostport};
           if (defined $handler) {
             $stream->{body} = '';
+            my $body_reader = $stream->{request}->{body}->get_reader ('byob');
+            my $run; $run = sub {
+              return $body_reader->read (DataView->new (ArrayBuffer->new (10)))->then (sub {
+                return if $_[0]->{done};
+                $stream->{body} .= $_[0]->{value}->manakai_to_string;
+                $stream->{ondata}->() if defined $stream->{ondata};
+                return $run->();
+              });
+            }; # $run
+            $run->()->then (sub { undef $run }, sub { undef $run });
             $handler->($stream, $req);
           } elsif ($req->{target_url}->path eq '/') {
             return $stream->send_response
@@ -100,9 +110,6 @@ my $HandleRequestHeaders = {};
       });
     }; # $run
     $run->()->then (sub { undef $run }, sub { undef $run });
-    #} elsif ($type eq 'data') {
-    #  $self->{body} .= $_[2];
-    #  $self->{ondata}->($_[2], $_[3]) if $self->{ondata};
     #} elsif ($type eq 'text') {
     #  $self->{text} .= $_[2];
     #} elsif ($type eq 'dataend' or $type eq 'textend' or
@@ -2477,7 +2484,7 @@ test {
       my $w = $self->{response}->{body}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
-      $self->{ondata} = sub { # XXX
+      $self->{ondata} = sub {
         if ($self->{body} =~ /stuvw/) {
           #XXX $self->close_response (status => 5678, reason => 'abc');
           return $w->close;
@@ -2540,7 +2547,7 @@ test {
       my $w = $self->{response}->{body}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
-      $self->{ondata} = sub { # XXX
+      $self->{ondata} = sub {
         if ($self->{body} =~ /stuvw/) {
           # XXX $self->close_response (status => 5678, reason => 'abc');
           return $w->close;
@@ -2600,7 +2607,7 @@ test {
       my $w = $self->{response}->{body}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
-      $self->{ondata} = sub { # XXX
+      $self->{ondata} = sub {
         if ($self->{body} =~ /stuvw/) {
           # XXX $self->close_response (status => 5678, reason => 'abc');
           return $w->close;
@@ -3736,12 +3743,16 @@ test {
 test {
   my $c = shift;
   my $path = rand;
+  my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $w->write (d 'abcde');
-      promised_sleep (1)->then (sub { $self->abort });
+      return $w->write (d 'abcde')->then (sub {
+        return promised_sleep (1);
+      })->then (sub {
+        return $self->abort;
+      });
     });
   };
 

@@ -83,15 +83,57 @@ my $HandleRequestHeaders = {};
           if (defined $handler) {
             $stream->{body} = '';
             my $body_reader = $stream->{request}->{body}->get_reader ('byob');
-            my $run; $run = sub {
-              return $body_reader->read (DataView->new (ArrayBuffer->new (10)))->then (sub {
-                return if $_[0]->{done};
-                $stream->{body} .= $_[0]->{value}->manakai_to_string;
-                $stream->{ondata}->() if defined $stream->{ondata};
-                return $run->();
-              });
-            }; # $run
-            $run->()->then (sub { undef $run }, sub { undef $run });
+            {
+              my $run; $run = sub {
+                return $body_reader->read (DataView->new (ArrayBuffer->new (10)))->then (sub {
+                  return if $_[0]->{done};
+                  $stream->{body} .= $_[0]->{value}->manakai_to_string;
+                  $stream->{ondata}->() if defined $stream->{ondata};
+                  return $run->();
+                });
+              }; # $run
+              $run->()->then (sub { undef $run }, sub { undef $run });
+            }
+            if (defined $stream->{request}->{messages}) {
+              my $r = $stream->{request}->{messages}->get_reader;
+              my $run; $run = sub {
+                return $r->read->then (sub {
+                  return if $_[0]->{done};
+                  my $msg = $_[0]->{value};
+                  if ($msg->{type} eq 'text') {
+                    my $r = $msg->{data_stream}->get_reader;
+                    $msg->{text} = '';
+                    my $read; $read = sub {
+                      return $r->read->then (sub {
+                        return if $_[0]->{done};
+                        $msg->{text} .= ${$_[0]->{value}};
+                        return $read->();
+                      });
+                    }; # $read
+                    promised_cleanup { undef $read } $read->()->then (sub {
+                      return $stream->{wstext}->($msg) if defined $stream->{wstext};
+                    });
+                  } elsif ($msg->{type} eq 'binary') {
+                    my $r = $msg->{data_stream}->get_reader ('byob');
+                    $msg->{body} = '';
+                    my $read; $read = sub {
+                      return $r->read (DataView->new (ArrayBuffer->new (20)))->then (sub {
+                        return if $_[0]->{done};
+                        $msg->{body} .= $_[0]->{value}->manakai_to_string;
+                        return $read->();
+                      });
+                    }; # $read
+                    promised_cleanup { undef $read } $read->()->then (sub {
+                      return $stream->{wsbinary}->($msg) if defined $stream->{wsbinary};
+                    });
+                  } else {
+                    die "Unknown WS message type |$msg->{type}|";
+                  }
+                  return $run->();
+                });
+              };
+              $run->()->then (sub { undef $run }, sub { undef $run });
+            }
             $handler->($stream, $req);
           } elsif ($req->{target_url}->path eq '/') {
             return $stream->send_response
@@ -104,17 +146,12 @@ my $HandleRequestHeaders = {};
         });
         $stream->closed->then (sub { # XXX
           $stream->{complete}->($_[2], $_[3]) if $stream->{complete};
-          delete $stream->{$_} for qw(ondata dataend textend ping complete);
+          delete $stream->{$_} for qw(ondata wsbinary wstext complete);
         });
         return $run->();
       });
     }; # $run
     $run->()->then (sub { undef $run }, sub { undef $run });
-    #} elsif ($type eq 'text') {
-    #  $self->{text} .= $_[2];
-    #} elsif ($type eq 'dataend' or $type eq 'textend' or
-    #         $type eq 'ping') {
-    #  $self->{$type}->($_[2], $_[3]) if $self->{$type};
   }; # $server_process
 
   our $server = tcp_server $host, $port, sub {
@@ -1874,9 +1911,9 @@ test {
       $self->send_binary_header (5);
       $w->write (d "abcde");
       $serverreq = $self;
-      #XXX
-      $self->{dataend} = sub {
-        if ($self->{body} =~ /stuvw/) {
+      $self->{wsbinary} = sub {
+        if ($_[0]->{body} =~ /stuvw/) {
+          $serverreq->{body} = $_[0]->{body};
           #XXX$self->close_response (status => 5678);
           return $w->close;
         }
@@ -1927,8 +1964,9 @@ test {
       $self->send_text_header (5);
       $w->write (d "abcde");
       $serverreq = $self;
-      $self->{textend} = sub { # XXX
-        if ($self->{text} =~ /stuvw/) {
+      $self->{wstext} = sub {
+        if ($_[0]->{text} =~ /stuvw/) {
+          $serverreq->{text} = $_[0]->{text};
           #XXXX $self->close_response (status => 5678, reason => 'abc');
           return $w->close;
         }
@@ -1977,12 +2015,15 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
+      my $w = $self->{response}->{body}->get_writer;
       $self->send_ping (data => "abbba");
+      $self->send_text_header (5);
+      $w->write (d "abcde");
       $serverreq = $self;
-      $self->{ping} = sub {
-        if ($_[1]) {
-          #XXX $self->close_response (status => 5678, reason => $_[0]);
-          return $self->{response}->{body}->get_writer->close;
+      $self->{wsbinary} = sub {
+        if ($_[0]->{body} =~ /ABCDE/) {
+          #XXX $self->close_response (status => 5678);
+          return $w->close;
         }
       };
     });
@@ -1994,17 +2035,20 @@ test {
     cb => sub {
       my ($client, $data, $is_text) = @_;
       $received .= (defined $data ? $data : '(end)');
+      if ($received =~ /abcde/) {
+        $client->send_binary ('ABCDE');
+      }
     },
   )->then (sub {
     my $res = $_[0];
     test {
       is $serverreq->{body}, '';
       is $serverreq->{text}, undef;
-      is $received, '(end)';
+      is $received, '(end)abcde(end)';
       ok ! $res->is_network_error;
       ok $res->ws_closed_cleanly;
       is $res->ws_code, 5678;
-      is $res->ws_reason, 'abbba';
+      is $res->ws_reason, '';
     } $c;
     done $c;
     undef $c;
@@ -2020,9 +2064,9 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       $serverreq = $self;
-      $self->{ping} = sub {
-        unless ($_[1]) {
-          #XXX $self->close_response (status => 5678, reason => $_[0]);
+      $self->{wsbinary} = sub {
+        if ($_[0]->{body} =~ /abc/) {
+          #XXX $self->close_response (status => 5678, reason => '');
           return $self->{response}->{body}->get_writer->close;
         }
       };
@@ -2035,7 +2079,10 @@ test {
     cb => sub {
       my ($client, $data, $is_text) = @_;
       $received .= (defined $data ? $data : '(end)');
-      $client->{client}->{http}->send_ping (data => "abbba");
+      my $http = $client->{client}->{http};
+      $http->send_ping (data => "abbba");
+      $http->send_binary_header (3);
+      $http->send_data (\"abc");
     },
   )->then (sub {
     my $res = $_[0];
@@ -2046,7 +2093,7 @@ test {
       ok ! $res->is_network_error;
       ok $res->ws_closed_cleanly;
       is $res->ws_code, 5678;
-      is $res->ws_reason, 'abbba';
+      is $res->ws_reason, '';
     } $c;
     done $c;
     undef $c;
@@ -2057,19 +2104,23 @@ test {
   my $c = shift;
   my $path = rand;
   my $error;
+  my $y;
+  my $z;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
       $self->send_binary_header (5);
-      eval {
-        $w->write (d "abcdef");
-      };
-      $error = $@;
-      $w->write (d "12345");
-      #XXX $self->close_response (status => 5678);
-      return $w->close;
+      return $w->write (d "abcdef")->catch (sub {
+        $error = $_[0];
+        return $w->write (d "123");
+      })->catch (sub {
+        $y = $_[0];
+        return $w->close;
+      })->catch (sub {
+        $z = $_[0];
+      });
     });
   };
 
@@ -2083,35 +2134,41 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Data too long \(given 6 bytes whereas only 5 bytes allowed\) at @{[__FILE__]} line @{[__LINE__-17]}};
-      is $received, '(end)12345(end)';
+      like $error, qr{^TypeError: Byte length 6 is greater than expected length 5 at }; # XXX location
+      is $received, '(end)';
       ok ! $res->is_network_error;
-      ok $res->ws_closed_cleanly;
-      is $res->ws_code, 5678;
+      ok ! $res->ws_closed_cleanly;
+      is $res->ws_code, 1006;
       is $res->ws_reason, '';
+      is $y->message, $error->message;
+      is $z->message, 'WritableStream is closed';
     } $c;
     done $c;
     undef $c;
   });
-} n => 6, name => 'WS data bad length';
+} n => 8, name => 'WS data bad length';
 
 test {
   my $c = shift;
   my $path = rand;
   my $error;
+  my $y;
+  my $z;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
       $self->send_text_header (5);
-      eval {
-        $w->write (d "abcdef");
-      };
-      $error = $@;
-      $w->write (d "12345");
-      #XXX $self->close_response (status => 5678);
-      return $w->close;
+      return $w->write (d "abcdef")->catch (sub {
+        $error = $_[0];
+        return $w->write (d "123");
+      })->catch (sub {
+        $y = $_[0];
+        return $w->close;
+      })->catch (sub {
+        $z = $_[0];
+      });
     });
   };
 
@@ -2125,22 +2182,26 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Data too long \(given 6 bytes whereas only 5 bytes allowed\) at @{[__FILE__]} line @{[__LINE__-17]}};
-      is $received, '(end)12345(end)';
+      like $error, qr{^TypeError: Byte length 6 is greater than expected length 5 at }; # XXX location
+      is $received, '(end)';
       ok ! $res->is_network_error;
-      ok $res->ws_closed_cleanly;
-      is $res->ws_code, 5678;
+      ok ! $res->ws_closed_cleanly;
+      is $res->ws_code, 1006;
       is $res->ws_reason, '';
+      is $y->message, $error->message;
+      is $z->message, 'WritableStream is closed';
     } $c;
     done $c;
     undef $c;
   });
-} n => 6, name => 'WS data bad length';
+} n => 8, name => 'WS data bad length';
 
 test {
   my $c = shift;
   my $path = rand;
   my $error;
+  my $y;
+  my $z;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
@@ -2148,13 +2209,15 @@ test {
       my $w = $self->{response}->{body}->get_writer;
       $self->send_text_header (5);
       $w->write (d "123");
-      eval {
-        $w->write (d "abcdef");
-      };
-      $error = $@;
-      $w->write (d "45");
-      #XXX $self->close_response (status => 5678);
-      return $w->close;
+      return $w->write (d "abcdef")->catch (sub {
+        $error = $_[0];
+        return $w->write (d "45");
+      })->catch (sub {
+        $y = $_[0];
+        return $w->close;
+      })->catch (sub {
+        $z = $_[0];
+      });
     });
   };
 
@@ -2168,34 +2231,37 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Data too long \(given 6 bytes whereas only 2 bytes allowed\) at @{[__FILE__]} line @{[__LINE__-17]}};
-      is $received, '(end)12345(end)';
+      like $error, qr{^TypeError: Byte length 6 is greater than expected length 2 at }; # XXX location
+      is $received, '(end)';
       ok ! $res->is_network_error;
-      ok $res->ws_closed_cleanly;
-      is $res->ws_code, 5678;
+      ok ! $res->ws_closed_cleanly;
+      is $res->ws_code, 1006;
       is $res->ws_reason, '';
+      is $y->message, $error->message;
+      is $z->message, 'WritableStream is closed';
     } $c;
     done $c;
     undef $c;
   });
-} n => 6, name => 'WS data bad length';
+} n => 8, name => 'WS data bad length';
 
 test {
   my $c = shift;
   my $path = rand;
   my $error;
+  my $y;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
       $self->send_text_header (0);
-      eval {
-        $w->write (d "abcdef");
-      };
-      $error = $@;
-      #XXX $self->close_response (status => 5678);
-      return $w->close;
+      return $w->write (d "abcdef")->catch (sub {
+        $error = $_[0];
+        return $w->close;
+      })->catch (sub {
+        $y = $_[0];
+      });
     });
   };
 
@@ -2209,35 +2275,35 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Not writable for now.* at @{[__FILE__]} line @{[__LINE__-16]}};
-      is $received, '(end)(end)';
+      like $error, qr{^TypeError: Not writable at }; # XXX location
+      is $received, '(end)';
       ok ! $res->is_network_error;
-      ok $res->ws_closed_cleanly;
-      is $res->ws_code, 5678;
+      ok ! $res->ws_closed_cleanly;
+      is $res->ws_code, 1006;
       is $res->ws_reason, '';
+      is $y->message, 'WritableStream is closed';
     } $c;
     done $c;
     undef $c;
   });
-} n => 6, name => 'WS data bad length';
+} n => 7, name => 'WS data bad length';
 
 test {
   my $c = shift;
   my $path = rand;
   my $error;
+  my $y;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      eval {
-        $w->write (d "abcdef");
-      };
-      $self->send_text_header (1);
-      $w->write (d "1");
-      $error = $@;
-      #XXX $self->close_response (status => 5678);
-      return $w->close;
+      return $w->write (d "abcdef")->catch (sub {
+        $error = $_[0];
+        return $w->close;
+      })->catch (sub {
+        $y = $_[0];
+      });
     });
   };
 
@@ -2251,17 +2317,18 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Not writable for now.* at @{[__FILE__]} line @{[__LINE__-18]}};
-      is $received, '(end)1(end)';
+      like $error, qr{^TypeError: Not writable at }; # XXX location
+      is $received, '(end)';
       ok ! $res->is_network_error;
-      ok $res->ws_closed_cleanly;
-      is $res->ws_code, 5678;
+      ok ! $res->ws_closed_cleanly;
+      is $res->ws_code, 1006;
       is $res->ws_reason, '';
+      is $y->message, 'WritableStream is closed';
     } $c;
     done $c;
     undef $c;
   });
-} n => 6, name => 'WS data bad length';
+} n => 7, name => 'WS data bad length';
 
 test {
   my $c = shift;
@@ -3693,8 +3760,8 @@ test {
       $self->send_binary_header (5);
       $w->write (d "abcde");
       $serverreq = $self;
-      $self->{dataend} = sub { # XXX
-        if ($self->{body} =~ /stuvw/) {
+      $self->{wsbinary} = sub {
+        if ($_[0]->{body} =~ /stuvw/) {
           $self->abort (message => "Test abort\x{6001}");
         }
       };

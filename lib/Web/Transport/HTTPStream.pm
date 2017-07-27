@@ -219,9 +219,10 @@ warn "XXX $self->{state}";
                               FIN => 1, opcode => 8, mask => $mask,
                               length => length $data, status => $status)
                 if $self->{DEBUG};
-            $self->{writer}->write
-                (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
-                   $mask . $data))));
+            $self->{ws_writable} = $self->{ws_writable}->then (sub {
+              return $self->{writer}->write
+                  (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 8, $masked | length $data) . $mask . $data))));
+            });
           }
           $self->{state} = 'ws terminating';
           $self->{exit} = {status => defined $status ? $status : 1005,
@@ -295,9 +296,11 @@ warn "XXX $self->{state}";
               substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
             }
           }
-          $self->{writer}->write
-              (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 10, $masked | length $data) .
-                 $mask . $data))));
+          $self->{ws_writable} = $self->{ws_writable}->then (sub {
+            return $self->{writer}->write
+                (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 10, $masked | length $data) .
+                   $mask . $data))));
+          });
           #XXX $stream->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 0);
         } elsif ($self->{ws_frame}->[0] == 10) {
 warn 14;
@@ -331,9 +334,11 @@ warn 42;
     $stream->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8,
                       mask => $mask, length => length $data,
                       status => $self->{exit}->{status}) if $self->{DEBUG};
-    $self->{writer}->write
-        (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
-           $mask . $data))));
+    $self->{ws_writable} = $self->{ws_writable}->then (sub {
+      return $self->{writer}->write
+          (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
+             $mask . $data))));
+    });
     $self->{state} = 'ws terminating';
     $self->{no_new_request} = 1;
     $stream->_send_done;
@@ -493,6 +498,7 @@ package Web::Transport::HTTPStream::Stream;
 use Carp qw(croak);
 use AnyEvent;
 use Promise;
+use Promised::Flow;
 use Web::Encoding;
 use ArrayBuffer;
 use DataView;
@@ -569,20 +575,22 @@ sub send_ws_message ($$$) {
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask,
                     length => $length) if $self->{DEBUG}; # XXX
-  return $con->{writer}->write
-      (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | ($is_binary ? 2 : 1), $masked | $length0) .
-         $len . $mask))))->then (sub {
+  my ($r_stream, $s_stream) = promised_cv;
+  $con->{ws_writable} = $con->{ws_writable}->then (sub {
+    return $con->{writer}->write
+        (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | ($is_binary ? 2 : 1), $masked | $length0) .
+           $len . $mask))));
+  })->then (sub {
+    my ($ok, $ng);
+    my $p = Promise->new (sub { ($ok, $ng) = @_ });
     my $ws = WritableStream->new ({
       write => sub {
         my $chunk = $_[1];
         return Promise->resolve->then (sub {
           my $is_body = (defined $con->{to_be_sent_length} and
                          $con->{to_be_sent_length} > 0);
-          my $is_tunnel = (defined $con->{state} and
-                           ($con->{state} eq 'tunnel' or
-                            $con->{state} eq 'tunnel sending'));
           die Web::DOM::TypeError->new ("Not writable")
-              if not $is_body and not $is_tunnel;
+              if not $is_body;
           # XXX $chunk type
           my $byte_length = $chunk->byte_length;
           die Web::DOM::TypeError->new
@@ -611,54 +619,51 @@ sub send_ws_message ($$$) {
               push @data, substr ($$ref, $_, 1) ^ substr ($mask, ($o+$_) % 4, 1);
             }
           }
-          $con->{ws_sent_length} += $byte_length;
-          $con->{to_be_sent_length} -= $byte_length;
-          if (defined $mask) {
-            $con->{writer}->write
-                (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
-          } else {
-            $con->{writer}->write ($chunk);
-          }
-        } else {
-          my $sent = $con->{writer}->write ($chunk);
-          if ($is_body) {
+            $con->{ws_sent_length} += $byte_length;
             $con->{to_be_sent_length} -= $byte_length;
-            if ($con->{to_be_sent_length} <= 0) {
-              $sent->then (sub {
-                $con->_send_done;
-              });
+            if (defined $mask) {
+              $con->{writer}->write
+                  (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
+            } else {
+warn 12;
+              $con->{writer}->write ($chunk);
             }
-          } # $is_body
-        }
-      })->catch (sub {
-        $self->abort (message => $_[0]);
-        die $_[0];
-      });
-    }, # write
-    close => sub {
+            $ok->() if $con->{to_be_sent_length} <= 0;
+          } else {
+            die "XXX bad state";
+          }
+        })->catch (sub {
+          $self->abort (message => $_[0]);
+          $ng->($_[0]);
+          die $_[0];
+        });
+      }, # write
+      close => sub {
       if ($con->{to_be_sent_length} > 0) {
         my $error = Web::DOM::TypeError->new
             (sprintf "Closed before bytes (n = %d) are sent", $con->{to_be_sent_length});
         $self->abort (message => $error);
+        $ng->($error);
         die $error;
       }
 
-      if ($con->{state} eq 'tunnel' or
-          $con->{state} eq 'tunnel sending') {
-        $con->{writer}->close; # can fail
-        $con->{state} = 'tunnel receiving' if $con->{state} eq 'tunnel';
-      }
-
-      delete $self->{ws_message_stream_controller};
-    },
-    abort => sub {
-      delete $self->{ws_message_stream_controller};
+        delete $self->{ws_message_stream_controller};
+      }, # close
+      abort => sub {
+        delete $self->{ws_message_stream_controller};
       
       # XXX
-    },
-  });
 
-    return {stream => $ws};
+        $ng->();
+      },
+    }); # $ws
+    $s_stream->($ws);
+
+    return $p;
+  }); # ws_writable
+
+  return $r_stream->then (sub {
+    return {stream => $_[0]};
   });
 } # send_ws_message
 
@@ -672,29 +677,31 @@ sub send_ping ($;%) {
       if not (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') or
          (defined $self->{to_be_sent_length} and
           $self->{to_be_sent_length} > 0);
-
-  my $mask = '';
-  my $masked = 0;
-  unless ($self->{is_server}) {
-    $masked = 0b10000000;
-    $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
-  }
-  my $opcode = $args{pong} ? 10 : 9;
-  $self->_ws_debug ('S', $args{data}, FIN => 1, opcode => $opcode,
-                    mask => $mask, length => length $args{data})
-      if $self->{DEBUG};
-  unless ($self->{is_server}) {
-    for (0..((length $args{data})-1)) {
-      substr ($args{data}, $_, 1) = substr ($args{data}, $_, 1) ^ substr ($mask, $_ % 4, 1);
+  $con->{ws_writable} = $con->{ws_writable}->then (sub {
+    my $mask = '';
+    my $masked = 0;
+    unless ($self->{is_server}) {
+      $masked = 0b10000000;
+      $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
     }
-  }
-  $con->{writer}->write
-      (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | $opcode, $masked | length $args{data}) .
-         $mask . $args{data}))));
+    my $opcode = $args{pong} ? 10 : 9;
+    $self->_ws_debug ('S', $args{data}, FIN => 1, opcode => $opcode,
+                      mask => $mask, length => length $args{data})
+        if $self->{DEBUG};
+    unless ($self->{is_server}) {
+      for (0..((length $args{data})-1)) {
+        substr ($args{data}, $_, 1) = substr ($args{data}, $_, 1) ^ substr ($mask, $_ % 4, 1);
+      }
+    }
+    return $con->{writer}->write
+        (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | $opcode, $masked | length $args{data}) .
+           $mask . $args{data}))));
+  });
+  # XXX return promise waiting pong?
 } # send_ping
 
-sub close ($;%) {
-  my ($self, %args) = @_;
+sub send_ws_close ($;$$) {
+  my ($self, $status, $reason) = @_;
   my $con = $self->{is_server} ? $self->{connection} : $self;
   if (not defined $con->{state}) {
     return Promise->reject ("Connection has not been established");
@@ -707,14 +714,14 @@ sub close ($;%) {
     }
   }
 
-  if (defined $args{status} and $args{status} > 0xFFFF) {
+  if (defined $status and $status > 0xFFFF) {
     return Promise->reject ("Bad status");
   }
-  if (defined $args{reason}) {
+  if (defined $reason) {
     return Promise->reject ("Reason is utf8-flagged")
-        if utf8::is_utf8 $args{reason};
+        if utf8::is_utf8 $reason;
     return Promise->reject ("Reason is too long")
-        if 0x7D < length $args{reason};
+        if 0x7D < length $reason;
   }
 
   if (defined $con->{ws_state} and
@@ -727,10 +734,10 @@ sub close ($;%) {
       $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
     }
     my $data = '';
-    my $frame_info = $self->{DEBUG} ? [$args{reason}, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $args{status}] : undef;
-    if (defined $args{status}) {
-      $data = pack 'n', $args{status};
-      $data .= $args{reason} if defined $args{reason};
+    my $frame_info = $self->{DEBUG} ? [$reason, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $status] : undef;
+    if (defined $status) {
+      $data = pack 'n', $status;
+      $data .= $reason if defined $reason;
       unless ($self->{is_server}) {
         for (0..((length $data)-1)) {
           substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
@@ -743,19 +750,47 @@ sub close ($;%) {
       $con->{pending_frame} = $frame;
       $con->{pending_frame_info} = $frame_info if $self->{DEBUG};
     } else {
-      $self->_ws_debug ('S', @$frame_info) if $self->{DEBUG};
-      $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$frame)));
-      $con->{ws_state} = 'CLOSING';
-      $con->{ws_timer} = AE::timer 20, 0, sub {
-        if ($self->{DEBUG}) {
-          my $id = $self->{is_server} ? $self->{id} : $self->{request}->{id};
-          warn "$id: WS timeout (20)\n";
-        }
-        # XXX set exit ?
-        $self->_receive_done;
-      };
-      $self->_ev ('closing');
+warn 1;
+      $con->{ws_writable} = $con->{ws_writable}->then (sub {
+warn 2;
+        $self->_ws_debug ('S', @$frame_info) if $self->{DEBUG};
+        $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$frame)));
+        $con->{ws_state} = 'CLOSING';
+        $con->{ws_timer} = AE::timer 20, 0, sub {
+          if ($self->{DEBUG}) {
+            my $id = $self->{is_server} ? $self->{id} : $self->{request}->{id};
+            warn "$id: WS timeout (20)\n";
+          }
+          # XXX set exit ?
+          $self->_receive_done;
+        };
+        $self->_ev ('closing');
+      });
     }
+    return $self->{closed};
+  }
+
+  die "XXX bad state";
+} # send_ws_close
+
+sub close ($) {
+  my ($self) = @_;
+  my $con = $self->{is_server} ? $self->{connection} : $self;
+  if (not defined $con->{state}) {
+    return Promise->reject ("Connection has not been established");
+  }
+  if (defined $self->{request_state} or
+      (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN')) {
+    if (defined $self->{to_be_sent_length} and
+        $self->{to_be_sent_length} > 0) {
+      return Promise->reject ("Body is not sent");
+    }
+  }
+
+  if (defined $con->{ws_state} and
+      ($con->{ws_state} eq 'OPEN' or
+       $con->{ws_state} eq 'CONNECTING')) {
+    die "XXX WS not closed";
   } elsif ($self->{is_server}) {
     $self->_receive_done;
     return;
@@ -1254,13 +1289,15 @@ sub _process_rbuf ($$) {
           $self->{temp_buffer} = '';
           if (defined $self->{pending_frame}) {
             $self->{ws_state} = 'CLOSING';
-            $self->{writer}->write
+            $self->{ws_writable} = $self->{writer}->write
                 (DataView->new (ArrayBuffer->new_from_scalarref (\($self->{pending_frame}))));
             $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if $self->{DEBUG}; # XXX $self->{stream}
             $self->{ws_timer} = AE::timer 20, 0, sub {
               warn "$self->{request}->{id}: WS timeout (20)\n" if $self->{DEBUG};
               $self->_receive_done;
             };
+          } else {
+            $self->{ws_writable} = Promise->resolve;
           }
         }
       } elsif (100 <= $res->{status} and $res->{status} <= 199) {
@@ -2861,6 +2898,7 @@ sub send_response ($$$;%) {
   if ($ws) {
     $con->{ws_state} = 'OPEN';
     $con->{state} = 'before ws frame';
+    $con->{ws_writable} = Promise->resolve;
     push @header,
         ['Upgrade', 'websocket'],
         ['Connection', 'Upgrade'],

@@ -1288,8 +1288,7 @@ test {
           ['Hoge', 'Fuga33'],
         ]})->then (sub {
       $serverreq = $self;
-      # XXX (status => 5678);
-      return $self->{response}->{body}->get_writer->close;
+      return $self->send_ws_close (5678);
     });
   };
 
@@ -1912,8 +1911,7 @@ test {
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /stuvw/) {
           $serverreq->{body} = $_[0]->{body};
-          #XXX$self->close_response (status => 5678);
-          return $w->close;
+          return $self->send_ws_close (5678);
         }
       };
       return $self->send_ws_message (5, 'binary')->then (sub {
@@ -1969,8 +1967,7 @@ test {
       $self->{wstext} = sub {
         if ($_[0]->{text} =~ /stuvw/) {
           $serverreq->{text} = $_[0]->{text};
-          #XXXX $self->close_response (status => 5678, reason => 'abc');
-          return $w->close;
+          return $self->send_ws_close (5678, 'abc');
         }
       };
       return $self->send_ws_message (5, not 'binary')->then (sub {
@@ -2026,8 +2023,7 @@ test {
       $serverreq = $self;
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /ABCDE/) {
-          #XXX $self->close_response (status => 5678);
-          return $w->close;
+          return $self->send_ws_close (5678);
         }
       };
       $self->send_ping (data => "abbba");
@@ -2076,8 +2072,7 @@ test {
       $serverreq = $self;
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /abc/) {
-          #XXX $self->close_response (status => 5678, reason => '');
-          return $self->{response}->{body}->get_writer->close;
+          return $self->send_ws_close (5678, '');
         }
       };
     });
@@ -2364,8 +2359,7 @@ test {
           $error = $_[0];
           return $writer->write (d "45");
         })->then (sub {
-          #XXX $self->close_response (status => 5678);
-          return $writer->close;
+          return $self->send_ws_close (5678);
         })->then (sub {
           return $w->close;
         });
@@ -2410,8 +2404,7 @@ test {
         return $self->send_ws_message (4, 'binary')->catch (sub {
           $error = $_[0];
           $writer->write (d "45");
-          #XXX $self->close_response (status => 5678);
-          return $writer->close;
+          return $self->send_ws_close (5678);
         });
       })->then (sub {
         return $w->close;
@@ -2491,8 +2484,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
-      #XXX $self->close_response (status => 4056);
-      return $self->{response}->{body}->get_writer->close;
+      return $self->send_ws_close (4056);
     })->then (sub {
       return $self->send_ws_message (5, 'binary');
     })->catch (sub {
@@ -2529,8 +2521,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
-      #XXX $self->close_response (status => 4056);
-      return $self->{response}->{body}->get_writer->close;
+      return $self->send_ws_close (4056);
     });
   };
 

@@ -496,6 +496,7 @@ use Promise;
 use Web::Encoding;
 use ArrayBuffer;
 use DataView;
+push our @CARP_NOT, qw(Web::DOM::TypeError);
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
@@ -536,65 +537,26 @@ sub _receive_bytes_done ($) {
   return undef;
 } # _receive_bytes_done
 
-sub send_text_header ($$) {
-  my ($self, $length) = @_;
-  croak "Data is utf8-flagged" if utf8::is_utf8 $_[2];
+sub send_ws_message ($$$) {
+  my ($self, $length, $is_binary) = @_;
   croak "Data too large" if MAX_BYTES < $length; # spec limit 2**63
   my $con = $self->{is_server} ? $self->{connection} : $self;
-  croak "Bad state"
+  return Promise->reject (Web::DOM::TypeError->new ("Not writable"))
       if not (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') or
-         (defined $self->{to_be_sent_length} and
-          $self->{to_be_sent_length} > 0);
+         (defined $con->{to_be_sent_length} and
+          $con->{to_be_sent_length} > 0);
 
   my $mask = '';
   my $masked = 0;
   unless ($self->{is_server}) {
     $masked = 0b10000000;
-    $self->{ws_encode_mask_key} = $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+    $con->{ws_encode_mask_key} = $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
   } else {
-    delete $self->{ws_encode_mask_key};
+    delete $con->{ws_encode_mask_key};
   }
 
-  $self->{ws_sent_length} = 0;
-  $self->{to_be_sent_length} = $length;
-
-  my $length0 = $length;
-  my $len = '';
-  if ($length >= 2**16) {
-    $length0 = 0x7F;
-    $len = pack 'n', $length;
-  } elsif ($length >= 0x7E) {
-    $length0 = 0x7E;
-    $len = pack 'Q>', $length;
-  }
-  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 1, mask => $mask,
-                    length => $length) if $self->{DEBUG};
-  $con->{writer}->write
-      (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 1, $masked | $length0) .
-         $len . $mask))));
-} # send_text_header
-
-sub send_binary_header ($$) {
-  my ($self, $length) = @_;
-  croak "Data is utf8-flagged" if utf8::is_utf8 $_[2];
-  croak "Data too large" if MAX_BYTES < $length; # spec limit 2**63
-  my $con = $self->{is_server} ? $self->{connection} : $self;
-  croak "Bad state"
-      if not (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') or
-         (defined $self->{to_be_sent_length} and
-          $self->{to_be_sent_length} > 0);
-
-  my $mask = '';
-  my $masked = 0;
-  unless ($self->{is_server}) {
-    $masked = 0b10000000;
-    $self->{ws_encode_mask_key} = $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
-  } else {
-    delete $self->{ws_encode_mask_key};
-  }
-
-  $self->{ws_sent_length} = 0;
-  $self->{to_be_sent_length} = $length;
+  $con->{ws_sent_length} = 0;
+  $con->{to_be_sent_length} = $length;
 
   my $length0 = $length;
   my $len = '';
@@ -606,11 +568,99 @@ sub send_binary_header ($$) {
     $len = pack 'Q>', $length;
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask,
-                    length => $length) if $self->{DEBUG};
-  $con->{writer}->write
-      (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 2, $masked | $length0) .
-         $len . $mask))));
-} # send_binary_header
+                    length => $length) if $self->{DEBUG}; # XXX
+  return $con->{writer}->write
+      (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | ($is_binary ? 2 : 1), $masked | $length0) .
+         $len . $mask))))->then (sub {
+    my $ws = WritableStream->new ({
+      write => sub {
+        my $chunk = $_[1];
+        return Promise->resolve->then (sub {
+          my $is_body = (defined $con->{to_be_sent_length} and
+                         $con->{to_be_sent_length} > 0);
+          my $is_tunnel = (defined $con->{state} and
+                           ($con->{state} eq 'tunnel' or
+                            $con->{state} eq 'tunnel sending'));
+          die Web::DOM::TypeError->new ("Not writable")
+              if not $is_body and not $is_tunnel;
+          # XXX $chunk type
+          my $byte_length = $chunk->byte_length;
+          die Web::DOM::TypeError->new
+              (sprintf "Byte length %d is greater than expected length %d",
+                   $byte_length, $con->{to_be_sent_length})
+                  if $is_body and $con->{to_be_sent_length} < $byte_length;
+        return unless $byte_length;
+
+        if ($con->{DEBUG}) {
+          if ($con->{DEBUG} > 1 or $byte_length <= 40) {
+            for (split /\x0A/, 'XXX', -1) {
+              warn "$con->{request}->{id}: S: @{[_e4d $_]}\n";
+            }
+          } else {
+            warn "$con->{request}->{id}: S: @{[_e4d substr $_, 0, 40]}... (@{[length $_]})\n";
+          }
+        }
+
+        if (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') {
+          my $ref = \('X' x $byte_length); # XXX
+          my @data;
+          my $mask = $con->{ws_encode_mask_key};
+          if (defined $mask) {
+            my $o = $con->{ws_sent_length};
+            for (0..($byte_length-1)) {
+              push @data, substr ($$ref, $_, 1) ^ substr ($mask, ($o+$_) % 4, 1);
+            }
+          }
+          $con->{ws_sent_length} += $byte_length;
+          $con->{to_be_sent_length} -= $byte_length;
+          if (defined $mask) {
+            $con->{writer}->write
+                (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
+          } else {
+            $con->{writer}->write ($chunk);
+          }
+        } else {
+          my $sent = $con->{writer}->write ($chunk);
+          if ($is_body) {
+            $con->{to_be_sent_length} -= $byte_length;
+            if ($con->{to_be_sent_length} <= 0) {
+              $sent->then (sub {
+                $con->_send_done;
+              });
+            }
+          } # $is_body
+        }
+      })->catch (sub {
+        $self->abort (message => $_[0]);
+        die $_[0];
+      });
+    }, # write
+    close => sub {
+      if ($con->{to_be_sent_length} > 0) {
+        my $error = Web::DOM::TypeError->new
+            (sprintf "Closed before bytes (n = %d) are sent", $con->{to_be_sent_length});
+        $self->abort (message => $error);
+        die $error;
+      }
+
+      if ($con->{state} eq 'tunnel' or
+          $con->{state} eq 'tunnel sending') {
+        $con->{writer}->close; # can fail
+        $con->{state} = 'tunnel receiving' if $con->{state} eq 'tunnel';
+      }
+
+      delete $self->{ws_message_stream_controller};
+    },
+    abort => sub {
+      delete $self->{ws_message_stream_controller};
+      
+      # XXX
+    },
+  });
+
+    return {stream => $ws};
+  });
+} # send_ws_message
 
 sub send_ping ($;%) {
   my ($self, %args) = @_;
@@ -1486,7 +1536,6 @@ sub _process_rbuf ($$) {
 sub _process_rbuf_eof ($;%) {
   my ($self, %args) = @_;
 
-warn "EOF $self->{state}";
   if ($self->{state} eq 'before response') {
     if (length $self->{temp_buffer}) {
       if ($self->{request}->{method} eq 'PUT' or
@@ -1885,6 +1934,9 @@ sub send_request ($$;%) {
     }
   }
   $con->{request_state} = 'sending headers';
+    $stream->{request} = $req;
+    $stream->{response} = $con->{receiving} = $res;
+    $stream->{closed} = $stream_closed;
   my $sent = $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\$header)));
   $con->{request}->{body_stream} = WritableStream->new ({
@@ -1970,9 +2022,6 @@ sub send_request ($$;%) {
     warn "$con->{id}: ========== @{[ref $con]}\n";
   }) if $con->{DEBUG};
   return $sent->then (sub {
-    $stream->{request} = $req;
-    $stream->{response} = $stream->{receiving} = $res;
-    $stream->{closed} = $stream_closed;
     return $r_end_of_headers;
   }); ## could be rejected when connection aborted
 } # send_request
@@ -2694,7 +2743,8 @@ sub received_streams ($) {
 sub abort ($) {
   my ($self, %args) = @_;
   $self->{writer}->abort ($args{message}) if defined $self->{writer}; # XXX
-  $self->{reader}->cancel ($args{message}) if defined $self->{reader}; # XXX
+  $self->{reader}->cancel ($args{message})->catch (sub { })
+      if defined $self->{reader}; # XXX
   delete $self->{writer};
   $self->{stream}->_send_done if defined $self->{stream};
   return $self->{closed};
@@ -2884,7 +2934,6 @@ sub send_response ($$$;%) {
       $stream->{response}->{body_stream_controller} = $_[1];
     },
     write => sub {
-warn "XXX reqsponse body write";
       my $chunk = $_[1]; # XXX must be an ArrayBufferView
       my $wm = $stream->{write_mode} || '';
       # XXX error location

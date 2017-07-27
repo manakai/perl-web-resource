@@ -1908,8 +1908,6 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $self->send_binary_header (5);
-      $w->write (d "abcde");
       $serverreq = $self;
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /stuvw/) {
@@ -1918,6 +1916,12 @@ test {
           return $w->close;
         }
       };
+      return $self->send_ws_message (5, 'binary')->then (sub {
+        my $ctx = $_[0];
+        my $writer = $ctx->{stream}->get_writer;
+        $writer->write (d "abcde");
+        return $writer->close;
+      });
     });
   };
 
@@ -1961,8 +1965,6 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $self->send_text_header (5);
-      $w->write (d "abcde");
       $serverreq = $self;
       $self->{wstext} = sub {
         if ($_[0]->{text} =~ /stuvw/) {
@@ -1971,6 +1973,11 @@ test {
           return $w->close;
         }
       };
+      return $self->send_ws_message (5, not 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "abcde");
+        return $writer->close;
+      });
     });
   };
 
@@ -2016,9 +2023,6 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $self->send_ping (data => "abbba");
-      $self->send_text_header (5);
-      $w->write (d "abcde");
       $serverreq = $self;
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /ABCDE/) {
@@ -2026,6 +2030,12 @@ test {
           return $w->close;
         }
       };
+      $self->send_ping (data => "abbba");
+      return $self->send_ws_message (5, not 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "abcde");
+        return $writer->close;
+      });
     });
   };
 
@@ -2111,15 +2121,17 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $self->send_binary_header (5);
-      return $w->write (d "abcdef")->catch (sub {
-        $error = $_[0];
-        return $w->write (d "123");
-      })->catch (sub {
-        $y = $_[0];
-        return $w->close;
-      })->catch (sub {
-        $z = $_[0];
+      return $self->send_ws_message (5, 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        return $writer->write (d "abcdef")->catch (sub {
+          $error = $_[0];
+          return $writer->write (d "123");
+        })->catch (sub {
+          $y = $_[0];
+          return $writer->close;
+        })->catch (sub {
+          $z = $_[0];
+        });
       });
     });
   };
@@ -2159,15 +2171,17 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $self->send_text_header (5);
-      return $w->write (d "abcdef")->catch (sub {
-        $error = $_[0];
-        return $w->write (d "123");
-      })->catch (sub {
-        $y = $_[0];
-        return $w->close;
-      })->catch (sub {
-        $z = $_[0];
+      return $self->send_ws_message (5, not 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        return $writer->write (d "abcdef")->catch (sub {
+          $error = $_[0];
+          return $writer->write (d "123");
+        })->catch (sub {
+          $y = $_[0];
+          return $writer->close;
+        })->catch (sub {
+          $z = $_[0];
+        });
       });
     });
   };
@@ -2207,16 +2221,18 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $self->send_text_header (5);
-      $w->write (d "123");
-      return $w->write (d "abcdef")->catch (sub {
-        $error = $_[0];
-        return $w->write (d "45");
-      })->catch (sub {
-        $y = $_[0];
-        return $w->close;
-      })->catch (sub {
-        $z = $_[0];
+      return $self->send_ws_message (5, not 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "123");
+        return $writer->write (d "abcdef")->catch (sub {
+          $error = $_[0];
+          return $writer->write (d "45");
+        })->catch (sub {
+          $y = $_[0];
+          return $writer->close;
+        })->catch (sub {
+          $z = $_[0];
+        });
       });
     });
   };
@@ -2255,12 +2271,14 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $self->send_text_header (0);
-      return $w->write (d "abcdef")->catch (sub {
-        $error = $_[0];
-        return $w->close;
-      })->catch (sub {
-        $y = $_[0];
+      return $self->send_ws_message (0, not 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        return $writer->write (d "abcdef")->catch (sub {
+          $error = $_[0];
+          return $writer->close;
+        })->catch (sub {
+          $y = $_[0];
+        });
       });
     });
   };
@@ -2276,7 +2294,7 @@ test {
     my $res = $_[0];
     test {
       like $error, qr{^TypeError: Not writable at }; # XXX location
-      is $received, '(end)';
+      is $received, '(end)(end)';
       ok ! $res->is_network_error;
       ok ! $res->ws_closed_cleanly;
       is $res->ws_code, 1006;
@@ -2339,15 +2357,19 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $self->send_binary_header (5);
-      $w->write (d "123");
-      eval {
-        $self->send_text_header (4);
-      };
-      $w->write (d "45");
-      $error = $@;
-      #XXX $self->close_response (status => 5678);
-      return $w->close;
+      return $self->send_ws_message (5, 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "123");
+        return $self->send_ws_message (4, not 'binary')->catch (sub {
+          $error = $_[0];
+          return $writer->write (d "45");
+        })->then (sub {
+          #XXX $self->close_response (status => 5678);
+          return $writer->close;
+        })->then (sub {
+          return $w->close;
+        });
+      });
     });
   };
 
@@ -2361,7 +2383,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Bad state at @{[__FILE__]} line @{[__LINE__-17]}};
+      like $error, qr{^TypeError: Not writable at @{[__FILE__]} line @{[__LINE__-15]}};
       is $received, '(end)12345(end)';
       ok ! $res->is_network_error;
       ok $res->ws_closed_cleanly;
@@ -2382,15 +2404,18 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $self->send_binary_header (5);
-      $w->write (d "123");
-      eval {
-        $self->send_binary_header (4);
-      };
-      $w->write (d "45");
-      $error = $@;
-      #XXX $self->close_response (status => 5678);
-      return $w->close;
+      return $self->send_ws_message (5, 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "123");
+        return $self->send_ws_message (4, 'binary')->catch (sub {
+          $error = $_[0];
+          $writer->write (d "45");
+          #XXX $self->close_response (status => 5678);
+          return $writer->close;
+        });
+      })->then (sub {
+        return $w->close;
+      });
     });
   };
 
@@ -2404,7 +2429,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Bad state at @{[__FILE__]} line @{[__LINE__-17]}};
+      like $error, qr{^TypeError: Not writable at @{[__FILE__]} line @{[__LINE__-17]}};
       is $received, '(end)12345(end)';
       ok ! $res->is_network_error;
       ok $res->ws_closed_cleanly;
@@ -2419,15 +2444,20 @@ test {
 test {
   my $c = shift;
   my $path = rand;
+  my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $self->send_binary_header (5);
-      $w->write (d "123");
-      #XXX $self->close_response (status => 4056);
-      return $w->close;
+      return $self->send_ws_message (5, not 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "123");
+        #XXX $self->close_response (status => 4056);
+        return $writer->close;
+      })->catch (sub {
+        $error = $_[0];
+      });
     });
   };
 
@@ -2441,6 +2471,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
+      like $error, qr{^\QTypeError: Closed before bytes (n = 2) are sent\E at }; # XXX location
       is $received, '(end)';
       ok ! $res->is_network_error;
       ok ! $res->ws_closed_cleanly;
@@ -2450,7 +2481,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 5, name => 'WS data bad length';
+} n => 6, name => 'WS data bad length';
 
 test {
   my $c = shift;
@@ -2463,10 +2494,9 @@ test {
       #XXX $self->close_response (status => 4056);
       return $self->{response}->{body}->get_writer->close;
     })->then (sub {
-      eval {
-        $self->send_binary_header (5);
-      };
-      $error = $@;
+      return $self->send_ws_message (5, 'binary');
+    })->catch (sub {
+      $error = $_[0];
     });
   };
 
@@ -2480,7 +2510,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Bad state at @{[__FILE__]} line @{[__LINE__-15]}};
+      like $error, qr{^TypeError: Not writable at @{[__FILE__]} line @{[__LINE__-16]}};
       is $received, '(end)';
       ok ! $res->is_network_error;
       ok $res->ws_closed_cleanly;
@@ -3757,17 +3787,21 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       my $w = $self->{response}->{body}->get_writer;
-      $self->send_binary_header (5);
-      $w->write (d "abcde");
       $serverreq = $self;
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /stuvw/) {
+          $serverreq->{body} = $_[0]->{body};
           $self->abort (message => "Test abort\x{6001}");
         }
       };
-      $self->{complete} = sub { # XXX
+      $self->closed->catch (sub {
         $exit = $_[0];
-      };
+      });
+      return $self->send_ws_message (5, 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "abcde");
+        return $writer->close;
+      });
     });
   };
 

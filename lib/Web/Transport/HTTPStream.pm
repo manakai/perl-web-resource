@@ -510,24 +510,26 @@ BEGIN {
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
 
-sub _end_of_headers ($) {
-  my $self = $_[0];
-  my $read_stream = ReadableStream->new ({
-    type => 'bytes',
-    auto_allocate_chunk_size => 1024*2,
-    start => sub {
-      $self->{receive_controller} = $_[1];
-      return undef;
-    },
-    pull => sub {
-      return $self->_read;
-    },
-    cancel => sub {
-      delete $self->{receive_controller};
-      return $self->abort (message => defined $_[1] ? $_[1] : 'HTTP reader cancelled');
-    },
-  });
-  $self->{receiving}->{body} = $read_stream;
+sub _end_of_headers ($;%) {
+  my ($self, %args) = @_;
+  unless ($args{is_ws}) {
+    my $read_stream = ReadableStream->new ({
+      type => 'bytes',
+      auto_allocate_chunk_size => 1024*2,
+      start => sub {
+        $self->{receive_controller} = $_[1];
+        return undef;
+      },
+      pull => sub {
+        return $self->_read;
+      },
+      cancel => sub {
+        delete $self->{receive_controller};
+        return $self->abort (message => defined $_[1] ? $_[1] : 'HTTP reader cancelled');
+      },
+    });
+    $self->{receiving}->{body} = $read_stream;
+  }
   (delete $self->{receiving}->{end_of_headers})->();
 } # _end_of_headers
 
@@ -1282,7 +1284,7 @@ sub _process_rbuf ($$) {
           return;
         } else {
           $self->{ws_state} = 'OPEN';
-          $self->_end_of_headers; # XXX ws => 1
+          $self->_end_of_headers (is_ws => 1);
           $self->_receive_bytes_done;
           $self->{no_new_request} = 1;
           $self->{state} = 'before ws frame';
@@ -2994,15 +2996,10 @@ sub send_response ($$$;%) {
                                     (\sprintf "%X\x0D\x0A%s\x0D\x0A", $dv->byte_length, $dv->manakai_to_string))); # XXX string copy!
           }
         }); # XXX catch
-      } elsif ($wm eq 'raw' or $wm eq 'ws') {
+      } elsif ($wm eq 'raw') {
         return Promise->resolve->then (sub {
           my $dv = UNIVERSAL::isa ($chunk, 'DataView')
               ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $chunk->byte_length); # or throw
-          die Web::DOM::TypeError->new ("Not writable")
-              if $wm eq 'ws' and
-                  (not $stream->{connection}->{ws_state} eq 'OPEN' or
-                   not defined $stream->{to_be_sent_length} or
-                   $stream->{to_be_sent_length} <= 0);
           if (defined $stream->{to_be_sent_length}) {
             if ($stream->{to_be_sent_length} >= $dv->byte_length) {
               $stream->{to_be_sent_length} -= $dv->byte_length;
@@ -3019,8 +3016,7 @@ sub send_response ($$$;%) {
         }
         my $writer = $stream->{connection}->{writer};
           $writer->write ($dv);
-          if ($wm eq 'raw' and
-              defined $stream->{to_be_sent_length} and
+          if (defined $stream->{to_be_sent_length} and
               $stream->{to_be_sent_length} <= 0) {
             return $stream->_close_stream;
           }
@@ -3043,7 +3039,7 @@ sub send_response ($$$;%) {
     abort => sub {
       # XXX
     },
-  }); # response body
+  }) unless $ws; # response body
 
   $stream->{close_after_response} = 1 if $close;
   $stream->{write_mode} = $write_mode;

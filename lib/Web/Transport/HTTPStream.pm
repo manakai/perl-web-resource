@@ -500,15 +500,191 @@ use ArrayBuffer;
 use DataView;
 push our @CARP_NOT, qw(Web::DOM::TypeError);
 
+## Client:
+##   $con->send_request->then (sub {
+##     $_[0]->{stream}
+##     $_[0]->{body}
+##   })
+##   $stream->headers_received->then (sub {
+##     $_[0]->{received}
+##     $_[0]->{received_messages}
+##   })
+## Server:
+##   $con->received_streams->read->then (sub { $_[0]->{value} })
+##   $stream->headers_received->then (sub {
+##     $_[0]->{received}
+##     $_[0]->{received_messages}
+##   })
+##   $stream->send_response->then (sub {
+##     $_[0]->{body}
+##   })
+## XXX received -> body
+## XXX received_messages -> messages
+
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
   *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
 
+sub _open_sending_stream ($;%) {
+  my ($stream, %args) = @_;
+  my $con = $stream->{connection};
+
+  if ($args{XXX_response}) {
+    my $ws = $args{is_ws} ? undef : WritableStream->new ({
+    start => sub {
+      $stream->{response}->{body_stream_controller} = $_[1];
+    },
+    write => sub {
+      my $chunk = $_[1]; # XXX must be an ArrayBufferView
+      my $wm = $stream->{write_mode} || '';
+      # XXX error location
+      if ($wm eq 'chunked') {
+        return Promise->resolve->then (sub {
+          my $dv = UNIVERSAL::isa ($chunk, 'DataView')
+              ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $chunk->byte_length); # or throw
+          if ($dv->byte_length) {
+            ## Note that some clients fail to parse chunks if there
+            ## are TCP segment boundaries within a chunk (which is
+            ## smaller than MSS).
+        if ($stream->{DEBUG} > 1) {
+          for (split /\x0A/, $dv->manakai_to_string, -1) {
+            warn "$stream->{id}: S: @{[_e4d $_]}\n";
+          }
+        }
+        my $writer = $stream->{connection}->{writer};
+            $writer->write
+                (DataView->new (ArrayBuffer->new_from_scalarref
+                                    (\sprintf "%X\x0D\x0A%s\x0D\x0A", $dv->byte_length, $dv->manakai_to_string))); # XXX string copy!
+          }
+        }); # XXX catch
+      } elsif ($wm eq 'raw') {
+        return Promise->resolve->then (sub {
+          my $dv = UNIVERSAL::isa ($chunk, 'DataView')
+              ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $chunk->byte_length); # or throw
+          if (defined $stream->{to_be_sent_length}) {
+            if ($stream->{to_be_sent_length} >= $dv->byte_length) {
+              $stream->{to_be_sent_length} -= $dv->byte_length;
+            } else {
+              die Web::DOM::TypeError->new
+                  (sprintf "Byte length %d is greater than expected length %d",
+                       $dv->byte_length, $stream->{to_be_sent_length});
+            }
+          }
+        if ($stream->{DEBUG} > 1) {
+          for (split /\x0A/, $dv->manakai_to_string, -1) {
+            warn "$stream->{id}: S: @{[_e4d $_]}\n";
+          }
+        }
+        my $writer = $stream->{connection}->{writer};
+          $writer->write ($dv);
+          if (defined $stream->{to_be_sent_length} and
+              $stream->{to_be_sent_length} <= 0) {
+            return $stream->_close_stream;
+          }
+        })->catch (sub {
+          delete $stream->{response}->{body_stream_controller};
+          $stream->abort (message => $_[0]); # XXX
+          die $_[0];
+        });
+      } elsif ($wm eq 'void') {
+        #
+      } else {
+        return Promise->reject
+            (Web::DOM::TypeError->new ("Response body is not writable"));
+        # XXX catch
+      }
+    }, # write
+    close => sub {
+      return $stream->_close_stream;
+    }, # close
+    abort => sub {
+      # XXX
+    },
+  });
+    return $ws;
+  }
+
+  my $ws = $args{is_ws} ? undef : WritableStream->new ({
+    start => sub {
+      $con->{request}->{body_stream_controller} = $_[1];
+    },
+    write => sub {
+      my $chunk = $_[1];
+      return Promise->resolve->then (sub {
+        my $is_body = (defined $con->{to_be_sent_length} and
+                       $con->{to_be_sent_length} > 0);
+        my $is_tunnel = (defined $con->{state} and
+                         ($con->{state} eq 'tunnel' or
+                          $con->{state} eq 'tunnel sending'));
+        die "Bad state" # XXX
+            if not $is_body and not $is_tunnel;
+        # XXX $chunk type
+        my $byte_length = $chunk->byte_length;
+        die "Data too large" # XXX
+            if $is_body and $con->{to_be_sent_length} < $byte_length;
+        return unless $byte_length;
+
+        if ($con->{DEBUG}) {
+          if ($con->{DEBUG} > 1 or $byte_length <= 40) {
+            for (split /\x0A/, 'XXX', -1) {
+              warn "$con->{request}->{id}: S: @{[_e4d $_]}\n";
+            }
+          } else {
+            warn "$con->{request}->{id}: S: @{[_e4d substr $_, 0, 40]}... (@{[length $_]})\n";
+          }
+        }
+
+        if (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') {
+          my $ref = \('X' x $byte_length); # XXX
+          my @data;
+          my $mask = $con->{ws_encode_mask_key};
+          my $o = $con->{ws_sent_length};
+          for (0..($byte_length-1)) {
+            push @data, substr ($$ref, $_, 1) ^ substr ($mask, ($o+$_) % 4, 1);
+          }
+          $con->{ws_sent_length} += $byte_length;
+          $con->{to_be_sent_length} -= $byte_length;
+          $con->{writer}->write
+              (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
+        } else {
+          my $sent = $con->{writer}->write ($chunk);
+          if ($is_body) {
+            $con->{to_be_sent_length} -= $byte_length;
+            if ($con->{to_be_sent_length} <= 0) {
+              $sent->then (sub {
+                $con->_send_done;
+              });
+            }
+          } # $is_body
+        }
+      }); # XXX catch
+    }, # write
+    close => sub {
+      # XXX fail if length not zero
+
+      if ($con->{state} eq 'tunnel' or
+          $con->{state} eq 'tunnel sending') {
+        $con->{writer}->close; # can fail
+        $con->{state} = 'tunnel receiving' if $con->{state} eq 'tunnel';
+      }
+    },
+    abort => sub {
+      # XXX
+    },
+  });
+
+  return $ws;
+} # _open_sending_stream
+
 sub _read ($) {
   return $_[0]->{connection}->_read;
 } # _read
+
+sub headers_received ($) {
+  return $_[0]->{headers_received}->[0];
+} # headers_received
 
 sub _headers_received ($;%) {
   my ($stream, %args) = @_;
@@ -535,7 +711,6 @@ sub _headers_received ($;%) {
         return undef;
       },
       pull => sub {
-warn "XXX pull $stream";
         return $stream->_read;
       },
       cancel => sub {
@@ -545,7 +720,7 @@ warn "XXX pull $stream";
     });
     $return->{received} = $read_stream;
   } # not is_ws
-  (delete $stream->{headers_received})->($return);
+  (delete $stream->{headers_received}->[1])->($return);
 } # _headers_received
 
 sub _receive_bytes_done ($) {
@@ -989,16 +1164,13 @@ my $BytesDataStates = {
 
 sub _read ($) {
   my ($self) = @_;
-warn "XXX $self read";
   return if $self->{read_running};
   $self->{read_running} = 1;
-warn 4;
 
   if ($BytesDataStates->{$self->{state}} and
       defined $self->{stream} and
       defined $self->{stream}->{receive_controller}) {
     my $req = $self->{stream}->{receive_controller}->byob_request;
-warn "XXX $req";
     unless (defined $req) {
       delete $self->{read_running};
       return;
@@ -1853,8 +2025,9 @@ sub _both_done ($) {
       $self->{response}->{stream_reject}->($self->{exit});
 
       my $stream = $self->{stream};
-      if (defined $stream->{headers_received}) {
-        (delete $stream->{headers_received})->(Promise->reject ("XXX")); # XXX
+      if (defined $stream->{headers_received} and
+          defined $stream->{headers_received}->[1]) {
+        (delete $stream->{headers_received}->[1])->(Promise->reject ("XXX")); # XXX
       }
 
       my $rc = delete $stream->{receive_controller};
@@ -1884,12 +2057,15 @@ sub _both_done ($) {
 
 # XXX can_create_stream is_active && (if h1: no current request)
 
-sub create_stream ($) {
-  # XXX wait until $_[0]->can_create_stream becomes true
-  return Promise->resolve (bless {
-    connection => $_[0],
-  },'Web::Transport::HTTPStream::ClientStream'); # XXX
-} # create_stream
+sub send_request ($$;%) {
+  my $con = shift;
+  my $req = shift;
+  # XXX wait until $con->can_create_stream becomes true
+  my $stream = bless {
+    connection => $con,
+  },'Web::Transport::HTTPStream::ClientStream';
+  return $stream->_send_request ($req, @_);
+} # send_request
 
 package Web::Transport::HTTPStream::ClientStream; # XXX
 use Carp qw(croak);
@@ -1903,10 +2079,11 @@ BEGIN {
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
 
+# XXX
 sub request ($) { $_[0]->{request} } # or undef
 sub response ($) { $_[0]->{response} } # or undef
 
-sub send_request ($$;%) {
+sub _send_request ($$;%) {
   my ($stream, $req, %args) = @_;
   my $con = $stream->{connection};
   my $method = defined $req->{method} ? $req->{method} : '';
@@ -1956,7 +2133,7 @@ sub send_request ($$;%) {
   my $cb = $args{cb} || sub { };
   $con->{cb} = $cb;
 
-  my ($r_end_of_headers, $s_end_of_headers) = promised_cv;
+  $stream->{headers_received} = [promised_cv];
   my ($resolve_stream, $reject_stream);
   my $stream_closed = Promise->new
       (sub { ($resolve_stream, $reject_stream) = @_ });
@@ -1970,7 +2147,6 @@ sub send_request ($$;%) {
     stream_resolve => $resolve_stream,
     stream_reject => $reject_stream,
   };
-  $stream->{headers_received} = $s_end_of_headers;
   $con->{state} = 'before response';
   $con->{temp_buffer} = '';
   # XXX Connection: close
@@ -2003,74 +2179,7 @@ sub send_request ($$;%) {
     $stream->{closed} = $stream_closed;
   my $sent = $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\$header)));
-  $con->{request}->{body_stream} = WritableStream->new ({
-    start => sub {
-      $con->{request}->{body_stream_controller} = $_[1];
-    },
-    write => sub {
-      my $chunk = $_[1];
-      return Promise->resolve->then (sub {
-        my $is_body = (defined $con->{to_be_sent_length} and
-                       $con->{to_be_sent_length} > 0);
-        my $is_tunnel = (defined $con->{state} and
-                         ($con->{state} eq 'tunnel' or
-                          $con->{state} eq 'tunnel sending'));
-        die "Bad state" # XXX
-            if not $is_body and not $is_tunnel;
-        # XXX $chunk type
-        my $byte_length = $chunk->byte_length;
-        die "Data too large" # XXX
-            if $is_body and $con->{to_be_sent_length} < $byte_length;
-        return unless $byte_length;
-
-        if ($con->{DEBUG}) {
-          if ($con->{DEBUG} > 1 or $byte_length <= 40) {
-            for (split /\x0A/, 'XXX', -1) {
-              warn "$con->{request}->{id}: S: @{[_e4d $_]}\n";
-            }
-          } else {
-            warn "$con->{request}->{id}: S: @{[_e4d substr $_, 0, 40]}... (@{[length $_]})\n";
-          }
-        }
-
-        if (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') {
-          my $ref = \('X' x $byte_length); # XXX
-          my @data;
-          my $mask = $con->{ws_encode_mask_key};
-          my $o = $con->{ws_sent_length};
-          for (0..($byte_length-1)) {
-            push @data, substr ($$ref, $_, 1) ^ substr ($mask, ($o+$_) % 4, 1);
-          }
-          $con->{ws_sent_length} += $byte_length;
-          $con->{to_be_sent_length} -= $byte_length;
-          $con->{writer}->write
-              (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
-        } else {
-          my $sent = $con->{writer}->write ($chunk);
-          if ($is_body) {
-            $con->{to_be_sent_length} -= $byte_length;
-            if ($con->{to_be_sent_length} <= 0) {
-              $sent->then (sub {
-                $con->_send_done;
-              });
-            }
-          } # $is_body
-        }
-      }); # XXX catch
-    }, # write
-    close => sub {
-      # XXX fail if length not zero
-
-      if ($con->{state} eq 'tunnel' or
-          $con->{state} eq 'tunnel sending') {
-        $con->{writer}->close; # can fail
-        $con->{state} = 'tunnel receiving' if $con->{state} eq 'tunnel';
-      }
-    },
-    abort => sub {
-      # XXX
-    },
-  });
+  my $ws = $stream->_open_sending_stream (is_ws => $args{ws});
   if ($con->{to_be_sent_length} <= 0) {
     $sent = $sent->then (sub {
       $con->_send_done;
@@ -2086,9 +2195,9 @@ sub send_request ($$;%) {
     warn "$con->{id}: ========== @{[ref $con]}\n";
   }) if $con->{DEBUG};
   return $sent->then (sub {
-    return $r_end_of_headers;
+    return {stream => $stream, body => $ws};
   }); ## could be rejected when connection aborted
-} # send_request
+} # _send_request
 
 sub closed ($) {
   return $_[0]->{closed};
@@ -2132,7 +2241,6 @@ sub new ($$) {
       $self->{stream_controller} = $_[1];
     },
     pull => sub {
-warn "XXX pull";
       return $self->_read if defined $self->{reader};
     },
     cancel => sub {
@@ -2269,11 +2377,9 @@ sub _new_stream ($) {
   $req->{cb} = sub { }; # XXX
   $con->{stream_controller}->enqueue ($req);
 
-  my ($r_end_of_headers, $s_end_of_headers) = promised_cv;
   my ($resolve_stream, $reject_stream);
   $req->{receiving} = $req->{request};
-  $req->{headers_received} = $s_end_of_headers;
-  $req->{request_received} = $r_end_of_headers;
+  $req->{headers_received} = [promised_cv];
 
   $req->{closed} = Promise->new (sub {
     $req->{closed_resolve} = $_[0];
@@ -2846,10 +2952,6 @@ BEGIN {
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
 
-sub request_ready ($) {
-  return $_[0]->{request_received};
-} # request_ready
-
 sub send_response ($$$;%) {
   my ($stream, $response, %args) = @_;
   return Promise->reject
@@ -2862,7 +2964,7 @@ sub send_response ($$$;%) {
               $stream->{request}->{version} == 0.9;
   my $done = 0;
   my $connect = 0;
-  my $ws = 0;
+  my $is_ws = 0;
   my $to_be_sent = undef;
   my $write_mode = 'sent';
   if ($stream->{request}->{method} eq 'HEAD' or
@@ -2881,7 +2983,7 @@ sub send_response ($$$;%) {
     ## No response body by definition
     croak "|content_length| not allowed" if defined $args{content_length};
     if (defined $stream->{ws_key} and $response->{status} == 101) {
-      $ws = 1;
+      $is_ws = 1;
       $write_mode = 'ws';
     } else {
       return Promise->reject
@@ -2913,7 +3015,7 @@ sub send_response ($$$;%) {
     push @header, ['Date', $dt->to_http_date_string];
   }
 
-  if ($ws) {
+  if ($is_ws) {
     $con->{ws_state} = 'OPEN';
     $con->{state} = 'before ws frame';
     $con->{ws_writable} = Promise->resolve;
@@ -2984,91 +3086,17 @@ sub send_response ($$$;%) {
     }
   }
 
-  $stream->{response} = {};
-  $stream->{response}->{body} = WritableStream->new ({
-    start => sub {
-      $stream->{response}->{body_stream_controller} = $_[1];
-    },
-    write => sub {
-      my $chunk = $_[1]; # XXX must be an ArrayBufferView
-      my $wm = $stream->{write_mode} || '';
-      # XXX error location
-      if ($wm eq 'chunked') {
-        return Promise->resolve->then (sub {
-          my $dv = UNIVERSAL::isa ($chunk, 'DataView')
-              ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $chunk->byte_length); # or throw
-          if ($dv->byte_length) {
-            ## Note that some clients fail to parse chunks if there
-            ## are TCP segment boundaries within a chunk (which is
-            ## smaller than MSS).
-        if ($stream->{DEBUG} > 1) {
-          for (split /\x0A/, $dv->manakai_to_string, -1) {
-            warn "$stream->{id}: S: @{[_e4d $_]}\n";
-          }
-        }
-        my $writer = $stream->{connection}->{writer};
-            $writer->write
-                (DataView->new (ArrayBuffer->new_from_scalarref
-                                    (\sprintf "%X\x0D\x0A%s\x0D\x0A", $dv->byte_length, $dv->manakai_to_string))); # XXX string copy!
-          }
-        }); # XXX catch
-      } elsif ($wm eq 'raw') {
-        return Promise->resolve->then (sub {
-          my $dv = UNIVERSAL::isa ($chunk, 'DataView')
-              ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $chunk->byte_length); # or throw
-          if (defined $stream->{to_be_sent_length}) {
-            if ($stream->{to_be_sent_length} >= $dv->byte_length) {
-              $stream->{to_be_sent_length} -= $dv->byte_length;
-            } else {
-              die Web::DOM::TypeError->new
-                  (sprintf "Byte length %d is greater than expected length %d",
-                       $dv->byte_length, $stream->{to_be_sent_length});
-            }
-          }
-        if ($stream->{DEBUG} > 1) {
-          for (split /\x0A/, $dv->manakai_to_string, -1) {
-            warn "$stream->{id}: S: @{[_e4d $_]}\n";
-          }
-        }
-        my $writer = $stream->{connection}->{writer};
-          $writer->write ($dv);
-          if (defined $stream->{to_be_sent_length} and
-              $stream->{to_be_sent_length} <= 0) {
-            return $stream->_close_stream;
-          }
-        })->catch (sub {
-          delete $stream->{response}->{body_stream_controller};
-          $stream->abort (message => $_[0]); # XXX
-          die $_[0];
-        });
-      } elsif ($wm eq 'void') {
-        #
-      } else {
-        return Promise->reject
-            (Web::DOM::TypeError->new ("Response body is not writable"));
-        # XXX catch
-      }
-    }, # write
-    close => sub {
-      return $stream->_close_stream;
-    }, # close
-    abort => sub {
-      # XXX
-    },
-  }) unless $ws; # response body
+  my $ws = $stream->_open_sending_stream (is_ws => $is_ws, XXX_response => 1);
 
   $stream->{close_after_response} = 1 if $close;
   $stream->{write_mode} = $write_mode;
   if ($done) {
     delete $stream->{to_be_sent_length};
-    my $w = $stream->{response}->{body}->get_writer;
-    $w->close;
-    $w->release_lock;
   } else {
     $stream->{to_be_sent_length} = $to_be_sent if defined $to_be_sent;
   }
 
-  return Promise->resolve;
+  return Promise->resolve ({body => $ws});
 } # send_response
 
 sub abort ($;%) {
@@ -3095,7 +3123,7 @@ sub _send_error ($$$;$) {
           @{$headers or []},
           ['Content-Type' => 'text/html; charset=utf-8'],
         ]}, close => 1, content_length => length $res)->then (sub {
-    my $w = $stream->{response}->{body}->get_writer;
+    my $w = $_[0]->{body}->get_writer;
     $w->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)))
         unless $stream->{request}->{method} eq 'HEAD';
     return $w->close;
@@ -3207,8 +3235,9 @@ sub _both_done ($) {
   } else {
     $stream->{closed_resolve}->();
   }
-  if (defined $stream->{headers_received}) {
-    $stream->{headers_received}->(Promise->reject ($error)); # XXX
+  if (defined $stream->{headers_received} and
+      defined $stream->{headers_received}->[1]) {
+    $stream->{headers_received}->[1]->(Promise->reject ($error)); # XXX
   }
   delete $stream->{closed_resolve};
   delete $stream->{closed_reject};

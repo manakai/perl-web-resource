@@ -76,7 +76,7 @@ my $HandleRequestHeaders = {};
       return $req_reader->read->then (sub {
         return 0 if $_[0]->{done};
         my $stream = $_[0]->{value};
-        $stream->request_ready->then (sub {
+        $stream->headers_received->then (sub {
           my $got = $_[0];
           my $req = $stream->{request};
           my $handler = $HandleRequestHeaders->{$req->{target_url}->path} ||
@@ -139,7 +139,7 @@ my $HandleRequestHeaders = {};
           } elsif ($req->{target_url}->path eq '/') {
             return $stream->send_response
                 ({status => 404, status_text => 'Not Found (/)'}, close => 1)->then (sub {
-              return $stream->{response}->{body}->get_writer->close;
+              return $_[0]->{body}->get_writer->close;
             });
           } else {
             die "No handler for |@{[$req->{target_url}->stringify]}|";
@@ -260,7 +260,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga2'],
         ]}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       return $w->close;
     });
@@ -296,7 +296,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga3'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d '');
       $w->write (d 'abcde3');
       return $w->close;
@@ -337,7 +337,7 @@ test {
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga4'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       return $w->write (d 'abcde4')->catch (sub {
         $x = $_[0];
       })->then (sub {
@@ -383,7 +383,7 @@ test {
         ({status => 204, status_text => 'OK', headers => [
           ['Hoge', 'Fuga4'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       return $w->write (d 'abcde4')->catch (sub {
         $x = $_[0];
         return $w->close;
@@ -425,7 +425,7 @@ test {
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga5'],
         ]})->then (sub {
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
   $HandleRequestHeaders->{'/hoge6'} = sub {
@@ -434,7 +434,7 @@ test {
         ({status => 200, status_text => 'OK', headers => [
           ['Hoge', 'Fuga6'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde6');
       return $w->close;
     });
@@ -482,7 +482,7 @@ test {
         ({status => 200, status_text => 'OK', headers => [
           ['Hoge', 'Fuga7'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde7')->catch (sub {
         $x = $_[0];
         return $w->close;
@@ -525,7 +525,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga8'],
         ]}, content_length => 12)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde8');
       $w->write (d '');
       $w->write (d 'abcde9');
@@ -569,7 +569,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga11'],
         ]}, content_length => 12)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcd11');
       $p = $w->write (d 'abcde12')->catch (sub {
         $x = $_[0];
@@ -613,7 +613,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga14'],
         ]}, content_length => 8)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcdef14');
       push @w, $w;
     });
@@ -624,7 +624,7 @@ test {
         ({status => 202, status_text => 'OK', headers => [
           ['Hoge', 'Fuga15'],
         ]}, content_length => 10)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcdefgh15');
       push @w, $w;
     });
@@ -675,7 +675,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga16'],
         ]}, content_length => 0)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       return $w->write (d 'abcde16')->catch (sub {
         $x = $_[0];
       });
@@ -719,7 +719,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga17'],
         ]}, content_length => 10)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc17');
       return $w->close;
     });
@@ -775,7 +775,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga18'],
         ]}, content_length => 5)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc18');
       push @w, $w;
     });
@@ -802,7 +802,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga19'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc19');
       return $w->close;
     });
@@ -827,7 +827,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga19'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc19');
       return $w->close;
     });
@@ -855,7 +855,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga21'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc21');
       $w->write (d 'abc');
       $w->write (d 'xyz');
@@ -882,7 +882,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga22'],
         ]}, content_length => 10)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc22');
       return $w->close;
     });
@@ -913,7 +913,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga23'],
         ]}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc23');
       $w->close;
       $w->write (d 'xyz')->catch (sub {
@@ -956,7 +956,7 @@ test {
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga25'],
         ]}, content_length => 5)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       return $w->write (d 'abcde')->catch (sub {
         $x = $_[0];
         return $w->close;
@@ -1003,7 +1003,7 @@ test {
         ({status => 204, status_text => 'OK', headers => [
           ['Hoge', 'Fuga25'],
         ]}, content_length => 5)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       return $w->write (d 'abcde')->catch (sub {
         $x = $_[0];
         return $w->close;
@@ -1051,7 +1051,7 @@ test {
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga26'],
         ]}, content_length => 0)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       return $w->write (d 'abcde')->catch (sub {
         $x = $_[0];
       });
@@ -1090,7 +1090,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga27'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc');
       $w->write (d '');
       $w->write (d 'xyz');
@@ -1121,7 +1121,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga28'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc');
       $w->write (d '');
       $w->write (d 'xyz');
@@ -1152,7 +1152,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga29'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc');
       $w->write (d '');
       $w->write (d 'xyz');
@@ -1183,7 +1183,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga30'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc');
       $w->write (d '');
       $w->write (d 'xyz');
@@ -1216,7 +1216,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga31'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc');
       $w->write (d '');
       $w->write (d 'xyz');
@@ -1254,7 +1254,7 @@ test {
         ({status => 200, status_text => 'OK', headers => [
           ['Hoge', 'Fuga32'],
         ]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abc');
       $w->write (d '');
       $w->write (d 'xyz');
@@ -1323,7 +1323,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1364,7 +1364,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1404,7 +1404,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1447,7 +1447,7 @@ test {
         ({status => 201, status_text => 'OK'}, content_length => 0, close => 1)->then (sub {
       $serverreq = $self;
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1491,7 +1491,7 @@ test {
         ({status => 201, status_text => 'OK'}, content_length => 0, close => 1)->then (sub {
       $serverreq = $self;
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1551,7 +1551,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1599,7 +1599,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1645,7 +1645,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1689,7 +1689,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1733,7 +1733,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1776,7 +1776,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1820,7 +1820,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -1863,7 +1863,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -2551,7 +2551,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 200, status_text => 'Switched!'})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
       $self->{ondata} = sub {
@@ -2614,7 +2614,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 200, status_text => 'Switched!'})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
       $self->{ondata} = sub {
@@ -2674,7 +2674,7 @@ test {
     return $self->send_response
         ({status => 200, status_text => 'Switched!',
           headers => [['Content-Length', '12']]})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
       $self->{ondata} = sub {
@@ -2738,7 +2738,7 @@ test {
       return $self->send_response
           ({status => 200, status_text => 'O.K.'});
     })->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
       return $w->close;
@@ -2808,7 +2808,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'ok!');
       return $w->close;
     });
@@ -2832,7 +2832,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       return $w->close;
     });
@@ -2856,7 +2856,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'ok!');
       return $w->close;
     });
@@ -2881,7 +2881,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -2908,7 +2908,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -2935,7 +2935,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -2962,7 +2962,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -2989,7 +2989,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3016,7 +3016,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3043,7 +3043,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3070,7 +3070,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3097,7 +3097,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3124,7 +3124,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3151,7 +3151,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3178,7 +3178,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3205,7 +3205,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3232,7 +3232,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3259,7 +3259,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3286,7 +3286,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3313,7 +3313,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3340,7 +3340,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3367,7 +3367,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3394,7 +3394,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3447,7 +3447,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3474,7 +3474,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3501,7 +3501,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3528,7 +3528,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3555,7 +3555,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -3583,7 +3583,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
       $invoked++;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -3608,7 +3608,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
       $invoked++;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -3633,7 +3633,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
       $invoked++;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -3658,7 +3658,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
       $invoked++;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -3683,7 +3683,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
       $invoked++;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -3708,7 +3708,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
       $invoked++;
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -3820,7 +3820,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $p = $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       return $w->write (d 'abcde')->then (sub {
         return promised_sleep (1);
       })->then (sub {
@@ -3858,7 +3858,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'},
                                   content_length => 10)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       promised_sleep (1)->then (sub { $self->abort });
     });
@@ -3947,7 +3947,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       return $w->close;
     });
@@ -4023,7 +4023,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       return $w->close;
     });
@@ -4065,7 +4065,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
-      #my $w = $self->{response}->{body}->get_writer;
+      #my $w = $_[0]->{body}->get_writer;
       #$w->write (d 'abcde');
       #return $w->close;
     });
@@ -4145,7 +4145,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       return $w->close;
     });
@@ -4187,7 +4187,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
     });
   };
@@ -4230,7 +4230,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'},
                                   close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
       return $w->close;
@@ -4274,7 +4274,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'},
                                   close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
       return $w->close;
@@ -4319,7 +4319,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'},
                                   close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
       return $w->close;
@@ -4365,7 +4365,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'},
                                   close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
       return $w->close;
@@ -4411,7 +4411,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga2'],
         ]}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $invoked++;
       return $w->close;
@@ -4451,7 +4451,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga2'],
         ]}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $invoked++;
       return $w->close;
@@ -4489,7 +4489,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga2'],
         ]}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $invoked++; 
       return $w->close;
@@ -4526,7 +4526,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'},
                                   close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
       return $w->close;
@@ -4576,7 +4576,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK'},
                                   close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
       return $w->close;
@@ -4629,7 +4629,7 @@ test {
     $self->{connection}->server_header ('Hoge/1.4.6');
     return $self->send_response
         ({status => 201, status_text => 'OK'}, close => 1)->then (sub {
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -4659,7 +4659,7 @@ test {
     $self->{connection}->server_header ("\x{3000}a\x00");
     return $self->send_response
         ({status => 201, status_text => 'OK'}, close => 1)->then (sub {
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -4689,7 +4689,7 @@ test {
     $self->{connection}->server_header (undef);
     return $self->send_response
         ({status => 201, status_text => 'OK'}, close => 1)->then (sub {
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -4720,7 +4720,7 @@ test {
     $self->{connection}->server_header ("");
     return $self->send_response
         ({status => 201, status_text => 'OK'}, close => 1)->then (sub {
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -4750,7 +4750,7 @@ test {
     $self->{connection}->server_header ("0");
     return $self->send_response
         ({status => 201, status_text => 'OK'}, close => 1)->then (sub {
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -5089,11 +5089,12 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => "OK"}, close => 1)->then (sub {
+      my $writer = $_[0]->{body}->get_writer;
       return $self->send_response
-            ({status => 202, status_text => "Not OK"}, close => 1);
-    })->catch (sub {
-      $error = $_[0];
-      return $self->{response}->{body}->get_writer->close;
+            ({status => 202, status_text => "Not OK"}, close => 1)->catch (sub {
+        $error = $_[0];
+        return $writer->close;
+      });
     });
   };
 
@@ -5101,7 +5102,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: \|send_response\| is invoked twice at \Q@{[__FILE__]}\E line \Q@{[__LINE__-12]}\E};
+      like $error, qr{^TypeError: \|send_response\| is invoked twice at \Q@{[__FILE__]}\E line \Q@{[__LINE__-8]}\E};
       is $res->status, 201;
     } $c;
   }, sub {
@@ -5124,7 +5125,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => "OK"}, close => 1)->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
+      my $w = $_[0]->{body}->get_writer;
       return $w->close->then (sub {
         return $w->write (d "abc");
       })->catch (sub {
@@ -5160,7 +5161,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => "OK"}, close => 1)->then (sub {
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     })->then (sub {
       return $self->send_response
           ({status => 202, status_text => "Not OK"}, close => 1);

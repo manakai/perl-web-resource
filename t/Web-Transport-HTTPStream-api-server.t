@@ -66,12 +66,12 @@ test {
     $r->read->then (sub {
       return 0 if $_[0]->{done};
       my $stream = $_[0]->{value};
-      return $stream->request_ready->then (sub {
+      return $stream->headers_received->then (sub {
         my $path = $stream->{request}->{target_url}->path;
 
         $stream->send_response
             ({status => 210, status_text => $stream->{id}})->then (sub {
-          return $stream->{response}->{body}->get_writer->close;
+          return $_[0]->{body}->get_writer->close;
         });
       })->then (sub { return 1 });
     });
@@ -135,17 +135,17 @@ test {
     $x->received_streams->get_reader->read->then (sub {
       return if $_[0]->{done};
       my $stream = $_[0]->{value};
-      return $stream->request_ready->then (sub {
+      return $stream->headers_received->then (sub {
         my $path = $stream->{request}->{target_url}->path;
         if ($path eq '/404') {
           $stream->send_response
               ({status => 404, status_text => $stream->{id}})->then (sub {
-            return $stream->{response}->{body}->get_writer->close;
+            return $_[0]->{body}->get_writer->close;
           });
         } else {
           $stream->send_response
               ({status => 210, status_text => $stream->{id}})->then (sub {
-            $response_header_sent->($stream);
+            $response_header_sent->($_[0]);
           });
         }
       });
@@ -158,9 +158,8 @@ test {
   my $id;
   my $after_request = $client->request (path => []);
   $after_response_header->then (sub {
-    my $stream = $_[0];
+    my $w = $_[0]->{body}->get_writer;
     promised_sleep (1)->then (sub {
-      my $w = $stream->{response}->{body}->get_writer;
       $w->write (d "abcde");
       return $w->close;
     });
@@ -216,12 +215,12 @@ test {
     $x->received_streams->get_reader->read->then (sub {
       return if $_[0]->{done};
       my $stream = $_[0]->{value};
-      return $stream->request_ready->then (sub {
+      return $stream->headers_received->then (sub {
         my $path = $stream->{request}->{target_url}->path;
         if ($path eq '/404') {
           $stream->send_response
               ({status => 404, status_text => $stream->{id}})->then (sub {
-            return $stream->{response}->{body}->get_writer->close;
+            return $_[0]->{body}->get_writer->close;
           });
         } else {
           $response_header_sent->($stream);
@@ -239,7 +238,7 @@ test {
     promised_sleep (1)->then (sub {
       return $stream->send_response
           ({status => 210, status_text => $stream->{id}})->then (sub {
-        my $w = $stream->{response}->{body}->get_writer;
+        my $w = $_[0]->{body}->get_writer;
         $w->write (d "abcde");
         return $w->close;
       });

@@ -259,12 +259,12 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               target => _a $test->{url}->[1]->[0],
               ws => 1,
             );
-            return $http->create_stream->then (sub {
-              my $stream = $_[0];
-              return $stream->send_request
-                  ($req,
-                   ws => 1,
-                   ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}])->then (sub {
+            return $http->send_request
+                ($req,
+                 ws => 1,
+                 ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}])->then (sub {
+              my $stream = $_[0]->{stream};
+              return $stream->headers_received->then (sub {
                 my $got = $_[0];
 
                 my $result = {};
@@ -290,16 +290,16 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   return $try->();
                 });
               }
-              return $http->create_stream->then (sub {
-                my $stream = $_[0];
+              return $http->send_request ($req, cb => $onev->($req))->then (sub {
+                my $stream = $_[0]->{stream};
                 my $req = $get_req->(
                   method => _a $test->{method}->[1]->[0],
                   target => _a $test->{url}->[1]->[0],
                   headers => [['Content-Length' => $test_type eq 'largerequest-second' ? 1024*1024 : 0]],
                 );
-                return $stream->send_request ($req, cb => $onev->($req))->then (sub {
+                my $reqbody = $_[0]->{body}->get_writer;
+                return $stream->headers_received->then (sub {
                   my $got = $_[0];
-                  my $reqbody = $stream->{request}->{body_stream}->get_writer;
                   if ($test_type eq 'largerequest-second') {
                     $reqbody->write
                         (DataView->new (ArrayBuffer->new_from_scalarref
@@ -363,11 +363,11 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               target => _a $test->{url}->[1]->[0],
               headers => [['Content-Length' => $test_type eq 'largerequest' ? 1024*1024 : 0]],
             );
-            return $http->create_stream->then (sub {
-              my $stream = $_[0];
-              return $stream->send_request ($req, cb => $onev->($req))->then (sub {
+            return $http->send_request ($req, cb => $onev->($req))->then (sub {
+              my $stream = $_[0]->{stream};
+              my $reqbody = $_[0]->{body}->get_writer;
+              return $stream->headers_received->then (sub {
                 my $got = $_[0];
-                my $reqbody = $stream->{request}->{body_stream}->get_writer;
                 if ($test_type eq 'largerequest') {
                   $reqbody->write
                       (DataView->new

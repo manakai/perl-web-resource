@@ -77,13 +77,14 @@ my $HandleRequestHeaders = {};
         return 0 if $_[0]->{done};
         my $stream = $_[0]->{value};
         $stream->request_ready->then (sub {
+          my $got = $_[0];
           my $req = $stream->{request};
           my $handler = $HandleRequestHeaders->{$req->{target_url}->path} ||
                         $HandleRequestHeaders->{$req->{target_url}->hostport};
           if (defined $handler) {
             $stream->{body} = '';
-            my $body_reader = $stream->{request}->{body}->get_reader ('byob');
-            {
+            if (defined $got->{received}) {
+              my $body_reader = $got->{received}->get_reader ('byob');
               my $run; $run = sub {
                 return $body_reader->read (DataView->new (ArrayBuffer->new (10)))->then (sub {
                   return if $_[0]->{done};
@@ -94,8 +95,8 @@ my $HandleRequestHeaders = {};
               }; # $run
               $run->()->then (sub { undef $run }, sub { undef $run });
             }
-            if (defined $stream->{request}->{messages}) {
-              my $r = $stream->{request}->{messages}->get_reader;
+            if (defined $got->{received_messages}) {
+              my $r = $got->{received_messages}->get_reader;
               my $run; $run = sub {
                 return $r->read->then (sub {
                   return if $_[0]->{done};
@@ -3758,7 +3759,6 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
-      my $w = $self->{response}->{body}->get_writer;
       $serverreq = $self;
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /stuvw/) {

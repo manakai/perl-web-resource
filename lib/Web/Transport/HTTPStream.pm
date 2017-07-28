@@ -48,12 +48,11 @@ BEGIN {
 
 sub info ($) { return $_[0]->{info} } # or undef
 
-sub _ws_received ($;%) {
-  my ($self, $ref, %args) = @_;
+sub _ws_received ($) {
+  my ($self, $ref) = @_;
   my $stream = $self->{is_server} ? $self->{stream} : $self;
   my $ws_failed;
   WS: {
-warn "XXX ws $self->{state}";
     if ($self->{state} eq 'before ws frame') {
       my $rlength = length $$ref;
       last WS if $rlength < 2;
@@ -151,7 +150,6 @@ warn "XXX ws $self->{state}";
       substr ($$ref, 0, pos $$ref) = '';
       $self->{state} = 'ws data';
     }
-warn "XXX $self->{state}";
     if ($self->{state} eq 'ws data') {
       if ($self->{unread_length} > 0 and
           length ($$ref) >= $self->{unread_length}) {
@@ -255,7 +253,7 @@ warn "XXX $self->{state}";
                 start => sub { $rc = $_[1] },
                 # XXX abort
               });
-              $stream->{receiving}->{messages_controller}->enqueue ({
+              $stream->{receive_message_controller}->enqueue ({
                 type => 'text',
                 data_stream => $rs,
               });
@@ -270,7 +268,7 @@ warn "XXX $self->{state}";
                 start => sub { $rc = $_[1] },
                 # XXX abort
               });
-              $stream->{receiving}->{messages_controller}->enqueue ({
+              $stream->{receive_message_controller}->enqueue ({
                 type => 'binary',
                 data_stream => $rs,
               });
@@ -303,7 +301,6 @@ warn "XXX $self->{state}";
           });
           #XXX $stream->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 0);
         } elsif ($self->{ws_frame}->[0] == 10) {
-warn 14;
           #XXX $stream->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 1);
         } # frame type
         delete $self->{ws_frame};
@@ -311,7 +308,6 @@ warn 14;
         $self->{state} = 'before ws frame';
         redo WS;
       }
-warn 42;
     }
   } # WS
   if (defined $ws_failed) {
@@ -510,32 +506,51 @@ BEGIN {
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
 
-sub _end_of_headers ($;%) {
-  my ($self, %args) = @_;
-  unless ($args{is_ws}) {
+sub _read ($) {
+  return $_[0]->{connection}->_read;
+} # _read
+
+sub _headers_received ($;%) {
+  my ($stream, %args) = @_;
+  my $return = {};
+  if ($args{is_ws}) {
+    my $read_message_stream = ReadableStream->new ({
+      start => sub {
+        $stream->{receive_message_controller} = $_[1];
+      },
+      pull => sub {
+        return $stream->_read if defined $stream->{reader};
+      },
+      abort => sub {
+        # XXX
+      },
+    });
+    $return->{received_messages} = $read_message_stream;
+  } else { # not is_ws
     my $read_stream = ReadableStream->new ({
       type => 'bytes',
       auto_allocate_chunk_size => 1024*2,
       start => sub {
-        $self->{receive_controller} = $_[1];
+        $stream->{receive_controller} = $_[1];
         return undef;
       },
       pull => sub {
-        return $self->_read;
+warn "XXX pull $stream";
+        return $stream->_read;
       },
       cancel => sub {
-        delete $self->{receive_controller};
-        return $self->abort (message => defined $_[1] ? $_[1] : 'HTTP reader cancelled');
+        delete $stream->{receive_controller};
+        return $stream->abort (message => defined $_[1] ? $_[1] : 'HTTP reader cancelled');
       },
     });
-    $self->{receiving}->{body} = $read_stream;
-  }
-  (delete $self->{receiving}->{end_of_headers})->();
-} # _end_of_headers
+    $return->{received} = $read_stream;
+  } # not is_ws
+  (delete $stream->{headers_received})->($return);
+} # _headers_received
 
 sub _receive_bytes_done ($) {
-  my $self = $_[0];
-  my $rc = delete $self->{receive_controller};
+  my $stream = $_[0];
+  my $rc = delete $stream->{receive_controller};
   return undef unless defined $rc;
   $rc->close;
   my $req = $rc->byob_request;
@@ -577,7 +592,7 @@ sub send_ws_message ($$$) {
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask,
                     length => $length) if $self->{DEBUG}; # XXX
-  my ($r_stream, $s_stream) = promised_cv;
+  my ($r_stream, $s_stream) = promised_cv; # XXX reject if aborted
   $con->{ws_writable} = $con->{ws_writable}->then (sub {
     return $con->{writer}->write
         (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | ($is_binary ? 2 : 1), $masked | $length0) .
@@ -627,7 +642,6 @@ sub send_ws_message ($$$) {
               $con->{writer}->write
                   (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
             } else {
-warn 12;
               $con->{writer}->write ($chunk);
             }
             $ok->() if $con->{to_be_sent_length} <= 0;
@@ -752,9 +766,7 @@ sub send_ws_close ($;$$) {
       $con->{pending_frame} = $frame;
       $con->{pending_frame_info} = $frame_info if $self->{DEBUG};
     } else {
-warn 1;
       $con->{ws_writable} = $con->{ws_writable}->then (sub {
-warn 2;
         $self->_ws_debug ('S', @$frame_info) if $self->{DEBUG};
         $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$frame)));
         $con->{ws_state} = 'CLOSING';
@@ -977,11 +989,16 @@ my $BytesDataStates = {
 
 sub _read ($) {
   my ($self) = @_;
+warn "XXX $self read";
   return if $self->{read_running};
   $self->{read_running} = 1;
+warn 4;
 
-  if ($BytesDataStates->{$self->{state}} and defined $self->{receive_controller}) {
-    my $req = $self->{receive_controller}->byob_request;
+  if ($BytesDataStates->{$self->{state}} and
+      defined $self->{stream} and
+      defined $self->{stream}->{receive_controller}) {
+    my $req = $self->{stream}->{receive_controller}->byob_request;
+warn "XXX $req";
     unless (defined $req) {
       delete $self->{read_running};
       return;
@@ -993,10 +1010,13 @@ sub _read ($) {
     if ($expected_size > 0) {
       my $view = TypedArray::Uint8Array->new
           ($req->view->buffer, $req->view->byte_offset, $expected_size);
+warn 1;
       return $self->{reader}->read ($view)->then (sub {
+warn "XXX $_[0]->{done}";
         delete $self->{read_running};
         return if $_[0]->{done};
 
+warn 3;
         my $length = $_[0]->{value}->byte_length;
         $req->manakai_respond_with_new_view ($_[0]->{value});
 
@@ -1060,8 +1080,8 @@ sub _process_rbuf ($$) {
           $self->_receive_done;
           return;
         } else {
-          $self->_end_of_headers;
-          $self->{receive_controller}->enqueue
+          $self->{stream}->_headers_received;
+          $self->{stream}->{receive_controller}->enqueue
               (TypedArray::Uint8Array->new
                    (ArrayBuffer->new_from_scalarref
                         (\($self->{temp_buffer}))));
@@ -1225,7 +1245,7 @@ sub _process_rbuf ($$) {
 
       if ($res->{status} == 200 and
           $self->{request}->{method} eq 'CONNECT') {
-        $self->_end_of_headers;
+        $self->{stream}->_headers_received;
         $self->{no_new_request} = 1;
         $self->{state} = 'tunnel';
       } elsif (defined $self->{ws_state} and
@@ -1275,8 +1295,8 @@ sub _process_rbuf ($$) {
               if grep { length $_ } split /,/, $exts;
         }
         if ($failed) {
-          $self->_end_of_headers;
-          $self->_receive_bytes_done;
+          $self->{stream}->_headers_received;
+          $self->{stream}->_receive_bytes_done;
           $self->{exit} = {ws => 1, failed => 1, status => 1006, reason => ''};
           $self->{no_new_request} = 1;
           $self->{request_state} = 'sent';
@@ -1284,8 +1304,8 @@ sub _process_rbuf ($$) {
           return;
         } else {
           $self->{ws_state} = 'OPEN';
-          $self->_end_of_headers (is_ws => 1);
-          $self->_receive_bytes_done;
+          $self->{stream}->_headers_received (is_ws => 1);
+          $self->{stream}->_receive_bytes_done;
           $self->{no_new_request} = 1;
           $self->{state} = 'before ws frame';
           $self->{temp_buffer} = '';
@@ -1331,11 +1351,11 @@ sub _process_rbuf ($$) {
                $res->{status} == 205 or
                $res->{status} == 304 or
                $self->{request}->{method} eq 'HEAD') {
-        $self->_end_of_headers;
+        $self->{stream}->_headers_received;
         $self->{unread_length} = 0;
         $self->{state} = 'response body';
       } else {
-        $self->_end_of_headers;
+        $self->{stream}->_headers_received;
         if ($chunked) {
           $self->{state} = 'before response chunk';
         } else {
@@ -1350,7 +1370,7 @@ sub _process_rbuf ($$) {
       my $len = (length $$ref) - (pos $$ref);
       if ($self->{unread_length} >= $len) {
         if ($len) {
-          $self->{receive_controller}->enqueue
+          $self->{stream}->{receive_controller}->enqueue
               (TypedArray::Uint8Array->new
                    (ArrayBuffer->new_from_scalarref
                         (\substr $$ref, pos $$ref)));
@@ -1358,7 +1378,7 @@ sub _process_rbuf ($$) {
           $self->{unread_length} -= $len;
         }
       } elsif ($self->{unread_length} > 0) {
-        $self->{receive_controller}->enqueue
+        $self->{stream}->{receive_controller}->enqueue
             (TypedArray::Uint8Array->new
                  (ArrayBuffer->new_from_scalarref
                       (\substr $$ref, (pos $$ref), $self->{unread_length})));
@@ -1366,7 +1386,7 @@ sub _process_rbuf ($$) {
         $self->{unread_length} = 0;
       }
       if ($self->{unread_length} <= 0) {
-        $self->_receive_bytes_done;
+        $self->{stream}->_receive_bytes_done;
 
         my $connection = '';
         my $keep_alive = $self->{response}->{version} eq '1.1';
@@ -1390,7 +1410,7 @@ sub _process_rbuf ($$) {
         $self->_receive_done;
       }
     } else {
-      $self->{receive_controller}->enqueue
+      $self->{stream}->{receive_controller}->enqueue
           (TypedArray::Uint8Array->new
                (ArrayBuffer->new_from_scalarref
                     (\substr $$ref, pos $$ref)))
@@ -1408,7 +1428,7 @@ sub _process_rbuf ($$) {
         $self->{response}->{incomplete} = 1;
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
-        $self->_receive_bytes_done;
+        $self->{stream}->_receive_bytes_done;
         $self->{exit} = {};
         $self->_receive_done;
         return;
@@ -1429,13 +1449,13 @@ sub _process_rbuf ($$) {
           $self->{response}->{incomplete} = 1;
           $self->{no_new_request} = 1;
           $self->{request_state} = 'sent';
-          $self->_receive_bytes_done;
+          $self->{stream}->_receive_bytes_done;
           $self->{exit} = {};
           $self->_receive_done;
           return;
         }
         if ($n == 0) {
-          $self->_receive_bytes_done;
+          $self->{stream}->_receive_bytes_done;
           $self->{state} = 'before response trailer';
           $self->{temp_buffer} = 0;
         } else {
@@ -1460,14 +1480,14 @@ sub _process_rbuf ($$) {
         if ($len <= 0) {
           #
         } elsif ($self->{unread_length} >= $len) {
-          $self->{receive_controller}->enqueue
+          $self->{stream}->{receive_controller}->enqueue
               (TypedArray::Uint8Array->new
                    (ArrayBuffer->new_from_scalarref
                         (\substr $$ref, pos $$ref)));
           $ref = \'';
           $self->{unread_length} -= $len;
         } else {
-          $self->{receive_controller}->enqueue
+          $self->{stream}->{receive_controller}->enqueue
               (TypedArray::Uint8Array->new
                    (ArrayBuffer->new_from_scalarref
                         (\substr $$ref, (pos $$ref), $self->{unread_length})));
@@ -1487,7 +1507,7 @@ sub _process_rbuf ($$) {
           $self->{response}->{incomplete} = 1;
           $self->{no_new_request} = 1;
           $self->{request_state} = 'sent';
-          $self->_receive_bytes_done;
+          $self->{stream}->_receive_bytes_done;
           $self->{exit} = {};
           $self->_receive_done;
           return;
@@ -1504,7 +1524,7 @@ sub _process_rbuf ($$) {
         $self->{response}->{incomplete} = 1;
         $self->{no_new_request} = 1;
         $self->{request_state} = 'sent';
-        $self->_receive_bytes_done;
+        $self->{stream}->_receive_bytes_done;
         $self->{exit} = {};
         $self->_receive_done;
         return;
@@ -1554,10 +1574,10 @@ sub _process_rbuf ($$) {
   if ($self->{state} eq 'before ws frame' or
       $self->{state} eq 'ws data' or
       $self->{state} eq 'ws terminating') {
-    return $self->_ws_received ($ref, "XXX %args"); # XXX
+    return $self->_ws_received ($ref);
   }
   if ($self->{state} eq 'tunnel' or $self->{state} eq 'tunnel receiving') {
-    $self->{receive_controller}->enqueue
+    $self->{stream}->{receive_controller}->enqueue
         (TypedArray::Uint8Array->new
              (ArrayBuffer->new_from_scalarref
                   (\substr $$ref, pos $$ref)))
@@ -1574,6 +1594,7 @@ sub _process_rbuf ($$) {
 
 sub _process_rbuf_eof ($;%) {
   my ($self, %args) = @_;
+  my $stream = $self->{stream};
 
   if ($self->{state} eq 'before response') {
     if (length $self->{temp_buffer}) {
@@ -1582,12 +1603,12 @@ sub _process_rbuf_eof ($;%) {
         $self->{exit} = {failed => 1,
                          message => "HTTP/0.9 response to non-GET request"};
       } else {
-        $self->_end_of_headers;
-        $self->{receive_controller}->enqueue
+        $stream->_headers_received;
+        $stream->{receive_controller}->enqueue
             (TypedArray::Uint8Array->new
                  (ArrayBuffer->new_from_scalarref
                       (\($self->{temp_buffer}))));
-        $self->_receive_bytes_done;
+        $stream->_receive_bytes_done;
         $self->{exit} = {};
         $self->{response}->{incomplete} = 1 if $args{abort};
       }
@@ -1601,7 +1622,7 @@ sub _process_rbuf_eof ($;%) {
     if (defined $self->{unread_length} and $self->{unread_length} > 0) {
       $self->{response}->{incomplete} = 1;
       $self->{request_state} = 'sent';
-      $self->_receive_bytes_done;
+      $self->{stream}->_receive_bytes_done;
       if ($self->{response}->{version} eq '1.1') {
         $self->{exit} = {failed => 1,
                          message => $args{error_message} || "Connection truncated",
@@ -1617,7 +1638,7 @@ sub _process_rbuf_eof ($;%) {
           $self->{response}->{incomplete} = 1;
         }
       }
-      $self->_receive_bytes_done;
+      $self->{stream}->_receive_bytes_done;
       $self->{exit} = {};
     }
   } elsif ({
@@ -1628,20 +1649,20 @@ sub _process_rbuf_eof ($;%) {
   }->{$self->{state}}) {
     $self->{response}->{incomplete} = 1;
     $self->{request_state} = 'sent';
-    $self->_receive_bytes_done;
+    $self->{stream}->_receive_bytes_done;
     $self->{exit} = {};
   } elsif ($self->{state} eq 'before response trailer') {
     $self->{request_state} = 'sent';
     $self->{exit} = {};
   } elsif ($self->{state} eq 'tunnel') {
-    $self->_receive_bytes_done;
+    $self->{stream}->_receive_bytes_done;
     unless ($args{abort}) {
       $self->{no_new_request} = 1;
       $self->{state} = 'tunnel sending';
       return;
     }
   } elsif ($self->{state} eq 'tunnel receiving') {
-    $self->_receive_bytes_done;
+    $self->{stream}->_receive_bytes_done;
     $self->{exit} = {failed => $args{abort}};
   } elsif ($self->{state} eq 'before response header') {
     $self->{exit} = {failed => 1,
@@ -1807,11 +1828,11 @@ sub _receive_done ($) {
   my $self = $_[0];
   return if $self->{state} eq 'stopped';
 
+  delete $self->{stream};
   delete $self->{timer};
   delete $self->{ws_timer};
-  if (defined $self->{receiving} and
-      defined $self->{receiving}->{messages_controller}) {
-    $self->{receiving}->{messages_controller}->close;
+  if (defined $self->{receive_message_controller}) {
+    $self->{receive_message_controller}->close;
   }
   if (defined $self->{request_state} and
       ($self->{request_state} eq 'sending headers' or
@@ -1831,11 +1852,12 @@ sub _both_done ($) {
     if ($self->{exit}->{failed}) {
       $self->{response}->{stream_reject}->($self->{exit});
 
-      if (defined $self->{response}->{end_of_headers}) {
-        (delete $self->{response}->{end_of_headers})->();
+      my $stream = $self->{stream};
+      if (defined $stream->{headers_received}) {
+        (delete $stream->{headers_received})->(Promise->reject ("XXX")); # XXX
       }
 
-      my $rc = delete $self->{receive_controller};
+      my $rc = delete $stream->{receive_controller};
       $rc->error ($self->{exit}) if defined $rc;
     } else {
       $self->{response}->{stream_resolve}->();
@@ -1873,6 +1895,7 @@ package Web::Transport::HTTPStream::ClientStream; # XXX
 use Carp qw(croak);
 use MIME::Base64 qw(encode_base64);
 use Promised::Flow;
+push our @ISA, qw(Web::Transport::HTTPStream::Stream);
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
@@ -1938,14 +1961,16 @@ sub send_request ($$;%) {
   my $stream_closed = Promise->new
       (sub { ($resolve_stream, $reject_stream) = @_ });
 
+  # XXX throw if $con->{stream} is defined
+  $con->{stream} = $stream;
   $con->{request} = $req;
   my $res = $con->{response} = {
     status => 200, reason => 'OK', version => '0.9',
     headers => [],
-    end_of_headers => $s_end_of_headers,
     stream_resolve => $resolve_stream,
     stream_reject => $reject_stream,
   };
+  $stream->{headers_received} = $s_end_of_headers;
   $con->{state} = 'before response';
   $con->{temp_buffer} = '';
   # XXX Connection: close
@@ -2107,6 +2132,7 @@ sub new ($$) {
       $self->{stream_controller} = $_[1];
     },
     pull => sub {
+warn "XXX pull";
       return $self->_read if defined $self->{reader};
     },
     cancel => sub {
@@ -2246,7 +2272,7 @@ sub _new_stream ($) {
   my ($r_end_of_headers, $s_end_of_headers) = promised_cv;
   my ($resolve_stream, $reject_stream);
   $req->{receiving} = $req->{request};
-  $req->{receiving}->{end_of_headers} = $s_end_of_headers;
+  $req->{headers_received} = $s_end_of_headers;
   $req->{request_received} = $r_end_of_headers;
 
   $req->{closed} = Promise->new (sub {
@@ -2666,6 +2692,7 @@ sub _request_headers ($) {
   }
 
   ## Upgrade: websocket
+  my $is_ws;
   if (@{$headers{upgrade} or []} == 1) {
     WS_OK: {
       my $status = 400;
@@ -2696,6 +2723,7 @@ sub _request_headers ($) {
         # XXX
         #my $exts = [grep { length $_ } split /[\x09\x20]*,[\x09\x20]*/, join ',', '', @{$headers{'sec-websocket-extensions'} or []}, ''];
 
+        $is_ws = 1;
         last WS_OK;
       } # WS_CHECK
 
@@ -2710,18 +2738,6 @@ sub _request_headers ($) {
       }
       return 0;
     } # WS_OK
-
-    $stream->{receiving}->{messages} = ReadableStream->new ({
-      start => sub {
-        $stream->{receiving}->{messages_controller} = $_[1];
-      },
-      pull => sub {
-        return $self->_read if defined $self->{reader};
-      },
-      abort => sub {
-        # XXX
-      },
-    });
   } elsif (@{$headers{upgrade} or []}) {
     $stream->_fatal;
     return 0;
@@ -2756,7 +2772,7 @@ sub _request_headers ($) {
     $self->{unread_length} = $l;
     $self->{state} = 'request body';
   }
-  $stream->_end_of_headers;
+  $stream->_headers_received (is_ws => $is_ws);
   if ($l == 0 and not $stream->{request}->{method} eq 'CONNECT') {
     $stream->_receive_bytes_done;
     unless (defined $stream->{ws_key}) {
@@ -3055,10 +3071,6 @@ sub send_response ($$$;%) {
   return Promise->resolve;
 } # send_response
 
-sub _read ($) {
-  return $_[0]->{connection}->_read;
-} # _read
-
 sub abort ($;%) {
   my $stream = shift;
   $stream->{connection}->abort (@_) if defined $stream->{connection};
@@ -3163,9 +3175,8 @@ sub _receive_done ($) {
   $con->{disable_timer} = 1;
   delete $con->{unread_length};
   delete $con->{ws_timer};
-  if (defined $stream->{receiving} and
-      defined $stream->{receiving}->{messages_controller}) {
-    $stream->{receiving}->{messages_controller}->close;
+  if (defined $stream->{receive_message_controller}) {
+    $stream->{receive_message_controller}->close;
   }
   if ($stream->{close_after_response} or
       not defined $stream->{connection}->{writer}) { # _send_done already called with close_after_response
@@ -3196,9 +3207,8 @@ sub _both_done ($) {
   } else {
     $stream->{closed_resolve}->();
   }
-  if (defined $stream->{receiving} and
-      defined $stream->{receiving}->{end_of_headers}) {
-    $stream->{receiving}->{end_of_headers}->(Promise->reject ($error)); # XXX
+  if (defined $stream->{headers_received}) {
+    $stream->{headers_received}->(Promise->reject ($error)); # XXX
   }
   delete $stream->{closed_resolve};
   delete $stream->{closed_reject};

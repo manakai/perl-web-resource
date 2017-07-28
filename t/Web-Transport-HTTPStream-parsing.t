@@ -262,15 +262,15 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             return $http->create_stream->then (sub {
               my $stream = $_[0];
               return $stream->send_request
-                ($req,
-                 ws => 1,
-                 ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}],
-                 cb => $onev->($req))->then (sub {
-                return $stream->closed; # XXX
-              })->then (sub {
-                return $req->{done};
-              })->then (sub {
-                return $req_results->{$req->{id}};
+                  ($req,
+                   ws => 1,
+                   ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}])->then (sub {
+                my $got = $_[0];
+
+                my $result = {};
+                return $stream->closed->then (sub { # XXX
+                  return $result;
+                });
               });
             });
           } elsif ($test_type eq 'second' or
@@ -298,6 +298,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   headers => [['Content-Length' => $test_type eq 'largerequest-second' ? 1024*1024 : 0]],
                 );
                 return $stream->send_request ($req, cb => $onev->($req))->then (sub {
+                  my $got = $_[0];
                   my $reqbody = $stream->{request}->{body_stream}->get_writer;
                   if ($test_type eq 'largerequest-second') {
                     $reqbody->write
@@ -320,7 +321,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   my $result = {
                     response => $stream->{response},
                   };
-                  return rsread ($test, $stream->{response}->{body})->then (sub {
+                  return rsread ($test, $got->{received})->then (sub {
                     $result->{response_body} = $_[0];
                   })->then (sub {
                     return $stream->closed;
@@ -365,6 +366,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             return $http->create_stream->then (sub {
               my $stream = $_[0];
               return $stream->send_request ($req, cb => $onev->($req))->then (sub {
+                my $got = $_[0];
                 my $reqbody = $stream->{request}->{body_stream}->get_writer;
                 if ($test_type eq 'largerequest') {
                   $reqbody->write
@@ -383,7 +385,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 my $result = {
                   response => $stream->{response},
                 };
-                return rsread ($test, $stream->{response}->{body})->then (sub {
+                return rsread ($test, $got->{received})->then (sub {
                   $result->{response_body} = $_[0];
                 })->then (sub {
                   return $stream->closed;
@@ -393,8 +395,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   return $req->{done};
                 })->then (sub {
                   return $result;
-                });
-              });
+                });              });
             });
           }
         })->then (sub {
@@ -509,19 +510,21 @@ if (0) { # XXX
           } $c;
           return $http->close;
         }, sub { # connect failed
-          my $error = $_[0];
+          my $error = $_[0]; # XXX
           test {
+            # XXXX
+            # XXX ws handshake error
             my $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
             is !!1, !!$is_error, 'is error';
             ok 1, 'response version (skipped)';
-            is 0, $test->{status}->[1]->[0], 'status';
+            is undef, $test->{status}->[1]->[0], 'status';
             if ($is_error) {
-              ok 1;
+              ok 1, $error;
             } else {
               is $error, undef, 'no error';
             }
             ok 1, 'headers (skipped)';
-            is '(close)', $test->{body}->[0], 'body';
+            is undef, $test->{body}->[0], 'body';
             ok 1, 'incomplete (skipped)';
 #XXX
 #            ok 1, 'r_events (skipped)';

@@ -321,7 +321,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   my $result = {
                     response => $stream->{response},
                   };
-                  return rsread ($test, $got->{received})->then (sub {
+                  return rsread ($test, $got->{body})->then (sub {
                     $result->{response_body} = $_[0];
                   })->then (sub {
                     return $stream->closed;
@@ -385,7 +385,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 my $result = {
                   response => $stream->{response},
                 };
-                return rsread ($test, $got->{received})->then (sub {
+                return rsread ($test, $got->{body})->then (sub {
                   $result->{response_body} = $_[0];
                 })->then (sub {
                   return $stream->closed;

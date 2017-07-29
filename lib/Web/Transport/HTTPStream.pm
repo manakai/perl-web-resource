@@ -526,20 +526,18 @@ push our @CARP_NOT, qw(Web::DOM::TypeError);
 ##     $_[0]->{body}
 ##   })
 ##   $stream->headers_received->then (sub {
-##     $_[0]->{received}
-##     $_[0]->{received_messages}
+##     $_[0]->{body}
+##     $_[0]->{messages}
 ##   })
 ## Server:
-##   $con->received_streams->read->then (sub { $_[0]->{value} })
+##   $con->received_streams->read->then (sub { $stream = $_[0]->{value} })
 ##   $stream->headers_received->then (sub {
-##     $_[0]->{received}
-##     $_[0]->{received_messages}
+##     $_[0]->{body}
+##     $_[0]->{messages}
 ##   })
 ##   $stream->send_response->then (sub {
 ##     $_[0]->{body}
 ##   })
-## XXX received -> body
-## XXX received_messages -> messages
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
@@ -633,17 +631,15 @@ sub _open_sending_stream ($;%) {
     write => sub {
       my $chunk = $_[1];
       return Promise->resolve->then (sub {
-        my $is_body = (defined $con->{to_be_sent_length} and
-                       $con->{to_be_sent_length} > 0);
-        my $is_tunnel = (defined $con->{state} and
-                         ($con->{state} eq 'tunnel' or
-                          $con->{state} eq 'tunnel sending'));
-        die "Bad state" # XXX
-            if not $is_body and not $is_tunnel;
-        # XXX $chunk type
+        die Web::DOM::TypeError->new ("The argument is not an ArrayBufferView")
+            unless UNIVERSAL::isa ($chunk, 'ArrayBufferView'); # XXX location
+
         my $byte_length = $chunk->byte_length;
-        die "Data too large" # XXX
-            if $is_body and $con->{to_be_sent_length} < $byte_length;
+        die Web::DOM::TypeError->new
+              (sprintf "Byte length %d is greater than expected length %d",
+                   $byte_length, $con->{to_be_sent_length})
+                  if defined $con->{to_be_sent_length} and
+                     $con->{to_be_sent_length} < $byte_length;
         return unless $byte_length;
 
         if ($con->{DEBUG}) {
@@ -656,43 +652,38 @@ sub _open_sending_stream ($;%) {
           }
         }
 
-        if (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') {
-          my $ref = \('X' x $byte_length); # XXX
-          my @data;
-          my $mask = $con->{ws_encode_mask_key};
-          my $o = $con->{ws_sent_length};
-          for (0..($byte_length-1)) {
-            push @data, substr ($$ref, $_, 1) ^ substr ($mask, ($o+$_) % 4, 1);
-          }
-          $con->{ws_sent_length} += $byte_length;
+        my $sent = $con->{writer}->write ($chunk);
+        if (defined $con->{to_be_sent_length}) {
           $con->{to_be_sent_length} -= $byte_length;
-          $con->{writer}->write
-              (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
-        } else {
-          my $sent = $con->{writer}->write ($chunk);
-          if ($is_body) {
-            $con->{to_be_sent_length} -= $byte_length;
-            if ($con->{to_be_sent_length} <= 0) {
-              $sent->then (sub {
-                $con->_send_done;
-              });
-            }
-          } # $is_body
+          if ($con->{to_be_sent_length} <= 0) {
+            $sent->then (sub {
+              $con->_send_done;
+            });
+          }
         }
-      }); # XXX catch
+      })->catch (sub {
+        $con->abort (message => $_[0]); # XXX
+        die $_[0];
+      });
     }, # write
     close => sub {
-      # XXX fail if length not zero
+      if ($con->{to_be_sent_length} > 0) {
+        my $error = Web::DOM::TypeError->new
+            (sprintf "Closed before bytes (n = %d) are sent",
+                 $con->{to_be_sent_length});
+        $con->abort (message => $error); # XXX
+        die $error;
+      }
 
       if ($con->{state} eq 'tunnel' or
           $con->{state} eq 'tunnel sending') {
         $con->{writer}->close; # can fail
         $con->{state} = 'tunnel receiving' if $con->{state} eq 'tunnel';
       }
-    },
+    }, # close
     abort => sub {
       # XXX
-    },
+    }, # abort
   });
 
   return $ws;
@@ -721,7 +712,7 @@ sub _headers_received ($;%) {
         # XXX
       },
     });
-    $return->{received_messages} = $read_message_stream;
+    $return->{messages} = $read_message_stream;
   } else { # not is_ws
     my $read_stream = ReadableStream->new ({
       type => 'bytes',
@@ -738,7 +729,7 @@ sub _headers_received ($;%) {
         return $stream->abort (message => defined $_[1] ? $_[1] : 'HTTP reader cancelled');
       },
     });
-    $return->{received} = $read_stream;
+    $return->{body} = $read_stream;
   } # not is_ws
   (delete $stream->{headers_received}->[1])->($return);
 } # _headers_received
@@ -772,20 +763,23 @@ sub _send_request ($$;%) {
       $url =~ /[\x09\x20]\z/) {
     croak "Bad |target|: |$url|";
   }
-  $con->{to_be_sent_length} = 0;
   for (@{$req->{headers} or []}) {
     croak "Bad header name |@{[_e4d $_->[0]]}|"
         unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
     croak "Bad header value |@{[_e4d $_->[1]]}|"
         unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
-    my $n = $_->[0];
-    $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
-    if ($n eq 'content-length' and not $req->{method} eq 'CONNECT') {
-      $con->{to_be_sent_length} = $_->[1]; # XXX
-      # XXX throw if multiple length?
-    }
   }
-  # XXX transfer-encoding
+
+  $args{content_length} = 0+($args{content_length} || 0);
+  return Promise->reject
+      (Web::DOM::TypeError->new ("Bad byte length $args{content_length}"))
+          unless $args{content_length} =~ /\A[0-9]+\z/;
+  if ($args{content_length} > 0 or
+      $method eq 'POST' or $method eq 'PUT') {
+    push @{$req->{headers} ||= []},
+        ['Content-Length', $args{content_length}];
+  }
+
   # XXX croak if WS protocols is bad
   # XXX utf8 flag
   # XXX header size
@@ -795,7 +789,8 @@ sub _send_request ($$;%) {
         (Web::DOM::TypeError->new ("Connection is not ready"));
   } elsif ($con->{no_new_request}) {
     return Promise->reject (Web::DOM::TypeError->new ("Connection is closed"));
-  } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
+  } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting') or
+           (defined $con->{request} and defined $con->{request}->{body_stream_controller})) {
     return Promise->reject (Web::DOM::TypeError->new ("Connection is busy"));
   }
 
@@ -818,6 +813,7 @@ sub _send_request ($$;%) {
 
   # XXX throw if $con->{stream} is defined
   $con->{stream} = $stream;
+  $con->{to_be_sent_length} = $args{content_length};
   $con->{request} = $req;
   my $res = $con->{response} = {
     status => 200, reason => 'OK', version => '0.9',

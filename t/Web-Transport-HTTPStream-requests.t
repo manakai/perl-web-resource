@@ -303,8 +303,8 @@ test {
       test {
         is $got->{failed}, undef;
         is $got->{message}, undef;
-        isa_ok $got->{received}, 'ReadableStream';
-        is $got->{received_messages}, undef;
+        isa_ok $got->{body}, 'ReadableStream';
+        is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
         is $got->{reason}, 'ok';
@@ -314,7 +314,7 @@ test {
         ok ! $closed_fulfilled;
         ok ! $closed_rejected;
       } $c;
-      return read_rbs ($got->{received})->then (sub {
+      return read_rbs ($got->{body})->then (sub {
         my $bytes = $_[0];
         test {
           is $bytes, "abc";
@@ -367,8 +367,8 @@ test {
       test {
         is $got->{failed}, undef;
         is $got->{message}, undef;
-        isa_ok $got->{received}, 'ReadableStream';
-        is $got->{received_messages}, undef;
+        isa_ok $got->{body}, 'ReadableStream';
+        is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
         is $got->{reason}, 'ok';
@@ -380,7 +380,7 @@ test {
         ok ! $closed_fulfilled;
         ok ! $closed_rejected;
       } $c;
-      return read_rbs ($got->{received})->then (sub {
+      return read_rbs ($got->{body})->then (sub {
         my $bytes = $_[0];
         test {
           is $bytes, "abc";
@@ -427,15 +427,15 @@ test {
       test {
         is $got->{failed}, undef;
         is $got->{message}, undef;
-        isa_ok $got->{received}, 'ReadableStream';
-        is $got->{received_messages}, undef;
+        isa_ok $got->{body}, 'ReadableStream';
+        is $got->{messages}, undef;
         is $got->{version}, '0.9';
         is $got->{status}, 200;
         is $got->{reason}, 'OK';
         is 0+@{$got->{headers}}, 0;
         ok ! $got->{incomplete};
       } $c;
-      return read_rbs ($got->{received})->then (sub {
+      return read_rbs ($got->{body})->then (sub {
         my $bytes = $_[0];
         test {
           is $bytes, "abcdefg";
@@ -487,8 +487,8 @@ test {
       test {
         ok $got->{failed};
         is $got->{message}, 'Inconsistent content-length values';
-        is $got->{received}, undef;
-        is $got->{received_messages}, undef;
+        is $got->{body}, undef;
+        is $got->{messages}, undef;
         is $got->{version}, undef;
         is $got->{status}, undef;
         is $got->{reason}, undef;
@@ -544,8 +544,8 @@ test {
       test {
         is $got->{failed}, undef;
         is $got->{message}, undef;
-        isa_ok $got->{received}, 'ReadableStream';
-        is $got->{received_messages}, undef;
+        isa_ok $got->{body}, 'ReadableStream';
+        is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
         is $got->{reason}, 'ok';
@@ -553,7 +553,7 @@ test {
         is $got->{headers}->[0]->[1], 'Foo bar';
         ok ! $got->{incomplete};
       } $c;
-      return read_rbs ($got->{received})->then (sub {
+      return read_rbs ($got->{body})->then (sub {
         my $bytes = $_[0];
         test {
           is $bytes, "abc";
@@ -573,8 +573,8 @@ test {
       test {
         is $got->{failed}, undef;
         is $got->{message}, undef;
-        isa_ok $got->{received}, 'ReadableStream';
-        is $got->{received_messages}, undef;
+        isa_ok $got->{body}, 'ReadableStream';
+        is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 207;
         is $got->{reason}, 'foo';
@@ -582,7 +582,7 @@ test {
         is $got->{headers}->[0]->[1], '7';
         ok ! $got->{incomplete};
       } $c;
-      return read_rbs ($got->{received})->then (sub {
+      return read_rbs ($got->{body})->then (sub {
         my $bytes = $_[0];
         test {
           is $bytes, "abcdefg";
@@ -641,10 +641,10 @@ test {
           my $got = $_[0];
           test {
             is $got->{failed}, undef;
-            isa_ok $got->{received}, 'ReadableStream';
+            isa_ok $got->{body}, 'ReadableStream';
             is $got->{status}, 203;
           } $c;
-          return read_rbs ($got->{received});
+          return read_rbs ($got->{body});
         });
       });
     })->then (sub{
@@ -717,6 +717,455 @@ test {
     undef $c;
   });
 } n => 4, name => 'send_request before connect';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "Content-Length: 0"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'PUT', target => '/'}, content_length => 0);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      test {
+        isa_ok $got->{body}, 'WritableStream';
+        my $writer = $got->{body}->get_writer;
+        $writer->close;
+      } $c;
+      return $stream->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      test {
+        is $got->{failed}, undef;
+        is $got->{message}, undef;
+        isa_ok $got->{body}, 'ReadableStream';
+        is $got->{messages}, undef;
+        is $got->{version}, '1.1';
+        is $got->{status}, 203;
+        is $got->{reason}, 'ok';
+        is $got->{headers}->[0]->[0], 'X-hoge';
+        is $got->{headers}->[0]->[1], 'Foo bar';
+        ok ! $got->{incomplete};
+      } $c;
+      return read_rbs ($got->{body})->then (sub {
+        my $bytes = $_[0];
+        test {
+          is $bytes, "abc";
+          ok ! $got->{incomplete};
+        } $c;
+      });
+    })->then (sub{
+      return $http->close;
+    })->catch (sub {
+      my $error = $_[0];
+      test {
+        ok 0, $error;
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 13, name => 'send_request with PUT 0 body';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "Content-Length: 0"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'POST', target => '/'}, content_length => 0);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      test {
+        isa_ok $got->{body}, 'WritableStream';
+        my $writer = $got->{body}->get_writer;
+        $writer->close;
+      } $c;
+      return $stream->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      test {
+        is $got->{failed}, undef;
+        is $got->{message}, undef;
+        isa_ok $got->{body}, 'ReadableStream';
+        is $got->{messages}, undef;
+        is $got->{version}, '1.1';
+        is $got->{status}, 203;
+        is $got->{reason}, 'ok';
+        is $got->{headers}->[0]->[0], 'X-hoge';
+        is $got->{headers}->[0]->[1], 'Foo bar';
+        ok ! $got->{incomplete};
+      } $c;
+      return read_rbs ($got->{body})->then (sub {
+        my $bytes = $_[0];
+        test {
+          is $bytes, "abc";
+          ok ! $got->{incomplete};
+        } $c;
+      });
+    })->then (sub{
+      return $http->close;
+    })->catch (sub {
+      my $error = $_[0];
+      test {
+        ok 0, $error;
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 13, name => 'send_request with POST 0 body';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "Content-Length: 5"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      test {
+        isa_ok $got->{body}, 'WritableStream';
+        my $writer = $got->{body}->get_writer;
+        $writer->write (d "12345");
+        $writer->close;
+      } $c;
+      return $stream->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      test {
+        is $got->{failed}, undef;
+        is $got->{message}, undef;
+        isa_ok $got->{body}, 'ReadableStream';
+        is $got->{messages}, undef;
+        is $got->{version}, '1.1';
+        is $got->{status}, 203;
+        is $got->{reason}, 'ok';
+        is $got->{headers}->[0]->[0], 'X-hoge';
+        is $got->{headers}->[0]->[1], 'Foo bar';
+        ok ! $got->{incomplete};
+      } $c;
+      return read_rbs ($got->{body})->then (sub {
+        my $bytes = $_[0];
+        test {
+          is $bytes, "abc";
+          ok ! $got->{incomplete};
+        } $c;
+      });
+    })->then (sub{
+      return $http->close;
+    })->catch (sub {
+      my $error = $_[0];
+      test {
+        ok 0, $error;
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 13, name => 'send_request with body';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "Content-Length: 5"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      test {
+        isa_ok $got->{body}, 'WritableStream';
+        $writer->write (d "1234");
+      } $c;
+      return $writer->close->catch (sub {
+        my $error = $_[0];
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'Closed before bytes (n = 1) are sent';
+          #is $error->file_name, __FILE__; # XXX location
+          #is $error->line_number, __LINE__;
+        } $c;
+        return $stream->headers_received;
+      })->catch (sub {
+        my $error = $_[0]->{message}; # XXX
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'Closed before bytes (n = 1) are sent';
+          #is $error->file_name, __FILE__; # XXX
+          #is $error->line_number, __LINE__;
+        } $c;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'send_request with body closed early';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "Content-Length: 5"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      test {
+        isa_ok $got->{body}, 'WritableStream';
+      } $c;
+      return $writer->write (d "123456")->catch (sub {
+        my $error = $_[0];
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'Byte length 6 is greater than expected length 5';
+          #is $error->file_name, __FILE__; # XXX location
+          #is $error->line_number, __LINE__;
+        } $c;
+        return $stream->headers_received;
+      })->catch (sub {
+        my $error = $_[0]->{message}; # XXX
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'Byte length 6 is greater than expected length 5';
+          #is $error->file_name, __FILE__; # XXX
+          #is $error->line_number, __LINE__;
+        } $c;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'send_request with body written too much';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "Content-Length: 5"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      test {
+        isa_ok $got->{body}, 'WritableStream';
+      } $c;
+      $writer->write (d "12345");
+      return $writer->write (d "6")->catch (sub {
+        my $error = $_[0];
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'Byte length 1 is greater than expected length 0';
+          #is $error->file_name, __FILE__; # XXX location
+          #is $error->line_number, __LINE__;
+        } $c;
+        return $stream->headers_received;
+      })->catch (sub {
+        my $error = $_[0]->{message}; # XXX
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'Byte length 1 is greater than expected length 0';
+          #is $error->file_name, __FILE__; # XXX
+          #is $error->line_number, __LINE__;
+        } $c;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'send_request with body written too much';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "Content-Length: 5"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      test {
+        isa_ok $got->{body}, 'WritableStream';
+      } $c;
+      return $writer->write ("12345")->catch (sub {
+        my $error = $_[0];
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'The argument is not an ArrayBufferView';
+          #is $error->file_name, __FILE__; # XXX location
+          #is $error->line_number, __LINE__;
+        } $c;
+        return $stream->headers_received;
+      })->catch (sub {
+        my $error = $_[0]->{message}; # XXX
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'The argument is not an ArrayBufferView';
+          #is $error->file_name, __FILE__; # XXX
+          #is $error->line_number, __LINE__;
+        } $c;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'send_request with body bad written data';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "Content-Length: 5"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      test {
+        isa_ok $got->{body}, 'WritableStream';
+      } $c;
+      $writer->write (d "12345");
+      return $http->send_request ({method => 'GET', target => '/'})->catch (sub {
+        my $error = $_[0];
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'Connection is busy';
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__+20;
+        } $c;
+        return $writer->write (d "6");
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'Byte length 1 is greater than expected length 0';
+          #is $error->file_name, __FILE__; # XXX location
+          #is $error->line_number, __LINE__;
+        } $c;
+        return $stream->headers_received;
+      })->catch (sub {
+        my $error = $_[0]->{message}; # XXX
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'Byte length 1 is greater than expected length 0';
+          #is $error->file_name, __FILE__; # XXX
+          #is $error->line_number, __LINE__;
+        } $c;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 9, name => 'send_request with body written too much';
 
 test {
   my $c = shift;
@@ -871,7 +1320,7 @@ close
       })->then (sub {
         my $stream = $_[0]->{stream};
         return $stream->headers_received->then (sub {
-          rsread $_[0]->{received_messages};
+          rsread $_[0]->{messages};
           return $stream->send_ws_message (3, $is_binary);
         })->then (sub {
           my $writer = $_[0]->{stream}->get_writer;

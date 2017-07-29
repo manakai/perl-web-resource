@@ -83,8 +83,8 @@ my $HandleRequestHeaders = {};
                         $HandleRequestHeaders->{$req->{target_url}->hostport};
           if (defined $handler) {
             $stream->{body} = '';
-            if (defined $got->{received}) {
-              my $body_reader = $got->{received}->get_reader ('byob');
+            if (defined $got->{body}) {
+              my $body_reader = $got->{body}->get_reader ('byob');
               my $run; $run = sub {
                 return $body_reader->read (DataView->new (ArrayBuffer->new (10)))->then (sub {
                   return if $_[0]->{done};
@@ -95,8 +95,8 @@ my $HandleRequestHeaders = {};
               }; # $run
               $run->()->then (sub { undef $run }, sub { undef $run });
             }
-            if (defined $got->{received_messages}) {
-              my $r = $got->{received_messages}->get_reader;
+            if (defined $got->{messages}) {
+              my $r = $got->{messages}->get_reader;
               my $run; $run = sub {
                 return $r->read->then (sub {
                   return if $_[0]->{done};

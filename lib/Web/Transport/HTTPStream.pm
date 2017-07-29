@@ -40,7 +40,7 @@ use AnyEvent;
 use Web::Encoding;
 use Encode qw(decode); # XXX
 
-push our @CARP_NOT, qw(Web::Transport::HTTPStream::ClientStream);
+push our @CARP_NOT, qw(Web::Transport::HTTPStream::Stream);
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
@@ -483,12 +483,13 @@ sub _debug_handshake_done ($$) {
 sub send_request ($$;%) {
   my $con = shift;
   my $req = shift;
-  return Promise->reject (Web::DOM::TypeError->new ("Request is not allowed"));
+  return Promise->reject (Web::DOM::TypeError->new ("Request is not allowed"))
+      if $con->{is_server};
 
   # XXX wait until $con->can_create_stream becomes true
   my $stream = bless {
     connection => $con,
-  },'Web::Transport::HTTPStream::ClientStream';
+  },'Web::Transport::HTTPStream::Stream';
   return $stream->_send_request ($req, @_);
 } # send_request
 
@@ -510,12 +511,13 @@ sub DESTROY ($) {
 
 package Web::Transport::HTTPStream::Stream;
 use Carp qw(croak);
-use AnyEvent;
-use Promise;
-use Promised::Flow;
+use MIME::Base64 qw(encode_base64);
 use Web::Encoding;
 use ArrayBuffer;
 use DataView;
+use AnyEvent;
+use Promise;
+use Promised::Flow;
 push our @CARP_NOT, qw(Web::DOM::TypeError);
 
 ## Client:
@@ -752,6 +754,126 @@ sub _receive_bytes_done ($) {
   }
   return undef;
 } # _receive_bytes_done
+
+sub _send_request ($$;%) {
+  my ($stream, $req, %args) = @_;
+  my $con = $stream->{connection};
+
+  # XXX input validation
+  my $method = defined $req->{method} ? $req->{method} : '';
+  if (not length $method or $method =~ /[\x0D\x0A\x09\x20]/) {
+    croak "Bad |method|: |$method|";
+  }
+  my $url = $req->{target};
+  if (not defined $url or
+      not length $url or
+      $url =~ /[\x0D\x0A]/ or
+      $url =~ /\A[\x09\x20]/ or
+      $url =~ /[\x09\x20]\z/) {
+    croak "Bad |target|: |$url|";
+  }
+  $con->{to_be_sent_length} = 0;
+  for (@{$req->{headers} or []}) {
+    croak "Bad header name |@{[_e4d $_->[0]]}|"
+        unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
+    croak "Bad header value |@{[_e4d $_->[1]]}|"
+        unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
+    my $n = $_->[0];
+    $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
+    if ($n eq 'content-length' and not $req->{method} eq 'CONNECT') {
+      $con->{to_be_sent_length} = $_->[1]; # XXX
+      # XXX throw if multiple length?
+    }
+  }
+  # XXX transfer-encoding
+  # XXX croak if WS protocols is bad
+  # XXX utf8 flag
+  # XXX header size
+
+  if (not defined $con->{state}) {
+    return Promise->reject
+        (Web::DOM::TypeError->new ("Connection is not ready"));
+  } elsif ($con->{no_new_request}) {
+    return Promise->reject (Web::DOM::TypeError->new ("Connection is closed"));
+  } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
+    return Promise->reject (Web::DOM::TypeError->new ("Connection is busy"));
+  }
+
+  # XXX
+  $req->{id} = $con->{id} . '.' . ++$con->{req_id};
+  if ($con->{DEBUG}) { # XXX
+    warn "$con->{id}: ========== @{[ref $con]}\n";
+    warn "$con->{id}: startstream $req->{id} @{[scalar gmtime]}\n";
+  }
+
+  $stream->{headers_received} = [promised_cv];
+  my ($resolve_stream, $reject_stream);
+  my $stream_closed = Promise->new
+      (sub { ($resolve_stream, $reject_stream) = @_ });
+  $stream_closed->catch (sub {
+    (delete $stream->{headers_received}->[1])->(Promise->reject ($_[0]))
+        if defined $stream->{headers_received} and
+           defined $stream->{headers_received}->[1];
+  });
+
+  # XXX throw if $con->{stream} is defined
+  $con->{stream} = $stream;
+  $con->{request} = $req;
+  my $res = $con->{response} = {
+    status => 200, reason => 'OK', version => '0.9',
+    headers => [],
+    stream_resolve => $resolve_stream, # XXX
+    stream_reject => $reject_stream, # XXX
+  };
+  $con->{state} = 'before response';
+  $con->{temp_buffer} = '';
+  # XXX Connection: close
+  if ($args{ws}) {
+    $con->{ws_state} = 'CONNECTING';
+    $con->{ws_key} = encode_base64 join ('', map { pack 'C', rand 256 } 1..16), '';
+    push @{$req->{headers} ||= []},
+        ['Sec-WebSocket-Key', $con->{ws_key}],
+        ['Sec-WebSocket-Version', '13'];
+    $con->{ws_protos} = $args{ws_protocols} || [];
+    if (@{$con->{ws_protos}}) {
+      push @{$req->{headers}},
+          ['Sec-WebSocket-Protocol', join ',', @{$con->{ws_protos}}];
+    }
+    # XXX extension
+  }
+  my $req_done = Promise->new (sub { $con->{request_done} = $_[0] });
+  my $header = join '',
+      "$method $url HTTP/1.1\x0D\x0A",
+      (map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []}),
+      "\x0D\x0A";
+  if ($con->{DEBUG}) {
+    for (split /\x0A/, $header) {
+      warn "$req->{id}: S: @{[_e4d $_]}\n";
+    }
+  }
+  $con->{request_state} = 'sending headers';
+    $stream->{response} =  $res; # XXX
+  my $sent = $con->{writer}->write
+      (DataView->new (ArrayBuffer->new_from_scalarref (\$header)));
+  my $ws = $stream->_open_sending_stream (is_ws => $args{ws});
+  if ($con->{to_be_sent_length} <= 0) {
+    $sent = $sent->then (sub {
+      $con->_send_done;
+    });
+  } else {
+    $sent = $sent->then (sub {
+      $con->{request_state} = 'sending body';
+    });
+  }
+  $con->_read;
+  $req_done->then (sub { # XXX
+    warn "$con->{id}: endstream $req->{id} @{[scalar gmtime]}\n";
+    warn "$con->{id}: ========== @{[ref $con]}\n";
+  }) if $con->{DEBUG};
+  return $sent->then (sub {
+    return {stream => $stream, body => $ws, closed => $stream_closed};
+  }); ## could be rejected when connection aborted
+} # _send_request
 
 sub send_ws_message ($$$) {
   my ($self, $length, $is_binary) = @_;
@@ -1129,7 +1251,17 @@ sub is_completed ($) {
   return $_[0]->{is_completed};
 } # is_completed
 
-1;
+# XXX
+sub closed ($) {
+  return $_[0]->{closed};
+} # closed
+
+sub DESTROY ($) {
+  local $@;
+  eval { die };
+  warn "$$: Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+      if $@ =~ /during global destruction/;
+} # DESTROY
 
 package Web::Transport::HTTPStream::ClientConnection;
 push our @ISA, qw(Web::Transport::HTTPStream::Connection
@@ -2073,152 +2205,6 @@ sub _both_done ($) {
     $self->{response_received} = 0;
   }
 } # _both_done
-
-package Web::Transport::HTTPStream::ClientStream; # XXX
-use Carp qw(croak);
-use MIME::Base64 qw(encode_base64);
-use Promised::Flow;
-push our @ISA, qw(Web::Transport::HTTPStream::Stream);
-
-push our @CARP_NOT, qw(Web::DOM::TypeError);
-
-BEGIN {
-  *_e4d = \&Web::Transport::HTTPStream::_e4d;
-  *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
-  *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
-}
-
-sub _send_request ($$;%) {
-  my ($stream, $req, %args) = @_;
-  my $con = $stream->{connection};
-
-  # XXX input validation
-  my $method = defined $req->{method} ? $req->{method} : '';
-  if (not length $method or $method =~ /[\x0D\x0A\x09\x20]/) {
-    croak "Bad |method|: |$method|";
-  }
-  my $url = $req->{target};
-  if (not defined $url or
-      not length $url or
-      $url =~ /[\x0D\x0A]/ or
-      $url =~ /\A[\x09\x20]/ or
-      $url =~ /[\x09\x20]\z/) {
-    croak "Bad |target|: |$url|";
-  }
-  $con->{to_be_sent_length} = 0;
-  for (@{$req->{headers} or []}) {
-    croak "Bad header name |@{[_e4d $_->[0]]}|"
-        unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
-    croak "Bad header value |@{[_e4d $_->[1]]}|"
-        unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
-    my $n = $_->[0];
-    $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
-    if ($n eq 'content-length' and not $req->{method} eq 'CONNECT') {
-      $con->{to_be_sent_length} = $_->[1]; # XXX
-      # XXX throw if multiple length?
-    }
-  }
-  # XXX transfer-encoding
-  # XXX croak if WS protocols is bad
-  # XXX utf8 flag
-  # XXX header size
-
-  if (not defined $con->{state}) {
-    return Promise->reject
-        (Web::DOM::TypeError->new ("Connection is not ready"));
-  } elsif ($con->{no_new_request}) {
-    return Promise->reject (Web::DOM::TypeError->new ("Connection is closed"));
-  } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
-    return Promise->reject (Web::DOM::TypeError->new ("Connection is busy"));
-  }
-
-  # XXX
-  $req->{id} = $con->{id} . '.' . ++$con->{req_id};
-  if ($con->{DEBUG}) { # XXX
-    warn "$con->{id}: ========== @{[ref $con]}\n";
-    warn "$con->{id}: startstream $req->{id} @{[scalar gmtime]}\n";
-  }
-
-  $stream->{headers_received} = [promised_cv];
-  my ($resolve_stream, $reject_stream);
-  my $stream_closed = Promise->new
-      (sub { ($resolve_stream, $reject_stream) = @_ });
-  $stream_closed->catch (sub {
-    (delete $stream->{headers_received}->[1])->(Promise->reject ($_[0]))
-        if defined $stream->{headers_received} and
-           defined $stream->{headers_received}->[1];
-  });
-
-  # XXX throw if $con->{stream} is defined
-  $con->{stream} = $stream;
-  $con->{request} = $req;
-  my $res = $con->{response} = {
-    status => 200, reason => 'OK', version => '0.9',
-    headers => [],
-    stream_resolve => $resolve_stream, # XXX
-    stream_reject => $reject_stream, # XXX
-  };
-  $con->{state} = 'before response';
-  $con->{temp_buffer} = '';
-  # XXX Connection: close
-  if ($args{ws}) {
-    $con->{ws_state} = 'CONNECTING';
-    $con->{ws_key} = encode_base64 join ('', map { pack 'C', rand 256 } 1..16), '';
-    push @{$req->{headers} ||= []},
-        ['Sec-WebSocket-Key', $con->{ws_key}],
-        ['Sec-WebSocket-Version', '13'];
-    $con->{ws_protos} = $args{ws_protocols} || [];
-    if (@{$con->{ws_protos}}) {
-      push @{$req->{headers}},
-          ['Sec-WebSocket-Protocol', join ',', @{$con->{ws_protos}}];
-    }
-    # XXX extension
-  }
-  my $req_done = Promise->new (sub { $con->{request_done} = $_[0] });
-  my $header = join '',
-      "$method $url HTTP/1.1\x0D\x0A",
-      (map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []}),
-      "\x0D\x0A";
-  if ($con->{DEBUG}) {
-    for (split /\x0A/, $header) {
-      warn "$req->{id}: S: @{[_e4d $_]}\n";
-    }
-  }
-  $con->{request_state} = 'sending headers';
-    $stream->{response} =  $res; # XXX
-  my $sent = $con->{writer}->write
-      (DataView->new (ArrayBuffer->new_from_scalarref (\$header)));
-  my $ws = $stream->_open_sending_stream (is_ws => $args{ws});
-  if ($con->{to_be_sent_length} <= 0) {
-    $sent = $sent->then (sub {
-      $con->_send_done;
-    });
-  } else {
-    $sent = $sent->then (sub {
-      $con->{request_state} = 'sending body';
-    });
-  }
-  $con->_read;
-  $req_done->then (sub { # XXX
-    warn "$con->{id}: endstream $req->{id} @{[scalar gmtime]}\n";
-    warn "$con->{id}: ========== @{[ref $con]}\n";
-  }) if $con->{DEBUG};
-  return $sent->then (sub {
-    return {stream => $stream, body => $ws, closed => $stream_closed};
-  }); ## could be rejected when connection aborted
-} # _send_request
-
-# XXX
-sub closed ($) {
-  return $_[0]->{closed};
-} # closed
-
-sub DESTROY ($) {
-  local $@;
-  eval { die };
-  warn "$$: Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
-      if $@ =~ /during global destruction/;
-} # DESTROY
 
 package Web::Transport::HTTPStream::ServerConnection;
 push our @ISA, qw(Web::Transport::HTTPStream::Connection);

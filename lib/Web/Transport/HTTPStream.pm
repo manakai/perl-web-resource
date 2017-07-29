@@ -40,6 +40,8 @@ use AnyEvent;
 use Web::Encoding;
 use Encode qw(decode); # XXX
 
+push our @CARP_NOT, qw(Web::Transport::HTTPStream::ClientStream);
+
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
   *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
@@ -50,7 +52,7 @@ sub info ($) { return $_[0]->{info} } # or undef
 
 sub _ws_received ($) {
   my ($self, $ref) = @_;
-  my $stream = $self->{is_server} ? $self->{stream} : $self;
+  my $stream = $self->{stream};
   my $ws_failed;
   WS: {
     if ($self->{state} eq 'before ws frame') {
@@ -203,6 +205,7 @@ sub _ws_received ($) {
           }
           unless ($self->{ws_state} eq 'CLOSING') {
             $self->{ws_state} = 'CLOSING';
+warn "XXX closin";
             $stream->_ev ('closing');
             my $mask = '';
             my $masked = 0;
@@ -312,6 +315,7 @@ sub _ws_received ($) {
   } # WS
   if (defined $ws_failed) {
     $self->{ws_state} = 'CLOSING';
+warn "XXX closing ($ws_failed)";
     $ws_failed = 'WebSocket Protocol Error' unless length $ws_failed;
     $ws_failed = '' if $ws_failed eq '-';
     $self->{exit} = {ws => 1, failed => 1, status => 1002, reason => $ws_failed};
@@ -473,6 +477,20 @@ sub _debug_handshake_done ($$) {
     warn "$id: + Failure ($exit->{message})\n";
   }
 } # _debug_handshake_done
+
+# XXX can_create_stream is_active && (if h1: no current request)
+
+sub send_request ($$;%) {
+  my $con = shift;
+  my $req = shift;
+  return Promise->reject (Web::DOM::TypeError->new ("Request is not allowed"));
+
+  # XXX wait until $con->can_create_stream becomes true
+  my $stream = bless {
+    connection => $con,
+  },'Web::Transport::HTTPStream::ClientStream';
+  return $stream->_send_request ($req, @_);
+} # send_request
 
 sub _terminate ($) {
   my $self = $_[0];
@@ -688,7 +706,7 @@ sub headers_received ($) {
 
 sub _headers_received ($;%) {
   my ($stream, %args) = @_;
-  my $return = {};
+  my $return = $args{is_request} ? $stream->{request} : $stream->{response};
   if ($args{is_ws}) {
     my $read_message_stream = ReadableStream->new ({
       start => sub {
@@ -738,8 +756,8 @@ sub _receive_bytes_done ($) {
 sub send_ws_message ($$$) {
   my ($self, $length, $is_binary) = @_;
   croak "Data too large" if MAX_BYTES < $length; # spec limit 2**63
-  my $con = $self->{is_server} ? $self->{connection} : $self;
-  return Promise->reject (Web::DOM::TypeError->new ("Not writable"))
+  my $con = $self->{connection};
+  return Promise->reject (Web::DOM::TypeError->new ("Stream is busy"))
       if not (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') or
          (defined $con->{to_be_sent_length} and
           $con->{to_be_sent_length} > 0);
@@ -893,7 +911,7 @@ sub send_ping ($;%) {
 
 sub send_ws_close ($;$$) {
   my ($self, $status, $reason) = @_;
-  my $con = $self->{is_server} ? $self->{connection} : $self;
+  my $con = $self->{connection};
   if (not defined $con->{state}) {
     return Promise->reject ("Connection has not been established");
   }
@@ -945,6 +963,7 @@ sub send_ws_close ($;$$) {
         $self->_ws_debug ('S', @$frame_info) if $self->{DEBUG};
         $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$frame)));
         $con->{ws_state} = 'CLOSING';
+warn "XXX closing";
         $con->{ws_timer} = AE::timer 20, 0, sub {
           if ($self->{DEBUG}) {
             my $id = $self->{is_server} ? $self->{id} : $self->{request}->{id};
@@ -979,14 +998,14 @@ sub close ($) {
   if (defined $con->{ws_state} and
       ($con->{ws_state} eq 'OPEN' or
        $con->{ws_state} eq 'CONNECTING')) {
-    die "XXX WS not closed";
+    return Promise->reject (Web::DOM::TypeError->new ("Connection is busy"));
   } elsif ($self->{is_server}) {
     $self->_receive_done;
     return;
   }
 
   # XXX $con->{request}->{body_stream}
-  $self->{no_new_request} = 1;
+  $con->{no_new_request} = 1;
   if ($con->{state} eq 'initial' or
       $con->{state} eq 'waiting' or
       $con->{state} eq 'tunnel' or
@@ -994,6 +1013,8 @@ sub close ($) {
     $con->{writer}->close; # can fail
     $con->{state} = 'tunnel receiving' if $con->{state} eq 'tunnel';
   }
+  $self->_read
+      if defined $con->{reader}; # XXX
 
   ## Client only (for now)
   return $self->{closed};
@@ -1094,7 +1115,7 @@ sub _ev ($$;$$) {
       }
     }
   }
-  $self->{cb}->($self, $type, @_);
+  #$self->{cb}->($self, $type, @_);
   if ($type eq 'complete') {
     $self->{is_completed} = 1;
     unless ($self->{is_server}) {
@@ -1182,13 +1203,10 @@ sub _read ($) {
     if ($expected_size > 0) {
       my $view = TypedArray::Uint8Array->new
           ($req->view->buffer, $req->view->byte_offset, $expected_size);
-warn 1;
       return $self->{reader}->read ($view)->then (sub {
-warn "XXX $_[0]->{done}";
         delete $self->{read_running};
         return if $_[0]->{done};
 
-warn 3;
         my $length = $_[0]->{value}->byte_length;
         $req->manakai_respond_with_new_view ($_[0]->{value});
 
@@ -1483,6 +1501,7 @@ sub _process_rbuf ($$) {
           $self->{temp_buffer} = '';
           if (defined $self->{pending_frame}) {
             $self->{ws_state} = 'CLOSING';
+warn "XXX closing";
             $self->{ws_writable} = $self->{writer}->write
                 (DataView->new (ArrayBuffer->new_from_scalarref (\($self->{pending_frame}))));
             $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if $self->{DEBUG}; # XXX $self->{stream}
@@ -1746,7 +1765,7 @@ sub _process_rbuf ($$) {
   if ($self->{state} eq 'before ws frame' or
       $self->{state} eq 'ws data' or
       $self->{state} eq 'ws terminating') {
-    return $self->_ws_received ($ref);
+    return $self->_ws_received (\substr $$ref, pos $$ref);
   }
   if ($self->{state} eq 'tunnel' or $self->{state} eq 'tunnel receiving') {
     $self->{stream}->{receive_controller}->enqueue
@@ -2000,12 +2019,12 @@ sub _receive_done ($) {
   my $self = $_[0];
   return if $self->{state} eq 'stopped';
 
+  if (defined $self->{stream}->{receive_message_controller}) {
+    $self->{stream}->{receive_message_controller}->close;
+  }
   delete $self->{stream};
   delete $self->{timer};
   delete $self->{ws_timer};
-  if (defined $self->{receive_message_controller}) {
-    $self->{receive_message_controller}->close;
-  }
   if (defined $self->{request_state} and
       ($self->{request_state} eq 'sending headers' or
        $self->{request_state} eq 'sending body')) {
@@ -2055,23 +2074,13 @@ sub _both_done ($) {
   }
 } # _both_done
 
-# XXX can_create_stream is_active && (if h1: no current request)
-
-sub send_request ($$;%) {
-  my $con = shift;
-  my $req = shift;
-  # XXX wait until $con->can_create_stream becomes true
-  my $stream = bless {
-    connection => $con,
-  },'Web::Transport::HTTPStream::ClientStream';
-  return $stream->_send_request ($req, @_);
-} # send_request
-
 package Web::Transport::HTTPStream::ClientStream; # XXX
 use Carp qw(croak);
 use MIME::Base64 qw(encode_base64);
 use Promised::Flow;
 push our @ISA, qw(Web::Transport::HTTPStream::Stream);
+
+push our @CARP_NOT, qw(Web::DOM::TypeError);
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
@@ -2079,13 +2088,11 @@ BEGIN {
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
 
-# XXX
-sub request ($) { $_[0]->{request} } # or undef
-sub response ($) { $_[0]->{response} } # or undef
-
 sub _send_request ($$;%) {
   my ($stream, $req, %args) = @_;
   my $con = $stream->{connection};
+
+  # XXX input validation
   my $method = defined $req->{method} ? $req->{method} : '';
   if (not length $method or $method =~ /[\x0D\x0A\x09\x20]/) {
     croak "Bad |method|: |$method|";
@@ -2117,26 +2124,30 @@ sub _send_request ($$;%) {
   # XXX header size
 
   if (not defined $con->{state}) {
-    return Promise->reject ("Connection has not been established");
+    return Promise->reject
+        (Web::DOM::TypeError->new ("Connection is not ready"));
   } elsif ($con->{no_new_request}) {
-    return Promise->reject ("Connection is no longer in active");
+    return Promise->reject (Web::DOM::TypeError->new ("Connection is closed"));
   } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
-    return Promise->reject ("Connection is busy");
+    return Promise->reject (Web::DOM::TypeError->new ("Connection is busy"));
   }
 
+  # XXX
   $req->{id} = $con->{id} . '.' . ++$con->{req_id};
   if ($con->{DEBUG}) { # XXX
     warn "$con->{id}: ========== @{[ref $con]}\n";
     warn "$con->{id}: startstream $req->{id} @{[scalar gmtime]}\n";
   }
 
-  my $cb = $args{cb} || sub { };
-  $con->{cb} = $cb;
-
   $stream->{headers_received} = [promised_cv];
   my ($resolve_stream, $reject_stream);
   my $stream_closed = Promise->new
       (sub { ($resolve_stream, $reject_stream) = @_ });
+  $stream_closed->catch (sub {
+    (delete $stream->{headers_received}->[1])->(Promise->reject ($_[0]))
+        if defined $stream->{headers_received} and
+           defined $stream->{headers_received}->[1];
+  });
 
   # XXX throw if $con->{stream} is defined
   $con->{stream} = $stream;
@@ -2144,8 +2155,8 @@ sub _send_request ($$;%) {
   my $res = $con->{response} = {
     status => 200, reason => 'OK', version => '0.9',
     headers => [],
-    stream_resolve => $resolve_stream,
-    stream_reject => $reject_stream,
+    stream_resolve => $resolve_stream, # XXX
+    stream_reject => $reject_stream, # XXX
   };
   $con->{state} = 'before response';
   $con->{temp_buffer} = '';
@@ -2174,9 +2185,7 @@ sub _send_request ($$;%) {
     }
   }
   $con->{request_state} = 'sending headers';
-    $stream->{request} = $req;
-    $stream->{response} = $con->{receiving} = $res;
-    $stream->{closed} = $stream_closed;
+    $stream->{response} =  $res; # XXX
   my $sent = $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\$header)));
   my $ws = $stream->_open_sending_stream (is_ws => $args{ws});
@@ -2195,10 +2204,11 @@ sub _send_request ($$;%) {
     warn "$con->{id}: ========== @{[ref $con]}\n";
   }) if $con->{DEBUG};
   return $sent->then (sub {
-    return {stream => $stream, body => $ws};
+    return {stream => $stream, body => $ws, closed => $stream_closed};
   }); ## could be rejected when connection aborted
 } # _send_request
 
+# XXX
 sub closed ($) {
   return $_[0]->{closed};
 } # closed
@@ -2878,7 +2888,7 @@ sub _request_headers ($) {
     $self->{unread_length} = $l;
     $self->{state} = 'request body';
   }
-  $stream->_headers_received (is_ws => $is_ws);
+  $stream->_headers_received (is_ws => $is_ws, is_request => 1);
   if ($l == 0 and not $stream->{request}->{method} eq 'CONNECT') {
     $stream->_receive_bytes_done;
     unless (defined $stream->{ws_key}) {

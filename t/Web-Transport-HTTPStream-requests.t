@@ -8,13 +8,51 @@ use Test::X1;
 use Test::HTCT::Parser;
 use Test::Certificates;
 use Web::Host;
-use Web::Transport::TCPTransport;
-use Web::Transport::H1CONNECTTransport;
-use Web::Transport::TLSTransport;
-use Web::Transport::UNIXDomainSocketTransport;
-use Web::Transport::HTTPClientConnection;
+use Web::Transport::TCPStream;
+use Web::Transport::UnixStream;
+use Web::Transport::TLSStream;
+use Web::Transport::H1CONNECTTransport; # XXX
+use Web::Transport::HTTPStream;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
+use ArrayBuffer;
+use DataView;
+
+sub d ($) {
+  return DataView->new (ArrayBuffer->new_from_scalarref (\($_[0])));
+} # d
+
+sub rsread ($) {
+  my $rs = shift;
+  return Promise->resolve (undef) unless defined $rs;
+  my $r = $rs->get_reader;
+  my $run; $run = sub {
+    return $r->read->then (sub {
+      return if $_[0]->{done};
+      if (ref $_[0]->{value} eq 'HASH' and
+          defined $_[0]->{value}->{data_stream}) {
+        rsread ($_[0]->{value}->{data_stream});
+      }
+      return $run->();
+    });
+  }; # $run
+  return $run->()->then (sub { undef $run }, sub { undef $run });
+} # rsread
+
+sub read_rbs ($) {
+  my $rs = shift;
+  return Promise->resolve (undef) unless defined $rs;
+  my $r = $rs->get_reader ('byob');
+  my $result = '';
+  my $run; $run = sub {
+    return $r->read (d "x" x 100)->then (sub {
+      return if $_[0]->{done};
+      $result .= $_[0]->{value}->manakai_to_string;
+      return $run->();
+    });
+  }; # $run
+  return $run->()->then (sub { undef $run; return $result }, sub { undef $run });
+} # read_rbs
 
 {
   use Socket;
@@ -92,10 +130,11 @@ sub unix_server_as_cv ($) {
 
 test {
   my $c = shift;
-  my $tcp = Web::Transport::TCPTransport->new
-      (host => Web::Host->parse_string ('127.0.53.53'), port => rand);
-  my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-  my $p = $http->send_request_headers ({method => 'GET', target => '/'});
+  my $http = Web::Transport::HTTPStream->new ({parent => {
+    class => 'Web::Transport::TCPStream',
+    host => Web::Host->parse_string ('127.0.53.53'), port => rand,
+  }});
+  my $p = $http->send_request ({method => 'GET', target => '/'});
   isa_ok $p, 'Promise';
   $p->then (sub {
     test {
@@ -104,7 +143,7 @@ test {
   }, sub {
     my $e = $_[0];
     test {
-      is $e, 'Connection has not been established';
+      like $e, qr{^TypeError: Connection is not ready at \Q@{[__FILE__]}\E line @{[__LINE__-9]}};
     } $c;
   })->then (sub {
     done $c;
@@ -118,14 +157,18 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'});
+      return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
-      my $p = $http->send_request_headers ({method => 'GET', target => '/'});
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received;
+    })->catch (sub {
+      my $p = $http->send_request ({method => 'GET', target => '/'});
       test {
         isa_ok $p, 'Promise';
       } $c;
@@ -134,7 +177,7 @@ test {
       }, sub {
         my $e = $_[0];
         test {
-          is $e, 'Connection is no longer in active';
+          like $e, qr{^TypeError: Connection is closed at \Q@{[__FILE__]}\E line @{[__LINE__-9]}};
         } $c;
       });
     })->then (sub{
@@ -153,13 +196,14 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      my $p1 = $http->send_request_headers ({method => 'GET', target => '/'});
-      my $p = $http->send_request_headers ({method => 'GET', target => '/'});
+      my $p1 = $http->send_request ({method => 'GET', target => '/'});
+      my $p = $http->send_request ({method => 'GET', target => '/'});
       test {
         isa_ok $p, 'Promise';
       } $c;
@@ -168,7 +212,7 @@ test {
       }, sub {
         my $e = $_[0];
         test {
-          is $e, 'Connection is busy';
+          like $e, qr{^TypeError: Connection is busy at \Q@{[__FILE__]}\E line @{[__LINE__-9]}};
         } $c;
       });
     })->then (sub{
@@ -188,10 +232,11 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
       my @p;
       for my $subtest (
@@ -204,7 +249,7 @@ test {
         [['Hoge' => "\x{4000}"]],
       ) {
         push @p, Promise->resolve->then (sub {
-          $http->send_request_headers
+          return $http->send_request
               ({method => 'GET', target => '/',
                 headers => $subtest});
         })->catch (sub {
@@ -214,6 +259,7 @@ test {
           } $c;
         });
       }
+      return Promise->all (\@p);
     })->then (sub{
       return $http->close;
     })->then (sub {
@@ -226,21 +272,473 @@ test {
 test {
   my $c = shift;
   server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $closed;
+    my $closed_fulfilled;
+    my $closed_rejected;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      $closed = $_[0]->{closed};
+      $closed->then (sub { $closed_fulfilled = 1 }, sub { $closed_rejected = 1 });
+      test {
+        isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
+      } $c;
+      return $stream->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      test {
+        is $got->{failed}, undef;
+        is $got->{message}, undef;
+        isa_ok $got->{received}, 'ReadableStream';
+        is $got->{received_messages}, undef;
+        is $got->{version}, '1.1';
+        is $got->{status}, 203;
+        is $got->{reason}, 'ok';
+        is $got->{headers}->[0]->[0], 'X-hoge';
+        is $got->{headers}->[0]->[1], 'Foo bar';
+        ok ! $got->{incomplete};
+        ok ! $closed_fulfilled;
+        ok ! $closed_rejected;
+      } $c;
+      return read_rbs ($got->{received})->then (sub {
+        my $bytes = $_[0];
+        test {
+          is $bytes, "abc";
+          ok ! $got->{incomplete};
+        } $c;
+      });
+    })->then (sub{
+      return $closed;
+    })->then (sub {
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 15, name => 'send_request gets a response';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 10"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $closed;
+    my $closed_fulfilled;
+    my $closed_rejected;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      $closed = $_[0]->{closed};
+      $closed->then (sub { $closed_fulfilled = 1 }, sub { $closed_rejected = 1 });
+      test {
+        isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
+      } $c;
+      return $stream->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      test {
+        is $got->{failed}, undef;
+        is $got->{message}, undef;
+        isa_ok $got->{received}, 'ReadableStream';
+        is $got->{received_messages}, undef;
+        is $got->{version}, '1.1';
+        is $got->{status}, 203;
+        is $got->{reason}, 'ok';
+        is $got->{headers}->[0]->[0], 'X-hoge';
+        is $got->{headers}->[0]->[1], 'Foo bar';
+        is $got->{headers}->[1]->[0], 'content-length';
+        is $got->{headers}->[1]->[1], '10';
+        ok ! $got->{incomplete};
+        ok ! $closed_fulfilled;
+        ok ! $closed_rejected;
+      } $c;
+      return read_rbs ($got->{received})->then (sub {
+        my $bytes = $_[0];
+        test {
+          is $bytes, "abc";
+          ok $got->{incomplete};
+        } $c;
+      });
+    })->then (sub {
+      return $closed;
+    })->catch (sub{
+      my $error = $_[0];
+      # XXX
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 17, name => 'send_request gets an incomplete response';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "abcdefg"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     my $error;
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      test {
+        isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
+      } $c;
+      return $stream->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      test {
+        is $got->{failed}, undef;
+        is $got->{message}, undef;
+        isa_ok $got->{received}, 'ReadableStream';
+        is $got->{received_messages}, undef;
+        is $got->{version}, '0.9';
+        is $got->{status}, 200;
+        is $got->{reason}, 'OK';
+        is 0+@{$got->{headers}}, 0;
+        ok ! $got->{incomplete};
+      } $c;
+      return read_rbs ($got->{received})->then (sub {
+        my $bytes = $_[0];
+        test {
+          is $bytes, "abcdefg";
+          ok ! $got->{incomplete};
+        } $c;
+      });
+    })->then (sub{
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 12, name => 'send_request HTTP/0.9 response';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 212 ok"CRLF
+    "content-length: 2"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abcdefg"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $closed;
+    my $closed_fulfilled;
+    my $closed_rejected;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      $closed = $_[0]->{closed};
+      $closed->then (sub { $closed_fulfilled = 1 }, sub { $closed_rejected = 1 });
+      test {
+        isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
+      } $c;
+      return $stream->headers_received;
+    })->then (sub {
+      test { ok 0 } $c;
+    }, sub {
+      my $got = $_[0];
+      test {
+        ok $got->{failed};
+        is $got->{message}, 'Inconsistent content-length values';
+        is $got->{received}, undef;
+        is $got->{received_messages}, undef;
+        is $got->{version}, undef;
+        is $got->{status}, undef;
+        is $got->{reason}, undef;
+        is $got->{headers}, undef;
+        is $got->{incomplete}, undef;
+        ok ! $closed_fulfilled;
+        ok $closed_rejected;
+      } $c;
+    })->then (sub{
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 12, name => 'send_request response error';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+    receive "GET"
+    "HTTP/1.1 207 foo"CRLF
+    "content-length: 7"CRLF
+    CRLF
+    "abcdefg"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $closed;
+    my $closed_fulfilled;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      $closed = $_[0]->{closed};
+      $closed->then (sub { $closed_fulfilled = 1 });
+      test {
+        isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
+      } $c;
+      return $stream->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      test {
+        is $got->{failed}, undef;
+        is $got->{message}, undef;
+        isa_ok $got->{received}, 'ReadableStream';
+        is $got->{received_messages}, undef;
+        is $got->{version}, '1.1';
+        is $got->{status}, 203;
+        is $got->{reason}, 'ok';
+        is $got->{headers}->[0]->[0], 'X-hoge';
+        is $got->{headers}->[0]->[1], 'Foo bar';
+        ok ! $got->{incomplete};
+      } $c;
+      return read_rbs ($got->{received})->then (sub {
+        my $bytes = $_[0];
+        test {
+          is $bytes, "abc";
+          ok ! $got->{incomplete};
+          ok $closed_fulfilled;
+        } $c;
+        return $http->send_request ({method => 'GET', target => '/'});
+      });
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      test {
+        isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
+      } $c;
+      return $stream->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      test {
+        is $got->{failed}, undef;
+        is $got->{message}, undef;
+        isa_ok $got->{received}, 'ReadableStream';
+        is $got->{received_messages}, undef;
+        is $got->{version}, '1.1';
+        is $got->{status}, 207;
+        is $got->{reason}, 'foo';
+        is $got->{headers}->[0]->[0], 'content-length';
+        is $got->{headers}->[0]->[1], '7';
+        ok ! $got->{incomplete};
+      } $c;
+      return read_rbs ($got->{received})->then (sub {
+        my $bytes = $_[0];
+        test {
+          is $bytes, "abcdefg";
+          ok ! $got->{incomplete};
+        } $c;
+      });
+    })->then (sub{
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 27, name => 'send_request two times';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+    receive "GET"
+    "HTTP/1.1 207 foo"CRLF
+    "content-length: 7"CRLF
+    CRLF
+    "abcdefg"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $error;
+    $http->connect->then (sub {
+      my $p = $http->send_request ({method => 'GET', target => '/'});
+      my $q = $http->send_request ({method => 'GET', target => '/'});
+      return $q->catch (sub {
+        my $error = $_[0];
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'Connection is busy';
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-7;
+        } $c;
+        return $p;
+      })->then (sub {
+        my $stream = $_[0]->{stream};
+        test {
+          isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
+        } $c;
+        return $stream->headers_received->then (sub {
+          my $got = $_[0];
+          test {
+            is $got->{failed}, undef;
+            isa_ok $got->{received}, 'ReadableStream';
+            is $got->{status}, 203;
+          } $c;
+          return read_rbs ($got->{received});
+        });
+      });
+    })->then (sub{
+      return $http->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 8, name => 'send_request connection in use';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+    receive "GET"
+    "HTTP/1.1 207 foo"CRLF
+    "content-length: 7"CRLF
+    CRLF
+    "abcdefg"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $error;
+    $http->connect->then (sub {
+      return $http->close;
+    })->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->catch (sub {
+      my $error = $_[0];
+      test {
+        is $error->name, 'TypeError';
+        is $error->message, 'Connection is closed';
+        is $error->file_name, __FILE__;
+        is $error->line_number, __LINE__-7;
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'send_request after close';
+
+test {
+  my $c = shift;
+  my $http = Web::Transport::HTTPStream->new ({parent => {
+    class => 'Web::Transport::TCPStream',
+    host => Web::Host->parse_string ('127.0.0.1'),
+    port => 5323322,
+  }});
+  $http->send_request ({method => 'GET', target => '/'})->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error->name, 'TypeError';
+      is $error->message, 'Connection is not ready';
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__+5;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'send_request before connect';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $error;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, cb => sub {
+#XXXXXXXXXXXXXXXX
         my ($http, $type, $data) = @_;
         $error = $data if $type eq 'complete';
       });
     })->then (sub {
       test {
+        ok $error;
         ok not $error->{can_retry};
       } $c;
     })->then (sub{
@@ -250,7 +748,7 @@ test {
       undef $c;
     });
   });
-} n => 1, name => 'first empty response';
+} n => 2, name => 'first empty response';
 
 test {
   my $c = shift;
@@ -263,24 +761,31 @@ test {
     close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $error;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $error1;
+    my $error2;
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
+      return $http->send_request ({method => 'GET', target => '/'}, cb => sub {
+#XXXXXXXXXXXXX
         my ($http, $type, $data) = @_;
-        $error = $data if $type eq 'complete';
+        $error1 = $data if $type eq 'complete';
       });
     })->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, cb => sub {
+      return $_[0]->{stream}->headers_received;
+    })->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, cb => sub {
+# XXXX
         my ($http, $type, $data) = @_;
-        $error = $data if $type eq 'complete';
+        $error2 = $data if $type eq 'complete';
       });
     })->then (sub {
       test {
-        ok $error->{can_retry};
+        ok $error2;
+        ok $error2->{can_retry};
       } $c;
     })->then (sub{
       return $http->close;
@@ -289,87 +794,57 @@ test {
       undef $c;
     });
   });
-} n => 1, name => 'second empty response';
+} n => 2, name => 'second empty response';
 
-for my $tbmethod (qw(send_text_header send_binary_header)) {
-
-test {
-  my $c = shift;
-  server_as_cv (q{
-    receive "GET"
-    "HTTP/1.1 200 OK"CRLF
-    "Content-Length: 0"CRLF
-    CRLF
-    receive "GET"
-    close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    $http->connect->then (sub {
-      $http->$tbmethod (3);
-      $http->send_data (\'abc');
-    })->then (sub {
-      test { ok 0 } $c;
-    }, sub {
-      my $error = $_[0];
-      test {
-        like $error, qr{^Bad state};
-      } $c;
-    })->then (sub{
-      return $http->close;
-    })->then (sub {
-      done $c;
-      undef $c;
-    });
-  });
-} n => 1, name => ['send_ws_message before request', $tbmethod];
-
-test {
-  my $c = shift;
-  server_as_cv (q{
-    receive "GET"
-    "HTTP/1.1 200 OK"CRLF
-    "Content-Length: 0"CRLF
-    CRLF
-    receive "GET"
-    close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $error;
-    $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        $error = $data->{reason} if $type eq 'complete';
+for my $is_binary (0, 1) {
+  test {
+    my $c = shift;
+    server_as_cv (q{
+      receive "GET"
+      "HTTP/1.1 200 OK"CRLF
+      "Content-Length: 0"CRLF
+      CRLF
+      receive "GET"
+      close
+    })->cb (sub {
+      my $server = $_[0]->recv;
+      my $http = Web::Transport::HTTPStream->new ({parent => {
+        class => 'Web::Transport::TCPStream',
+        host => Web::Host->parse_string ($server->{addr}),
+        port => $server->{port},
+      }});
+      my $error;
+      $http->connect->then (sub {
+        return $http->send_request ({method => 'GET', target => '/'}, ws => 1, cb => sub {
+#XXXXX
+          my ($http, $type, $data) = @_;
+          $error = $data->{reason} if $type eq 'complete';
+        });
+      })->then (sub {
+        my $stream = $_[0]->{stream};
+        return Promise->resolve->then (sub {
+          return $stream->send_ws_message (3, $is_binary);
+        })->then (sub {
+          test { ok 0 } $c;
+        }, sub {
+          my $error = $_[0];
+          test {
+            like $error, qr{^TypeError: Stream is busy at \Q@{[__FILE__]}\E line \Q@{[__LINE__-6]}\E};
+          } $c;
+        })->then (sub{
+#XXXX
+          return $http->close;
+        });
+      })->then (sub {
+        done $c;
+        undef $c;
       });
-    })->then (sub {
-      $http->$tbmethod (3);
-      $http->send_data (\'abc');
-    })->then (sub {
-      test { ok 0 } $c;
-    }, sub {
-      my $error = $_[0];
-      test {
-        like $error, qr{^Bad state};
-      } $c;
-    })->then (sub{
-      return $http->close;
-    })->then (sub {
-      done $c;
-      undef $c;
     });
-  });
-} n => 1, name => ['send_ws_message after bad handshake', $tbmethod];
+  } n => 2, name => ['send_ws_message after bad handshake', $is_binary];
 
-test {
-  my $c = shift;
-  server_as_cv (q{
+  test {
+    my $c = shift;
+    server_as_cv (q{
 receive "GET", start capture
 receive CRLFCRLF, end capture
 "HTTP/1.1 101 OK"CRLF
@@ -384,34 +859,42 @@ ws-receive-data
 ws-send-header opcode=1 length=3
 "xyz"
 close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
-    $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->$tbmethod (3);
-          $http->send_data (\'abc');
-          $sent++;
-        }
+    })->cb (sub {
+      my $server = $_[0]->recv;
+      my $http = Web::Transport::HTTPStream->new ({parent => {
+        class => 'Web::Transport::TCPStream',
+        host => Web::Host->parse_string ($server->{addr}),
+        port => $server->{port},
+      }});
+      $http->connect->then (sub {
+        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      })->then (sub {
+        my $stream = $_[0]->{stream};
+        return $stream->headers_received->then (sub {
+          rsread $_[0]->{received_messages};
+          return $stream->send_ws_message (3, $is_binary);
+        })->then (sub {
+          my $writer = $_[0]->{stream}->get_writer;
+          $writer->write (d 'abc');
+          return $writer->close;
+        })->then (sub {
+          return $stream->send_ws_close;
+        });
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+#XXX
+          ok $error->{ws};
+          is $error->{status}, 1006;
+        } $c;
+      })->then (sub {
+        done $c;
+        undef $c;
       });
-    })->then (sub{
-      test {
-        is $sent, 1;
-      } $c;
-      return $http->close;
-    })->then (sub {
-      done $c;
-      undef $c;
     });
-  });
-} n => 1, name => ['send_ws_message ok', $tbmethod];
+  } n => 2, name => ['send_ws_message ok', $is_binary];
 
+my $tbmethod;
 test {
   my $c = shift;
   server_as_cv (q{
@@ -2032,7 +2515,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

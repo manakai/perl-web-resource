@@ -13,6 +13,23 @@ use Web::Transport::ConnectionClient;
 use Web::Transport::TCPStream;
 use Web::Transport::HTTPStream;
 
+sub rsread ($) {
+  my $rs = shift;
+  return Promise->resolve (undef) unless defined $rs;
+  my $r = $rs->get_reader;
+  my $run; $run = sub {
+    return $r->read->then (sub {
+      return if $_[0]->{done};
+      if (ref $_[0]->{value} eq 'HASH' and
+          defined $_[0]->{value}->{data_stream}) {
+        rsread ($_[0]->{value}->{data_stream});
+      }
+      return $run->();
+    });
+  }; # $run
+  return $run->()->then (sub { undef $run }, sub { undef $run });
+} # rsread
+
 {
   use Socket;
   my $EphemeralStart = 1024;
@@ -272,6 +289,57 @@ test {
     undef $c;
   });
 } n => 6, name => 'server closed before response';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $response_header_sent;
+  my $after_response_header = Promise->new (sub { $response_header_sent = $_[0] });
+
+  my $con;
+  my $p;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new_XXXserver
+        ({parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }});
+
+    $p = $x->send_request ({method => 'GET', target => '/'});
+    rsread $x->received_streams;
+    $con = $x;
+  }; # $server
+
+  my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $client->request (path => []);
+  (promised_wait_until { !! $p })->then (sub {
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+    return $p;
+  })->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error->name, 'TypeError';
+      is $error->message, 'Request is not allowed';
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__-18;
+    } $c;
+    return $client->abort;
+  })->then (sub {
+    return $con->abort;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'send_request on server connection';
 
 run_tests;
 

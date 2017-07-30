@@ -75,7 +75,8 @@ my $HandleRequestHeaders = {};
     my $run; $run = sub {
       return $req_reader->read->then (sub {
         return 0 if $_[0]->{done};
-        my $stream = $_[0]->{value};
+        my $stream = $_[0]->{value}->{stream};
+        my $closed = $_[0]->{value}->{closed};
         $stream->headers_received->then (sub {
           my $got = $_[0];
           my $req = $stream->{request};
@@ -135,7 +136,7 @@ my $HandleRequestHeaders = {};
               };
               $run->()->then (sub { undef $run }, sub { undef $run });
             }
-            $handler->($stream, $req);
+            $handler->($stream, $req, $closed);
           } elsif ($req->{target_url}->path eq '/') {
             return $stream->send_response
                 ({status => 404, status_text => 'Not Found (/)'}, close => 1)->then (sub {
@@ -145,10 +146,9 @@ my $HandleRequestHeaders = {};
             die "No handler for |@{[$req->{target_url}->stringify]}|";
           }
         });
-        $stream->closed->then (sub { # XXX
-          $stream->{complete}->($_[2], $_[3]) if $stream->{complete};
-          delete $stream->{$_} for qw(ondata wsbinary wstext complete);
-        });
+        promised_cleanup {
+          delete $stream->{$_} for qw(ondata wsbinary wstext);
+        } $stream->closed;
         return $run->();
       });
     }; # $run
@@ -225,7 +225,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga'],
         ]}, close => 1)->then (sub {
-      return $self->{response}->{body}->get_writer->close;
+      return $_[0]->{body}->get_writer->close;
     });
   };
 
@@ -328,6 +328,47 @@ test {
 
 test {
   my $c = shift;
+  my $path = rand;
+  my @closed;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req, $closed) = @_;
+    push @closed, $closed;
+    return $self->send_response
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga14'],
+        ]})->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      $w->write (d 'abcde'); # can reject
+      $w->abort;
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  return $http->request (path => [$path])->then (sub {
+    my $res1 = $_[0];
+    test {
+      ok $res1->is_network_error;
+      is 0+@closed, 1;
+    } $c;
+    return $closed[0];
+  })->catch (sub {
+    my $error = $_[0]->{message}; # XXX
+    test {
+      is $error->name, 'Error';
+      is $error->message, "Something's wrong";
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__-18;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'write aborted (write_mode chunked)';
+
+test {
+  my $c = shift;
   my $x;
   my $y;
   my $rand = rand;
@@ -357,7 +398,7 @@ test {
       is $res->header ('Hoge'), 'Fuga4';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
+      like $x, qr{^TypeError: Byte length 6 is greater than expected length 0 at }; # XXX location
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
@@ -402,7 +443,7 @@ test {
       is $res->header ('Hoge'), 'Fuga4';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
+      like $x, qr{^TypeError: Byte length 6 is greater than expected length 0 at }; # XXX location
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
@@ -501,7 +542,7 @@ test {
       is $res->header ('Hoge'), 'Fuga7';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
+      like $x, qr{^TypeError: Byte length 6 is greater than expected length 0 at }; # XXX location
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
@@ -544,7 +585,7 @@ test {
       is $res->header ('Hoge'), 'Fuga8';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, 'abcde8abcde9';
-      like $x, qr{^TypeError: Response body is not writable at}; # XXX location
+      like $x, qr{^TypeError: Byte length 7 is greater than expected length 0 at }; # XXX location
     } $c;
   }, sub {
     test {
@@ -667,6 +708,263 @@ test {
 
 test {
   my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga14'],
+        ]}, content_length => 8)->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      $w->write (d 'abcdef14');
+      $w->close;
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  return $http->request (path => [$path])->then (sub {
+    my $res1 = $_[0];
+    test {
+      is $res1->status, 201;
+      is $res1->status_text, 'OK';
+      is $res1->header ('Hoge'), 'Fuga14';
+      is $res1->header ('Connection'), undef;
+      is $res1->header ('Content-Length'), '8';
+      is $res1->body_bytes, 'abcdef14';
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'with Content-Length 4';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga14'],
+        ]}, content_length => 8)->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      $w->write (d 'abcd');
+      $w->write (d 'ef14');
+      $w->close;
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  return $http->request (path => [$path])->then (sub {
+    my $res1 = $_[0];
+    test {
+      is $res1->status, 201;
+      is $res1->status_text, 'OK';
+      is $res1->header ('Hoge'), 'Fuga14';
+      is $res1->header ('Connection'), undef;
+      is $res1->header ('Content-Length'), '8';
+      is $res1->body_bytes, 'abcdef14';
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'with Content-Length 5';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga14'],
+        ]}, content_length => 8)->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      return $w->write (d 'abcdef145')->catch (sub {
+        $error = $_[0];
+      });
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  return $http->request (path => [$path])->then (sub {
+    my $res1 = $_[0];
+    test {
+      ok $res1->is_network_error;
+      is $error->name, 'TypeError';
+      is $error->message, 'Byte length 9 is greater than expected length 8';
+      #is $error->file_name, __FILE__; XXX location
+      #is $error->line_number, __LINE__-10;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'write too long (write_mode raw)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga14'],
+        ]}, content_length => 8)->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      $w->write (d 'abcdef14');
+      return $w->write (d "a")->catch (sub {
+        $error = $_[0];
+      });
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  return $http->request (path => [$path])->then (sub {
+    my $res1 = $_[0];
+    test {
+      is $res1->body_bytes, "abcdef14";
+      is $error->name, 'TypeError';
+      is $error->message, 'Byte length 1 is greater than expected length 0';
+      #is $error->file_name, __FILE__; XXX location
+      #is $error->line_number, __LINE__-10;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'write too long (write_mode raw)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my @closed;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req, $closed) = @_;
+    push @closed, $closed;
+    return $self->send_response
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga14'],
+        ]}, content_length => 8)->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      $w->write (d 'abcde'); # can reject
+      return $w->close;
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  return $http->request (path => [$path])->then (sub {
+    my $res1 = $_[0];
+    test {
+      ok $res1->is_network_error;
+      is 0+@closed, 1;
+    } $c;
+    return $closed[0];
+  })->catch (sub {
+    my $error = $_[0]->{message}; # XXX
+    test {
+      is $error->name, 'TypeError';
+      is $error->message, 'Closed before bytes (n = 3) are sent';
+      #is $error->file_name, __FILE__; XXX
+      #is $error->line_number, __LINE__-18;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'write closed before filled (write_mode raw)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my @closed;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req, $closed) = @_;
+    push @closed, $closed;
+    return $self->send_response
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga14'],
+        ]}, content_length => 8)->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      $w->write (d 'abcde'); # can reject
+      $w->abort;
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  return $http->request (path => [$path])->then (sub {
+    my $res1 = $_[0];
+    test {
+      ok $res1->is_network_error;
+      is 0+@closed, 1;
+    } $c;
+    return $closed[0];
+  })->catch (sub {
+    my $error = $_[0]->{message}; # XXX
+    test {
+      is $error->name, 'Error';
+      is $error->message, "Something's wrong";
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__-18;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'write aborted (write_mode raw)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 201, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga14'],
+        ]}, content_length => 8)->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      return $w->write ('abcdef14')->catch (sub {
+        $error = $_[0];
+      });
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  return $http->request (path => [$path])->then (sub {
+    my $res1 = $_[0];
+    test {
+      ok $res1->is_network_error;
+      is $error->name, 'TypeError';
+      is $error->message, 'The argument is not an ArrayBufferView';
+      #is $error->file_name, __FILE__; XXX location
+      #is $error->line_number, __LINE__-10;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'write not an ArrayBufferView';
+
+test {
+  my $c = shift;
   my $p;
   my $x;
   $HandleRequestHeaders->{'/hoge16'} = sub {
@@ -696,7 +994,7 @@ test {
     return $p;
   })->then (sub {
     test {
-      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line \Q@{[__LINE__-18]}\E};
+      like $x, qr{^TypeError: Byte length 7 is greater than expected length 0 at }; # XXX location
     } $c;
   }, sub {
     test {
@@ -976,7 +1274,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '5';
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
+      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at }; # XXX location
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
     } $c;
   }, sub {
@@ -1027,7 +1325,7 @@ test {
     return $p;
   })->then (sub {
     test {
-      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
+      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at }; # XXX location
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-22]}};
     } $c;
   }, sub {
@@ -1068,7 +1366,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '0';
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
+      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at }; # XXX location
     } $c;
   }, sub {
     test {
@@ -5102,7 +5400,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: \|send_response\| is invoked twice at \Q@{[__FILE__]}\E line \Q@{[__LINE__-8]}\E};
+      like $error, qr{^TypeError: Response is not allowed at \Q@{[__FILE__]}\E line \Q@{[__LINE__-8]}\E};
       is $res->status, 201;
     } $c;
   }, sub {
@@ -5151,7 +5449,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => 'send_response_data after close';
+} n => 2, name => 'send_response_data after close 1';
 
 test {
   my $c = shift;
@@ -5174,7 +5472,43 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: \|send_response\| is invoked twice at \Q@{[__FILE__]}\E line \Q@{[__LINE__-11]}\E};
+      like $error, qr{^TypeError: Response is not allowed at \Q@{[__FILE__]}\E line \Q@{[__LINE__-11]}\E};
+      is $res->status, 201;
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'send_response after close';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    my $p = $self->send_response
+        ({status => 201, status_text => "OK"});
+    $self->send_response
+        ({status => 202, status_text => "Not OK"}, close => 1)->catch (sub {
+      $error = $_[0];
+    });
+    return $p->then (sub {
+      return $_[0]->{body}->get_writer->close;
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      like $error, qr{^TypeError: Response is not allowed at \Q@{[__FILE__]}\E line \Q@{[__LINE__-10]}\E};
       is $res->status, 201;
     } $c;
   }, sub {

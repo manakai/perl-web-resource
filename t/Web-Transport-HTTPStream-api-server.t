@@ -82,7 +82,7 @@ test {
     my $r = $x->received_streams->get_reader;
     $r->read->then (sub {
       return 0 if $_[0]->{done};
-      my $stream = $_[0]->{value};
+      my $stream = $_[0]->{value}->{stream};
       return $stream->headers_received->then (sub {
         my $path = $stream->{request}->{target_url}->path;
 
@@ -151,7 +151,7 @@ test {
          }});
     $x->received_streams->get_reader->read->then (sub {
       return if $_[0]->{done};
-      my $stream = $_[0]->{value};
+      my $stream = $_[0]->{value}->{stream};
       return $stream->headers_received->then (sub {
         my $path = $stream->{request}->{target_url}->path;
         if ($path eq '/404') {
@@ -231,7 +231,7 @@ test {
          }});
     $x->received_streams->get_reader->read->then (sub {
       return if $_[0]->{done};
-      my $stream = $_[0]->{value};
+      my $stream = $_[0]->{value}->{stream};
       return $stream->headers_received->then (sub {
         my $path = $stream->{request}->{target_url}->path;
         if ($path eq '/404') {

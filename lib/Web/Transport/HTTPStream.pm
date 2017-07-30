@@ -497,6 +497,7 @@ sub send_request ($$;%) {
 sub _terminate ($) {
   my $self = $_[0];
   delete $self->{reader};
+warn "XXX writer delete", Carp::longmess;
   delete $self->{writer};
   delete $self->{timer};
 } # _terminate
@@ -549,16 +550,23 @@ BEGIN {
 sub _open_sending_stream ($;%) {
   my ($stream, %args) = @_;
   my $con = $stream->{connection};
+  my $canceled = 0;
 
   if ($args{XXX_response}) {
     my $ws = $args{is_ws} ? undef : WritableStream->new ({
     start => sub {
-      $stream->{response}->{body_stream_controller} = $_[1];
-    },
+      my $wc = $_[1];
+      $con->{cancel_current_writable_stream} = sub {
+        $wc->error ($_[0]) if defined $_[0];
+        $canceled = 1;
+        $con->{cancel_current_writable_stream} = sub { };
+      };
+    }, # start
     write => sub {
       my $chunk = $_[1]; # XXX must be an ArrayBufferView
-      my $wm = $stream->{write_mode} || '';
+      my $wm = $con->{write_mode} || '';
       # XXX error location
+      # XXX if $canceled
       if ($wm eq 'chunked') {
         return Promise->resolve->then (sub {
           my $dv = UNIVERSAL::isa ($chunk, 'DataView')
@@ -572,7 +580,7 @@ sub _open_sending_stream ($;%) {
             warn "$stream->{id}: S: @{[_e4d $_]}\n";
           }
         }
-        my $writer = $stream->{connection}->{writer};
+        my $writer = $con->{writer};
             $writer->write
                 (DataView->new (ArrayBuffer->new_from_scalarref
                                     (\sprintf "%X\x0D\x0A%s\x0D\x0A", $dv->byte_length, $dv->manakai_to_string))); # XXX string copy!
@@ -596,14 +604,14 @@ sub _open_sending_stream ($;%) {
             warn "$stream->{id}: S: @{[_e4d $_]}\n";
           }
         }
-        my $writer = $stream->{connection}->{writer};
+        my $writer = $con->{writer};
           $writer->write ($dv);
           if (defined $stream->{to_be_sent_length} and
               $stream->{to_be_sent_length} <= 0) {
             return $stream->_close_stream;
           }
         })->catch (sub {
-          delete $stream->{response}->{body_stream_controller};
+          $con->{cancel_current_writable_stream}->($_[0]);
           $stream->abort (message => $_[0]); # XXX
           die $_[0];
         });
@@ -627,8 +635,13 @@ sub _open_sending_stream ($;%) {
 
   my $ws = $args{is_ws} ? undef : WritableStream->new ({
     start => sub {
-      $con->{request}->{body_stream_controller} = $_[1];
-    },
+      my $wc = $_[1];
+      $con->{cancel_current_writable_stream} = sub {
+        $wc->error ($_[0]) if defined $_[0];
+        $canceled = 1;
+        $con->{cancel_current_writable_stream} = sub { };
+      };
+    }, # start
     write => sub {
       my $chunk = $_[1];
       return Promise->resolve->then (sub {
@@ -638,9 +651,10 @@ sub _open_sending_stream ($;%) {
         my $byte_length = $chunk->byte_length;
         die Web::DOM::TypeError->new
               (sprintf "Byte length %d is greater than expected length %d",
-                   $byte_length, $con->{to_be_sent_length})
-                  if defined $con->{to_be_sent_length} and
-                     $con->{to_be_sent_length} < $byte_length;
+                   $byte_length, $con->{to_be_sent_length} || 0)
+                  if $canceled or
+                     (defined $con->{to_be_sent_length} and
+                      $con->{to_be_sent_length} < $byte_length);
         return unless $byte_length;
 
         if ($con->{DEBUG}) {
@@ -664,6 +678,7 @@ sub _open_sending_stream ($;%) {
         }
         return $sent;
       })->catch (sub {
+        $con->{cancel_current_writable_stream}->($_[0]);
         $con->abort (message => $_[0]); # XXX
         die $_[0];
       });
@@ -674,16 +689,17 @@ sub _open_sending_stream ($;%) {
           my $error = Web::DOM::TypeError->new
               (sprintf "Closed before bytes (n = %d) are sent",
                    $con->{to_be_sent_length});
+          $con->{cancel_current_writable_stream}->($error);
           $con->abort (message => $error); # XXX
           die $error;
         }
       } else {
-        my $p = $con->{writer}->close;
         $con->_send_done;
-        return $p;
+        return;
       }
     }, # close
     abort => sub {
+      $con->{cancel_current_writable_stream}->($_[1]);
       return $con->abort (message => $_[1]); # XXX
     }, # abort
   });
@@ -1034,7 +1050,7 @@ sub send_ws_close ($;$$) {
   if (not defined $con->{state}) {
     return Promise->reject ("Connection has not been established");
   }
-  if (defined $self->{write_mode} or
+  if (defined $con->{write_mode} or
       (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN')) {
     if (defined $self->{to_be_sent_length} and
         $self->{to_be_sent_length} > 0) {
@@ -1105,7 +1121,7 @@ sub close ($) {
   if (not defined $con->{state}) {
     return Promise->reject ("Connection has not been established");
   }
-  if (defined $self->{write_mode} or
+  if (defined $con->{write_mode} or
       (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN')) {
     if (defined $self->{to_be_sent_length} and
         $self->{to_be_sent_length} > 0) {
@@ -1625,7 +1641,6 @@ sub _process_rbuf ($$) {
           $self->{temp_buffer} = '';
           if (defined $self->{pending_frame}) {
             $self->{ws_state} = 'CLOSING';
-warn "XXX closing";
             $self->{ws_writable} = $self->{writer}->write
                 (DataView->new (ArrayBuffer->new_from_scalarref (\($self->{pending_frame}))));
             $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if $self->{DEBUG}; # XXX $self->{stream}
@@ -2113,21 +2128,28 @@ sub abort ($;%) {
 
 # XXX ::Stream::
 sub _send_done ($) {
-  my $stream = my $con = $_[0];
-  $stream->{write_mode} = 'sent';
-  $stream->_ev ('requestsent') unless defined $con->{ws_state}; # XXX
-  $stream->_both_done if $con->{state} eq 'sending';
+  my $con = $_[0];
+  my $stream = $con->{stream};
+
+  $con->{write_mode} = 'sent';
+  #$stream->_ev ('requestsent') unless defined $con->{ws_state}; # XXX
+
+  if (defined $con->{cancel_current_writable_stream}) {
+    $con->{cancel_current_writable_stream}->(undef);
+  }
+
+  $con->_both_done if $con->{state} eq 'sending';
 } # _send_done
 
 # XXX ::Stream::
 sub _receive_done ($) {
   my $self = $_[0];
+warn "XXX receive done ($self->{state} $self->{write_mode})";
   return if $self->{state} eq 'stopped';
 
   if (defined $self->{stream}->{receive_message_controller}) {
     $self->{stream}->{receive_message_controller}->close;
   }
-  delete $self->{stream};
   delete $self->{timer};
   delete $self->{ws_timer};
   if ($self->{write_mode} eq 'raw') {
@@ -2140,6 +2162,7 @@ sub _receive_done ($) {
 # XXX ::Stream::
 sub _both_done ($) {
   my $self = $_[0];
+warn "XXX both done";
   if (defined $self->{request} and $self->{write_mode} eq 'sent') {
     if ($self->{exit}->{failed}) {
       $self->{response}->{stream_reject}->($self->{exit});
@@ -2158,6 +2181,7 @@ sub _both_done ($) {
     $self->_ev ('complete', $self->{exit}); # XXX
   }
   my $id = defined $self->{request} ? $self->{request}->{id}.': ' : '';
+  delete $self->{stream};
   delete $self->{request};
   delete $self->{response};
   delete $self->{receiving};
@@ -2919,11 +2943,12 @@ BEGIN {
 
 sub send_response ($$$;%) {
   my ($stream, $response, %args) = @_;
+  my $con = $stream->{connection};
+
   return Promise->reject
       (Web::DOM::TypeError->new ("|send_response| is invoked twice"))
-          if defined $stream->{write_mode};
+          if defined $con->{write_mode};
 
-  my $con = $stream->{connection};
   my $close = $args{close} ||
               $stream->{close_after_response} ||
               $stream->{request}->{version} == 0.9;
@@ -3054,7 +3079,7 @@ sub send_response ($$$;%) {
   my $ws = $stream->_open_sending_stream (is_ws => $is_ws, XXX_response => 1);
 
   $stream->{close_after_response} = 1 if $close;
-  $stream->{write_mode} = $write_mode;
+  $con->{write_mode} = $write_mode;
   if ($done) {
     delete $stream->{to_be_sent_length};
   } else {
@@ -3107,10 +3132,11 @@ sub _fatal ($) {
 
 sub _close_stream ($) {
   my $stream = $_[0];
-  delete $stream->{response}->{body_stream_controller}
-      if defined $stream->{response};
+  my $con = $stream->{connection};
+  $con->{cancel_current_writable_stream}->(undef)
+      if defined $con->{cancel_current_writable_stream};
   return unless defined $stream->{connection};
-  if (not defined $stream->{write_mode}) {
+  if (not defined $con->{write_mode}) {
     return $stream->abort (message => 'Closed without response');
   } elsif (defined $stream->{to_be_sent_length} and
            $stream->{to_be_sent_length} > 0) {
@@ -3121,13 +3147,13 @@ sub _close_stream ($) {
   } else {
     $stream->{close_after_response} = 1
         if $stream->{request}->{method} eq 'CONNECT';
-    if ($stream->{write_mode} eq 'chunked') {
+    if ($con->{write_mode} eq 'chunked') {
       # XXX trailer headers
-      my $p = $stream->{connection}->{writer}->write
+      my $p = $con->{writer}->write
           (DataView->new (ArrayBuffer->new_from_scalarref (\"0\x0D\x0A\x0D\x0A")));
       $stream->_send_done;
       return $p;
-    } elsif (defined $stream->{write_mode} and $stream->{write_mode} eq 'ws') {
+    } elsif (defined $con->{write_mode} and $con->{write_mode} eq 'ws') {
       return $stream->close; # XXX $args
     } else {
       $stream->_send_done;
@@ -3138,20 +3164,17 @@ sub _close_stream ($) {
 
 sub _send_done ($) {
   my $stream = $_[0];
-  delete $stream->{connection}->{sending_stream};
+  my $con = $stream->{connection};
+  delete $con->{sending_stream};
   if (delete $stream->{close_after_response}) {
-    $stream->{connection}->{writer}->close
-        if defined $stream->{connection}->{writer};
-    delete $stream->{connection}->{writer};
+    $con->{writer}->close if defined $con->{writer};
+    delete $con->{writer};
   }
-  $stream->{write_mode} = 'sent';
+  $con->{write_mode} = 'sent';
   delete $stream->{to_be_sent_length};
   $stream->{send_done} = 1;
-  if (defined $stream->{response} and
-      defined $stream->{response}->{body_stream_controller}) {
-    my $error = Web::DOM::TypeError->new ("Response body is aborted by an error");
-    $stream->{response}->{body_stream_controller}->error ($error);
-    delete $stream->{response}->{body_stream_controller};
+  if (defined $con->{cancel_current_writable_stream}) {
+    $con->{cancel_current_writable_stream}->(undef);
   }
   if ($stream->{receive_done}) {
     $stream->_both_done;
@@ -3189,7 +3212,6 @@ sub _both_done ($) {
   return unless defined $con;
 
   if (delete $stream->{close_after_response}) {
-warn "XXX both done";
     $con->{writer}->close if defined $con->{writer};
     delete $con->{writer};
     $con->{state} = 'end';

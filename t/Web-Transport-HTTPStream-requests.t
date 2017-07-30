@@ -1371,6 +1371,198 @@ test {
 test {
   my $c = shift;
   server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $closed;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      $closed = $got->{closed};
+      return $stream->headers_received->then (sub {
+        my $got = $_[0];
+        return (read_rbs $got->{body});
+      })->then (sub {
+        my $received = $_[0];
+        test {
+          is $received, "abc";
+        } $c;
+        return $writer->write (d 'xyz')->catch (sub {
+          my $error = $_[0];
+          test {
+            is $error->name, 'TypeError';
+            is $error->message, 'Byte length 3 is greater than expected length 0';
+            # XXX location
+          } $c;
+        });
+      });
+    })->then (sub {
+      test {
+        ok ! $http->is_active;
+      } $c;
+      return $closed;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'send_request request body write (should fail) after response closed';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $closed;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      $closed = $got->{closed};
+      return $stream->headers_received->then (sub {
+        my $got = $_[0];
+        return (read_rbs $got->{body});
+      })->then (sub {
+        my $received = $_[0];
+        test {
+          is $received, "abc";
+        } $c;
+        return $writer->close;
+      });
+    })->then (sub {
+      test {
+        ok ! $http->is_active;
+      } $c;
+      return $closed;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'send_request request body close after response closed';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $closed;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, content_length => 3);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      $closed = $got->{closed};
+      return $stream->headers_received->then (sub {
+        my $got = $_[0];
+        return (read_rbs $got->{body});
+      })->then (sub {
+        my $received = $_[0];
+        test {
+          is $received, "abc";
+        } $c;
+        return $writer->write (d 'xyz');
+      });
+    })->then (sub {
+      test {
+        ok ! $http->is_active;
+      } $c;
+      return $closed;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'send_request request body write after response closed';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $closed;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, content_length => 3);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      $closed = $got->{closed};
+      return $stream->headers_received->then (sub {
+        my $got = $_[0];
+        return (read_rbs $got->{body});
+      })->then (sub {
+        my $received = $_[0];
+        test {
+          is $received, "abc";
+        } $c;
+        $writer->write (d 'xyz');
+        return $writer->close;
+      });
+    })->then (sub {
+      test {
+        ok ! $http->is_active;
+      } $c;
+      return $closed;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'send_request request body write after response closed';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
     close
   })->cb (sub {
     my $server = $_[0]->recv;

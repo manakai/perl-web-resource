@@ -213,7 +213,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             if ($type eq 'dataend' and
                 $req->{method} eq 'CONNECT' and
                 $result->{response}->{status} == 200) {
-              AE::postpone { $http->close };
+              AE::postpone { $http->close_after_current_stream };
             }
             if ($type eq 'complete') {
               $result->{version} = $result->{response}
@@ -231,7 +231,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 $result->{body} = '(close)' unless defined $_[2]->{status};
               }
               $result->{exit} = $_[2];
-              $req->{_ok}->();
             }
           };
         }; # $onev
@@ -242,12 +241,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             @_,
             id => $next_req_id++,
           };
-          $req->{done} = Promise->new (sub { $req->{_ok} = $_[0] });
           if ($test_type eq 'ws') {
             ${$server->{close_server_ref}} = 1;
-            $req->{done} = $req->{done}->then (sub {
-              return Promise->from_cv ($server->{after_server_close_cv});
-            });
           }
           return $req;
         }; # $get_req
@@ -278,7 +273,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             my $try_count = 0;
             my $try; $try = sub {
               unless ($http->is_active) {
-                return $http->close->then (sub {
+                return $http->close_after_current_stream->then (sub {
                   $tparams = {
                     class => 'Web::Transport::TCPStream',
                     host => Web::Host->parse_string ($server->{addr}),
@@ -328,8 +323,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   })->catch (sub {
                     $result->{error} = $_[0];
                   })->then (sub {
-                    return $req->{done};
-                  })->then (sub {
                     unless ($try_count++) {
                       return Promise->new (sub {
                         my $ok = $_[0];
@@ -365,6 +358,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             );
             return $http->send_request ($req, cb => $onev->($req))->then (sub {
               my $stream = $_[0]->{stream};
+              my $closed = $_[0]->{closed};
               my $reqbody = $_[0]->{body}->get_writer;
               return $stream->headers_received->then (sub {
                 my $got = $_[0];
@@ -388,14 +382,13 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 return rsread ($test, $got->{body})->then (sub {
                   $result->{response_body} = $_[0];
                 })->then (sub {
-                  return $stream->closed;
+                  return $closed;
                 })->catch (sub {
                   $result->{error} = $_[0];
                 })->then (sub {
-                  return $req->{done};
-                })->then (sub {
                   return $result;
-                });              });
+                });
+              });
             });
           }
         })->then (sub {
@@ -508,7 +501,7 @@ if (0) { # XXX
             }
 }
           } $c;
-          return $http->close;
+          return $http->close_after_current_stream;
         }, sub { # connect failed
           my $error = $_[0]; # XXX
           test {

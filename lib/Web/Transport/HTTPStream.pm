@@ -494,10 +494,49 @@ sub send_request ($$;%) {
   return $stream->_send_request ($req, @_);
 } # send_request
 
+## Stop accepting new requests and close the connection AFTER any
+## ongoing processing has been completed.
+sub close_after_current_stream ($) {
+  my $con = $_[0];
+
+  if (not defined $con->{state}) {
+    return Promise->reject ("Connection has not been established");
+  }
+
+  # XXX
+  if ($con->{is_server}) {
+    if (defined $con->{stream}) {
+      $con->{stream}->{close_after_response} = 1;
+    } elsif (defined $con->{sending_stream}) {
+      $con->{sending_stream}->{close_after_response} = 1;
+    } else {
+      if (defined $con->{writer}) {
+        my $w = $con->{writer};
+        $w->write (DataView->new (ArrayBuffer->new))->then (sub {
+          my $error = 'Close by |close_after_current_stream|'; # XXX
+          $w->abort ($error);
+          $con->{reader}->cancel ($error)->catch (sub { });
+        });
+        delete $con->{writer};
+      }
+      $con->{state} = 'end';
+    }
+    return $con->{closed};
+  }
+
+  $con->{no_new_request} = 1;
+  if ($con->{state} eq 'initial' or
+      $con->{state} eq 'waiting') {
+    $con->{writer}->close; # can fail
+    $con->_read;
+  }
+
+  return $con->{closed};
+} # close_after_current_stream
+
 sub _terminate ($) {
   my $self = $_[0];
   delete $self->{reader};
-warn "XXX writer delete", Carp::longmess;
   delete $self->{writer};
   delete $self->{timer};
 } # _terminate
@@ -788,7 +827,9 @@ sub _send_request ($$;%) {
   }
 
   if ($method eq 'CONNECT') {
-    # XXX
+    return Promise->reject
+        (Web::DOM::TypeError->new ("Bad byte length $args{content_length}"))
+            if defined $args{content_length};
   } else {
     $args{content_length} = 0+($args{content_length} || 0);
     return Promise->reject
@@ -1114,42 +1155,6 @@ sub send_ws_close ($;$$) {
 
   die "XXX bad state";
 } # send_ws_close
-
-sub close ($) {
-  my ($self) = @_;
-  my $con = $self->{is_server} ? $self->{connection} : $self;
-  if (not defined $con->{state}) {
-    return Promise->reject ("Connection has not been established");
-  }
-  if (defined $con->{write_mode} or
-      (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN')) {
-    if (defined $self->{to_be_sent_length} and
-        $self->{to_be_sent_length} > 0) {
-      return Promise->reject ("Body is not sent");
-    }
-  }
-
-  if (defined $con->{ws_state} and
-      ($con->{ws_state} eq 'OPEN' or
-       $con->{ws_state} eq 'CONNECTING')) {
-    return Promise->reject (Web::DOM::TypeError->new ("Connection is busy"));
-  } elsif ($self->{is_server}) {
-    $self->_receive_done;
-    return;
-  }
-
-  # XXX $con->{request}->{body_stream}
-  $con->{no_new_request} = 1;
-  if ($con->{state} eq 'initial' or
-      $con->{state} eq 'waiting') {
-    $con->{writer}->close; # can fail
-  }
-  $self->_read
-      if defined $con->{reader}; # XXX
-
-  ## Client only (for now)
-  return $self->{closed};
-} # close
 
 sub _ws_debug ($$$%) {
   my $self = $_[0];
@@ -2144,7 +2149,6 @@ sub _send_done ($) {
 # XXX ::Stream::
 sub _receive_done ($) {
   my $self = $_[0];
-warn "XXX receive done ($self->{state} $self->{write_mode})";
   return if $self->{state} eq 'stopped';
 
   if (defined $self->{stream}->{receive_message_controller}) {
@@ -2152,7 +2156,8 @@ warn "XXX receive done ($self->{state} $self->{write_mode})";
   }
   delete $self->{timer};
   delete $self->{ws_timer};
-  if ($self->{write_mode} eq 'raw') {
+  if (defined $self->{write_mode} and
+      $self->{write_mode} eq 'raw') {
     $self->{state} = 'sending';
   } else {
     $self->_both_done;
@@ -2162,7 +2167,6 @@ warn "XXX receive done ($self->{state} $self->{write_mode})";
 # XXX ::Stream::
 sub _both_done ($) {
   my $self = $_[0];
-warn "XXX both done";
   if (defined $self->{request} and $self->{write_mode} eq 'sent') {
     if ($self->{exit}->{failed}) {
       $self->{response}->{stream_reject}->($self->{exit});
@@ -2170,7 +2174,7 @@ warn "XXX both done";
       my $stream = $self->{stream};
       if (defined $stream->{headers_received} and
           defined $stream->{headers_received}->[1]) {
-        (delete $stream->{headers_received}->[1])->(Promise->reject ("XXX")); # XXX
+        (delete $stream->{headers_received}->[1])->(Promise->reject ($self->{exit})); # XXX
       }
 
       my $rc = delete $stream->{receive_controller};
@@ -2899,27 +2903,6 @@ sub abort ($) {
   $self->{stream}->_send_done if defined $self->{stream}; # XXX
   return $self->{closed};
 } # abort
-
-sub close_after_current_stream ($) {
-  my $self = $_[0];
-  if (defined $self->{stream}) {
-    $self->{stream}->{close_after_response} = 1;
-  } elsif (defined $self->{sending_stream}) {
-    $self->{sending_stream}->{close_after_response} = 1;
-  } else {
-    if (defined $self->{writer}) {
-      my $w = $self->{writer};
-      $w->write (DataView->new (ArrayBuffer->new))->then (sub {
-        my $error = 'Close by |close_after_current_stream|'; # XXX
-        $w->abort ($error);
-        $self->{reader}->cancel ($error)->catch (sub { });
-      });
-      delete $self->{writer};
-    }
-    $self->{state} = 'end';
-  }
-  return $self->{closed};
-} # close_after_current_stream
 
 sub closed ($) {
   return $_[0]->{closed};

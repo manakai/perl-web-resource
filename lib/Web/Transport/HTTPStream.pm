@@ -2292,6 +2292,7 @@ sub new ($$) {
       }
       delete $self->{timer};
       $self->_oneof (undef);
+      return undef;
     }, sub {
       if ($self->{DEBUG}) {
         my $id = ''; # XXX $transport->id;
@@ -2300,6 +2301,7 @@ sub new ($$) {
       delete $self->{timer};
       $self->{exit} = {failed => 1, message => $_[0]}; # XXX
       $self->_oneof ($_[0]);
+      return undef;
     });
 
     my $p2 = $self->{writer}->closed->then (sub {
@@ -2309,6 +2311,7 @@ sub new ($$) {
         warn "$id: S: EOF\n";
       }
       $self->{sending_stream}->_send_done if defined $self->{sending_stream};
+      return undef;
     }, sub {
       delete $self->{writer};
       if ($self->{DEBUG}) {
@@ -2316,6 +2319,7 @@ sub new ($$) {
         warn "$id: S: EOF (@{[_e4d_t $_[0]]})\n";
       }
       $self->{sending_stream}->_send_done if defined $self->{sending_stream};
+      return undef;
     }); # underlying writer closed
 
     return Promise->all ([$p1, $p2, $info->{closed}])->then (sub {
@@ -2903,8 +2907,7 @@ sub _timeout ($) {
   my $self = $_[0];
   delete $self->{timer};
   my $error = Web::DOM::TypeError->new ("Read timeout ($ReadTimeout)");
-  $self->{writer}->abort ($error);
-  $self->{reader}->cancel ($error);
+  return $self->abort (message => $error);
 } # _timeout
 
 sub received_streams ($) {
@@ -2925,6 +2928,8 @@ sub abort ($) {
 sub closed ($) {
   return $_[0]->{closed};
 } # closed
+
+# XXX CONNECT request/response body tests
 
 package Web::Transport::HTTPStream::ServerStream;
 push our @ISA, qw(Web::Transport::HTTPStream::Stream);
@@ -2948,17 +2953,19 @@ sub send_response ($$$;%) {
   my $close = $args{close} ||
               $stream->{close_after_response} ||
               $stream->{request}->{version} == 0.9;
-  my $done = 0;
   my $connect = 0;
   my $is_ws = 0;
+  my @header;
   my $to_be_sent = undef;
   my $write_mode = 'sent';
   if ($stream->{request}->{method} eq 'HEAD' or
       $response->{status} == 204 or
       $response->{status} == 304) {
     ## No response body by definition
-    $to_be_sent = 0+$args{content_length} if defined $args{content_length};
-    $done = 1;
+    return Promise->reject
+        (Web::DOM::TypeError->new ("Bad byte length $args{content_length}"))
+            if defined $args{content_length};
+    $to_be_sent = 0;
   } elsif ($stream->{request}->{method} eq 'CONNECT' and
            200 <= $response->{status} and $response->{status} < 300) {
     ## No response body by definition but switched to the tunnel mode
@@ -2980,7 +2987,7 @@ sub send_response ($$$;%) {
       ## If body length is specified
       $write_mode = 'raw';
       $to_be_sent = 0+$args{content_length};
-      $done = 1 if $to_be_sent <= 0;
+      push @header, ['Content-Length', $to_be_sent];
     } elsif ($stream->{request}->{version} == 1.1) {
       ## Otherwise, if chunked encoding can be used
       $write_mode = 'chunked';
@@ -2993,7 +3000,6 @@ sub send_response ($$$;%) {
   }
 
   my $con = $stream->{connection};
-  my @header;
   unless ($args{proxying}) {
     push @header, ['Server', encode_web_utf8 (defined $con ? $con->server_header : '')];
 
@@ -3018,9 +3024,6 @@ sub send_response ($$$;%) {
     if ($write_mode eq 'chunked') {
       push @header, ['Transfer-Encoding', 'chunked'];
     }
-    if (defined $to_be_sent) {
-      push @header, ['Content-Length', $to_be_sent];
-    }
   }
 
   push @header, @{$response->{headers} or []};
@@ -3044,7 +3047,7 @@ sub send_response ($$$;%) {
     ## Connection aborted (typically by client) before the application
     ## sends the headers
     $write_mode = 'void';
-    $done = 1;
+    $to_be_sent = 0;
   }
 
   return Promise->reject (Web::DOM::TypeError->new ("Response is not allowed"))
@@ -3084,10 +3087,9 @@ sub send_response ($$$;%) {
 
   $stream->{close_after_response} = 1 if $close;
   $con->{write_mode} = $write_mode;
-  if ($done) {
-    $con->{to_be_sent_length} = 0;
-  } else {
-    $con->{to_be_sent_length} = $to_be_sent if defined $to_be_sent;
+  if (defined $to_be_sent) {
+    $con->{to_be_sent_length} = $to_be_sent;
+    $stream->_close_stream if $to_be_sent <= 0;
   }
 
   return Promise->resolve ({body => $ws});

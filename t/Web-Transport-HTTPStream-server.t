@@ -1190,8 +1190,8 @@ test {
     my $data = $_[0];
     test {
       like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
+Content-Length: 10\x0D[\s\S]*
 Connection: close\x0D
-Content-Length: 10\x0D
 Hoge: Fuga22\x0D
 \x0D
 abc22\z};
@@ -1245,6 +1245,40 @@ test {
 
 test {
   my $c = shift;
+  my $error;
+  my $rand = rand;
+  $HandleRequestHeaders->{"/$rand"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 304, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga25'],
+        ]}, content_length => 5)->catch (sub {
+      $error = $_[0];
+      return $self->send_response ({status => 412}, content_length => 0);
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$rand])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 412;
+      like $error, qr{^TypeError: Bad byte length 5 at \Q@{[__FILE__]}\E line \Q@{[__LINE__-8]}\E};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => '304 with Content-Length';
+
+test {
+  my $c = shift;
   my $x;
   my $y;
   my $rand = rand;
@@ -1253,7 +1287,8 @@ test {
     return $self->send_response
         ({status => 304, status_text => 'OK', headers => [
           ['Hoge', 'Fuga25'],
-        ]}, content_length => 5)->then (sub {
+          ['Content-Length', 5],
+        ]})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       return $w->write (d 'abcde')->catch (sub {
         $x = $_[0];
@@ -1291,16 +1326,131 @@ test {
 
 test {
   my $c = shift;
-  my $x;
-  my $y;
-  my $p;
+  my $error;
   my $rand = rand;
   $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response
+    return $self->send_response
+        ({status => 304, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga25'],
+        ]}, content_length => 0)->catch (sub {
+      $error = $_[0];
+      return $self->send_response ({status => 412}, content_length => 0);
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$rand])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 412;
+      like $error, qr{^TypeError: Bad byte length 0 at \Q@{[__FILE__]}\E line \Q@{[__LINE__-8]}\E};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => '304 with Content-Length 0';
+
+test {
+  my $c = shift;
+  my $x;
+  my $y;
+  my $rand = rand;
+  $HandleRequestHeaders->{"/$rand"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 304, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga25'],
+          ['Content-Length', 0],
+        ]})->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      return $w->write (d 'abcde')->catch (sub {
+        $x = $_[0];
+        return $w->close;
+      })->catch (sub {
+        $y = $_[0];
+      });
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$rand])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 304;
+      is $res->status_text, 'OK';
+      is $res->header ('Hoge'), 'Fuga25';
+      is $res->header ('Connection'), undef;
+      is $res->header ('Content-Length'), '0';
+      is $res->body_bytes, '';
+      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at }; # XXX location
+      like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 8, name => '304 with Content-Length 0';
+
+test {
+  my $c = shift;
+  my $error;
+  my $rand = rand;
+  $HandleRequestHeaders->{"/$rand"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
         ({status => 204, status_text => 'OK', headers => [
           ['Hoge', 'Fuga25'],
-        ]}, content_length => 5)->then (sub {
+        ]}, content_length => 5)->catch (sub {
+      $error = $_[0];
+      return $self->send_response ({status => 412}, content_length => 0);
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$rand])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 412;
+      like $error, qr{^TypeError: Bad byte length 5 at \Q@{[__FILE__]}\E line \Q@{[__LINE__-8]}\E};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => '204 with Content-Length';
+
+test {
+  my $c = shift;
+  my $x;
+  my $y;
+  my $rand = rand;
+  $HandleRequestHeaders->{"/$rand"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 204, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga25'],
+          ['Content-Length', 5],
+        ]})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       return $w->write (d 'abcde')->catch (sub {
         $x = $_[0];
@@ -1321,12 +1471,8 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '5';
       is $res->body_bytes, '';
-    } $c;
-    return $p;
-  })->then (sub {
-    test {
       like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at }; # XXX location
-      like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-22]}};
+      like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
     } $c;
   }, sub {
     test {
@@ -1342,31 +1488,25 @@ test {
 
 test {
   my $c = shift;
-  my $x;
-  $HandleRequestHeaders->{'/hoge26'} = sub {
+  my $error;
+  my $rand = rand;
+  $HandleRequestHeaders->{"/$rand"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 304, status_text => 'OK', headers => [
-          ['Hoge', 'Fuga26'],
-        ]}, content_length => 0)->then (sub {
-      my $w = $_[0]->{body}->get_writer;
-      return $w->write (d 'abcde')->catch (sub {
-        $x = $_[0];
-      });
+        ({status => 204, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga25'],
+        ]}, content_length => 0)->catch (sub {
+      $error = $_[0];
+      return $self->send_response ({status => 412}, content_length => 0);
     });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
-  $http->request (path => ['hoge26'])->then (sub {
+  $http->request (path => [$rand])->then (sub {
     my $res = $_[0];
     test {
-      is $res->status, 304;
-      is $res->status_text, 'OK';
-      is $res->header ('Hoge'), 'Fuga26';
-      is $res->header ('Connection'), undef;
-      is $res->header ('Content-Length'), '0';
-      is $res->body_bytes, '';
-      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at }; # XXX location
+      is $res->status, 412;
+      like $error, qr{^TypeError: Bad byte length 0 at \Q@{[__FILE__]}\E line \Q@{[__LINE__-8]}\E};
     } $c;
   }, sub {
     test {
@@ -1378,7 +1518,54 @@ test {
     done $c;
     undef $c;
   });
-} n => 7, name => '304 with Content-Length=0';
+} n => 2, name => '204 with Content-Length 0';
+
+test {
+  my $c = shift;
+  my $x;
+  my $y;
+  my $rand = rand;
+  $HandleRequestHeaders->{"/$rand"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 204, status_text => 'OK', headers => [
+          ['Hoge', 'Fuga25'],
+          ['Content-Length', 0],
+        ]})->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      return $w->write (d 'abcde')->catch (sub {
+        $x = $_[0];
+        return $w->close;
+      })->catch (sub {
+        $y = $_[0];
+      });
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  $http->request (path => [$rand])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 204;
+      is $res->status_text, 'OK';
+      is $res->header ('Hoge'), 'Fuga25';
+      is $res->header ('Connection'), undef;
+      is $res->header ('Content-Length'), '0';
+      is $res->body_bytes, '';
+      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at }; # XXX location
+      like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
+    } $c;
+  }, sub {
+    test {
+      ok 0;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 8, name => '204 with Content-Length 0';
 
 test {
   my $c = shift;
@@ -1527,8 +1714,8 @@ test {
     my $data = $_[0];
     test {
       like $data, qr{\AHTTP/1.1 400 Bad Request[\s\S]*
+Content-Length: 102\x0D[\s\S]*
 Connection: close\x0D
-Content-Length: 102\x0D
 Content-Type: text/html; charset=utf-8\x0D
 \x0D
 <!DOCTYPE html><html>
@@ -3097,7 +3284,29 @@ test {
     done $c;
     undef $c;
   });
-} n => 1, name => 'request-target GET origin-path';
+} n => 1, name => 'request-target GET origin-path / implicit response body close';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1, content_length => 0)->then (sub {
+      return $_[0]->{body}->get_writer->close;
+    });
+  };
+
+  rawtcp (qq{GET /$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 201 o};
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'request-target GET origin-path / explicit response body close';
 
 test {
   my $c = shift;

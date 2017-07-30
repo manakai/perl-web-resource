@@ -14,6 +14,7 @@ use Web::Transport::TLSStream;
 use Web::Transport::H1CONNECTTransport; # XXX
 use Web::Transport::HTTPStream;
 use Promise;
+use Promised::Flow;
 use AnyEvent::Util qw(run_cmd);
 use ArrayBuffer;
 use DataView;
@@ -51,7 +52,7 @@ sub read_rbs ($) {
       return $run->();
     });
   }; # $run
-  return $run->()->then (sub { undef $run; return $result }, sub { undef $run });
+  return $run->()->then (sub { undef $run; return $result }, sub { undef $run; die $_[0] });
 } # read_rbs
 
 {
@@ -1166,6 +1167,206 @@ test {
     });
   });
 } n => 9, name => 'send_request with body written too much';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "Content-Length: 5"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      test {
+        isa_ok $got->{body}, 'WritableStream';
+      } $c;
+      $writer->write (d "1234");
+      my $thrown = Web::DOM::TypeError->new;
+      $writer->abort ($thrown);
+      return $got->{closed}->catch (sub {
+        my $error = $_[0]->{message}; # XXX
+        test {
+          is $error, $thrown;
+        } $c;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'send_request with body aborted';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "Content-Length: 5"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    "content-length: 3"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      test {
+        isa_ok $got->{body}, 'WritableStream';
+      } $c;
+      $writer->write (d "1234");
+      $writer->abort;
+      return $got->{closed}->catch (sub {
+        my $error = $_[0]->{message}; # XXX
+        test {
+          is $error->name, 'Error';
+          is $error->message, "Something's wrong";
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-7;
+        } $c;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'send_request with body aborted';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+    "def"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $response;
+    my $closed;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      $closed = $got->{closed};
+      return $stream->headers_received;
+    })->then (sub {
+      $response = my $got = $_[0];
+      test {
+        isa_ok $got->{body}, 'ReadableStream';
+        is $got->{messages}, undef;
+      } $c;
+      my $reader = $got->{body}->get_reader ('byob');
+      my $result = '';
+      my $run; $run = sub {
+        return $reader->read (d 'x' x 6)->then (sub {
+          return if $_[0]->{done};
+          $result .= $_[0]->{value}->manakai_to_string;
+          $http->abort if $result =~ /abcdef/;
+          return $run->();
+        });
+      };
+      return $run->()->then (sub { undef $run });
+    })->then (sub {
+      test {
+        ok ! $http->is_active;
+      } $c;
+      return $closed;
+    })->then (sub {
+      test {
+        ok $response->{incomplete}, 'response aborted';
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'send_request response body HTTP aborted';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+    "def"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $response;
+    my $closed;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      $closed = $got->{closed};
+      return $stream->headers_received;
+    })->then (sub {
+      $response = my $got = $_[0];
+      test {
+        isa_ok $got->{body}, 'ReadableStream';
+        is $got->{messages}, undef;
+      } $c;
+      my $reader = $got->{body}->get_reader ('byob');
+      my $result = '';
+      my $run; $run = sub {
+        return $reader->read (d 'x' x 6)->then (sub {
+          return if $_[0]->{done};
+          $result .= $_[0]->{value}->manakai_to_string;
+          $reader->cancel if $result =~ /abcdef/;
+          return $run->();
+        });
+      };
+      return $run->()->then (sub { undef $run });
+    })->then (sub {
+      test {
+        ok ! $http->is_active;
+      } $c;
+      return $closed;
+    })->then (sub {
+      test {
+        ok $response->{incomplete}, 'response aborted';
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'send_request response body aborted';
 
 test {
   my $c = shift;
@@ -2306,47 +2507,39 @@ test {
 receive "CONNECT"
 "HTTP/1.1 200 OK"CRLF
 CRLF
+receive "abc"
 "xyz"
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
-    my $received = '';
-    my @ev;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $type, $data) = @_;
-        push @ev, $type if $type eq 'complete';
-        if ($type eq 'headers') {
-          AE::postpone {
-            test {
-              $http->send_data (\'abc');
-              $http->close;
-              $sent++;
-            } $c;
-          };
-        } elsif ($type eq 'data') {
-          $received .= $data;
-        }
+      return $http->send_request ({method => 'CONNECT', target => 'test'});
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      return $stream->headers_received->then (sub {
+        my $got = $_[0];
+        $writer->write (d 'abc');
+        $writer->close;
+        return read_rbs $got->{body};
+      })->then (sub {
+        my $received = $_[0];
+        test {
+          is $received, 'xyz';
+        } $c;
       });
-    })->then (sub{
-      test {
-        is $sent, 1;
-        is $received, 'xyz';
-        is $ev[-1], 'complete';
-        pop @ev;
-      } $c;
-      return $http->close;
     })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 3, name => 'connect';
+} n => 1, name => 'connect';
 
 test {
   my $c = shift;
@@ -2354,148 +2547,41 @@ test {
 receive "CONNECT"
 "HTTP/1.1 200 OK"CRLF
 CRLF
+receive "abc"
 "xyz"
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
-    my $received = '';
-    my @ev;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $type, $data) = @_;
-        push @ev, $type if $type eq 'complete';
-        if ($type eq 'headers') {
-          AE::postpone {
-            test {
-              eval {
-                $http->send_data (\"\x{5000}");
-              };
-              like $@, qr{^Data is utf8-flagged};
-            } $c;
-          };
-          AE::postpone {
-            test {
-              $http->send_data (\'abc');
-              $http->close;
-              $sent++;
-            } $c;
-          };
-        } elsif ($type eq 'data') {
-          $received .= $data;
-        }
+      return $http->send_request ({method => 'CONNECT', target => 'test'});
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      return $stream->headers_received->then (sub {
+        my $got = $_[0];
+        $writer->write (d 'ab');
+        $writer->write (d '');
+        $writer->write (d 'c');
+        $writer->close;
+        return read_rbs $got->{body};
+      })->then (sub {
+        my $received = $_[0];
+        test {
+          is $received, 'xyz';
+        } $c;
       });
-    })->then (sub{
-      test {
-        is $sent, 1;
-        is $received, 'xyz';
-        is $ev[-1], 'complete';
-        pop @ev;
-      } $c;
-      return $http->close;
     })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 4, name => 'connect send_data utf8';
-
-test {
-  my $c = shift;
-  server_as_cv (q{
-receive "CONNECT"
-"HTTP/1.1 200 OK"CRLF
-CRLF
-"xyz"
-close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
-    my $received = '';
-    my @ev;
-    $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $type, $data) = @_;
-        push @ev, $type if $type eq 'complete';
-        if ($type eq 'headers') {
-          AE::postpone {
-            test {
-              $http->send_data (\'');
-              $http->close;
-              $sent++;
-            } $c;
-          };
-        } elsif ($type eq 'data') {
-          $received .= $data;
-        }
-      });
-    })->then (sub{
-      test {
-        is $sent, 1;
-        is $received, 'xyz';
-        is $ev[-1], 'complete';
-        pop @ev;
-      } $c;
-      return $http->close;
-    })->then (sub {
-      done $c;
-      undef $c;
-    });
-  });
-} n => 3, name => 'connect send_data empty';
-
-test {
-  my $c = shift;
-  server_as_cv (q{
-receive "CONNECT"
-"HTTP/1.1 200 OK"CRLF
-CRLF
-"xyz"
-close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $error = 0;
-    my $x;
-    my $p = Promise->new (sub { $x = $_[0] });
-    $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          AE::postpone {
-            $http->close->then (sub {
-              $http->send_data (\'abc');
-            })->then (sub {
-              test { ok 0 } $c;
-            }, sub {
-              my $err = $_[0];
-              test {
-                like $err, qr{^Bad state};
-                $x->();
-              } $c;
-            });
-          };
-        }
-      });
-    })->then (sub{
-      return $p;
-    })->then (sub {
-      done $c;
-      undef $c;
-    });
-  });
-} n => 1, name => 'connect data after close';
+} n => 1, name => 'connect empty';
 
 test {
   my $c = shift;
@@ -2509,28 +2595,26 @@ sleep 1
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $received = '';
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $received .= '(headers)';
-          AE::postpone {
-            $http->close;
-          };
-        } elsif ($type eq 'data') {
-          $received .= $data;
-        }
+      return $http->send_request ({method => 'CONNECT', target => 'test'});
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      return $stream->headers_received->then (sub {
+        $writer->close;
+        return read_rbs $_[0]->{body};
+      })->then (sub {
+        my $received = $_[0];
+        test {
+          is $received, 'xyz';
+        } $c;
       });
-    })->then (sub{
-      test {
-        is $received, '(headers)xyz';
-      } $c;
-      return $http->close;
     })->then (sub {
       done $c;
       undef $c;
@@ -2547,28 +2631,72 @@ CRLF
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'CONNECT', target => 'test'}, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          my $timer; $timer = AE::timer 1, 0, sub {
-            $http->send_data (\'abc');
-            AE::postpone {
-              $http->close;
-            };
-            undef $timer;
-          };
-        }
-      });
+      return $http->send_request ({method => 'CONNECT', target => 'test'});
     })->then (sub{
-      test {
-        ok 1;
-      } $c;
-      return $http->close;
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      my $closed = $got->{closed};
+      return $stream->headers_received->then (sub {
+        my $got = $_[0];
+        return read_rbs $got->{body};
+      })->then (sub {
+        my $received = $_[0];
+        test {
+          is $received, '';
+        } $c;
+        $writer->write (d 'abc');
+        $writer->close;
+        return $closed;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'connect sending after EOF';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'CONNECT', target => 'test'});
+    })->then (sub{
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      my $closed = $got->{closed};
+      return $stream->headers_received->then (sub {
+        my $got = $_[0];
+        return read_rbs $got->{body};
+      })->then (sub {
+        my $received = $_[0];
+        test {
+          is $received, '';
+        } $c;
+        return promised_sleep 1;
+      })->then (sub {
+        $writer->write (d 'abc');
+        Promise->resolve->then (sub { $writer->close });
+        return $closed;
+      });
     })->then (sub {
       done $c;
       undef $c;

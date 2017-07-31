@@ -3041,7 +3041,6 @@ test {
       $serverreq = $self;
       $self->{ondata} = sub {
         if ($self->{body} =~ /stuvw/) {
-          #XXX $self->close_response (status => 5678, reason => 'abc');
           return $w->close;
         }
       };
@@ -3103,8 +3102,200 @@ test {
       $w->write (d "abcde");
       $serverreq = $self;
       $self->{ondata} = sub {
+        promised_sleep (2)->then (sub {
+          $w->write (d "12345");
+          return $w->close;
+        });
+      };
+    });
+  };
+
+  my $url = Web::URL->parse_string ("/$path.test", $Origin);
+  bless $url, 'TestURLForCONNECT';
+  my $received = '';
+  my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+  my $http = Web::Transport::ClientBareConnection->new_from_url ($url);
+  $http->parent_id ('L' . __LINE__);
+  $http->proxy_manager ($client->proxy_manager);
+  $http->resolver ($client->resolver);
+  $http->request ('CONNECT', $url, [], undef, 0, 0, sub {
+    if (defined $_[2]) {
+      if ($_[2] eq '') {
+        $http->{http}->send_data (\'stu');
+        promised_sleep (1)->then (sub { $http->close; });
+      }
+      $received .= $_[2];
+    } else {
+      $received .= '(end)';
+    }
+  })->then (sub {
+    my ($res, $result) = @{$_[0]};
+    test {
+      is $serverreq->{body}, 'stu';
+      is $received, 'abcde12345(end)';
+      ok ! $result->{failed};
+      is $result->{message}, undef;
+    } $c;
+  })->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error, undef, "No error";
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'CONNECT data client closed';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  $HandleRequestHeaders->{"$path.test"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 200, status_text => 'Switched!'})->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      $w->write (d "abcde");
+      $self->{connection}->close_after_current_stream;
+      $w->write (d "123123");
+      $serverreq = $self;
+      $self->{ondata} = sub {
         if ($self->{body} =~ /stuvw/) {
-          # XXX $self->close_response (status => 5678, reason => 'abc');
+          return $w->close;
+        }
+      };
+    });
+  };
+
+  my $url = Web::URL->parse_string ("/$path.test", $Origin);
+  bless $url, 'TestURLForCONNECT';
+  my $received = '';
+  my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+  my $http = Web::Transport::ClientBareConnection->new_from_url ($url);
+  $http->parent_id ('L' . __LINE__);
+  $http->proxy_manager ($client->proxy_manager);
+  $http->resolver ($client->resolver);
+  $http->request ('CONNECT', $url, [], undef, 0, 0, sub {
+    if (defined $_[2]) {
+      $received .= $_[2];
+      if ($received =~ /abcde/) {
+        $http->{http}->send_data (\'stuvw');
+      }
+    } else {
+      $received .= '(end)';
+      $http->{http}->send_data (\'abc');
+      my $timer; $timer = AE::timer 1, 0, sub {
+        undef $timer;
+        $http->close;
+      };
+    }
+  })->then (sub {
+    my ($res, $result) = @{$_[0]};
+    test {
+      is $serverreq->{body}, 'stuvwabc';
+      is $received, 'abcde123123(end)';
+      ok ! $result->{failed};
+      is $result->{message}, undef;
+    } $c;
+  })->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error, undef, "No error";
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'CONNECT data';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  my $p;
+  $HandleRequestHeaders->{"$path.test"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 200, status_text => 'Switched!'})->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      $w->write (d "abcde");
+      $serverreq = $self;
+      $self->{ondata} = sub {
+        if (not defined $p and $self->{body} =~ /stuvw/) {
+          $p = promised_sleep (5)->then (sub { # 5 > 3 (timeout)
+            $w->write (d "123");
+            return $w->close;
+          });
+        }
+      };
+    });
+  };
+
+  my $url = Web::URL->parse_string ("/$path.test", $Origin);
+  bless $url, 'TestURLForCONNECT';
+  my $received = '';
+  my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+  my $http = Web::Transport::ClientBareConnection->new_from_url ($url);
+  $http->parent_id ('L' . __LINE__);
+  $http->proxy_manager ($client->proxy_manager);
+  $http->resolver ($client->resolver);
+  my $sent = 0;
+  $http->request ('CONNECT', $url, [], undef, 0, 0, sub {
+    if (defined $_[2]) {
+      $received .= $_[2];
+      if ($received =~ /abcde/ and not $sent) {
+        $http->{http}->send_data (\'stuvw');
+        $sent = 1;
+      }
+    } else {
+      $received .= '(end)';
+      $http->{http}->send_data (\'abc');
+      my $timer; $timer = AE::timer 1, 0, sub {
+        undef $timer;
+        $http->close;
+      };
+    }
+  })->then (sub {
+    my ($res, $result) = @{$_[0]};
+    test {
+      is $serverreq->{body}, 'stuvwabc';
+      is $received, 'abcde123(end)';
+      ok ! $result->{failed};
+      is $result->{message}, undef;
+    } $c;
+  })->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error, undef, "No error";
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    return $p;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'CONNECT data no timeout';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  $HandleRequestHeaders->{"$path.test"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 200, status_text => 'Switched!'})->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      $w->write (d "abcde");
+      $serverreq = $self;
+      $self->{ondata} = sub {
+        if ($self->{body} =~ /stuvw/) {
           return $w->close;
         }
       };

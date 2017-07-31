@@ -528,6 +528,7 @@ sub close_after_current_stream ($) {
   if ($con->{state} eq 'initial' or
       $con->{state} eq 'waiting') {
     $con->{writer}->close; # can fail
+    delete $con->{writer};
     $con->_read;
   }
 
@@ -2208,6 +2209,7 @@ sub _both_done ($) {
   delete $self->{to_be_sent_length};
   if ($self->{no_new_request}) {
     $self->{writer}->close->catch (sub { }); # can fail
+    delete $self->{writer};
     $self->{timer} = AE::timer 1, 0, sub {
       $self->{writer}->abort ("HTTP completion timer (1)"); # XXX and reader?
     };
@@ -2235,6 +2237,7 @@ BEGIN {
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
 
+# XXX
 sub new ($$) {
   my ($class, $args) = @_;
   my $self = bless {DEBUG => DEBUG, is_server => 1,
@@ -2679,8 +2682,8 @@ sub _oneof ($$) {
 } # _oneof
 
 sub _request_headers ($) {
-  my $self = $_[0];
-  my $stream = $self->{stream};
+  my $con = $_[0];
+  my $stream = $con->{stream};
 
   my %headers;
   for (@{$stream->{request}->{headers}}) {
@@ -2801,12 +2804,12 @@ sub _request_headers ($) {
   $stream->{request}->{target_url} = $target_url;
 
   ## Connection:
-  my $con = join ',', '', @{$headers{connection} or []}, '';
-  $con =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
-  if ($con =~ /,[\x09\x20]*close[\x09\x20]*,/) {
+  my $conn = join ',', '', @{$headers{connection} or []}, '';
+  $conn =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
+  if ($conn =~ /,[\x09\x20]*close[\x09\x20]*,/) {
     $stream->{close_after_response} = 1;
   } elsif ($stream->{request}->{version} != 1.1) {
-    unless ($con =~ /,[\x09\x20]*keep-alive[\x09\x20]*,/) {
+    unless ($conn =~ /,[\x09\x20]*keep-alive[\x09\x20]*,/) {
       $stream->{close_after_response} = 1;
     }
   }
@@ -2823,7 +2826,7 @@ sub _request_headers ($) {
         my $upgrade = $headers{upgrade}->[0];
         $upgrade =~ tr/A-Z/a-z/; ## ASCII case-insensitive;
         last WS_CHECK unless $upgrade eq 'websocket';
-        last WS_CHECK unless $con =~ /,[\x09\x20]*upgrade[\x09\x20]*,/;
+        last WS_CHECK unless $conn =~ /,[\x09\x20]*upgrade[\x09\x20]*,/;
 
         last WS_CHECK unless @{$headers{'sec-websocket-key'} or []} == 1;
         $stream->{ws_key} = $headers{'sec-websocket-key'}->[0];
@@ -2870,7 +2873,7 @@ sub _request_headers ($) {
     return 0;
   }
 
-  $self->{state} = 'request body' if $stream->{request}->{method} eq 'CONNECT';
+  $con->{state} = 'request body' if $stream->{request}->{method} eq 'CONNECT';
 
   ## Content-Length:
   my $l = 0;
@@ -2885,15 +2888,19 @@ sub _request_headers ($) {
   $stream->{request}->{body_length} = $l;
   if ($l == 0) {
     if (defined $stream->{ws_key}) {
-      $self->{state} = 'ws handshaking';
-      $self->{stream}->{close_after_response} = 1;
+      $con->{state} = 'ws handshaking';
+      $con->{stream}->{close_after_response} = 1;
     }
   } else {
-    $self->{unread_length} = $l;
-    $self->{state} = 'request body';
+    $con->{unread_length} = $l;
+    $con->{state} = 'request body';
   }
   $stream->_headers_received (is_ws => $is_ws, is_request => 1);
-  if ($l == 0 and not $stream->{request}->{method} eq 'CONNECT') {
+
+  if ($stream->{request}->{method} eq 'CONNECT') {
+    delete $con->{timer};
+    $con->{disable_timer} = 1;
+  } elsif ($l == 0) {
     $stream->_receive_bytes_done;
     unless (defined $stream->{ws_key}) {
       $stream->_receive_done;
@@ -2925,11 +2932,10 @@ sub abort ($) {
   return $self->{closed};
 } # abort
 
+# XXX
 sub closed ($) {
   return $_[0]->{closed};
 } # closed
-
-# XXX CONNECT request/response body tests
 
 package Web::Transport::HTTPStream::ServerStream;
 push our @ISA, qw(Web::Transport::HTTPStream::Stream);
@@ -3173,6 +3179,7 @@ sub _send_done ($) {
   my $con = $stream->{connection};
   delete $con->{sending_stream};
   if (delete $stream->{close_after_response}) {
+warn "XXX sdone wclose";#, Carp::longmess;
     $con->{writer}->close if defined $con->{writer};
     delete $con->{writer};
   }
@@ -3219,11 +3226,11 @@ sub _both_done ($) {
   return unless defined $con;
 
   if (delete $stream->{close_after_response}) {
+warn "XXX wclose";
     $con->{writer}->close if defined $con->{writer};
     delete $con->{writer};
     $con->{state} = 'end';
   }
-  delete $con->{disable_timer};
   my $error = $con->{exit} || {};
   if (eval { $error->{failed} }) { # XXX
     $stream->{closed_reject}->($error);
@@ -3240,6 +3247,7 @@ sub _both_done ($) {
     warn "$con->{id}: endstream $stream->{id} @{[scalar gmtime]}\n";
     warn "$con->{id}: ========== @{[ref $con]}\n";
   }
+  delete $con->{disable_timer};
   $con->{timer} = AE::timer $ReadTimeout, 0, sub { $con->_timeout };
   delete $stream->{connection};
 } # _both_done

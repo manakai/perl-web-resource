@@ -1651,12 +1651,9 @@ for my $is_binary (0, 1) {
       }});
       my $error;
       $http->connect->then (sub {
-        return $http->send_request ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-#XXXXX
-          my ($http, $type, $data) = @_;
-          $error = $data->{reason} if $type eq 'complete';
-        });
+        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
       })->then (sub {
+        my $closed = $_[0]->{closed};
         my $stream = $_[0]->{stream};
         return Promise->resolve->then (sub {
           return $stream->send_ws_message (3, $is_binary);
@@ -1668,8 +1665,13 @@ for my $is_binary (0, 1) {
             like $error, qr{^TypeError: Stream is busy at \Q@{[__FILE__]}\E line \Q@{[__LINE__-6]}\E};
           } $c;
         })->then (sub{
-#XXXX
           return $http->close_after_current_stream;
+        })->then (sub {
+          return $closed;
+        })->then (sub {
+          test {
+            ok 1;
+          } $c;
         });
       })->then (sub {
         done $c;
@@ -1705,6 +1707,7 @@ close
       $http->connect->then (sub {
         return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
       })->then (sub {
+        my $closed = $_[0]->{closed};
         my $stream = $_[0]->{stream};
         return $stream->headers_received->then (sub {
           rsread $_[0]->{messages};
@@ -1715,11 +1718,12 @@ close
           return $writer->close;
         })->then (sub {
           return $stream->send_ws_close;
+        })->then (sub {
+          return $closed;
         });
       })->catch (sub {
         my $error = $_[0];
         test {
-#XXX
           ok $error->{ws};
           is $error->{status}, 1006;
         } $c;
@@ -1730,10 +1734,9 @@ close
     });
   } n => 2, name => ['send_ws_message ok', $is_binary];
 
-my $tbmethod;
-test {
-  my $c = shift;
-  server_as_cv (q{
+  test {
+    my $c = shift;
+    server_as_cv (q{
 receive "GET", start capture
 receive CRLFCRLF, end capture
 "HTTP/1.1 101 OK"CRLF
@@ -1745,43 +1748,42 @@ CRLF
 CRLF
 sleep 1
 close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $error = 0;
-    $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->$tbmethod (2);
-          eval {
-            $http->send_data (\'abc');
-          } or do {
-            test {
-              like $@, qr{^Data too large};
-            } $c;
-            $error++;
-          }
-        }
+    })->cb (sub {
+      my $server = $_[0]->recv;
+      my $http = Web::Transport::HTTPStream->new ({parent => {
+        class => 'Web::Transport::TCPStream',
+        host => Web::Host->parse_string ($server->{addr}),
+        port => $server->{port},
+      }});
+      $http->connect->then (sub {
+        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      })->then (sub {
+        my $stream = $_[0]->{stream};
+        return $stream->headers_received->then (sub {
+          return $stream->send_ws_message (2, $is_binary);
+        })->then (sub {
+          my $writer = $_[0]->{stream}->get_writer;
+          return $writer->write (d 'abc');
+        })->catch (sub {
+          my $error = $_[0];
+          test {
+            is $error->name, 'TypeError', $error;
+            is $error->message, 'Byte length 3 is greater than expected length 2';
+            # XXX location
+          } $c;
+        });
+      })->then (sub{
+        return $http->close_after_current_stream;
+      })->then (sub {
+        done $c;
+        undef $c;
       });
-    })->then (sub{
-      test {
-        is $error, 1;
-      } $c;
-      return $http->close_after_current_stream;
-    })->then (sub {
-      done $c;
-      undef $c;
     });
-  });
-} n => 2, name => ['send_ws_message data too large', $tbmethod];
+  } n => 2, name => ['send_ws_message data too large', $is_binary];
 
-test {
-  my $c = shift;
-  server_as_cv (q{
+  test {
+    my $c = shift;
+    server_as_cv (q{
 receive "GET", start capture
 receive CRLFCRLF, end capture
 "HTTP/1.1 101 OK"CRLF
@@ -1793,103 +1795,56 @@ CRLF
 CRLF
 sleep 1
 close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $error = 0;
-    $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->$tbmethod (2);
-          eval {
-            $http->send_data (\"\x{100}");
-          } or do {
-            test {
-              like $@, qr{^Data is utf8-flagged};
-            } $c;
-            $error++;
-          }
-        }
-      });
-    })->then (sub{
-      test {
-        is $error, 1;
-      } $c;
-      return $http->close_after_current_stream;
-    })->then (sub {
-      done $c;
-      undef $c;
-    });
-  });
-} n => 2, name => ['send_ws_message data utf8 flagged', $tbmethod];
-
-test {
-  my $c = shift;
-  server_as_cv (q{
-receive "GET", start capture
-receive CRLFCRLF, end capture
-"HTTP/1.1 101 OK"CRLF
-"Upgrade: websocket"CRLF
-"Sec-WebSocket-Accept: "
-ws-accept
-CRLF
-"Connection: Upgrade"CRLF
-CRLF
-sleep 1
-close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $error = 0;
-    my @p;
-    $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->$tbmethod (3);
-          $http->send_data (\'ab');
+    })->cb (sub {
+      my $server = $_[0]->recv;
+      my $http = Web::Transport::HTTPStream->new ({parent => {
+        class => 'Web::Transport::TCPStream',
+        host => Web::Host->parse_string ($server->{addr}),
+        port => $server->{port},
+      }});
+      my @p;
+      $http->connect->then (sub {
+        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      })->then (sub {
+        my $stream = $_[0]->{stream};
+        return $stream->headers_received->then (sub {
+          return $stream->send_ws_message (3, $is_binary);
+        })->then (sub {
+          my $writer = $_[0]->{stream}->get_writer;
+          $writer->write (d "ab");
           for my $code (
-            sub { $http->send_text_header (4); },
-            sub { $http->send_binary_header (4); },
-            sub { $http->send_ping },
-            sub { $http->send_ping (pong => 1) },
-            sub { $http->close_after_current_stream },
+            sub { $stream->send_ws_message (4, 0); },
+            sub { $stream->send_ws_message (4, 1); },
+            sub { $stream->send_ping },
+            sub { $stream->send_ping (pong => 1) },
+            sub { $stream->send_ws_close },
           ) {
             push @p,
             Promise->resolve->then ($code)->then (sub { test { ok 0 } $c }, sub {
               my $err = $_[0];
               test {
-                like $err, qr{^(?:Bad state|Body is not sent)};
+                is $err->name, 'TypeError', 'error name';
+                is $err->message, 'Stream is busy';
+                is $err->file_name, __FILE__, $err;
+                ok __LINE__-13 <= $err->line_number && $err->line_number <= __LINE__-6, $err->line_number;
               } $c;
-              $error++;
             });
           }
-        }
+        });
+      })->then (sub{
+        return Promise->all (\@p);
+      })->then (sub {
+        return $http->abort;
+      })->then (sub {
+        done $c;
+        undef $c;
       });
-    })->then (sub{
-      test {
-        is $error, 5;
-      } $c;
-      return Promise->all (\@p);
-    })->then (sub {
-      return $http->abort;
-    })->then (sub {
-      done $c;
-      undef $c;
     });
-  });
-} n => 6, name => ['send_ws_message then bad method', $tbmethod];
+  } n => 5*4, name => ['send_ws_message then bad method', $is_binary];
 
-test {
-  my $c = shift;
-  server_as_cv (q{
+  test {
+    my $c = shift;
+    server_as_cv (q{
 receive "GET", start capture
 receive CRLFCRLF, end capture
 "HTTP/1.1 101 OK"CRLF
@@ -1906,37 +1861,42 @@ ws-receive-header
 ws-send-header opcode=1 length=3
 "xyz"
 close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
-    $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->$tbmethod (0);
-          $http->$tbmethod (3);
-          $http->send_data (\'a');
-          $http->send_data (\'bc');
-          $http->$tbmethod (0);
-          $sent++;
-        }
+    })->cb (sub {
+      my $server = $_[0]->recv;
+      my $http = Web::Transport::HTTPStream->new ({parent => {
+        class => 'Web::Transport::TCPStream',
+        host => Web::Host->parse_string ($server->{addr}),
+        port => $server->{port},
+      }});
+      $http->connect->then (sub {
+        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      })->then (sub {
+        my $stream = $_[0]->{stream};
+        return $stream->headers_received->then (sub {
+          rsread $_[0]->{messages};
+          return $stream->send_ws_message (0, $is_binary);
+        })->then (sub {
+          return $stream->send_ws_message (3, $is_binary);
+        })->then (sub {
+          my $writer = $_[0]->{stream}->get_writer;
+          $writer->write (d 'a');
+          $writer->write (d 'bc');
+        })->then (sub {
+          return $stream->send_ws_message (0, $is_binary);
+        })->then (sub {
+          return $stream->send_ws_close;
+        });
+      })->then (sub{
+        return $http->closed;
+      })->then (sub {
+        test {
+          ok 1;
+        } $c;
+        done $c;
+        undef $c;
       });
-    })->then (sub{
-      test {
-        is $sent, 1;
-      } $c;
-      return $http->close_after_current_stream;
-    })->then (sub {
-      done $c;
-      undef $c;
     });
-  });
-} n => 1, name => ['send_ws_message zero length', $tbmethod];
-
+  } n => 1, name => ['send_ws_message zero length', $is_binary];
 }
 
 test {
@@ -1958,30 +1918,37 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->close_after_current_stream;
-          $sent++;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      my $closed = $_[0]->{closed};
+      return $stream->headers_received->then (sub {
+        rsread $_[0]->{messages};
+        return $stream->send_ws_close;
+      })->then (sub {
+        return $closed;
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          ok $error->{ws};
+          is $error->{status}, 1006;
+          is $error->{reason}, '';
+        } $c;
       });
     })->then (sub{
-      test {
-        is $sent, 1;
-      } $c;
       return $http->close_after_current_stream;
     })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 1, name => 'ws close ok no args';
+} n => 3, name => 'ws close ok no args';
 
 test {
   my $c = shift;
@@ -2002,25 +1969,25 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->close_after_current_stream (status => 1234);
-          $sent++;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        rsread $_[0]->{messages};
+        return $stream->send_ws_close (1234);
       });
     })->then (sub{
-      test {
-        is $sent, 1;
-      } $c;
-      return $http->close_after_current_stream;
+      return $http->closed;
     })->then (sub {
+      test {
+        ok 1;
+      } $c;
       done $c;
       undef $c;
     });
@@ -2046,22 +2013,22 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->close_after_current_stream (status => 1234, reason => 'av c');
-          $sent++;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        rsread $_[0]->{messages};
+        return $stream->send_ws_close (1234, 'av c');
       });
     })->then (sub{
       test {
-        is $sent, 1;
+        ok 1;
       } $c;
       return $http->close_after_current_stream;
     })->then (sub {
@@ -2090,37 +2057,34 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->close_after_current_stream (status => 0x10000, reason => 'av c')->then (sub {
-            test { ok 0 } $c;
-          }, sub {
-            my $err = $_[0];
-            test {
-              like $err, qr{^Bad status};
-            } $c;
-          })->then (sub { return $http->close_after_current_stream });
-          $sent++;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        rsread $_[0]->{messages};
+        return $stream->send_ws_close (0x10000, 'av c');
+      })->catch (sub {
+        my $err = $_[0];
+        test {
+          like $err, qr{^Bad status};
+        } $c;
+      })->then (sub {
+        return $stream->send_ws_close;
       });
     })->then (sub{
-      test {
-        is $sent, 1;
-      } $c;
       return $http->close_after_current_stream;
     })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 2, name => 'ws close with bad status';
+} n => 1, name => 'ws close with bad status';
 
 test {
   my $c = shift;
@@ -2141,37 +2105,34 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->close_after_current_stream (status => 1234, reason => "\x{105}")->then (sub {
-            test { ok 0 } $c;
-          }, sub {
-            my $err = $_[0];
-            test {
-              like $err, qr{^Reason is utf8-flagged};
-            } $c;
-          })->then (sub { return $http->close_after_current_stream });
-          $sent++;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        rsread $_[0]->{messages};
+        return $stream->send_ws_close (1234, "\x{105}");
+      })->catch (sub {
+        my $err = $_[0];
+        test {
+          like $err, qr{^Reason is utf8-flagged};
+        } $c;
+      })->then (sub {
+        return $stream->send_ws_close;
       });
     })->then (sub{
-      test {
-        is $sent, 1;
-      } $c;
       return $http->close_after_current_stream;
     })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 2, name => 'ws close with bad reason';
+} n => 1, name => 'ws close with bad reason';
 
 test {
   my $c = shift;
@@ -2192,37 +2153,34 @@ ws-send-header opcode=1 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->close_after_current_stream (status => 1234, reason => 'x' x 126)->then (sub {
-            test { ok 0 } $c;
-          }, sub {
-            my $err = $_[0];
-            test {
-              like $err, qr{^Reason is too long};
-            } $c;
-          })->then (sub { return $http->close_after_current_stream });
-          $sent++;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        rsread $_[0]->{messages};
+        return $stream->send_ws_close (1234, 'x' x 126);
+      })->catch (sub {
+        my $err = $_[0];
+        test {
+          like $err, qr{^Reason is too long};
+        } $c;
+      })->then (sub {
+        return $stream->send_ws_close;
       });
-    })->then (sub{
-      test {
-        is $sent, 1;
-      } $c;
-      return $http->close_after_current_stream;
+    })->then (sub {
+      return $http->closed;
     })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 2, name => 'ws close with long reason';
+} n => 1, name => 'ws close with long reason';
 
 test {
   my $c = shift;
@@ -2277,31 +2235,24 @@ CRLF
 CRLF
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          AE::postpone {
-            $http->abort;
-            $sent++;
-          };
-        }
-      });
-    })->then (sub{
-      test {
-        is $sent, 1, "abort called";
-      } $c;
-      return $http->close_after_current_stream;
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        return $http->abort;
+      });
+    })->then (sub {
+      test {
+        ok 1;
+      } $c;
       done $c;
       undef $c;
-    }, sub {
-      warn $_[0];
     });
   });
 } n => 1, name => 'ws then abort';
@@ -2325,26 +2276,22 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
-    my $pong = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->send_ping;
-          $sent++;
-        } elsif ($type eq 'ping') {
-          $pong++;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        rsread $_[0]->{messages};
+        $stream->send_ping;
       });
     })->then (sub{
       test {
-        is $sent, 1;
-        is $pong, 1;
+        ok 1;
       } $c;
       return $http->close_after_current_stream;
     })->then (sub {
@@ -2352,7 +2299,7 @@ close
       undef $c;
     });
   });
-} n => 2, name => 'ws ping';
+} n => 1, name => 'ws ping';
 
 test {
   my $c = shift;
@@ -2373,22 +2320,21 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->send_ping (pong => 1);
-          $sent++;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        $stream->send_ping (pong => 1);
       });
     })->then (sub{
       test {
-        is $sent, 1;
+        ok 1;
       } $c;
       return $http->close_after_current_stream;
     })->then (sub {
@@ -2417,22 +2363,21 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $sent = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->send_ping (data => "ab c");
-          $sent++;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        $stream->send_ping (data => "ab c");
       });
     })->then (sub{
       test {
-        is $sent, 1;
+        ok 1;
       } $c;
       return $http->close_after_current_stream;
     })->then (sub {
@@ -2461,37 +2406,33 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $error = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          eval {
-            $http->send_ping (data => "ab c\x{500}");
-          } or do {
-            test {
-              like $@, qr{^Data is utf8-flagged};
-              $error++;
-            } $c;
-          };
-          $http->close_after_current_stream;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        $stream->send_ping (data => "ab c\x{500}");
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          like $error, qr{^Data is utf8-flagged};
+        } $c;
+      })->then (sub {
+        return $stream->send_ws_close;
       });
     })->then (sub{
-      test {
-        is $error, 1;
-      } $c;
       return $http->close_after_current_stream;
     })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 2, name => 'ws ping utf8 data';
+} n => 1, name => 'ws ping utf8 data';
 
 test {
   my $c = shift;
@@ -2512,37 +2453,32 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $error = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          eval {
-            $http->send_ping (data => 'x' x 126);
-          } or do {
-            test {
-              like $@, qr{^Data too large};
-              $error++;
-            } $c;
-          };
-          $http->close_after_current_stream;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        $stream->send_ping (data => 'x' x 126);
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          like $error, qr{^Data too large};
+        } $c;
+        return $stream->send_ws_close;
       });
     })->then (sub{
-      test {
-        is $error, 1;
-      } $c;
       return $http->close_after_current_stream;
     })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 2, name => 'ws ping long data';
+} n => 1, name => 'ws ping long data';
 
 test {
   my $c = shift;
@@ -2563,27 +2499,24 @@ ws-send-header opcode=10 length=3
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $error = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->close_after_current_stream->then (sub {
-            $http->send_ping (data => 'x');
-          })->then (sub {
-            test { ok 0 } $c;
-          }, sub {
-            my $err = $_[0];
-            test {
-              like $err, qr{^Bad state}, 'error text';
-              $error++;
-            } $c;
-          });
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        return $stream->send_ws_close;
+      })->then (sub {
+        $stream->send_ping (data => 'x');
+      })->catch (sub {
+        my $err = $_[0];
+        test {
+          like $err, qr{^TypeError: Stream is busy at }, 'error text';
+        } $c;
       });
     })->then (sub{
       return $http->close_after_current_stream;
@@ -2608,84 +2541,38 @@ CRLF
 CRLF
 ws-receive-header
 ws-receive-data
+show "sleep (20)..."
 sleep 21
+  # WS timeout = 20
+show "awake!"
 ws-send-header opcode=9 length=3
 "xyz"
 close
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $ping = 0;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
     $http->connect->then (sub {
-      return $http->send_request_headers ({method => 'GET', target => '/'}, ws => 1, cb => sub {
-        my ($http, $type, $data) = @_;
-        if ($type eq 'headers') {
-          $http->close_after_current_stream;
-        } elsif ($type eq 'ping') {
-          $ping++;
-        }
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        return $stream->send_ws_close;
       });
     })->then (sub{
       return $http->close_after_current_stream;
     })->then (sub {
       test {
-        is $ping, 0, 'ping not received';
+        ok 1;
       } $c;
-    })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 1, name => 'ws ping received after closed';
-
-test {
-  my $c = shift;
-  server_as_cv (q{
-receive "GET", start capture
-receive CRLFCRLF, end capture
-"HTTP/1.1 101 OK"CRLF
-"Upgrade: websocket"CRLF
-"Sec-WebSocket-Accept: "
-ws-accept
-CRLF
-"Connection: Upgrade"CRLF
-CRLF
-ws-receive-header
-ws-receive-data
-ws-send-header opcode=10 length=3
-"xyz"
-close
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ($server->{addr}),
-         port => $server->{port});
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $error = 0;
-    $http->connect->then (sub {
-      return $http->send_ping;
-    })->then (sub{
-      test { ok 0 } $c;
-    }, sub {
-      my $err = $_[0];
-      test {
-        like $err, qr{^Bad state}, 'error text';
-        $error++;
-      } $c;
-    })->then (sub {
-      test {
-        is $error, 1, 'error count';
-      } $c;
-      return $http->close_after_current_stream;
-    })->then (sub {
-      done $c;
-      undef $c;
-    });
-  });
-} n => 2, name => 'ws ping bad context';
+} n => 1, name => 'ws ping received after closed (not received)';
 
 test {
   my $c = shift;
@@ -3041,6 +2928,11 @@ CRLF
         is $received, 'abc';
       } $c;
       return $http->close_after_current_stream;
+    })->catch (sub {
+      my $error = $_[0];
+      test {
+        ok 0, $error;
+      } $c;
     })->then (sub {
       done $c;
       undef $c;

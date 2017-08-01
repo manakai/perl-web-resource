@@ -1924,14 +1924,13 @@ test {
 test {
   my $c = shift;
   my $path = rand;
-  my $invoked;
-  my $serverreq;
+  my $invoked = 0;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
+    $invoked++;
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0, close => 1)->then (sub {
-      $serverreq = $self;
-      $invoked = 1;
+      $invoked++;
       return $_[0]->{body}->get_writer->close;
     });
   };
@@ -1945,12 +1944,11 @@ test {
   }, body => "x" x 42)->then (sub {
     my $res = $_[0];
     test {
-      ok $invoked;
-      is $res->status, 201;
-      is $res->status_text, 'OK';
+      is $res->status, 400;
+      is $res->status_text, 'Bad Request';
       is $res->header ('Connection'), 'close';
-      is $res->body_bytes, q{};
-      is $serverreq->{body}, q{x} x 42;
+      ok $res->body_bytes;
+      is $invoked, 0;
     } $c;
   }, sub {
     my $error = $_[0];
@@ -1963,7 +1961,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 6, name => 'WS handshake with Content-Length - not handshake response 2', timeout => 120;
+} n => 5, name => 'WS handshake with Content-Length - not handshake response 2', timeout => 120;
 
 test {
   my $c = shift;
@@ -2848,7 +2846,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: Not writable at @{[__FILE__]} line @{[__LINE__-15]}};
+      like $error, qr{^TypeError: Stream is busy at @{[__FILE__]} line @{[__LINE__-15]}};
       is $received, '(end)12345(end)';
       ok ! $res->is_network_error;
       ok $res->ws_closed_cleanly;
@@ -2890,7 +2888,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: Not writable at @{[__FILE__]} line @{[__LINE__-15]}};
+      like $error, qr{^TypeError: Stream is busy at @{[__FILE__]} line @{[__LINE__-15]}};
       is $received, '(end)12345(end)';
       ok ! $res->is_network_error;
       ok $res->ws_closed_cleanly;
@@ -2969,7 +2967,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: Not writable at @{[__FILE__]} line @{[__LINE__-16]}};
+      like $error, qr{^TypeError: Stream is busy at @{[__FILE__]} line @{[__LINE__-16]}};
       is $received, '(end)';
       ok ! $res->is_network_error;
       ok $res->ws_closed_cleanly;
@@ -4503,7 +4501,7 @@ test {
       ok $exit->{failed};
       ok $exit->{ws};
       is $exit->{status}, 1006;
-      is $exit->{reason}, "Test abort\x{6001}";
+      like $exit->{reason}, qr{^Error: Test abort\x{6001} at @{[__FILE__]} line @{[__LINE__-42]}};
       ok ! $exit->{cleanly};
     } $c;
     done $c;
@@ -5856,7 +5854,7 @@ test {
   my $path = rand;
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
-    my ($self, $req) = @_;
+    my ($self, $req, $closed) = @_;
     return $self->send_response
         ({status => 201, status_text => "OK"}, close => 1)->then (sub {
       return $_[0]->{body}->get_writer->close;

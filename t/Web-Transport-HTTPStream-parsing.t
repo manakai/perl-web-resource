@@ -17,6 +17,7 @@ use Web::Transport::HTTPStream;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
 use Test::Certificates;
+use Promised::Flow;
 
 sub _a ($) {
   return encode 'utf-8', $_[0];
@@ -123,7 +124,7 @@ sub rsread ($$) {
       return $run->();
     });
   }; # $run
-  return $run->()->then (sub { undef $run; return $result . '(close)' });
+  return $run->()->then (sub { undef $run; return $result . '(close)' }, sub { undef $run });
 } # rsread
 
 for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_deps/data/*.dat')) {
@@ -259,11 +260,12 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                  ws => 1,
                  ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}])->then (sub {
               my $stream = $_[0]->{stream};
+              my $closed = $_[0]->{closed};
               return $stream->headers_received->then (sub {
                 my $got = $_[0];
 
                 my $result = {};
-                return $stream->closed->then (sub { # XXX
+                return $closed->then (sub { # XXX
                   return $result;
                 });
               });
@@ -284,21 +286,20 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 })->then (sub {
                   return $try->();
                 });
-              }
-              return $http->send_request ($req, cb => $onev->($req))->then (sub {
+              } # is_active
+              my $req = $get_req->(
+                method => _a $test->{method}->[1]->[0],
+                target => _a $test->{url}->[1]->[0],
+              );
+              return $http->send_request ($req, content_length => ($test_type eq 'largerequest-second' ? 1024*1024 : 0))->then (sub {
                 my $stream = $_[0]->{stream};
-                my $req = $get_req->(
-                  method => _a $test->{method}->[1]->[0],
-                  target => _a $test->{url}->[1]->[0],
-                  headers => [['Content-Length' => $test_type eq 'largerequest-second' ? 1024*1024 : 0]],
-                );
                 my $reqbody = $_[0]->{body}->get_writer;
+                my $closed = $_[0]->{closed};
+warn "XXX [$closed]";
+                my $result = {};
                 return $stream->headers_received->then (sub {
                   my $got = $_[0];
                   if ($test_type eq 'largerequest-second') {
-                    $reqbody->write
-                        (DataView->new (ArrayBuffer->new_from_scalarref
-                                            (\('x' x (1024*1024)))));
                     $reqbody->write
                         (DataView->new (ArrayBuffer->new_from_scalarref
                                             (\('x' x (1024*1024)))));
@@ -313,50 +314,44 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                     $reqbody->close;
                   }
 
-                  my $result = {
-                    response => $stream->{response},
-                  };
+                  $result->{response} = $stream->{response};
                   return rsread ($test, $got->{body})->then (sub {
                     $result->{response_body} = $_[0];
                   })->then (sub {
-                    return $stream->closed;
-                  })->catch (sub {
-                    $result->{error} = $_[0];
-                  })->then (sub {
-                    unless ($try_count++) {
-                      return Promise->new (sub {
-                        my $ok = $_[0];
-                        my $timer; $timer = AE::timer 0.1, 0, sub {
-                          undef $timer;
-                          $ok->($try->());
-                        };
-                      });
-                    }
-                    for (@{$result->{response}->{headers}}) {
-                      if ($_->[2] eq 'x-test-retry') {
-                        return $try->() if $try_count < 10;
-                      }
-                    }
-                    if (defined $result->{error} and
-                        $result->{error}->{can_retry}) {
+                    return $closed;
+                  });
+                })->catch (sub {
+                  $result->{error} = $_[0];
+                })->then (sub {
+                  unless ($try_count++) {
+                    return Promise->new (sub {
+                      my $ok = $_[0];
+                      my $timer; $timer = AE::timer 0.1, 0, sub {
+                        undef $timer;
+                        $ok->($try->());
+                      };
+                    });
+                  }
+                  for (@{$result->{response}->{headers}}) {
+                    if ($_->[2] eq 'x-test-retry') {
                       return $try->() if $try_count < 10;
                     }
-                    return $result;
-                  });
+                  }
+                  if (defined $result->{error} and
+                      $result->{error}->{can_retry}) {
+                    return $try->() if $try_count < 10;
+                  }
+                  return $result;
                 });
-              })->then (sub {
-                undef $try;
-                return $_[0];
               });
-            };
-            return $try->();
+            }; # $try
+            return promised_cleanup { undef $try } $try->();
           } else { # $test_type
             my $req = $get_req->(
               method => _a $test->{method}->[1]->[0],
               target => _a $test->{url}->[1]->[0],
-              headers => [['Content-Length' => $test_type eq 'largerequest' ? 1024*1024 : 0]],
             );
-            return $http->send_request ($req, cb => $onev->($req))->then (sub {
+            return $http->send_request ($req, content_length => ($test_type eq 'largerequest' ? 1024*1024 : 0))->then (sub {
               my $stream = $_[0]->{stream};
               my $closed = $_[0]->{closed};
               my $reqbody = $_[0]->{body}->get_writer;
@@ -510,14 +505,14 @@ if (0) { # XXX
             my $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
             is !!1, !!$is_error, 'is error';
             ok 1, 'response version (skipped)';
-            is undef, $test->{status}->[1]->[0], 'status';
+            is undef, $test->{status}->[1]->[0] || undef, 'status';
             if ($is_error) {
               ok 1, $error;
             } else {
               is $error, undef, 'no error';
             }
             ok 1, 'headers (skipped)';
-            is undef, $test->{body}->[0], 'body';
+            is '(close)', $test->{body}->[0] || '(close)', 'body';
             ok 1, 'incomplete (skipped)';
 #XXX
 #            ok 1, 'r_events (skipped)';

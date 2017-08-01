@@ -4,7 +4,7 @@ use warnings;
 our $VERSION = '1.0';
 use Web::Encoding;
 
-# XXX WS client/server
+# XXX WS API errors
 # XXX httpserver tests
 # XXX debug mode & id
 # XXX XXX cleanup
@@ -235,16 +235,17 @@ sub _ws_received ($) {
           $self->{exit} = {status => defined $status ? $status : 1005,
                            reason => defined $reason ? $reason : '',
                            ws => 1, cleanly => 1};
-          $stream->_send_done; # XXX
           if ($self->{is_server}) {
+            $stream->_send_done;
             $stream->_receive_done;
           } else {
+            $self->_send_done;
             $self->{ws_timer} = AE::timer 1, 0, sub { # XXX spec
               if ($self->{DEBUG}) {
                 my $id = defined $self->{request} ? $self->{request}->{id} : $self->{id};
                 warn "$id: WS timeout (1)\n";
               }
-              $stream->_receive_done;
+              $self->_receive_done;
             };
           }
           return;
@@ -536,7 +537,6 @@ sub close_after_current_stream ($) {
     return $con->{closed};
   }
 
-warn "XXX $con->{state}+";
   $con->{no_new_request} = 1;
   if ($con->{state} eq 'initial' or
       $con->{state} eq 'waiting') {
@@ -1312,6 +1312,22 @@ sub _ev ($$;$$) {
   }
 } # _ev
 
+sub _fatal ($$) {
+  my ($stream, $msg) = @_;
+  my $con = $stream->{connection};
+
+  $con->{exit} = {failed => 1, message => $msg};
+  $con->{no_new_request} = 1;
+
+  $con->{write_mode} = 'sent';
+  $con->{cancel_current_writable_stream}->();
+
+  $con->{reader}->cancel;
+  delete $con->{reader};
+
+  $con->_receive_done;
+} # _fatal
+
 sub is_completed ($) {
   return $_[0]->{is_completed};
 } # is_completed
@@ -1383,6 +1399,7 @@ my $BytesDataStates = {
 
 sub _read ($) {
   my ($self) = @_;
+  return unless defined $self->{reader};
   return if $self->{read_running};
   $self->{read_running} = 1;
 
@@ -1448,6 +1465,7 @@ sub _process_rbuf ($$) {
     substr ($$ref, $offset + $length) = '';
     pos ($$ref) = $offset;
   }
+  my $stream = $self->{stream};
 
   HEADER: {
     if ($self->{state} eq 'before response') {
@@ -1461,12 +1479,7 @@ sub _process_rbuf ($$) {
         $self->{response_received} = 1;
         if ($self->{request}->{method} eq 'PUT' or
             $self->{request}->{method} eq 'CONNECT') {
-          $self->{no_new_request} = 1;
-          $self->{write_mode} = 'sent';
-          $self->{exit} = {failed => 1,
-                           message => "HTTP/0.9 response to non-GET request"};
-          $self->_receive_done;
-          return;
+          return $stream->_fatal ("HTTP/0.9 response to non-GET request");
         } else {
           $self->{stream}->_headers_received;
           $self->{stream}->{receive_controller}->enqueue
@@ -1504,23 +1517,13 @@ sub _process_rbuf ($$) {
           return;
         } elsif ($$ref =~ /\G(.*?)\x0A\x0D?\x0A/gcs) {
           if (2**18-1 < (length $self->{temp_buffer}) + (length $1)) {
-            $self->{no_new_request} = 1;
-            $self->{write_mode} = 'sent';
-            $self->{exit} = {failed => 1,
-                             message => "Header section too large"};
-            $self->_receive_done;
-            return;
+            return $stream->_fatal ("Header section too large");
           }
           $self->{temp_buffer} .= $1;
           #
         } else {
           if (2**18-1 + 2 < (length $self->{temp_buffer}) + (length $$ref) - (pos $$ref)) {
-            $self->{no_new_request} = 1;
-            $self->{write_mode} = 'sent';
-            $self->{exit} = {failed => 1,
-                             message => "Header section too large"};
-            $self->_receive_done;
-            return;
+            return $stream->_fatal ("Header section too large");
           }
           $self->{temp_buffer} .= substr $$ref, pos $$ref;
           return;
@@ -1715,12 +1718,7 @@ sub _process_rbuf ($$) {
         if ($self->{request}->{method} eq 'CONNECT' or
             (defined $self->{ws_state} and
              $self->{ws_state} eq 'CONNECTING')) {
-          $self->{no_new_request} = 1;
-          $self->{write_mode} = 'sent';
-          $self->{exit} = {failed => 1,
-                           message => "1xx response to CONNECT or WS"};
-          $self->_receive_done;
-          return;
+          return $stream->_fatal ("1xx response to CONNECT or WS");
         } else {
           #push @{$res->{'1xxes'} ||= []}, {
           #  version => $res->{version},
@@ -1989,8 +1987,7 @@ sub _process_rbuf_eof ($;%) {
     if (length $self->{temp_buffer}) {
       if ($self->{request}->{method} eq 'PUT' or
           $self->{request}->{method} eq 'CONNECT') {
-        $self->{exit} = {failed => 1,
-                         message => "HTTP/0.9 response to non-GET request"};
+        return $stream->_fatal ("HTTP/0.9 response to non-GET request");
       } else {
         $stream->_headers_received;
         $stream->{receive_controller}->enqueue
@@ -2006,6 +2003,8 @@ sub _process_rbuf_eof ($;%) {
                        message => $args{error_message} || "Connection closed without response",
                        errno => $args{errno},
                        can_retry => !$args{abort} && !$self->{response_received}};
+      $self->{write_mode} = 'sent';
+      $self->{cancel_current_writable_stream}->();
     }
   } elsif ($self->{state} eq 'response body') {
     if (defined $self->{unread_length} and $self->{unread_length} > 0) {
@@ -2208,7 +2207,6 @@ sub _receive_done ($) {
   my $self = $_[0];
   return if $self->{state} eq 'stopped';
 
-warn "XXX receive ($self->{stream}->{receive_message_controller})";
   if (defined $self->{stream} and
       defined $self->{stream}->{receive_message_controller}) {
     $self->{stream}->{receive_message_controller}->close;
@@ -2229,6 +2227,9 @@ sub _both_done ($) {
   if (defined $self->{request} and $self->{write_mode} eq 'sent') {
     if ($self->{exit}->{failed}) {
       $self->{response}->{stream_reject}->($self->{exit});
+warn "XXXX";
+      use Data::Dumper;
+warn Dumper $self->{exit};
 
       my $stream = $self->{stream};
       if (defined $stream->{headers_received} and
@@ -2236,10 +2237,10 @@ sub _both_done ($) {
         (delete $stream->{headers_received}->[1])->(Promise->reject ($self->{exit})); # XXX
       }
 
-warn "XXX";
       my $rc = delete $stream->{receive_controller};
       $rc->error ($self->{exit}) if defined $rc;
     } else {
+warn "XXXXXXX resolve", Carp::longmess;
       $self->{response}->{stream_resolve}->();
     }
     $self->_ev ('complete', $self->{exit}); # XXX

@@ -21,8 +21,12 @@ sub rsread ($) {
     return $r->read->then (sub {
       return if $_[0]->{done};
       if (ref $_[0]->{value} eq 'HASH' and
-          defined $_[0]->{value}->{data_stream}) {
-        rsread ($_[0]->{value}->{data_stream});
+          defined $_[0]->{value}->{body}) {
+        rsread ($_[0]->{value}->{body});
+      }
+      if (ref $_[0]->{value} eq 'HASH' and
+          defined $_[0]->{value}->{text_body}) {
+        rsread ($_[0]->{value}->{text_body});
       }
       return $run->();
     });

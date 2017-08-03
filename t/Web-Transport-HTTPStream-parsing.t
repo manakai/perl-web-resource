@@ -156,9 +156,9 @@ sub rsread_messages ($$) {
       return if $_[0]->{done};
       my $v = $_[0]->{value};
       return (
-        $v->{type} eq 'text'
-              ? rsread_text ($test, $v->{data_stream})
-              : rsread ($test, $v->{data_stream})
+        defined $v->{text_body}
+            ? rsread_text ($test, $v->{text_body})
+            : rsread ($test, $v->{body})
       )->then (sub {
         $result .= $_[0];
         return $run->();
@@ -514,7 +514,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
 
               return Promise->from_cv ($server->{after_server_close_cv})->then (sub {
                 my $expected = perl2json_bytes_for_record (json_bytes2perl (($test->{"result-data"} || ["[]"])->[0]));
-warn "XXX check resultdata";
                 my $actual = perl2json_bytes_for_record $server->{resultdata};
                 test {
                   is $actual, $expected, 'resultdata';

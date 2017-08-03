@@ -102,8 +102,8 @@ my $HandleRequestHeaders = {};
                 return $r->read->then (sub {
                   return if $_[0]->{done};
                   my $msg = $_[0]->{value};
-                  if ($msg->{type} eq 'text') {
-                    my $r = $msg->{data_stream}->get_reader;
+                  if (defined $msg->{text_body}) {
+                    my $r = $msg->{text_body}->get_reader;
                     $msg->{text} = '';
                     my $read; $read = sub {
                       return $r->read->then (sub {
@@ -115,8 +115,8 @@ my $HandleRequestHeaders = {};
                     promised_cleanup { undef $read } $read->()->then (sub {
                       return $stream->{wstext}->($msg) if defined $stream->{wstext};
                     });
-                  } elsif ($msg->{type} eq 'binary') {
-                    my $r = $msg->{data_stream}->get_reader ('byob');
+                  } else { # binary
+                    my $r = $msg->{body}->get_reader ('byob');
                     $msg->{body} = '';
                     my $read; $read = sub {
                       return $r->read (DataView->new (ArrayBuffer->new (20)))->then (sub {
@@ -126,10 +126,9 @@ my $HandleRequestHeaders = {};
                       });
                     }; # $read
                     promised_cleanup { undef $read } $read->()->then (sub {
-                      return $stream->{wsbinary}->($msg) if defined $stream->{wsbinary};
+                      return $stream->{wsbinary}->($msg)
+                          if defined $stream->{wsbinary};
                     });
-                  } else {
-                    die "Unknown WS message type |$msg->{type}|";
                   }
                   return $run->();
                 });
@@ -2496,6 +2495,49 @@ test {
 test {
   my $c = shift;
   my $path = rand;
+  my $error;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      return $self->send_ws_message (5, not 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "abc");
+        return $writer->write ("foo");
+      })->catch (sub {
+        $error = $_[0];
+      });
+    });
+  };
+
+  my $received = '';
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      if ($is_text) {
+        if (defined $data) {
+          $received .= $data;
+        } else {
+          $received .= '(end)';
+        }
+      }
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      is $error->name, 'TypeError', $error;
+      is $error->message, 'The argument is not an ArrayBufferView';
+      # XXXlocation
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'WS message write error';
+
+test {
+  my $c = shift;
+  my $path = rand;
   my $serverreq;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
@@ -2765,7 +2807,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: Not writable at }; # XXX location
+      like $error, qr{^TypeError: Byte length 6 is greater than expected length 0 at }; # XXX location
       is $received, '(end)';
       ok ! $res->is_network_error;
       ok ! $res->ws_closed_cleanly;
@@ -2912,7 +2954,6 @@ test {
       return $self->send_ws_message (5, not 'binary')->then (sub {
         my $writer = $_[0]->{stream}->get_writer;
         $writer->write (d "123");
-        #XXX $self->close_response (status => 4056);
         return $writer->close;
       })->catch (sub {
         $error = $_[0];
@@ -2946,9 +2987,10 @@ test {
   my $c = shift;
   my $error;
   my $path = rand;
+  my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    return $self->send_response
+    $p = $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       return $self->send_ws_close (4056);
     })->then (sub {
@@ -2968,12 +3010,16 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: Stream is busy at @{[__FILE__]} line @{[__LINE__-16]}};
       is $received, '(end)';
       ok ! $res->is_network_error;
       ok $res->ws_closed_cleanly;
       is $res->ws_code, 4056;
       is $res->ws_reason, '';
+    } $c;
+    return $p;
+  })->then (sub {
+    test {
+      like $error, qr{^TypeError: Stream is busy at @{[__FILE__]} line @{[__LINE__-25]}};
     } $c;
     done $c;
     undef $c;

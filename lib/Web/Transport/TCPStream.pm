@@ -177,6 +177,7 @@ sub create ($$) {
             unless UNIVERSAL::isa ($view, 'ArrayBufferView'); # XXX location
         return if $view->byte_length == 0;
         return _writing {
+          return 1 unless defined $fh; # end
           my $l = eval { $view->buffer->manakai_syswrite
                              ($fh, $view->byte_length, $view->byte_offset) };
           if ($@) {

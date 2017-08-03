@@ -31,8 +31,12 @@ sub rsread ($) {
     return $r->read->then (sub {
       return if $_[0]->{done};
       if (ref $_[0]->{value} eq 'HASH' and
-          defined $_[0]->{value}->{data_stream}) {
-        rsread ($_[0]->{value}->{data_stream});
+          defined $_[0]->{value}->{body}) {
+        rsread ($_[0]->{value}->{body});
+      }
+      if (ref $_[0]->{value} eq 'HASH' and
+          defined $_[0]->{value}->{text_body}) {
+        rsread ($_[0]->{value}->{text_body});
       }
       return $run->();
     });
@@ -2573,6 +2577,328 @@ close
     });
   });
 } n => 1, name => 'ws ping received after closed (not received)';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $error = Web::DOM::Error->new ("Custom error");
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      my $closed = $_[0]->{closed};
+      return $stream->headers_received->then (sub {
+        $_[0]->{messages}->cancel ($error);
+        return $closed;
+      })->catch (sub {
+        my $e = $_[0];
+        test {
+          ok $e->{ws};
+          ok $e->{failed};
+          is $e->{status}, 1006;
+          is $e->{reason}, '';
+        } $c;
+      });
+    })->then (sub{
+      return $http->close_after_current_stream;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'ws messages cancel';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $error = Web::DOM::Error->new ("Custom error");
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      my $closed = $_[0]->{closed};
+      return $stream->headers_received->then (sub {
+        $stream->send_ws_close;
+        $_[0]->{messages}->cancel ($error);
+        return $closed;
+      })->catch (sub {
+        my $e = $_[0];
+        test {
+          ok $e->{ws};
+          ok $e->{failed};
+          is $e->{status}, 1006;
+          is $e->{reason}, '';
+        } $c;
+      });
+    })->then (sub{
+      return $http->close_after_current_stream;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'ws messages cancel';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-send-header opcode=1 length=3
+"xyz"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $error = Web::DOM::Error->new ("Custom error");
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      my $closed = $_[0]->{closed};
+      return $stream->headers_received->then (sub {
+        $stream->send_ws_close;
+        my $reader = $_[0]->{messages}->get_reader;
+        return $reader->read->then (sub {
+          my $msg = $_[0]->{value};
+          my $reader = $msg->{text_body}->get_reader;
+          $reader->cancel ($error);
+          return $closed;
+        });
+      })->catch (sub {
+        my $e = $_[0];
+        test {
+          ok $e->{ws};
+          ok $e->{failed};
+          is $e->{status}, 1006;
+          is $e->{reason}, '';
+        } $c;
+      });
+    })->then (sub{
+      return $http->close_after_current_stream;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'ws messages text cancel';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-send-header opcode=2 length=3
+"xyz"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $error = Web::DOM::Error->new ("Custom error");
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      my $closed = $_[0]->{closed};
+      return $stream->headers_received->then (sub {
+        $stream->send_ws_close;
+        my $reader = $_[0]->{messages}->get_reader;
+        return $reader->read->then (sub {
+          my $msg = $_[0]->{value};
+          my $reader = $msg->{body}->get_reader;
+          $reader->cancel ($error);
+          return $closed;
+        });
+      })->catch (sub {
+        my $e = $_[0];
+        test {
+          ok $e->{ws};
+          ok $e->{failed};
+          is $e->{status}, 1006;
+          is $e->{reason}, '';
+        } $c;
+      });
+    })->then (sub{
+      return $http->close_after_current_stream;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'ws messages binary cancel';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=8
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $error;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      my $closed = $_[0]->{closed};
+      return $stream->headers_received->then (sub {
+        $stream->send_ping;
+        return $stream->send_ws_message (2, 'binary')->then (sub {
+          my $writer = $_[0]->{stream}->get_writer;
+          return promised_sleep (1)->then (sub {
+            $writer->write (d "ab")->catch (sub { $error = $_[0] });
+            return $closed;
+          });
+        });
+      })->then (sub {
+        my $e = $_[0];
+        test {
+          ok $e->{ws};
+          ok ! $e->{failed};
+          is $e->{status}, 1005;
+          is $e->{reason}, '';
+          ok $e->{cleanly};
+          is $error, undef;
+        } $c;
+      });
+    })->then (sub{
+      return $http->close_after_current_stream;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => 'ws messages write after close received';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=9
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=8
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $error;
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      my $closed = $_[0]->{closed};
+      return $stream->headers_received->then (sub {
+        $stream->send_ping;
+        return $stream->send_ws_message (2, 'binary')->then (sub {
+          my $writer = $_[0]->{stream}->get_writer;
+          return promised_sleep (1)->then (sub {
+            $writer->write (d "ab")->catch (sub { $error = $_[0] });
+          });
+        })->then (sub {
+          return $stream->send_ws_message (3, 'binary');
+        })->then (sub {
+          my $writer = $_[0]->{stream}->get_writer;
+          $writer->write (d "123");
+          return $closed;
+        });
+      })->then (sub {
+        my $e = $_[0];
+        test {
+          ok $e->{ws};
+          ok ! $e->{failed};
+          is $e->{status}, 1005;
+          is $e->{reason}, '';
+          ok $e->{cleanly};
+        } $c;
+      });
+    })->then (sub{
+      return $http->close_after_current_stream;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'ws messages write after ping received';
 
 test {
   my $c = shift;

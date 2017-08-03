@@ -77,6 +77,7 @@ sub server_as_cv ($) {
           warn "--- ^parsing.t received^ ---\n";
         }
         while ($data =~ s/^\[data (.+)\]$//m) {
+warn "XXXX data";
           push @$resultdata, json_bytes2perl $1;
         }
         if ($data =~ s/^\[server done\]$//m) {
@@ -124,8 +125,48 @@ sub rsread ($$) {
       return $run->();
     });
   }; # $run
-  return $run->()->then (sub { undef $run; return $result . '(close)' }, sub { undef $run });
+  return $run->()->then (sub { undef $run; return $result . '(close)' }, sub { undef $run; return "Error: $_[0]" });
 } # rsread
+
+sub rsread_text ($$) {
+  my $test = shift;
+  my $rs = shift;
+  return Promise->resolve (undef) unless defined $rs;
+  my $r = $rs->get_reader;
+  my $result = '';
+  my $run; $run = sub {
+    return $r->read (DataView->new (ArrayBuffer->new (1024)))->then (sub {
+      return if $_[0]->{done};
+      $result .= ${$_[0]->{value}};
+      $result .= '(boundary)' if $test->{boundary};
+      return $run->();
+    });
+  }; # $run
+  return $run->()->then (sub { undef $run; return $result . '(close)' }, sub { undef $run; return "Error: $_[0]" });
+} # rsread_text
+
+sub rsread_messages ($$) {
+  my $test = shift;
+  my $rs = shift;
+  return Promise->resolve (undef) unless defined $rs;
+  my $r = $rs->get_reader;
+  my $result = '';
+  my $run; $run = sub {
+    return $r->read->then (sub {
+      return if $_[0]->{done};
+      my $v = $_[0]->{value};
+      return (
+        $v->{type} eq 'text'
+              ? rsread_text ($test, $v->{data_stream})
+              : rsread ($test, $v->{data_stream})
+      )->then (sub {
+        $result .= $_[0];
+        return $run->();
+      });
+    });
+  }; # $run
+  return $run->()->then (sub { undef $run; return $result }, sub { undef $run; return "Error: $_[0]" });
+} # rsread_messages
 
 for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_deps/data/*.dat')) {
   next if $path =~ m{/h2}; # XXX not implemented yet
@@ -194,17 +235,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             }
             if ($type eq 'headers') {
               $result->{response} = $_[2];
-              if ($flag) {
-                $result->{ws_established} = 1;
-                if ($test_type eq 'ws' and $test->{'ws-send'}) {
-                  $http->send_text_header (3);
-                  $http->send_data (\'stu');
-                }
-              } else {
-                if ($test_type eq 'ws') {
-                  AE::postpone { $http->abort };
-                }
-              }
             }
             if ($type eq 'data' or $type eq 'text') {
               $result->{body} = '' unless defined $result->{body};
@@ -231,7 +261,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 delete $result->{response};
                 $result->{body} = '(close)' unless defined $_[2]->{status};
               }
-              $result->{exit} = $_[2];
             }
           };
         }; # $onev
@@ -265,7 +294,34 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 my $got = $_[0];
 
                 my $result = {};
-                return $closed->then (sub { # XXX
+                if ($got->{messages}) {
+                  $result->{ws_established} = 1;
+                  if ($test_type eq 'ws' and $test->{'ws-send'}) {
+                    $stream->send_ws_message (3, not 'binary')->then (sub {
+                      my $writer = $_[0]->{stream}->get_writer;
+                      $writer->write (DataView->new (ArrayBuffer->new_from_scalarref (\'stu')));
+                      return $writer->close;
+                    });
+                  }
+                } else {
+                  if ($test_type eq 'ws') {
+                    Promise->resolve->then (sub { $http->abort });
+                  }
+                }
+                $result->{response} = $stream->{response};
+                return (
+                  defined $got->{messages}
+                    ? rsread_messages ($test, $got->{messages})
+                    : rsread ($test, $got->{body})
+                )->then (sub {
+                  $result->{response_body} = $_[0];
+                })->then (sub {
+                  return $closed;
+                })->then (sub {
+                  $result->{error} = $_[0];
+                }, sub {
+                  $result->{error} = $_[0];
+                })->then (sub {
                   return $result;
                 });
               });
@@ -291,11 +347,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 method => _a $test->{method}->[1]->[0],
                 target => _a $test->{url}->[1]->[0],
               );
-              return $http->send_request ($req, content_length => ($test_type eq 'largerequest-second' ? 1024*1024 : 0))->then (sub {
+              return $http->send_request ($req, content_length => ($test_type eq 'largerequest-second' ? 1024*1024 : undef))->then (sub {
                 my $stream = $_[0]->{stream};
                 my $reqbody = $_[0]->{body}->get_writer;
                 my $closed = $_[0]->{closed};
-warn "XXX [$closed]";
                 my $result = {};
                 return $stream->headers_received->then (sub {
                   my $got = $_[0];
@@ -315,12 +370,18 @@ warn "XXX [$closed]";
                   }
 
                   $result->{response} = $stream->{response};
-                  return rsread ($test, $got->{body})->then (sub {
+                  return (
+                    defined $got->{messages}
+                      ? rsread_messages ($test, $got->{messages})
+                      : rsread ($test, $got->{body})
+                  )->then (sub {
                     $result->{response_body} = $_[0];
                   })->then (sub {
                     return $closed;
                   });
-                })->catch (sub {
+                })->then (sub {
+                  $result->{error} = $_[0];
+                }, sub {
                   $result->{error} = $_[0];
                 })->then (sub {
                   unless ($try_count++) {
@@ -351,7 +412,7 @@ warn "XXX [$closed]";
               method => _a $test->{method}->[1]->[0],
               target => _a $test->{url}->[1]->[0],
             );
-            return $http->send_request ($req, content_length => ($test_type eq 'largerequest' ? 1024*1024 : 0))->then (sub {
+            return $http->send_request ($req, content_length => ($test_type eq 'largerequest' ? 1024*1024 : undef))->then (sub {
               my $stream = $_[0]->{stream};
               my $closed = $_[0]->{closed};
               my $reqbody = $_[0]->{body}->get_writer;
@@ -378,7 +439,9 @@ warn "XXX [$closed]";
                   $result->{response_body} = $_[0];
                 })->then (sub {
                   return $closed;
-                })->catch (sub {
+                })->then (sub {
+                  $result->{error} = $_[0];
+                }, sub {
                   $result->{error} = $_[0];
                 })->then (sub {
                   return $result;
@@ -389,14 +452,14 @@ warn "XXX [$closed]";
         })->then (sub {
           my $result = $_[0];
           my $res = $result->{response};
-          test {
+          return Promise->resolve->then (test {
             my $is_error;
             if ($test_type eq 'ws') {
               $is_error = !$result->{ws_established};
               is !!$is_error, !!$test->{'handshake-error'}, 'is error (ws)';
             } else {
               $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
-              is !!$result->{error}, !!$is_error, 'is error';
+              is !!($result->{error}->{failed}), !!$is_error, 'is error';
             }
 
             #my $expected_1xxes = $test->{'1xx'} || [];
@@ -428,6 +491,7 @@ warn "XXX [$closed]";
               if ($is_error) {
                 ok 1;
               } else {
+                $result->{response_body} = '(close)' unless length $result->{response_body};
                 if ($test->{'received-length'}) {
                   is length ($result->{response_body}), $test->{'received-length'}->[1]->[0] + length '(close)', 'received length';
                 } else {
@@ -435,21 +499,27 @@ warn "XXX [$closed]";
                 }
               }
               if (not $result->{ws_established}) {
-                $result->{exit}->{status} = 1006;
-                $result->{exit}->{reason} = '';
-              } elsif (not defined $result->{exit}->{status}) {
-                $result->{exit}->{status} = 1005;
-                $result->{exit}->{reason} = '';
-              } elsif ($result->{exit}->{status} == 1002) {
-                $result->{exit}->{status} = 1006;
-                $result->{exit}->{reason} = '';
+                $result->{error}->{status} = 1006;
+                $result->{error}->{reason} = '';
+              } elsif (not defined $result->{error}->{status}) {
+                $result->{error}->{status} = 1005;
+                $result->{error}->{reason} = '';
+              } elsif ($result->{error}->{status} == 1002) {
+                $result->{error}->{status} = 1006;
+                $result->{error}->{reason} = '';
               }
-              is $result->{exit}->{status}, $test->{'ws-status'} ? $test->{'ws-status'}->[1]->[0] : $test->{'handshake-error'} ? 1006 : undef, 'WS status code';
-              is $result->{exit}->{reason}, $test->{'ws-reason'} ? $test->{'ws-reason'}->[0] : $test->{'handshake-error'} ? '' : undef, 'WS reason';
-              is !!$result->{exit}->{cleanly}, !!$test->{'ws-was-clean'}, 'WS wasClean';
-              my $expected = perl2json_bytes_for_record (json_bytes2perl (($test->{"result-data"} || ["[]"])->[0]));
-              my $actual = perl2json_bytes_for_record $server->{resultdata};
-              is $actual, $expected, 'resultdata';
+              is $result->{error}->{status}, $test->{'ws-status'} ? $test->{'ws-status'}->[1]->[0] : $test->{'handshake-error'} ? 1006 : undef, 'WS status code';
+              is $result->{error}->{reason}, $test->{'ws-reason'} ? $test->{'ws-reason'}->[0] : $test->{'handshake-error'} ? '' : undef, 'WS reason';
+              is !!$result->{error}->{cleanly}, !!$test->{'ws-was-clean'}, 'WS wasClean';
+
+              return Promise->from_cv ($server->{after_server_close_cv})->then (sub {
+                my $expected = perl2json_bytes_for_record (json_bytes2perl (($test->{"result-data"} || ["[]"])->[0]));
+warn "XXX check resultdata";
+                my $actual = perl2json_bytes_for_record $server->{resultdata};
+                test {
+                  is $actual, $expected, 'resultdata';
+                } $c;
+              });
             } else {
               if ($is_error) {
                 ok 1;
@@ -468,7 +538,7 @@ warn "XXX [$closed]";
               }
             }
 if (0) { # XXX
-            if ($result->{exit}->{reset}) {
+            if ($result->{error}->{reset}) {
               is $result->{r_events}->[-1], 'complete', 'r_events';
               is $result->{s_events}->[-1], 'complete', 's_events';
             } else {
@@ -495,14 +565,15 @@ if (0) { # XXX
                   qr{^(?:requestsent,|)complete$}, 's_events';
             }
 }
-          } $c;
-          return $http->close_after_current_stream;
+          } $c)->then (sub {
+            return $http->close_after_current_stream;
+          });
         }, sub { # connect failed
           my $error = $_[0]; # XXX
           test {
             # XXXX
             # XXX ws handshake error
-            my $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
+            my $is_error = $test->{status} ? ($test->{status}->[1]->[0] == 0 && !defined $test->{reason}) : 1;
             is !!1, !!$is_error, 'is error';
             ok 1, 'response version (skipped)';
             is undef, $test->{status}->[1]->[0] || undef, 'status';

@@ -63,11 +63,22 @@ sub _ws_received ($) {
   my $ws_failed;
   WS: {
     if ($self->{state} eq 'before ws frame') {
-      my $rlength = length $$ref;
-      last WS if $rlength < 2;
+      my $read_bytes = sub ($) {
+        my $want = $_[0] - length $self->{temp_buffer};
+        return 1 if $want <= 0;
 
-      my $b1 = ord substr $$ref, 0, 1;
-      my $b2 = ord substr $$ref, 1, 1;
+        my $avail = length ($$ref) - pos ($$ref);
+        return 0 unless $avail >= $want;
+
+        $self->{temp_buffer} .= substr $$ref, pos $$ref, $want;
+        pos ($$ref) += $want;
+        return 1;
+      }; # $read_bytes
+
+      my $length = 2;
+      $read_bytes->(2) or last WS;
+      my $b1 = ord substr $self->{temp_buffer}, 0, 1;
+      my $b2 = ord substr $self->{temp_buffer}, 1, 1;
       my $fin = $b1 & 0b10000000;
       my $opcode = $b1 & 0b1111;
       my $mask = $b2 & 0b10000000;
@@ -77,9 +88,9 @@ sub _ws_received ($) {
           $ws_failed = '';
           last WS;
         }
-        last WS unless $rlength >= 4;
-        $self->{unread_length} = unpack 'n', substr $$ref, 2, 2;
-        pos ($$ref) = 4;
+        $length = 4;
+        $read_bytes->(4) or last WS;
+        $self->{unread_length} = unpack 'n', substr $self->{temp_buffer}, 2, 2;
         if ($self->{unread_length} < 126) {
           $ws_failed = '';
           last WS;
@@ -89,9 +100,9 @@ sub _ws_received ($) {
           $ws_failed = '';
           last WS;
         }
-        last WS unless $rlength >= 10;
-        $self->{unread_length} = unpack 'Q>', substr $$ref, 2, 8;
-        pos ($$ref) = 10;
+        $length = 10;
+        $read_bytes->(10) or last WS;
+        $self->{unread_length} = unpack 'Q>', substr $self->{temp_buffer}, 2, 8;
         if ($self->{unread_length} > MAX_BYTES) { # spec limit=2**63
           $ws_failed = '';
           last WS;
@@ -100,14 +111,12 @@ sub _ws_received ($) {
           $ws_failed = '';
           last WS;
         }
-      } else {
-        pos ($$ref) = 2;
       }
       if ($mask) {
-        last WS unless $rlength >= pos ($$ref) + 4;
-        $self->{ws_decode_mask_key} = substr $$ref, pos ($$ref), 4;
+        $read_bytes->($length + 4) or last WS;
+        $self->{ws_decode_mask_key} = substr $self->{temp_buffer}, $length, 4;
+        $length += 4;
         $self->{ws_read_length} = 0;
-        pos ($$ref) += 4;
         unless ($self->{is_server}) {
           $ws_failed = 'Masked frame from server';
           last WS;
@@ -156,41 +165,27 @@ sub _ws_received ($) {
         $self->{ws_frame} = [$opcode, []];
       }
       $self->{ws_frame}->[2] = 1 if $fin;
-      substr ($$ref, 0, pos $$ref) = '';
       $self->{state} = 'ws data';
     }
     if ($self->{state} eq 'ws data') {
-      if ($self->{unread_length} > 0 and
-          length ($$ref) >= $self->{unread_length}) {
+      if ($self->{unread_length} > 0) {
+        my $length = length ($$ref) - pos ($$ref);
+        $length = $self->{unread_length} if $self->{unread_length} < $length;
+        push @{$self->{ws_frame}->[1]}, substr $$ref, pos $$ref, $length; # XXX string copy!
         if (defined $self->{ws_decode_mask_key}) {
-          push @{$self->{ws_frame}->[1]}, substr $$ref, 0, $self->{unread_length};
-          for (0..((length $self->{ws_frame}->[1]->[-1])-1)) {
-            substr ($self->{ws_frame}->[1]->[-1], $_, 1) = substr ($self->{ws_frame}->[1]->[-1], $_, 1) ^ substr ($self->{ws_decode_mask_key}, ($self->{ws_read_length} + $_) % 4, 1);
-          }
-          $self->{ws_read_length} += length $self->{ws_frame}->[1];
-        } else {
-          push @{$self->{ws_frame}->[1]}, substr $$ref, 0, $self->{unread_length};
-        }
-        #if ($self->{DEBUG} > 1 or
-        #    ($self->{DEBUG} and $self->{ws_frame}->[0] >= 8)) {
-        if ($self->{DEBUG} and $self->{ws_frame}->[0] == 8) {
-          my $id = defined $self->{request} ? $self->{request}->{id} : $self->{id};
-          if ($self->{ws_frame}->[0] == 8 and
-              $self->{unread_length} > 1) {
-            warn sprintf "$id: R: status=%d %s\n",
-                unpack ('n', substr $$ref, 0, 2),
-                _e4d substr ($$ref, 2, $self->{unread_length});
-          } else {
-            warn sprintf "$id: R: %s\n",
-                _e4d substr ($$ref, 0, $self->{unread_length});
+          for (0..($length-1)) {
+            substr ($self->{ws_frame}->[1]->[-1], $_, 1)
+                = substr ($self->{ws_frame}->[1]->[-1], $_, 1)
+                ^ substr ($self->{ws_decode_mask_key}, ($self->{ws_read_length} + $_) % 4, 1);
           }
         }
-        substr ($$ref, 0, $self->{unread_length}) = '';
-        $self->{unread_length} = 0;
+        $self->{ws_read_length} += $length;
+        pos ($$ref) += $length;
+        $self->{unread_length} -= $length;
       }
       if ($self->{unread_length} <= 0) {
-        if ($self->{ws_frame}->[0] == 8) {
-          my $data = join '', @{$self->{ws_frame}->[1]};
+        if ($self->{ws_frame}->[0] == 8) { # close
+          my $data = join '', @{$self->{ws_frame}->[1]}; # XXX string copy!
           if (1 == length $data) {
             $ws_failed = '-';
             last WS;
@@ -210,9 +205,14 @@ sub _ws_received ($) {
               last WS;
             }
           }
+          if ($self->{DEBUG} and $self->{unread_length} > 1) {
+            my $id = 'XXX';
+            warn sprintf "$id: R: status=%d %s\n",
+                unpack ('n', $status), _e4d $reason;
+          }
           unless ($self->{ws_state} eq 'CLOSING') {
             $self->{ws_state} = 'CLOSING';
-            $stream->_ev ('closing');
+            $stream->_ev ('closing');  #XXX
             my $mask = '';
             my $masked = 0;
             unless ($self->{is_server}) {
@@ -226,15 +226,25 @@ sub _ws_received ($) {
                               FIN => 1, opcode => 8, mask => $mask,
                               length => length $data, status => $status)
                 if $self->{DEBUG};
-            $self->{ws_writable} = $self->{ws_writable}->then (sub {
-              return $self->{writer}->write
+#XXX            $self->{ws_writable} = $self->{ws_writable}->then (sub {
+              $self->{writer}->write
                   (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 8, $masked | length $data) . $mask . $data))));
-            });
+#XXX            });
           }
           $self->{state} = 'ws terminating';
           $self->{exit} = {status => defined $status ? $status : 1005,
                            reason => defined $reason ? $reason : '',
                            ws => 1, cleanly => 1};
+          if (length ($$ref) - pos ($$ref)) { # ws terminating state
+            if (not $self->{exit}->{failed}) {
+              $self->{exit}->{failed} = 1;
+              $self->{exit}->{ws} = 1;
+              $self->{exit}->{status} = 1006;
+              $self->{exit}->{reason} = '';
+              delete $self->{exit}->{cleanly};
+            }
+            $$ref = '';
+          }
           if ($self->{is_server}) {
             $stream->_send_done;
             $stream->_receive_done;
@@ -252,7 +262,7 @@ sub _ws_received ($) {
         } elsif ($self->{ws_frame}->[0] <= 2) { # 0, 1, 2
           if ($self->{ws_frame}->[2]) { # FIN
             if ($self->{ws_frame}->[0] == 1) { # text
-              my $buffer = join '', @{$self->{ws_frame}->[1]};
+              my $buffer = join '', @{$self->{ws_frame}->[1]}; # XXX string copy!
               $self->{ws_frame}->[1] = [eval { decode 'utf-8', $buffer, Encode::FB_CROAK }]; # XXX Encoding Standard # XXX streaming decoder
               if (length $buffer) {
                 $ws_failed = 'Invalid UTF-8 in text frame';
@@ -280,7 +290,7 @@ sub _ws_received ($) {
               });
               $stream->{receive_message_controller}->enqueue ({
                 type => 'binary',
-                data_stream => $rs,
+                data_stream => $rs, # XXX
               });
               for (@{$self->{ws_frame}->[1]}) {
                 $rc->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\$_)));
@@ -304,11 +314,11 @@ sub _ws_received ($) {
               substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
             }
           }
-          $self->{ws_writable} = $self->{ws_writable}->then (sub {
-            return $self->{writer}->write
+#XXX          $self->{ws_writable} = $self->{ws_writable}->then (sub {
+            $self->{writer}->write
                 (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 10, $masked | length $data) .
                    $mask . $data))));
-          });
+#XXX          });
           #XXX $stream->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 0);
         } elsif ($self->{ws_frame}->[0] == 10) {
           #XXX $stream->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 1);
@@ -316,6 +326,7 @@ sub _ws_received ($) {
         delete $self->{ws_frame};
         delete $self->{ws_decode_mask_key};
         $self->{state} = 'before ws frame';
+        $self->{temp_buffer} = '';
         redo WS;
       }
     }
@@ -340,20 +351,28 @@ sub _ws_received ($) {
     $stream->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8,
                       mask => $mask, length => length $data,
                       status => $self->{exit}->{status}) if $self->{DEBUG};
-    $self->{ws_writable} = $self->{ws_writable}->then (sub {
-      return $self->{writer}->write
+#XXX    $self->{ws_writable} = $self->{ws_writable}->then (sub {
+      $self->{writer}->write
           (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 8, $masked | length $data) .
              $mask . $data))));
-    });
+#XXX    });
     $self->{state} = 'ws terminating';
     $self->{no_new_request} = 1;
+
     # XXX
-    $stream->_send_done;
-    $stream->_receive_done;
+    if ($self->{is_server}) {
+      $stream->_send_done;
+      $stream->_receive_done;
+    } else {
+      $self->_send_done;
+      $self->_receive_done;
+    }
+    #XXX
+
     return;
   }
   if ($self->{state} eq 'ws terminating') {
-    if (length $$ref) {
+    if ((length $$ref) - (pos $$ref)) {
       if (not $self->{exit}->{failed}) {
         $self->{exit}->{failed} = 1;
         $self->{exit}->{ws} = 1;
@@ -361,15 +380,18 @@ sub _ws_received ($) {
         $self->{exit}->{reason} = '';
         delete $self->{exit}->{cleanly};
       }
-      $$ref = '';
+      $ref = \'';
     }
+  }
+  if ((length $$ref) - (pos $$ref)) { # before ws frame
+    $self->{temp_buffer} .= substr $$ref, pos $$ref;
+    $ref = \'';
   }
 } # _ws_received
 
 sub _ws_received_eof ($;%) {
   my ($self, $ref, %args) = @_;
 
-warn "XXX eof $self->{state}+";
   if ($self->{state} eq 'before ws frame' or
       $self->{state} eq 'ws data') {
     $self->{ws_state} = 'CLOSING';
@@ -606,13 +628,14 @@ sub _open_sending_stream ($;%) {
   my $canceled = 0;
 
   if ($args{XXX_ws_message}) {
- 
     my ($ok, $ng);
     my $p = Promise->new (sub { ($ok, $ng) = @_ });
     my $ws = WritableStream->new ({
       start => sub {
 #XXX
-        $con->{cancel_current_writable_stream} = sub { };
+        $con->{cancel_current_writable_stream} = sub {
+          delete $con->{cancel_current_writable_stream};
+        };
       },
       write => sub {
         my $chunk = $_[1];
@@ -622,7 +645,7 @@ sub _open_sending_stream ($;%) {
           die Web::DOM::TypeError->new ("Not writable")
               if not $is_body;
           # XXX $chunk type
-          my $byte_length = $chunk->byte_length;
+          my $byte_length = $chunk->byte_length; # can throw
           die Web::DOM::TypeError->new
               (sprintf "Byte length %d is greater than expected length %d",
                    $byte_length, $con->{to_be_sent_length})
@@ -640,26 +663,26 @@ sub _open_sending_stream ($;%) {
         }
 
         if (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') {
-          my $ref = \('X' x $byte_length); # XXX
-          my @data;
           my $mask = $con->{ws_encode_mask_key};
           if (defined $mask) {
+            my @data;
+            $chunk = DataView->new ($chunk->buffer, $chunk->byte_offset, $byte_length); # or throw
+            my $ref = \($chunk->manakai_to_string);
             my $o = $con->{ws_sent_length};
             for (0..($byte_length-1)) {
               push @data, substr ($$ref, $_, 1) ^ substr ($mask, ($o+$_) % 4, 1);
             }
-          }
-            $con->{ws_sent_length} += $byte_length;
-            $con->{to_be_sent_length} -= $byte_length;
-            if (defined $mask) {
               $con->{writer}->write
                   (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
             } else {
               $con->{writer}->write ($chunk);
             }
 
+            $con->{ws_sent_length} += $byte_length;
+            $con->{to_be_sent_length} -= $byte_length;
           if ($con->{to_be_sent_length} <= 0) {
             delete $con->{cancel_current_writable_stream};
+            $canceled = 1;
             delete $con->{ws_message_stream_controller};
             $ok->();
           }
@@ -668,6 +691,8 @@ sub _open_sending_stream ($;%) {
           }
         })->catch (sub {
           $con->abort (message => $_[0]);
+          $con->{cancel_current_writable_stream}->($_[0])
+              if defined $con->{cancel_current_writable_stream};
           $ng->($_[0]);
           die $_[0];
         });
@@ -677,7 +702,8 @@ sub _open_sending_stream ($;%) {
         my $error = Web::DOM::TypeError->new
             (sprintf "Closed before bytes (n = %d) are sent", $con->{to_be_sent_length});
         $con->abort (message => $error);
-      delete $con->{cancel_current_writable_stream};
+        $con->{cancel_current_writable_stream}->($error)
+            if defined $con->{cancel_current_writable_stream};
         delete $con->{ws_message_stream_controller};
         $ng->($error);
         die $error;
@@ -686,7 +712,8 @@ sub _open_sending_stream ($;%) {
       }, # close
       abort => sub {
         delete $con->{ws_message_stream_controller};
-      
+        $con->{cancel_current_writable_stream}->($_[1])
+            if defined $con->{cancel_current_writable_stream};
       # XXX
 
         $ng->();
@@ -695,7 +722,7 @@ sub _open_sending_stream ($;%) {
 
     # XXX
     if ($con->{to_be_sent_length} <= 0) {
-      delete $con->{cancel_current_writable_stream};
+      $con->{cancel_current_writable_stream}->();
       delete $con->{ws_message_stream_controller};
       $ok->();
     }
@@ -711,7 +738,7 @@ sub _open_sending_stream ($;%) {
       $con->{cancel_current_writable_stream} = sub {
         $wc->error ($_[0]) if defined $_[0];
         $canceled = 1;
-        $con->{cancel_current_writable_stream} = sub { };
+        delete $con->{cancel_current_writable_stream};
       };
     }, # start
     write => sub {
@@ -767,13 +794,16 @@ sub _open_sending_stream ($;%) {
             $con->{to_be_sent_length} -= $byte_length;
             if (defined $con->{to_be_sent_length} and
                 $con->{to_be_sent_length} <= 0) {
+              delete $con->{cancel_current_writable_stream};
+              $canceled = 1;
               return $sent->then (sub { $stream->_close_stream });
             }
           }
           return $sent;
         }
       })->catch (sub {
-        $con->{cancel_current_writable_stream}->($_[0]);
+        $con->{cancel_current_writable_stream}->($_[0])
+            if defined $con->{cancel_current_writable_stream};
         $stream->abort (message => $_[0]); # XXX
         die $_[0];
       });
@@ -784,16 +814,20 @@ sub _open_sending_stream ($;%) {
           my $error = Web::DOM::TypeError->new
               (sprintf "Closed before bytes (n = %d) are sent",
                    $con->{to_be_sent_length});
-          $con->{cancel_current_writable_stream}->($error);
+          $con->{cancel_current_writable_stream}->($error)
+              if defined $con->{cancel_current_writable_stream};
           $con->abort (message => $error); # XXX
           die $error;
         }
       }
 
+      delete $con->{cancel_current_writable_stream};
+      $canceled = 1;
       return $stream->_close_stream;
     }, # close
     abort => sub {
-      $con->{cancel_current_writable_stream}->($_[1]);
+      $con->{cancel_current_writable_stream}->($_[1])
+          if defined $con->{cancel_current_writable_stream};
       return $con->abort (message => $_[1]); # XXX
     },
   });
@@ -806,7 +840,7 @@ sub _open_sending_stream ($;%) {
       $con->{cancel_current_writable_stream} = sub {
         $wc->error ($_[0]) if defined $_[0];
         $canceled = 1;
-        $con->{cancel_current_writable_stream} = sub { };
+        delete $con->{cancel_current_writable_stream};
       };
     }, # start
     write => sub {
@@ -838,6 +872,8 @@ sub _open_sending_stream ($;%) {
         if (defined $con->{to_be_sent_length}) {
           $con->{to_be_sent_length} -= $byte_length;
           if ($con->{to_be_sent_length} <= 0) {
+            delete $con->{cancel_current_writable_stream};
+            $canceled = 1;
             return $sent->then (sub {
               $con->_send_done;
             });
@@ -845,7 +881,8 @@ sub _open_sending_stream ($;%) {
         }
         return $sent;
       })->catch (sub {
-        $con->{cancel_current_writable_stream}->($_[0]);
+        $con->{cancel_current_writable_stream}->($_[0])
+            if defined $con->{cancel_current_writable_stream};
         $con->abort (message => $_[0]); # XXX
         die $_[0];
       });
@@ -856,7 +893,8 @@ sub _open_sending_stream ($;%) {
           my $error = Web::DOM::TypeError->new
               (sprintf "Closed before bytes (n = %d) are sent",
                    $con->{to_be_sent_length});
-          $con->{cancel_current_writable_stream}->($error);
+          $con->{cancel_current_writable_stream}->($error)
+              if defined $con->{cancel_current_writable_stream};
           $con->abort (message => $error); # XXX
           die $error;
         }
@@ -866,7 +904,8 @@ sub _open_sending_stream ($;%) {
       }
     }, # close
     abort => sub {
-      $con->{cancel_current_writable_stream}->($_[1]);
+      $con->{cancel_current_writable_stream}->($_[1])
+          if defined $con->{cancel_current_writable_stream};
       return $con->abort (message => $_[1]); # XXX
     }, # abort
   });
@@ -1091,15 +1130,15 @@ sub send_ws_message ($$$) {
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask,
                     length => $length) if $self->{DEBUG}; # XXX
   my ($r_stream, $s_stream) = promised_cv; # XXX reject if aborted
-  $con->{ws_writable} = $con->{ws_writable}->then (sub {
-    return $con->{writer}->write
+#XXX  $con->{ws_writable} = $con->{ws_writable}->then (sub {
+    $con->{writer}->write
         (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | ($is_binary ? 2 : 1), $masked | $length0) .
            $len . $mask))));
-  })->then (sub {
+#XXX  })->then (sub {
     my ($ws, $p) = $con->{stream}->_open_sending_stream (XXX_ws_message => 1);
     $s_stream->($ws);
-    return $p;
-  }); # ws_writable
+#XXX    return $p;
+#XXX  }); # ws_writable
 
   return $r_stream->then (sub {
     return {stream => $_[0]}; # XXX
@@ -1117,7 +1156,7 @@ sub send_ping ($;%) {
       if not (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') or
          defined $con->{cancel_current_writable_stream};
 
-  $con->{ws_writable} = $con->{ws_writable}->then (sub {
+#XXX  $con->{ws_writable} = $con->{ws_writable}->then (sub {
     my $mask = '';
     my $masked = 0;
     unless ($self->{is_server}) {
@@ -1136,7 +1175,7 @@ sub send_ping ($;%) {
     return $con->{writer}->write
         (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | $opcode, $masked | length $args{data}) .
            $mask . $args{data}))));
-  });
+#XXX  });
   # XXX return promise waiting pong?
 } # send_ping
 
@@ -1184,7 +1223,7 @@ sub send_ws_close ($;$$) {
       $con->{pending_frame} = $frame;
       $con->{pending_frame_info} = $frame_info if $con->{DEBUG};
     } else {
-      $con->{ws_writable} = $con->{ws_writable}->then (sub {
+#XXX      $con->{ws_writable} = $con->{ws_writable}->then (sub {
         $con->_ws_debug ('S', @$frame_info) if $con->{DEBUG};
         $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$frame)));
         $con->{ws_state} = 'CLOSING';
@@ -1201,7 +1240,7 @@ sub send_ws_close ($;$$) {
           }
         };
         $stream->_ev ('closing'); # XXX
-      });
+#XXX      });
     }
 
     return $stream->{closed};
@@ -1320,7 +1359,8 @@ sub _fatal ($$) {
   $con->{no_new_request} = 1;
 
   $con->{write_mode} = 'sent';
-  $con->{cancel_current_writable_stream}->();
+  $con->{cancel_current_writable_stream}->()
+      if defined $con->{cancel_current_writable_stream};
 
   $con->{reader}->cancel;
   delete $con->{reader};
@@ -1402,6 +1442,7 @@ sub _read ($) {
   return unless defined $self->{reader};
   return if $self->{read_running};
   $self->{read_running} = 1;
+warn "read...";
 
   if ($BytesDataStates->{$self->{state}} and
       defined $self->{stream} and
@@ -1440,13 +1481,18 @@ sub _read ($) {
     } # $expected_size
   } # byob
 
-  my $view = TypedArray::Uint8Array->new (ArrayBuffer->new (1024*2));
+  my $view = DataView->new (ArrayBuffer->new (1024*2));
   $view->buffer->manakai_label ('HTTP-client reading');
+warn "read,";
   return $self->{reader}->read ($view)->then (sub {
     delete $self->{read_running};
     return if $_[0]->{done};
 
+warn "...", join ' ', map { sprintf  "%02X", ord $_ } split //, $_[0]->{value}->manakai_to_string;
+warn "temo buffer: " , map { sprintf  "%02X", ord $_ } split //, $self->{temp_buffer};
+
     $self->_process_rbuf ($_[0]->{value});
+warn "read more!";
     return $self->_read;
   }, sub {
     delete $self->{read_running};
@@ -1703,7 +1749,8 @@ sub _process_rbuf ($$) {
           $self->{temp_buffer} = '';
           if (defined $self->{pending_frame}) {
             $self->{ws_state} = 'CLOSING';
-            $self->{ws_writable} = $self->{writer}->write
+#XXX            $self->{ws_writable} =
+            $self->{writer}->write
                 (DataView->new (ArrayBuffer->new_from_scalarref (\($self->{pending_frame}))));
             $self->_ws_debug ('S', @{$self->{pending_frame_info}}) if $self->{DEBUG}; # XXX $self->{stream}
             $self->{ws_timer} = AE::timer 20, 0, sub {
@@ -1711,7 +1758,7 @@ sub _process_rbuf ($$) {
               $self->_receive_done;
             };
           } else {
-            $self->{ws_writable} = Promise->resolve;
+#XXX            $self->{ws_writable} = Promise->resolve;
           }
         }
       } elsif (100 <= $res->{status} and $res->{status} <= 199) {
@@ -1961,7 +2008,7 @@ sub _process_rbuf ($$) {
   if ($self->{state} eq 'before ws frame' or
       $self->{state} eq 'ws data' or
       $self->{state} eq 'ws terminating') {
-    return $self->_ws_received (\substr $$ref, pos $$ref);
+    return $self->_ws_received ($ref);
   }
   if ($self->{state} eq 'tunnel') {
     $self->{stream}->{receive_controller}->enqueue
@@ -2004,7 +2051,8 @@ sub _process_rbuf_eof ($;%) {
                        errno => $args{errno},
                        can_retry => !$args{abort} && !$self->{response_received}};
       $self->{write_mode} = 'sent';
-      $self->{cancel_current_writable_stream}->();
+      $self->{cancel_current_writable_stream}->()
+          if defined $self->{cancel_current_writable_stream};
     }
   } elsif ($self->{state} eq 'response body') {
     if (defined $self->{unread_length} and $self->{unread_length} > 0) {
@@ -2227,9 +2275,6 @@ sub _both_done ($) {
   if (defined $self->{request} and $self->{write_mode} eq 'sent') {
     if ($self->{exit}->{failed}) {
       $self->{response}->{stream_reject}->($self->{exit});
-warn "XXXX";
-      use Data::Dumper;
-warn Dumper $self->{exit};
 
       my $stream = $self->{stream};
       if (defined $stream->{headers_received} and
@@ -2240,8 +2285,7 @@ warn Dumper $self->{exit};
       my $rc = delete $stream->{receive_controller};
       $rc->error ($self->{exit}) if defined $rc;
     } else {
-warn "XXXXXXX resolve", Carp::longmess;
-      $self->{response}->{stream_resolve}->();
+      $self->{response}->{stream_resolve}->($self->{exit});
     }
     $self->_ev ('complete', $self->{exit}); # XXX
   }
@@ -2661,7 +2705,13 @@ sub _ondata ($$) {
     } elsif ($self->{state} eq 'before ws frame' or
              $self->{state} eq 'ws data' or
              $self->{state} eq 'ws terminating') {
-      return $self->_ws_received ($inref);
+      my $ref = $inref;
+      if (length $self->{rbuf}) {
+        $ref = \($self->{rbuf} . $$inref); # string copy!
+        $self->{rbuf} = '';
+      }
+      pos ($$ref) = 0;
+      return $self->_ws_received ($ref);
     } elsif ($self->{state} eq 'ws handshaking') {
       return unless length $$inref;
       return $self->{stream}->_fatal;
@@ -3115,7 +3165,8 @@ sub send_response ($$$;%) {
   if ($is_ws) {
     $con->{ws_state} = 'OPEN';
     $con->{state} = 'before ws frame';
-    $con->{ws_writable} = Promise->resolve;
+    $con->{temp_buffer} = '';
+#XXX    $con->{ws_writable} = Promise->resolve;
   }
 
   if ($write_mode eq 'void') {
@@ -3279,7 +3330,6 @@ sub _both_done ($) {
   my $con = $stream->{connection};
   return unless defined $con;
 
-warn "XXX both";
   if (delete $stream->{close_after_response}) {
     $con->{writer}->close if defined $con->{writer};
     delete $con->{writer};

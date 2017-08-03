@@ -2766,7 +2766,7 @@ test {
     my $res = $_[0];
     test {
       like $error, qr{^TypeError: Not writable at }; # XXX location
-      is $received, '(end)(end)';
+      is $received, '(end)';
       ok ! $res->is_network_error;
       ok ! $res->ws_closed_cleanly;
       is $res->ws_code, 1006;
@@ -2871,8 +2871,9 @@ test {
         $writer->write (d "123");
         return $self->send_ws_message (4, 'binary')->catch (sub {
           $error = $_[0];
-          $writer->write (d "45");
-          return $self->send_ws_close (5678);
+          $writer->write (d "45")->then (sub {
+            return $self->send_ws_close (5678);
+          });
         });
       });
     });

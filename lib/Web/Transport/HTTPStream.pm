@@ -384,9 +384,9 @@ sub _ws_received ($) {
     $self->{ws_state} = 'CLOSING';
     $ws_failed = 'WebSocket Protocol Error' unless length $ws_failed;
     $ws_failed = '' if $ws_failed eq '-';
-    $self->{exit} = {ws => 1, failed => 1, status => 1002, reason => $ws_failed};
-    my $data = pack 'n', $self->{exit}->{status};
-    $data .= $self->{exit}->{reason};
+    my $exit = {ws => 1, failed => 1, status => 1002, reason => $ws_failed};
+    my $data = pack 'n', $exit->{status};
+    $data .= $exit->{reason};
     my $mask = '';
     my $masked = 0;
     unless ($self->{is_server}) {
@@ -397,20 +397,13 @@ sub _ws_received ($) {
       }
     }
     # length $data must be < 126
-    $stream->_ws_debug ('S', $self->{exit}->{reason}, FIN => 1, opcode => 8,
-                      mask => $mask, length => length $data,
-                      status => $self->{exit}->{status}) if $self->{DEBUG};
+    $stream->_ws_debug ('S', $exit->{reason}, FIN => 1, opcode => 8,
+                        mask => $mask, length => length $data,
+                        status => $exit->{status}) if $self->{DEBUG};
     $self->{writer}->write
         (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 8, $masked | length $data) . $mask . $data))));
     $self->{state} = 'ws terminating';
-    $self->{to_be_closed} = 1;
-
-    # XXX
-    $self->_send_done;
-    $self->_receive_done;
-    #XXX
-
-    return;
+    return $self->_fatal ($exit);
   }
   if ($self->{state} eq 'ws terminating') {
     if ((length $$ref) - (pos $$ref)) {
@@ -604,6 +597,111 @@ sub close_after_current_stream ($) {
   return $con->{closed};
 } # close_after_current_stream
 
+# XXX server tests
+sub is_active ($) {
+  return defined $_[0]->{state} && !$_[0]->{to_be_closed};
+} # is_active
+
+sub abort ($;%) {
+  my ($self, %args) = @_;
+  if (not defined $self->{state}) {
+    return Promise->reject ("Connection has not been established");
+  }
+  my $error = Web::DOM::Error->wrap ($args{message});
+
+  if ($self->{is_server}) {
+
+  if (defined $self->{writer}) {
+    $self->{writer}->abort ($error);
+    $self->_send_done ($error);
+    delete $self->{writer};
+  }
+
+} else {
+
+  $self->{to_be_closed} = 1;
+  $self->{write_mode} = 'sent';
+  delete $self->{to_be_sent_length};
+  $self->{writer}->abort ($error)
+      if defined $self->{writer};
+
+}
+
+  if (defined $self->{reader}) {
+    unless ($self->{is_server}) { # XXX
+      $self->{reader}->cancel ($error)->catch (sub { });
+    }
+  }
+
+  return $self->{closed};
+} # abort
+
+# XXX tests
+sub closed ($) {
+  return $_[0]->{closed};
+} # closed
+
+sub _fatal ($$) {
+  my $con = $_[0];
+  my $error;
+  if (defined $_[1]) {
+    if (ref $_[1]) {
+      $error = $_[1];
+    } else {
+      $error = {failed => 1, message => $_[1]};
+    }
+  } else {
+    $error = {failed => 1, message => 'Parse error'}; # XXX
+  }
+
+  $con->{exit} = $error if defined $error;
+  $con->{to_be_closed} = 1;
+
+  if ($con->{state} eq 'ws terminating') {
+    $con->_send_done;
+    $con->_receive_done;
+    return;
+  }
+
+  if ($con->{is_server}) {
+    $con->_receive_done;
+    $con->{state} = 'end';
+    $con->{rbuf} = '';
+    return $con->_send_error (400, 'Bad Request');
+  } else {
+    $con->_send_done;
+    $con->_receive_done;
+  }
+} # _fatal
+
+sub _send_error ($$$;$) {
+  my ($con, $status, $status_text, $headers) = @_;
+
+  if (defined $con->{write_mode}) {
+    ## A response is being sent or has been sent.
+    return $con->abort; # XXX {$status $status_text}
+  }
+
+  my $stream = $con->{stream};
+  my $res = qq{<!DOCTYPE html><html>
+<head><title>$status $status_text</title></head>
+<body>$status $status_text};
+  #$res .= Carp::longmess;
+  $res .= qq{</body></html>\x0A};
+  $stream->send_response
+      ({status => $status, status_text => $status_text,
+        headers => [
+          @{$headers or []},
+          ['Content-Type' => 'text/html; charset=utf-8'],
+        ]}, close => 1, content_length => length $res)->then (sub {
+    my $w = $_[0]->{body}->get_writer;
+    $w->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)))
+        unless $stream->{request}->{method} eq 'HEAD';
+    return $w->close;
+  });
+  return;
+} # _send_error
+
 sub _send_done ($;$) {
   my ($con, $error) = @_;
   my $stream = $con->{stream};
@@ -675,7 +773,6 @@ sub _receive_done ($) {
 
   return if $con->{state} eq 'stopped';
 
-  my $stream = $con->{stream};
   if (defined $stream->{messages_controller}) {
     $stream->{messages_controller}->close;
     delete $stream->{messages_controller};
@@ -783,16 +880,26 @@ sub DESTROY ($) {
       if $@ =~ /during global destruction/;
 } # DESTROY
 
+# End of ::Connection
+
 package Web::Transport::HTTPStream::Stream;
 use Carp qw(croak);
 use MIME::Base64 qw(encode_base64);
+use Digest::SHA qw(sha1);
 use Web::Encoding;
 use ArrayBuffer;
 use DataView;
 use AnyEvent;
 use Promise;
 use Promised::Flow;
-push our @CARP_NOT, qw(Web::DOM::TypeError Web::Transport::HTTPStream::ClientConnection WritableStream WritableStreamDefaultWriter);
+use Web::DateTime;
+use Web::DateTime::Clock;
+push our @CARP_NOT, qw(
+  Web::DOM::TypeError
+  Web::Transport::HTTPStream::ClientConnection
+  Web::Transport::HTTPStream::ServerConnection
+  WritableStream WritableStreamDefaultWriter
+);
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
@@ -1546,24 +1653,146 @@ sub _ev ($$;$$) {
   }
 } # _ev
 
-sub _fatal ($$) {
-  my ($stream, $msg) = @_;
+sub send_response ($$$;%) {
+  my ($stream, $response, %args) = @_;
   my $con = $stream->{connection};
 
-  $con->{exit} = {failed => 1, message => $msg};
-  $con->{to_be_closed} = 1;
+  return Promise->reject (Web::DOM::TypeError->new ("Response is not allowed"))
+      if not defined $con or defined $con->{write_mode} or not $con->{is_server};
 
-  $con->{write_mode} = 'sent';
-  $con->{cancel_current_writable_stream}->()
-      if defined $con->{cancel_current_writable_stream};
+  my $close = $args{close} ||
+              $con->{to_be_closed} ||
+              $stream->{request}->{version} == 0.9;
+  my $connect = 0;
+  my $is_ws = 0;
+  my @header;
+  my $to_be_sent = undef;
+  my $write_mode = 'sent';
+  if ($stream->{request}->{method} eq 'HEAD' or
+      $response->{status} == 204 or
+      $response->{status} == 304) {
+    ## No response body by definition
+    return Promise->reject
+        (Web::DOM::TypeError->new ("Bad byte length $args{content_length}"))
+            if defined $args{content_length};
+    $to_be_sent = 0;
+  } elsif ($stream->{request}->{method} eq 'CONNECT' and
+           200 <= $response->{status} and $response->{status} < 300) {
+    ## No response body by definition but switched to the tunnel mode
+    croak "|content_length| not allowed" if defined $args{content_length};
+    $write_mode = 'raw';
+    $connect = 1;
+  } elsif (100 <= $response->{status} and $response->{status} < 200) {
+    ## No response body by definition
+    croak "|content_length| not allowed" if defined $args{content_length};
+    if (defined $stream->{ws_key} and $response->{status} == 101) {
+      $is_ws = 1;
+      $write_mode = 'ws';
+    } else {
+      return Promise->reject
+          (Web::DOM::TypeError->new ("1xx response not supported"));
+    }
+  } else {
+    if (defined $args{content_length}) {
+      ## If body length is specified
+      $write_mode = 'raw';
+      $to_be_sent = 0+$args{content_length};
+      push @header, ['Content-Length', $to_be_sent];
+    } elsif ($stream->{request}->{version} == 1.1) {
+      ## Otherwise, if chunked encoding can be used
+      $write_mode = 'chunked';
+    } else {
+      ## Otherwise, end of the response is the termination of the connection
+      $close = 1;
+      $write_mode = 'raw';
+    }
+    $close = 1 if $stream->{request}->{method} eq 'CONNECT';
+  }
 
-  $con->{reader}->cancel;
-  delete $con->{reader};
+  unless ($args{proxying}) {
+    push @header, ['Server', encode_web_utf8 (defined $con ? $con->server_header : '')];
 
-  $con->_receive_done;
-} # _fatal
+    my $dt = Web::DateTime->new_from_unix_time
+        (Web::DateTime::Clock->realtime_clock->()); # XXX
+    push @header, ['Date', $dt->to_http_date_string];
+  }
 
-# XXX
+  if ($is_ws) {
+    push @header,
+        ['Upgrade', 'websocket'],
+        ['Connection', 'Upgrade'],
+        ['Sec-WebSocket-Accept', encode_base64 sha1 ($stream->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), ''];
+      # XXX Sec-WebSocket-Protocol
+      # XXX Sec-WebSocket-Extensions
+  } else {
+    if ($close and not $connect) {
+      push @header, ['Connection', 'close'];
+    } elsif ($stream->{request}->{version} == 1.0) {
+      push @header, ['Connection', 'keep-alive'];
+    }
+    if ($write_mode eq 'chunked') {
+      push @header, ['Transfer-Encoding', 'chunked'];
+    }
+  }
+
+  push @header, @{$response->{headers} or []};
+
+  croak "Bad status text |@{[_e4d $response->{status_text}]}|"
+      if $response->{status_text} =~ /[\x0D\x0A]/;
+  croak "Status text is utf8-flagged"
+      if utf8::is_utf8 $response->{status_text};
+
+  for (@header) {
+    croak "Bad header name |@{[_e4d $_->[0]]}|"
+        unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
+    croak "Bad header value |$_->[0]: @{[_e4d $_->[1]]}|"
+        unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
+    croak "Header name |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[0];
+    croak "Header value of |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[1];
+  }
+
+  if ($is_ws) {
+    $con->{ws_state} = 'OPEN';
+    $con->{state} = 'before ws frame';
+    $con->{temp_buffer} = '';
+  }
+
+  if ($stream->{request}->{version} != 0.9) {
+    my $res = sprintf qq{HTTP/1.1 %d %s\x0D\x0A},
+        $response->{status},
+        $response->{status_text};
+    for (@header) {
+      $res .= "$_->[0]: $_->[1]\x0D\x0A";
+    }
+    $res .= "\x0D\x0A";
+    if ($stream->{DEBUG}) {
+      warn "$stream->{id}: Sending response headers... @{[scalar gmtime]}\n";
+      for (split /\x0A/, $res) {
+        warn "$stream->{id}: S: @{[_e4d $_]}\n";
+      }
+    }
+
+    $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)));
+  } else {
+    if ($stream->{DEBUG}) {
+      warn "$stream->{id}: Response headers skipped (HTTP/0.9) @{[scalar gmtime]}\n";
+    }
+  }
+
+  $con->{to_be_closed} = 1 if $close;
+  $con->{write_mode} = $write_mode;
+  $con->{to_be_sent_length} = $to_be_sent; # or undef
+  my ($ws) = $stream->_open_sending_stream (is_ws => $is_ws, XXX_response => 1);
+
+  return Promise->resolve ({body => $ws});
+} # send_response
+
+# XXX tests
+sub abort ($;%) {
+  my $stream = shift;
+  $stream->{connection}->abort (@_) if defined $stream->{connection};
+} # abort
+
 sub closed ($) {
   return $_[0]->{closed};
 } # closed
@@ -1571,9 +1800,11 @@ sub closed ($) {
 sub DESTROY ($) {
   local $@;
   eval { die };
-  warn "$$: Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 } # DESTROY
+
+# End of ::Stream
 
 package Web::Transport::HTTPStream::ClientConnection;
 push our @ISA, qw(Web::Transport::HTTPStream::Connection
@@ -1703,7 +1934,7 @@ sub _process_rbuf ($$) {
         $self->{response_received} = 1;
         if ($self->{request}->{method} eq 'PUT' or
             $self->{request}->{method} eq 'CONNECT') {
-          return $stream->_fatal ("HTTP/0.9 response to non-GET request");
+          return $self->_fatal ("HTTP/0.9 response to non-GET request");
         } else {
           $stream->_headers_received;
           $stream->{body_controller}->enqueue
@@ -1739,13 +1970,13 @@ sub _process_rbuf ($$) {
           return;
         } elsif ($$ref =~ /\G(.*?)\x0A\x0D?\x0A/gcs) {
           if (2**18-1 < (length $self->{temp_buffer}) + (length $1)) {
-            return $stream->_fatal ("Header section too large");
+            return $self->_fatal ("Header section too large");
           }
           $self->{temp_buffer} .= $1;
           #
         } else {
           if (2**18-1 + 2 < (length $self->{temp_buffer}) + (length $$ref) - (pos $$ref)) {
-            return $stream->_fatal ("Header section too large");
+            return $self->_fatal ("Header section too large");
           }
           $self->{temp_buffer} .= substr $$ref, pos $$ref;
           return;
@@ -1939,7 +2170,7 @@ sub _process_rbuf ($$) {
         if ($self->{request}->{method} eq 'CONNECT' or
             (defined $self->{ws_state} and
              $self->{ws_state} eq 'CONNECTING')) {
-          return $stream->_fatal ("1xx response to CONNECT or WS");
+          return $self->_fatal ("1xx response to CONNECT or WS");
         } else {
           #push @{$res->{'1xxes'} ||= []}, {
           #  version => $res->{version},
@@ -2191,7 +2422,7 @@ sub _process_rbuf_eof ($;%) {
     if (length $self->{temp_buffer}) {
       if ($self->{request}->{method} eq 'PUT' or
           $self->{request}->{method} eq 'CONNECT') {
-        return $stream->_fatal ("HTTP/0.9 response to non-GET request");
+        return $self->_fatal ("HTTP/0.9 response to non-GET request");
       } else {
         $stream->_headers_received;
         $stream->{body_controller}->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\($self->{temp_buffer}))));
@@ -2370,24 +2601,7 @@ sub connect ($) {
   });
 } # connect
 
-sub is_active ($) {
-  return defined $_[0]->{state} && !$_[0]->{to_be_closed};
-} # is_active
-
-sub abort ($;%) {
-  my ($self, %args) = @_;
-  if (not defined $self->{state}) {
-    return Promise->reject ("Connection has not been established");
-  }
-
-  $self->{to_be_closed} = 1;
-  $self->{write_mode} = 'sent';
-  delete $self->{to_be_sent_length};
-  $self->{writer}->abort (Web::DOM::Error->wrap ($args{message}))
-      if defined $self->{writer}; # XXX and reader?
-
-  return $self->{closed};
-} # abort
+# End of ::ClientConnection
 
 package Web::Transport::HTTPStream::ServerConnection;
 push our @ISA, qw(Web::Transport::HTTPStream::Connection);
@@ -2551,7 +2765,7 @@ sub _new_stream ($) {
       # method target_url version
     },
     # cb target
-  }, 'Web::Transport::HTTPStream::ServerStream'; # XXX
+  }, 'Web::Transport::HTTPStream::Stream';
 
   if ($con->{DEBUG}) { # XXX
     warn "$con->{id}: ========== @{[ref $con]}\n";
@@ -2625,7 +2839,7 @@ sub _ondata ($$) {
         if ($line =~ /[\x00\x0D]/) {
           $stream->{request}->{version} = 0.9;
           $stream->{request}->{method} = 'GET';
-          return $stream->_fatal;
+          return $self->_fatal;
         }
         if ($line =~ s{\x20+(H[^\x20]*)\z}{}) {
           my $version = $1;
@@ -2634,37 +2848,37 @@ sub _ondata ($$) {
           } elsif ($version =~ m{\AHTTP/0+1?\.}) {
             $stream->{request}->{version} = 0.9;
             $stream->{request}->{method} = 'GET';
-            return $stream->_fatal;
+            return $self->_fatal;
           } elsif ($version =~ m{\AHTTP/[0-9]+\.[0-9]+\z}) {
             $stream->{request}->{version} = 1.1;
           } else {
             $stream->{request}->{version} = 0.9;
             $stream->{request}->{method} = 'GET';
-            return $stream->_fatal;
+            return $self->_fatal;
           }
           if ($line =~ s{\A([^\x20]+)\x20+}{}) {
             $stream->{request}->{method} = $1;
           } else { # no method
             $stream->{request}->{method} = 'GET';
-            return $stream->_fatal;
+            return $self->_fatal;
           }
         } else { # no version
           $stream->{request}->{version} = 0.9;
           $stream->{request}->{method} = 'GET';
           unless ($line =~ s{\AGET\x20+}{}) {
-            return $stream->_fatal;
+            return $self->_fatal;
           }
         }
         $stream->{target} = $line;
         if ($stream->{target} =~ m{\A/}) {
           if ($stream->{request}->{method} eq 'CONNECT') {
-            return $stream->_fatal;
+            return $self->_fatal;
           } else {
             #
           }
         } elsif ($stream->{target} =~ m{^[A-Za-z][A-Za-z0-9.+-]+://}) {
           if ($stream->{request}->{method} eq 'CONNECT') {
-            return $stream->_fatal;
+            return $self->_fatal;
           } else {
             #
           }
@@ -2676,13 +2890,13 @@ sub _ondata ($$) {
                    length $stream->{target}) {
             #
           } else {
-            return $stream->_fatal;
+            return $self->_fatal;
           }
         }
         if ($stream->{request}->{version} == 0.9) {
           $self->_request_headers or return;
         } else { # 1.0 / 1.1
-          return $stream->_fatal unless length $line;
+          return $self->_fatal unless length $line;
           $self->{state} = 'before request header';
         }
       } elsif (8192 <= length $self->{rbuf}) {
@@ -2691,7 +2905,7 @@ sub _ondata ($$) {
         $stream->{request}->{method} = 'GET';
         $stream->{request}->{version} = 1.1;
         $self->_receive_done;
-        return $stream->_send_error (414, 'Request-URI Too Large');
+        return $self->_send_error (414, 'Request-URI Too Large');
       } else {
         return;
       }
@@ -2699,10 +2913,10 @@ sub _ondata ($$) {
       $self->{rbuf} .= $$inref;
       if ($self->{rbuf} =~ s/\A([^\x0A]{0,8191})\x0A//) {
         my $line = $1;
-        return $stream->_fatal
+        return $self->_fatal
             if @{$stream->{request}->{headers}} == 100;
         $line =~ s/\x0D\z//;
-        return $stream->_fatal
+        return $self->_fatal
             if $line =~ /[\x00\x0D]/;
         if ($line =~ s/\A([^\x09\x20:][^:]*):[\x09\x20]*//) {
           my $name = $1;
@@ -2712,7 +2926,7 @@ sub _ondata ($$) {
           if ((length $stream->{request}->{headers}->[-1]->[0]) + 1 +
               (length $stream->{request}->{headers}->[-1]->[1]) + 1 +
               (length $line) + 2 > 8192) {
-            return $stream->_fatal;
+            return $self->_fatal;
           } else {
             $stream->{request}->{headers}->[-1]->[1] .= " " . $line;
           }
@@ -2720,10 +2934,10 @@ sub _ondata ($$) {
           $self->_request_headers or return;
           $stream = $self->{stream};
         } else { # broken line
-          return $stream->_fatal;
+          return $self->_fatal;
         }
       } elsif (8192 <= length $self->{rbuf}) {
-        return $stream->_fatal;
+        return $self->_fatal;
       } else {
         return;
       }
@@ -2785,7 +2999,7 @@ sub _ondata ($$) {
       return $self->_ws_received ($ref);
     } elsif ($self->{state} eq 'ws handshaking') {
       return unless length $$inref;
-      return $self->{stream}->_fatal;
+      return $self->_fatal;
     } elsif ($self->{state} eq 'end') {
       return;
     } else {
@@ -2798,7 +3012,6 @@ sub _ondata ($$) {
 sub _oneof ($$) {
   my ($self, $error) = @_;
   delete $self->{writer} if defined $error; # XXX
-warn "XXX $self->{state}";
   if ($self->{state} eq 'initial' or
       $self->{state} eq 'before request-line') {
     if (not defined $self->{writer}) {
@@ -2809,11 +3022,11 @@ warn "XXX $self->{state}";
       my $stream = $self->_new_stream;
       $stream->{request}->{version} = 0.9;
       $stream->{request}->{method} = 'GET';
-      return $stream->_fatal ($error);
+      return $self->_fatal ($error);
     }
   } elsif ($self->{state} eq 'before request header') {
     $self->{to_be_closed} = 1;
-    return $self->{stream}->_fatal ($error);
+    return $self->_fatal ($error);
   } elsif ($self->{state} eq 'request body') {
     $self->{to_be_closed} = 1;
     if (defined $self->{unread_length}) {
@@ -2831,15 +3044,15 @@ warn "XXX $self->{state}";
     $self->{exit} = {failed => 1, message => $error}; # XXX
     return $self->_ws_received_eof (\'');
   } elsif ($self->{state} eq 'ws handshaking') {
-    return $self->{stream}->_fatal ($error);
+    return $self->_fatal ($error);
   } elsif ($self->{state} eq 'after request') {
     if (length $self->{rbuf}) { # XXX
       my $stream = $self->_new_stream;
       $stream->{request}->{version} = 0.9;
       $stream->{request}->{method} = 'GET';
-      return $stream->_fatal ($error);
+      return $self->_fatal ($error);
     } elsif (defined $self->{stream}) {
-      return $self->{stream}->_fatal ($error);
+      return $self->_fatal ($error);
     } else {
       # XXX
       $self->{writer}->close if defined $self->{writer};
@@ -2874,11 +3087,11 @@ sub _request_headers ($) {
     $host = $headers{host}->[0];
     $host =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
   } elsif (@{$headers{host} or []}) { # multiple Host:
-    $stream->_fatal;
+    $con->_fatal;
     return 0;
   } else { # no Host:
     if ($stream->{request}->{version} == 1.1) {
-      $stream->_fatal;
+      $con->_fatal;
       return 0;
     }
   }
@@ -2891,7 +3104,7 @@ sub _request_headers ($) {
     if (defined $host) {
       ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
       unless (defined $host_host) {
-        $stream->_fatal;
+        $con->_fatal;
         return 0;
       }
     }
@@ -2900,7 +3113,7 @@ sub _request_headers ($) {
     $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
     my ($target_host, $target_port) = Web::Host->parse_hostport_string ($target);
     unless (defined $target_host) {
-      $stream->_fatal;
+      $con->_fatal;
       return 0;
     }
     $target_url = Web::URL->parse_string ("http://$target/");
@@ -2908,21 +3121,21 @@ sub _request_headers ($) {
     if (defined $host) {
       ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
       unless (defined $host_host) {
-        $stream->_fatal;
+        $con->_fatal;
         return 0;
       }
       my $scheme = $con->_url_scheme;
       $target_url = Web::URL->parse_string ("$scheme://$host/");
       delete $stream->{target};
     } else {
-      $stream->_fatal;
+      $con->_fatal;
       return 0;
     }
   } elsif ($stream->{target} =~ m{\A/}) {
     if (defined $host) {
       ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
       unless (defined $host_host) {
-        $stream->_fatal;
+        $con->_fatal;
         return 0;
       }
     }
@@ -2937,7 +3150,7 @@ sub _request_headers ($) {
       $target_url = Web::URL->parse_string ("$scheme://$hostport$target");
     }
     if (not defined $target_url or not defined $target_url->host) {
-      $stream->_fatal;
+      $con->_fatal;
       return 0;
     }
   } else { # absolute URL
@@ -2945,21 +3158,21 @@ sub _request_headers ($) {
     $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
     $target_url = Web::URL->parse_string ($target);
     if (not defined $target_url or not defined $target_url->host) {
-      $stream->_fatal;
+      $con->_fatal;
       return 0;
     }
 
     if (defined $host) {
       ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
       unless (defined $host_host) {
-        $stream->_fatal;
+        $con->_fatal;
         return 0;
       }
     }
   }
   if (defined $host_host and defined $target_url) {
     unless ($host_host->equals ($target_url->host)) {
-      $stream->_fatal;
+      $con->_fatal;
       return 0;
     }
     my $target_port = $target_url->port;
@@ -2970,7 +3183,7 @@ sub _request_headers ($) {
     } elsif (not defined $host_port and not defined $target_port) {
       #
     } else {
-      $stream->_fatal;
+      $con->_fatal;
       return 0;
     }
   }
@@ -3026,24 +3239,24 @@ sub _request_headers ($) {
 
       if ($status == 426) {
         $con->_receive_done;
-        $stream->_send_error (426, 'Upgrade Required', [
+        $con->_send_error (426, 'Upgrade Required', [
           ['Upgrade', 'websocket'],
           ['Sec-WebSocket-Version', '13'],
         ]);
       } else {
-        $stream->_fatal;
+        $con->_fatal;
       }
       return 0;
     } # WS_OK
   } elsif (@{$headers{upgrade} or []}) {
-    $stream->_fatal;
+    $con->_fatal;
     return 0;
   }
 
   ## Transfer-Encoding:
   if (@{$headers{'transfer-encoding'} or []}) {
     $con->_receive_done;
-    $stream->_send_error (411, 'Length Required');
+    $con->_send_error (411, 'Length Required');
     return 0;
   }
 
@@ -3056,14 +3269,14 @@ sub _request_headers ($) {
     $l = 0+$headers{'content-length'}->[0]
         unless $stream->{request}->{method} eq 'CONNECT';
   } elsif (@{$headers{'content-length'} or []}) { # multiple headers or broken
-    $stream->_fatal;
+    $con->_fatal;
     return 0;
   }
   $stream->{request}->{body_length} = $l;
 
   if (defined $stream->{ws_key}) {
     unless ($l == 0) {
-      $stream->_fatal;
+      $con->_fatal;
       return 0;
     }
     $stream->_headers_received (is_ws => 1, is_request => 1);
@@ -3100,244 +3313,7 @@ sub received_streams ($) {
   return $_[0]->{received_streams};
 } # received_streams
 
-sub abort ($) {
-  my ($self, %args) = @_;
-  my $error = Web::DOM::Error->wrap ($args{message});
-
-  if (defined $self->{writer}) {
-    $self->{writer}->abort ($error);
-    $self->_send_done ($error);
-    delete $self->{writer};
-  }
-
-  $self->{reader}->cancel ($error)->catch (sub { })
-      if defined $self->{reader}; # XXX
-
-  return $self->{closed};
-} # abort
-
-# XXX
-sub closed ($) {
-  return $_[0]->{closed};
-} # closed
-
-package Web::Transport::HTTPStream::ServerStream;
-push our @ISA, qw(Web::Transport::HTTPStream::Stream);
-use Carp qw(carp croak);
-use Digest::SHA qw(sha1);
-use MIME::Base64 qw(encode_base64);
-use Web::Encoding;
-use Web::DateTime;
-use Web::DateTime::Clock;
-push our @CARP_NOT, qw(Web::DOM::TypeError WritableStream Web::Transport::HTTPStream::ServerConnection Web::Transport::HTTPStream::ClientConnection);
-
-BEGIN {
-  *_e4d = \&Web::Transport::HTTPStream::_e4d;
-  *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
-  *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
-}
-
-sub send_response ($$$;%) {
-  my ($stream, $response, %args) = @_;
-  my $con = $stream->{connection};
-
-  my $close = $args{close} ||
-              $con->{to_be_closed} ||
-              $stream->{request}->{version} == 0.9;
-  my $connect = 0;
-  my $is_ws = 0;
-  my @header;
-  my $to_be_sent = undef;
-  my $write_mode = 'sent';
-  if ($stream->{request}->{method} eq 'HEAD' or
-      $response->{status} == 204 or
-      $response->{status} == 304) {
-    ## No response body by definition
-    return Promise->reject
-        (Web::DOM::TypeError->new ("Bad byte length $args{content_length}"))
-            if defined $args{content_length};
-    $to_be_sent = 0;
-  } elsif ($stream->{request}->{method} eq 'CONNECT' and
-           200 <= $response->{status} and $response->{status} < 300) {
-    ## No response body by definition but switched to the tunnel mode
-    croak "|content_length| not allowed" if defined $args{content_length};
-    $write_mode = 'raw';
-    $connect = 1;
-  } elsif (100 <= $response->{status} and $response->{status} < 200) {
-    ## No response body by definition
-    croak "|content_length| not allowed" if defined $args{content_length};
-    if (defined $stream->{ws_key} and $response->{status} == 101) {
-      $is_ws = 1;
-      $write_mode = 'ws';
-    } else {
-      return Promise->reject
-          (Web::DOM::TypeError->new ("1xx response not supported"));
-    }
-  } else {
-    if (defined $args{content_length}) {
-      ## If body length is specified
-      $write_mode = 'raw';
-      $to_be_sent = 0+$args{content_length};
-      push @header, ['Content-Length', $to_be_sent];
-    } elsif ($stream->{request}->{version} == 1.1) {
-      ## Otherwise, if chunked encoding can be used
-      $write_mode = 'chunked';
-    } else {
-      ## Otherwise, end of the response is the termination of the connection
-      $close = 1;
-      $write_mode = 'raw';
-    }
-    $close = 1 if $stream->{request}->{method} eq 'CONNECT';
-  }
-
-  unless ($args{proxying}) {
-    push @header, ['Server', encode_web_utf8 (defined $con ? $con->server_header : '')];
-
-    my $dt = Web::DateTime->new_from_unix_time
-        (Web::DateTime::Clock->realtime_clock->()); # XXX
-    push @header, ['Date', $dt->to_http_date_string];
-  }
-
-  if ($is_ws) {
-    push @header,
-        ['Upgrade', 'websocket'],
-        ['Connection', 'Upgrade'],
-        ['Sec-WebSocket-Accept', encode_base64 sha1 ($stream->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), ''];
-      # XXX Sec-WebSocket-Protocol
-      # XXX Sec-WebSocket-Extensions
-  } else {
-    if ($close and not $connect) {
-      push @header, ['Connection', 'close'];
-    } elsif ($stream->{request}->{version} == 1.0) {
-      push @header, ['Connection', 'keep-alive'];
-    }
-    if ($write_mode eq 'chunked') {
-      push @header, ['Transfer-Encoding', 'chunked'];
-    }
-  }
-
-  push @header, @{$response->{headers} or []};
-
-  croak "Bad status text |@{[_e4d $response->{status_text}]}|"
-      if $response->{status_text} =~ /[\x0D\x0A]/;
-  croak "Status text is utf8-flagged"
-      if utf8::is_utf8 $response->{status_text};
-
-  for (@header) {
-    croak "Bad header name |@{[_e4d $_->[0]]}|"
-        unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
-    croak "Bad header value |$_->[0]: @{[_e4d $_->[1]]}|"
-        unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
-    croak "Header name |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[0];
-    croak "Header value of |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[1];
-  }
-
-  return Promise->reject (Web::DOM::TypeError->new ("Response is not allowed"))
-      if not defined $con or defined $con->{write_mode};
-
-  # XXX
-  if (not defined $con->{writer}) {
-    ## Connection aborted (typically by client) before the application
-    ## sends the headers
-    $write_mode = 'void';
-    $to_be_sent = 0;
-  }
-
-  if ($is_ws) {
-    $con->{ws_state} = 'OPEN';
-    $con->{state} = 'before ws frame';
-    $con->{temp_buffer} = '';
-  }
-
-  if ($write_mode eq 'void') {
-    #
-  } elsif ($stream->{request}->{version} != 0.9) {
-    my $res = sprintf qq{HTTP/1.1 %d %s\x0D\x0A},
-        $response->{status},
-        $response->{status_text};
-    for (@header) {
-      $res .= "$_->[0]: $_->[1]\x0D\x0A";
-    }
-    $res .= "\x0D\x0A";
-    if ($stream->{DEBUG}) {
-      warn "$stream->{id}: Sending response headers... @{[scalar gmtime]}\n";
-      for (split /\x0A/, $res) {
-        warn "$stream->{id}: S: @{[_e4d $_]}\n";
-      }
-    }
-
-    $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)));
-  } else {
-    if ($stream->{DEBUG}) {
-      warn "$stream->{id}: Response headers skipped (HTTP/0.9) @{[scalar gmtime]}\n";
-    }
-  }
-
-  $con->{to_be_closed} = 1 if $close;
-  $con->{write_mode} = $write_mode;
-  $con->{to_be_sent_length} = $to_be_sent; # or undef
-  my ($ws) = $stream->_open_sending_stream (is_ws => $is_ws, XXX_response => 1);
-
-  return Promise->resolve ({body => $ws});
-} # send_response
-
-# XXX move to parent
-sub abort ($;%) {
-  my $stream = shift;
-  $stream->{connection}->abort (@_) if defined $stream->{connection};
-} # abort
-
-# XXX move to parent
-sub closed ($) {
-  return $_[0]->{closed};
-} # closed
-
-sub _send_error ($$$;$) {
-  my ($stream, $status, $status_text, $headers) = @_;
-
-  my $con = $stream->{connection};
-  return unless defined $con; # XXX
-  if (not defined $con or defined $con->{write_mode}) {
-    ## A response is being sent or has been sent.
-    return $con->abort; # XXX {$status $status_text}
-  }
-
-  my $res = qq{<!DOCTYPE html><html>
-<head><title>$status $status_text</title></head>
-<body>$status $status_text};
-  #$res .= Carp::longmess;
-  $res .= qq{</body></html>\x0A};
-  $stream->send_response
-      ({status => $status, status_text => $status_text,
-        headers => [
-          @{$headers or []},
-          ['Content-Type' => 'text/html; charset=utf-8'],
-        ]}, close => 1, content_length => length $res)->then (sub {
-    my $w = $_[0]->{body}->get_writer;
-    $w->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)))
-        unless $stream->{request}->{method} eq 'HEAD';
-    return $w->close;
-  });
-  return;
-} # _send_error
-
-sub _fatal ($;$) {
-  my ($stream, $error) = @_;
-  my $con = $stream->{connection};
-warn "XXXX $error";
-  $con->{exit} = $error if defined $error;
-  $con->_receive_done;
-  $con->{state} = 'end';
-  $con->{rbuf} = '';
-  return $stream->_send_error (400, 'Bad Request');
-} # _fatal
-
-sub DESTROY ($) {
-  local $@;
-  eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
-      if $@ =~ /during global destruction/;
-} # DESTROY
+# End of ::ServerConnection
 
 1;
 

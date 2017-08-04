@@ -3590,6 +3590,53 @@ close
   });
 } n => 1, name => 'close_after_current_stream connect';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->connect->then (sub {
+      return $http->send_request ({method => 'GET', target => 'test'}, content_length => 3);
+    })->then (sub {
+      my $got = $_[0];
+      my $stream = $got->{stream};
+      my $writer = $got->{body}->get_writer;
+      my $error;
+      return $stream->headers_received->then (sub {
+        my $got = $_[0];
+        $stream->send_response ({}, content_length => 0)->catch (sub {
+          $error = $_[0];
+          $writer->write (d 'abc');
+          $writer->close;
+          return read_rbs $got->{body};
+        });
+      })->then (sub {
+        my $received = $_[0];
+        test {
+          is $received, 'xyz';
+          is $error->name, 'TypeError';
+          is $error->message, 'Response is not allowed';
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-8;
+        } $c;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'send_response';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

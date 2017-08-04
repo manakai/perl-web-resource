@@ -77,17 +77,15 @@ sub server_as_cv ($) {
           warn "--- ^parsing.t received^ ---\n";
         }
         while ($data =~ s/^\[data (.+)\]$//m) {
-warn "XXXX data";
           push @$resultdata, json_bytes2perl $1;
         }
         if ($data =~ s/^\[server done\]$//m) {
-          kill 'TERM', $pid if $close_server;
+          #kill 'TERM', $pid if $close_server;
         }
         return if $started;
         if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
           $cv->send ({pid => $pid, addr => $1, port => $2, host => $host,
                       resultdata => $resultdata,
-                      close_server_ref => \$close_server,
                       after_server_close_cv => $after_server_close_cv,
                       stop => sub {
                         kill 'TERM', $pid;
@@ -219,71 +217,13 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
         my $http = Web::Transport::HTTPStream->new ({parent => $tparams});
         my $test_type = $test->{'test-type'}->[1]->[0] || '';
 
-        my $req;
-        my $req_results = {};
-        my $onev = sub {
-          my $req = shift;
-          return sub {
-            my ($http, $type, undef, $flag) = @_;
-            #warn "$req $type";
-            my $result = $req_results->{$req ? $req->{id} : ''} ||= {};
-            if (not {requestsent => 1}->{$type}) {
-              push @{$result->{r_events} ||= []}, $type;
-            }
-            if ({requestsent => 1, complete => 1}->{$type}) {
-              push @{$result->{s_events} ||= []}, $type;
-            }
-            if ($type eq 'headers') {
-              $result->{response} = $_[2];
-            }
-            if ($type eq 'data' or $type eq 'text') {
-              $result->{body} = '' unless defined $result->{body};
-              $result->{body} .= $_[2];
-              $result->{body} .= '(boundary)' if $test->{boundary};
-            }
-            if ($type eq 'dataend' and
-                $req->{method} eq 'CONNECT' and
-                $result->{response}->{status} == 200) {
-              AE::postpone { $http->close_after_current_stream };
-            }
-            if ($type eq 'complete') {
-              $result->{version} = $result->{response}
-                  ? $result->{response}->{version} : '1.1';
-              $result->{body} = '' unless defined $result->{body};
-              $result->{body} .= '(close)';
-              $result->{is_error} = 1 if $_[2]->{failed};
-              $result->{can_retry} = 1 if $_[2]->{can_retry};
-              if ($_[2]->{reset}) {
-                $result->{body} = '';
-                $result->{version} = '1.1';
-              }
-              if ($_[2]->{failed}) {
-                delete $result->{response};
-                $result->{body} = '(close)' unless defined $_[2]->{status};
-              }
-            }
-          };
-        }; # $onev
-
-        my $next_req_id = 1;
-        my $get_req = sub {
-          my $req = {
-            @_,
-            id => $next_req_id++,
-          };
-          if ($test_type eq 'ws') {
-            ${$server->{close_server_ref}} = 1;
-          }
-          return $req;
-        }; # $get_req
-
         $http->connect ()->then (sub {
           if ($test_type eq 'ws') {
-            my $req = $get_req->(
+            my $req = {
               method => _a 'GET',
               target => _a $test->{url}->[1]->[0],
               ws => 1,
-            );
+            };
             return $http->send_request
                 ($req,
                  ws => 1,
@@ -343,10 +283,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   return $try->();
                 });
               } # is_active
-              my $req = $get_req->(
+              my $req = {
                 method => _a $test->{method}->[1]->[0],
                 target => _a $test->{url}->[1]->[0],
-              );
+              };
               return $http->send_request ($req, content_length => ($test_type eq 'largerequest-second' ? 1024*1024 : undef))->then (sub {
                 my $stream = $_[0]->{stream};
                 my $reqbody = $_[0]->{body}->get_writer;
@@ -408,10 +348,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             }; # $try
             return promised_cleanup { undef $try } $try->();
           } else { # $test_type
-            my $req = $get_req->(
+            my $req = {
               method => _a $test->{method}->[1]->[0],
               target => _a $test->{url}->[1]->[0],
-            );
+            };
             return $http->send_request ($req, content_length => ($test_type eq 'largerequest' ? 1024*1024 : undef))->then (sub {
               my $stream = $_[0]->{stream};
               my $closed = $_[0]->{closed};
@@ -462,26 +402,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               is !!($result->{error}->{failed}), !!$is_error, 'is error';
             }
 
-            #my $expected_1xxes = $test->{'1xx'} || [];
-            #my $actual_1xxes = $res->{'1xxes'} || [];
-            #is 0+@$actual_1xxes, 0+@$expected_1xxes, '# of 1xx responses';
-            #for my $i (0..$#$expected_1xxes) {
-            #  my $expected = ($expected_1xxes->[$i] || [''])->[0];
-            #  my $actual = $actual_1xxes->[$i] || {};
-            #  for_each_test \$expected, {
-            #    headers => {is_prefixed => 1},
-            #  }, sub {
-            #    my $t = $_[0];
-            #    test {
-            #      is $actual->{status}, $t->{status}->[1]->[0];
-            #      is $actual->{reason}, $t->{reason}->[1]->[0] // $t->{reason}->[0] // '';
-            #      is join ("\x0A", map {
-            #        $_->[0] . ': ' . $_->[1];
-            #      } @{$actual->{headers}}), $t->{headers}->[0] // '';
-            #    } $c, name => $i;
-            #  };
-            #}
-
             if ($is_error) {
               ok 1;
             } else {
@@ -511,6 +431,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               is $result->{error}->{status}, $test->{'ws-status'} ? $test->{'ws-status'}->[1]->[0] : $test->{'handshake-error'} ? 1006 : undef, 'WS status code';
               is $result->{error}->{reason}, $test->{'ws-reason'} ? $test->{'ws-reason'}->[0] : $test->{'handshake-error'} ? '' : undef, 'WS reason';
               is !!$result->{error}->{cleanly}, !!$test->{'ws-was-clean'}, 'WS wasClean';
+              ok 1, 'skip (ws)';
 
               return Promise->from_cv ($server->{after_server_close_cv})->then (sub {
                 my $expected = perl2json_bytes_for_record (json_bytes2perl (($test->{"result-data"} || ["[]"])->[0]));
@@ -536,34 +457,6 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 is !!$result->{response}->{incomplete}, !!$test->{incomplete}, 'incomplete message';
               }
             }
-if (0) { # XXX
-            if ($result->{error}->{reset}) {
-              is $result->{r_events}->[-1], 'complete', 'r_events';
-              is $result->{s_events}->[-1], 'complete', 's_events';
-            } else {
-              my $r_events = join (',', @{$result->{r_events} || []});
-              1 while $r_events =~ s/,data,data,/,data,/g;
-              $r_events =~ s/,datastart,dataend,/,datastart,data,dataend,/g;
-              $r_events =~ s/,textstart,textend,/,textstart,text,textend,/g;
-              if ($test_type eq 'ws') {
-                like $r_events, qr{^(?:
-                  (?:
-                    headers,
-                    (?:datastart,data,dataend,|textstart,text,textend,|ping,)*
-                    (?:closing,|)
-                  |)
-                  complete
-                )$}x, 'r_events';
-              } else {
-                like $r_events, qr{^(?:headers,datastart,data,dataend,|)complete$}, 'r_events';
-              }
-              ## If server closes the connection before sending all
-              ## data to the server, requestsent event might not be
-              ## reported.
-              like join (',', @{$result->{s_events} || []}),
-                  qr{^(?:requestsent,|)complete$}, 's_events';
-            }
-}
           } $c)->then (sub {
             return $http->close_after_current_stream;
           });
@@ -584,9 +477,6 @@ if (0) { # XXX
             ok 1, 'headers (skipped)';
             is '(close)', $test->{body}->[0] || '(close)', 'body';
             ok 1, 'incomplete (skipped)';
-#XXX
-#            ok 1, 'r_events (skipped)';
-#            ok 1, 's_events (skipped)';
           } $c;
         })->then (sub {
           $server->{stop}->();
@@ -597,9 +487,7 @@ if (0) { # XXX
           undef $c;
         });
       });
-    } n => 7 # + 1 + 3*@{$test->{'1xx'} || []}
-      , name => [$path, $test->{name}->[0]],
-        timeout => 120;
+    } n => 7, name => [$path, $test->{name}->[0]], timeout => 120;
   };
 } # $path
 

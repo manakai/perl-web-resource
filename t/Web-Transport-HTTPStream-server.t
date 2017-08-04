@@ -351,7 +351,7 @@ test {
     } $c;
     return $closed[0];
   })->catch (sub {
-    my $error = $_[0]->{message}; # XXX
+    my $error = $_[0];
     test {
       is $error->name, 'Error';
       is $error->message, "Something's wrong";
@@ -870,8 +870,10 @@ test {
       is 0+@closed, 1;
     } $c;
     return $closed[0];
-  })->catch (sub {
-    my $error = $_[0]->{message}; # XXX
+  })->then (sub {
+    test { ok 0 } $c;
+  }, sub {
+    my $error = $_[0];
     test {
       is $error->name, 'TypeError';
       is $error->message, 'Closed before bytes (n = 3) are sent';
@@ -911,13 +913,15 @@ test {
       is 0+@closed, 1;
     } $c;
     return $closed[0];
-  })->catch (sub {
-    my $error = $_[0]->{message}; # XXX
+  })->then (sub {
+    test { ok 0 } $c;
+  }, sub {
+    my $error = $_[0];
     test {
       is $error->name, 'Error';
       is $error->message, "Something's wrong";
       is $error->file_name, __FILE__;
-      is $error->line_number, __LINE__-18;
+      is $error->line_number, __LINE__-20;
     } $c;
   })->then (sub {
     return $http->close;
@@ -4545,7 +4549,7 @@ test {
       ok ! $res->ws_closed_cleanly;
       is $res->ws_code, 1006;
       is $res->ws_reason, '';
-      ok $exit->{failed};
+      ok $exit->{failed}, $exit;
       ok $exit->{ws};
       is $exit->{status}, 1006;
       like $exit->{reason}, qr{^Error: Test abort\x{6001} at @{[__FILE__]} line @{[__LINE__-42]}};

@@ -319,7 +319,7 @@ warn "XXX $self->{state}";
               type => ($is_text ? undef : 'bytes'),
               start => sub { $rc = $_[1] },
               pull => sub {
-                return $self->_read if defined $self->{reader};
+                return $self->_read;
               }, # pull
               cancel => sub {
                 undef $rc;
@@ -428,8 +428,6 @@ warn "XXX $self->{state}";
 
 sub _ws_received_eof ($;%) {
   my ($self, $ref, %args) = @_;
-
-warn "XXX $self->{state}";
 
   if ($self->{state} eq 'before ws frame' or
       $self->{state} eq 'ws data') {
@@ -579,6 +577,7 @@ sub close_after_current_stream ($) {
     } else {
       if (defined $con->{writer}) {
         my $w = $con->{writer};
+        # XXX
         $w->write (DataView->new (ArrayBuffer->new))->then (sub {
           my $error = 'Close by |close_after_current_stream|'; # XXX
           $w->abort ($error);
@@ -717,7 +716,7 @@ sub _send_done ($;$) {
     $con->{exit} = $error;
   }
 
-  if (delete $con->{to_be_closed}) {
+  if ($con->{to_be_closed}) {
     $con->{writer}->close if defined $con->{writer};
     delete $con->{writer};
   }
@@ -738,6 +737,12 @@ sub _send_done ($;$) {
 
   if (defined $con->{cancel_current_writable_stream}) {
     $con->{cancel_current_writable_stream}->(undef);
+  }
+
+  # XXX
+  if ($con->{to_be_closed}) {
+    $con->{writer}->close if defined $con->{writer};
+    delete $con->{writer};
   }
 
   $con->_both_done if $con->{state} eq 'sending';
@@ -799,23 +804,9 @@ sub _both_done ($) {
   my $con = $_[0];
   my $stream = $con->{stream};
 
-warn "$con both done";
-
-  # XXX
-  if ($con->{to_be_closed} and defined $con->{reader}) {
-warn "$con cancel";
-    $con->{reader}->cancel ($con->{exit});
-    delete $con->{reader};
-  }
-
   if ($con->{is_server}) {
 
   delete $con->{stream};
-  if (delete $con->{to_be_closed}) {
-    $con->{writer}->close if defined $con->{writer};
-    delete $con->{writer};
-    $con->{state} = 'end';
-  }
   my $error = $con->{exit} || {};
   if (Web::DOM::Error->is_error ($error)) { # XXX
     $stream->{closed_reject}->($error);
@@ -839,6 +830,12 @@ warn "$con cancel";
   delete $stream->{connection};
 
   return;
+  }
+
+  # XXX
+  if ($con->{to_be_closed} and defined $con->{reader}) {
+    $con->{reader}->cancel ($con->{exit});
+    delete $con->{reader};
   }
 
   if (defined $con->{request} and $con->{write_mode} eq 'sent') {
@@ -865,6 +862,7 @@ warn "$con cancel";
   delete $con->{to_be_sent_length};
   if ($con->{to_be_closed}) {
     if (defined $con->{writer}) {
+      # XXX
       my $writer = $con->{writer};
       $writer->close->catch (sub { }); # can fail
       $con->{timer} = AE::timer 1, 0, sub {
@@ -1242,10 +1240,6 @@ sub _open_sending_stream ($;%) {
   return ($ws);
 } # _open_sending_stream
 
-sub _read ($) {
-  return $_[0]->{connection}->_read;
-} # _read
-
 sub headers_received ($) {
   return $_[0]->{headers_received}->[0];
 } # headers_received
@@ -1259,7 +1253,7 @@ sub _headers_received ($;%) {
         $stream->{messages_controller} = $_[1];
       },
       pull => sub {
-        return $stream->_read if defined $stream->{reader};
+        return $stream->{connection}->_read;
       },
       cancel => sub {
         delete $stream->{messages_controller};
@@ -1277,7 +1271,7 @@ sub _headers_received ($;%) {
         return undef;
       },
       pull => sub {
-        return $stream->_read;
+        return $stream->{connection}->_read;
       },
       cancel => sub {
         delete $stream->{body_controller};
@@ -1911,10 +1905,8 @@ sub _read ($) {
 
   my $view = DataView->new (ArrayBuffer->new (1024*2));
   $view->buffer->manakai_label ('HTTP-client reading');
-warn "$self read...";
   return $self->{reader}->read ($view)->then (sub {
     delete $self->{read_running};
-warn "$self read! ($_[0]->{done})";
     return if $_[0]->{done};
 
     $self->_process_rbuf ($_[0]->{value});
@@ -2081,12 +2073,7 @@ sub _process_rbuf ($$) {
         $chunked = 0;
       }
       if (($has_broken_length and keys %length) or 1 < keys %length) {
-        $self->{to_be_closed} = 1;
-        $self->{write_mode} = 'sent';
-        $self->{exit} = {failed => 1,
-                         message => "Inconsistent content-length values"};
-        $self->_receive_done;
-        return;
+        return $self->_connection_error ("Inconsistent content-length values");
       } elsif (1 == keys %length) {
         my $length = each %length;
         $length =~ s/\A0+//;
@@ -2094,12 +2081,7 @@ sub _process_rbuf ($$) {
         if ($length eq 0+$length) { # overflow check
           $self->{unread_length} = $res->{content_length} = 0+$length;
         } else {
-          $self->{to_be_closed} = 1;
-          $self->{write_mode} = 'sent';
-          $self->{exit} = {failed => 1,
-                           message => "Inconsistent content-length values"};
-          $self->_receive_done;
-          return;
+          return $self->_connection_error ("Inconsistent content-length values");
         }
       }
 
@@ -2158,11 +2140,7 @@ sub _process_rbuf ($$) {
         if ($failed) {
           $stream->_headers_received;
           $stream->_receive_bytes_done;
-          $self->{exit} = {ws => 1, failed => 1, status => 1006, reason => ''};
-          $self->{to_be_closed} = 1;
-          $self->{write_mode} = 'sent';
-          $self->_receive_done;
-          return;
+          return $self->_connection_error ({ws => 1, failed => 1, status => 1006, reason => ''});
         } else {
           $self->{ws_state} = 'OPEN';
           $stream->_headers_received (is_ws => 1);
@@ -2274,12 +2252,11 @@ sub _process_rbuf ($$) {
         $self->{state} = 'response chunk size';
       } elsif ((length $$ref) - (pos $$ref)) {
         $self->{response}->{incomplete} = 1;
-        $self->{to_be_closed} = 1;
-        $self->{write_mode} = 'sent';
         $self->{stream}->_receive_bytes_done;
-        $self->{exit} = {};
-        $self->_receive_done;
-        return;
+        return $self->_connection_error ({
+          failed => 0,
+          message => 'Invalid chunk size',
+        });
       }
     }
     if ($self->{state} eq 'response chunk size') {
@@ -2292,15 +2269,14 @@ sub _process_rbuf ($$) {
         $self->{temp_buffer} =~ tr/A-F/a-f/;
         $self->{temp_buffer} =~ s/^0+//;
         $self->{temp_buffer} ||= 0;
-        my $n = hex $self->{temp_buffer};
+        my $n = hex $self->{temp_buffer}; # XXX overflow warning
         unless ($self->{temp_buffer} eq sprintf '%x', $n) { # overflow
           $self->{response}->{incomplete} = 1;
-          $self->{to_be_closed} = 1;
-          $self->{write_mode} = 'sent';
           $self->{stream}->_receive_bytes_done;
-          $self->{exit} = {};
-          $self->_receive_done;
-          return;
+          return $self->_connection_error ({
+            failed => 0,
+            message => 'Chunk size overflow',
+          });
         }
         if ($n == 0) {
           $self->{stream}->_receive_bytes_done;
@@ -2347,12 +2323,11 @@ sub _process_rbuf ($$) {
         } elsif ((length $$ref) - (pos $$ref)) {
           delete $self->{unread_length};
           $self->{response}->{incomplete} = 1;
-          $self->{to_be_closed} = 1;
-          $self->{write_mode} = 'sent';
           $self->{stream}->_receive_bytes_done;
-          $self->{exit} = {};
-          $self->_receive_done;
-          return;
+          return $self->_connection_error ({
+            failed => 0,
+            message => 'No CRLF after chunk',
+          });
         }
       }
     }
@@ -2364,33 +2339,30 @@ sub _process_rbuf ($$) {
       } elsif ((length $$ref) - (pos $$ref)) {
         delete $self->{unread_length};
         $self->{response}->{incomplete} = 1;
-        $self->{to_be_closed} = 1;
-        $self->{write_mode} = 'sent';
         $self->{stream}->_receive_bytes_done;
-        $self->{exit} = {};
-        $self->_receive_done;
-        return;
+        return $self->_connection_error ({
+          failed => 0,
+          message => 'No CRLF after chunk',
+        });
       }
     }
   } # CHUNK
   if ($self->{state} eq 'before response trailer') {
     if ($$ref =~ /\G(.*?)\x0A\x0D?\x0A/gcs) {
       if (2**18-1 < $self->{temp_buffer} + (length $1)) {
-        $self->{to_be_closed} = 1;
-        $self->{write_mode} = 'sent';
-        $self->{exit} = {};
-        $self->_receive_done;
-        return;
+        return $self->_connection_error ({
+          failed => 0,
+          message => 'Header section too large',
+        });
       }
       $self->{temp_buffer} += length $1;
       #
     } else {
       if (2**18-1 < $self->{temp_buffer} + (length $$ref) - (pos $$ref)) {
-        $self->{to_be_closed} = 1;
-        $self->{write_mode} = 'sent';
-        $self->{exit} = {};
-        $self->_receive_done;
-        return;
+        return $self->_connection_error ({
+          failed => 0,
+          message => 'Header section too large',
+        });
       }
       $self->{temp_buffer} += (length $$ref) - (pos $$ref);
       return;
@@ -2433,6 +2405,7 @@ sub _process_rbuf ($$) {
 sub _process_rbuf_eof ($;%) {
   my ($self, %args) = @_;
   my $stream = $self->{stream};
+  # XXX %args
 
   if ($self->{state} eq 'before response') {
     if (length $self->{temp_buffer}) {
@@ -2442,70 +2415,107 @@ sub _process_rbuf_eof ($;%) {
       } else {
         $stream->_headers_received;
         $stream->{body_controller}->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\($self->{temp_buffer}))));
-        $stream->_receive_bytes_done;
-        $self->{exit} = {};
         $self->{response}->{incomplete} = 1 if $args{abort};
+        $stream->_receive_bytes_done;
+        return $self->_connection_error ({
+          failed => 0,
+          message => 'Connection truncated',
+        }) if $args{abort};
+
+        $self->{exit} = {};
+        $self->{to_be_closed} = 1;
+        $self->_receive_done;
+        return;
       }
     } else { # empty
-      $self->{exit} = {failed => 1,
-                       message => $args{error_message} || "Connection closed without response",
-                       errno => $args{errno},
-                       can_retry => !$args{abort} && !$self->{response_received}};
-      $self->{write_mode} = 'sent';
-      $self->{cancel_current_writable_stream}->()
-          if defined $self->{cancel_current_writable_stream};
+      return $self->_connection_error ({
+        failed => 1,
+        message => $args{error_message} || "Connection closed without response",
+        errno => $args{errno}, # XXX
+        can_retry => !$args{abort} && !$self->{response_received},
+      });
     }
   } elsif ($self->{state} eq 'response body') {
-    if (defined $self->{unread_length} and $self->{unread_length} > 0) {
-      $self->{response}->{incomplete} = 1;
-      $self->{write_mode} = 'sent';
-      $self->{stream}->_receive_bytes_done;
-      if ($self->{response}->{version} eq '1.1') {
-        $self->{exit} = {failed => 1,
-                         message => $args{error_message} || "Connection truncated",
-                         errno => $args{errno}};
-      } else {
+    if (defined $self->{unread_length}) {
+      if ($self->{unread_length} > 0) {
+        $self->{response}->{incomplete} = 1;
+        $self->{stream}->_receive_bytes_done;
+        return $self->_connection_error ({
+          failed => ($self->{response}->{version} eq '1.1'),
+          message => $args{error_message} || "Connection truncated", # XXX
+          errno => $args{errno}, # XXX
+        });
+      } else { # all data read
+        $self->{stream}->_receive_bytes_done;
+        return $self->_connection_error ({
+          failed => 0,
+          message => 'Connection truncated',
+        }) if $args{abort};
+
         $self->{exit} = {};
+        $self->{to_be_closed} = 1;
+        $self->_receive_done;
+        return;
       }
     } else {
-      if ($args{abort}) {
-        if (defined $self->{unread_length}) { #$self->{unread_length} == 0
-          $self->{write_mode} = 'sent';
-        } else {
-          $self->{response}->{incomplete} = 1;
-        }
-      }
+      $self->{response}->{incomplete} = 1 if $args{abort};
       $self->{stream}->_receive_bytes_done;
+      return $self->_connection_error ({
+        failed => 0,
+        message => 'Connection truncated',
+      }) if $args{abort};
+
       $self->{exit} = {};
+      $self->{to_be_closed} = 1;
+      $self->_receive_done;
+      return;
     }
   } elsif ({
     'before response chunk' => 1,
     'response chunk size' => 1,
     'response chunk extension' => 1,
     'response chunk data' => 1,
+    'after response chunk CR' => 1, # XXX need tests
   }->{$self->{state}}) {
     $self->{response}->{incomplete} = 1;
-    $self->{write_mode} = 'sent';
     $self->{stream}->_receive_bytes_done;
-    $self->{exit} = {};
+    return $self->_connection_error ({
+      failed => 0,
+      message => 'Connection truncated within chunk',
+    });
   } elsif ($self->{state} eq 'before response trailer') {
-    $self->{write_mode} = 'sent';
-    $self->{exit} = {};
+    return $self->_connection_error ({
+      failed => 0,
+      message => 'Connection truncated within trailer',
+    });
   } elsif ($self->{state} eq 'tunnel') {
     $self->{stream}->_receive_bytes_done;
+    return $self->_connection_error ("Connection truncated")
+        if $args{abort};
+    $self->{exit} = {};
+    $self->{to_be_closed} = 1;
+    $self->_receive_done;
+    return;
   } elsif ($self->{state} eq 'before response header') {
-    $self->{exit} = {failed => 1,
-                     message => $args{error_message} || "Connection closed within response headers",
-                     errno => $args{errno}};
+    return $self->_connection_error ({
+      failed => 1,
+      message => $args{error_message} || "Connection closed within response headers",
+      errno => $args{errno},
+    });
   } elsif ($self->{state} eq 'before ws frame' or
            $self->{state} eq 'ws data' or
            $self->{state} eq 'ws terminating') {
     return $self->_ws_received_eof (\($self->{temp_buffer}), %args);
+  } else {
+    # initial
+    # waiting
+    # sending
+    # stopped
+    return $self->_connection_error ({
+      failed => $args{abort},
+      message => 'Connection closed',
+    });
   }
-
-  $self->{to_be_closed} = 1;
-  $self->{write_mode} = 'sent' if $args{abort};
-  $self->_receive_done;
 } # _process_rbuf_eof
 
 # XXX merge with new?
@@ -2564,23 +2574,15 @@ sub connect ($) {
 
         if (UNIVERSAL::isa ($error, 'Streams::IOError') and
             $error->errno == ECONNRESET) {
-          $self->{to_be_closed} = 1;
-          $self->{write_mode} = 'sent';
-          $self->{exit} = {failed => 1, reset => 1};
-          $self->_receive_done;
+          return $self->_connection_error ({failed => 1, reset => 1});
         } else {
           $self->_process_rbuf (undef);
           $self->_process_rbuf_eof
               (abort => $data->{failed},
                errno => $data->{errno},
                error_message => $data->{message});
+          return;
         }
-        if (defined $self->{writer}) {
-          $self->{writer}->abort ('XXX 2'); # XXX ? also reader?
-          delete $self->{writer};
-        }
-
-        return undef;
       });
 
     my $p2 = $self->{writer}->closed->then (sub { # XXX
@@ -2600,7 +2602,7 @@ sub connect ($) {
         }
       });
 
-    Promise->all ([$p1, $p2, #$info->{closed}
+    Promise->all ([$p1, $p2, #$info->{closed} XXX
     ])->then (sub {
       $onclosed->();
     });
@@ -2656,7 +2658,7 @@ sub new ($$) {
       $self->{stream_controller} = $_[1];
     },
     pull => sub {
-      return $self->_read if defined $self->{reader};
+      return $self->_read;
     },
     cancel => sub {
       # XXX abort
@@ -2811,6 +2813,7 @@ sub _new_stream ($) {
 
 sub _read ($) {
   my $self = $_[0];
+  return unless defined $self->{reader};
   my $read; $read = sub {
     return $self->{reader}->read (DataView->new (ArrayBuffer->new (1024*3)))->then (sub {
       return if $_[0]->{done};

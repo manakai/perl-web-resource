@@ -2851,8 +2851,10 @@ CRLF
 ws-receive-header
 ws-receive-data
 ws-send-header opcode=9
+show "ping sent"
 ws-receive-header
 ws-receive-data
+show "something received"
 ws-send-header opcode=8
   })->cb (sub {
     my $server = $_[0]->recv;
@@ -2861,6 +2863,7 @@ ws-send-header opcode=8
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
+warn "http = $http";
     my $error;
     $http->connect->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);

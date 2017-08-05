@@ -946,7 +946,7 @@ test {
         } $c;
         return $stream->headers_received;
       })->catch (sub {
-        my $error = $_[0]->{message}; # XXX
+        my $error = $_[0];
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Closed before bytes (n = 1) are sent';
@@ -996,7 +996,7 @@ test {
         } $c;
         return $stream->headers_received;
       })->catch (sub {
-        my $error = $_[0]->{message}; # XXX
+        my $error = $_[0];
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Byte length 6 is greater than expected length 5';
@@ -1009,7 +1009,7 @@ test {
       undef $c;
     });
   });
-} n => 5, name => 'send_request with body written too much';
+} n => 5, name => 'send_request with body written too much 1';
 
 test {
   my $c = shift;
@@ -1047,7 +1047,7 @@ test {
         } $c;
         return $stream->headers_received;
       })->catch (sub {
-        my $error = $_[0]->{message}; # XXX
+        my $error = $_[0];
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Byte length 1 is greater than expected length 0';
@@ -1060,7 +1060,7 @@ test {
       undef $c;
     });
   });
-} n => 5, name => 'send_request with body written too much';
+} n => 5, name => 'send_request with body written too much 2';
 
 test {
   my $c = shift;
@@ -1097,7 +1097,7 @@ test {
         } $c;
         return $stream->headers_received;
       })->catch (sub {
-        my $error = $_[0]->{message}; # XXX
+        my $error = $_[0];
         test {
           is $error->name, 'TypeError';
           is $error->message, 'The argument is not an ArrayBufferView';
@@ -1157,7 +1157,7 @@ test {
         } $c;
         return $stream->headers_received;
       })->catch (sub {
-        my $error = $_[0]->{message}; # XXX
+        my $error = $_[0];
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Byte length 1 is greater than expected length 0';
@@ -1170,7 +1170,7 @@ test {
       undef $c;
     });
   });
-} n => 9, name => 'send_request with body written too much';
+} n => 9, name => 'send_request with body written too much 3';
 
 test {
   my $c = shift;
@@ -1201,7 +1201,7 @@ test {
       my $thrown = Web::DOM::TypeError->new;
       $writer->abort ($thrown);
       return $got->{closed}->catch (sub {
-        my $error = $_[0]->{message}; # XXX
+        my $error = $_[0];
         test {
           is $error, $thrown;
         } $c;
@@ -1211,7 +1211,7 @@ test {
       undef $c;
     });
   });
-} n => 2, name => 'send_request with body aborted';
+} n => 2, name => 'send_request with body aborted 1';
 
 test {
   my $c = shift;
@@ -1241,7 +1241,7 @@ test {
       $writer->write (d "1234");
       $writer->abort;
       return $got->{closed}->catch (sub {
-        my $error = $_[0]->{message}; # XXX
+        my $error = $_[0];
         test {
           is $error->name, 'Error';
           is $error->message, "Something's wrong";
@@ -1254,7 +1254,7 @@ test {
       undef $c;
     });
   });
-} n => 5, name => 'send_request with body aborted';
+} n => 5, name => 'send_request with body aborted 2';
 
 test {
   my $c = shift;
@@ -1362,15 +1362,22 @@ test {
       } $c;
       return $closed;
     })->then (sub {
+      my $error = $_[0];
       test {
         ok $response->{incomplete}, 'response aborted';
+        # XXX
+        ok $error;
+        #is $error->name, 'Error';
+        #is $error->message, "Something's wrong";
+        #is $error->file_name, __FILE__;
+        #is $error->line_number, __LINE__-17;
       } $c;
     })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 4, name => 'send_request response body aborted';
+} n => 5, name => 'send_request response body aborted';
 
 test {
   my $c = shift;

@@ -540,6 +540,7 @@ sub close_after_current_stream ($) {
     $con->{exit} = {failed => 0,
                     message => 'Close by |close_after_current_stream|'};
     $con->_send_done (close => 1);
+    $con->_read;
   }
   return $con->{closed};
 } # close_after_current_stream
@@ -550,34 +551,21 @@ sub is_active ($) {
 } # is_active
 
 sub abort ($;%) {
-  my ($self, %args) = @_;
-  if (not defined $self->{state}) {
+  my ($con, %args) = @_;
+  if (not defined $con->{state}) {
     return Promise->reject ("Connection has not been established");
   }
   my $error = Web::DOM::Error->wrap ($args{message});
 
-  if ($self->{is_server}) {
+  $con->{exit} ||= $error; # XXX
+  $con->_send_done (abort => 1);
 
-  $self->{exit} ||= $error; # XXX
-  $self->_send_done (abort => 1);
+  # XXX spec
+  $con->{reader}->cancel ($con->{exit})->catch (sub { })
+      if defined $con->{reader};
+  delete $con->{reader};
 
-} else {
-
-  $self->{to_be_closed} = 1;
-  $self->{write_mode} = 'sent';
-  delete $self->{to_be_sent_length};
-  $self->{writer}->abort ($error)
-      if defined $self->{writer};
-
-}
-
-  if (defined $self->{reader}) {
-    unless ($self->{is_server}) { # XXX
-      $self->{reader}->cancel ($error)->catch (sub { });
-    }
-  }
-
-  return $self->{closed};
+  return $con->{closed};
 } # abort
 
 # XXX tests
@@ -654,18 +642,15 @@ sub _send_done ($;%) {
 
   # XXX
   if ($args{abort}) {
+    # XXX move to abort?
     $con->{to_be_closed} = 1;
     $con->{writer}->abort ($con->{exit}) if defined $con->{writer};
     delete $con->{writer};
-warn "abort";
   } elsif ($args{close}) {
     $con->{to_be_closed} = 1;
     $con->{writer}->close if defined $con->{writer};
     delete $con->{writer};
-warn "close";
   }
-
-warn "sent done [$con->{to_be_closed}]";
 
   $con->{write_mode} = 'sent';
   delete $con->{to_be_sent_length}; # XXX spec
@@ -678,11 +663,10 @@ warn "sent done [$con->{to_be_closed}]";
   $con->_both_done if $con->{receive_done};
 } # _send_done
 
-sub _receive_done ($) {
-  my $con = $_[0];
+sub _receive_done ($;%) {
+  my ($con, %args) = @_;
   my $stream = $con->{stream};
 
-warn "receiv done";
   return if $con->{state} eq 'stopped';
 
   if (defined $stream->{messages_controller}) {
@@ -705,26 +689,37 @@ sub _both_done ($) {
   my $con = $_[0];
   my $stream = $con->{stream};
 
-warn "both";
+  # XXX
+  my $error = $con->{exit};
+  if (Web::DOM::Error->is_error ($error)) {
+    #
+  } elsif ($error->{failed} and Web::DOM::Error->is_error ($error->{message})) {
+    $error = $error->{message};
+  } elsif ($error->{failed}) {
+    #
+  } else {
+    $error = undef;
+  }
+
   if ($con->{is_server}) {
 
   delete $con->{stream};
-  my $error = $con->{exit} || {};
   if (defined $stream) {
-  if (Web::DOM::Error->is_error ($error)) { # XXX
-    $stream->{closed_reject}->($error);
-  } elsif (eval { $error->{failed} }) { # XXX
-    $stream->{closed_reject}->($error);
-  } else {
-    $stream->{closed_resolve}->();
-  }
-  }
-  if (defined $stream->{headers_received} and
-      defined $stream->{headers_received}->[1]) {
-    $stream->{headers_received}->[1]->(Promise->reject ($error)); # XXX
-  }
+    if (defined $error) {
+      $stream->{closed_reject}->($error);
+    } else {
+      $stream->{closed_resolve}->($con->{exit} || {});
+    }
+
+    if (defined $stream->{headers_received} and
+        defined $stream->{headers_received}->[1]) {
+      (delete $stream->{headers_received}->[1])->(Promise->reject ($error));
+    }
+
   delete $stream->{closed_resolve};
   delete $stream->{closed_reject};
+  }
+
   if ($con->{DEBUG}) { #XXX
     warn "$con->{id}: endstream $stream->{id} @{[scalar gmtime]}\n";
     warn "$con->{id}: ========== @{[ref $con]}\n";
@@ -734,6 +729,11 @@ warn "both";
   delete $stream->{connection};
 
   if ($con->{to_be_closed}) {
+    if (defined $con->{reader}) {
+      $con->{reader}->cancel ($con->{exit});
+      delete $con->{reader};
+    }
+
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
       $writer->close;
@@ -742,7 +742,6 @@ warn "both";
       };
       delete $con->{writer};
     }
-    # XXX and reader?
     $con->{state} = 'stopped';
   } else {
     if ($con->{rbuf} =~ /[^\x0D\x0A]/) {
@@ -755,34 +754,36 @@ warn "both";
   return;
   }
 
-  # XXX
-  if ($con->{to_be_closed} and defined $con->{reader}) {
-    $con->{reader}->cancel ($con->{exit});
-    delete $con->{reader};
-  }
+  if (defined $stream) {
+    if (defined $stream->{headers_received} and
+        defined $stream->{headers_received}->[1]) {
+      (delete $stream->{headers_received}->[1])->(Promise->reject ($error));
+    }
 
-  if (defined $con->{request} and $con->{write_mode} eq 'sent') {
-    if ($con->{exit}->{failed}) {
-      $con->{response}->{stream_reject}->($con->{exit});
-
-      if (defined $stream->{headers_received} and
-          defined $stream->{headers_received}->[1]) {
-        (delete $stream->{headers_received}->[1])->(Promise->reject ($con->{exit})); # XXX
-      }
+    if (defined $error) {
+      $con->{response}->{stream_reject}->($error);
 
       if (defined (my $rc = delete $stream->{body_controller})) {
         $rc->error ($con->{exit});
       }
     } else {
-      $con->{response}->{stream_resolve}->($con->{exit});
+      $con->{response}->{stream_resolve}->($con->{exit} || {});
     }
-    #$con->_ev ('complete', $con->{exit}); # XXX
   }
+
   delete $con->{stream};
+  delete $con->{send_done};
+  delete $con->{receive_done};
   delete $con->{request};
   delete $con->{response};
   delete $con->{write_mode};
   if ($con->{to_be_closed}) {
+    # XXX spec
+    if (defined $con->{reader}) {
+      $con->{reader}->cancel ($con->{exit});
+      delete $con->{reader};
+    }
+
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
       $writer->close;
@@ -791,7 +792,7 @@ warn "both";
       };
       delete $con->{writer};
     }
-    # XXX and reader?
+
     $con->{state} = 'stopped';
   } else {
     $con->{state} = 'waiting';
@@ -1303,6 +1304,7 @@ sub _send_request ($$;%) {
     stream_reject => $reject_stream, # XXX
   };
   $con->{state} = 'before response';
+warn "set $con->{state}";
   $con->{temp_buffer} = '';
   # XXX Connection: close
   if ($args{ws}) {
@@ -1851,6 +1853,7 @@ sub _process_rbuf ($$) {
   }
   my $stream = $self->{stream};
 
+warn "XXX $self->{state}";
   HEADER: {
     if ($self->{state} eq 'before response') {
       my $head = $self->{temp_buffer} . substr $$ref, pos ($$ref), 9;
@@ -2327,6 +2330,7 @@ sub _process_rbuf_eof ($;%) {
   my ($self, %args) = @_;
   my $stream = $self->{stream};
   # XXX %args
+warn "XXX abort * $args{abort} ($self->{state})(";
 
   if ($self->{state} eq 'before response') {
     if (length $self->{temp_buffer}) {

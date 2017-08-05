@@ -671,40 +671,42 @@ sub _connection_error ($$) {
     $con->_receive_done;
     $con->{state} = 'end';
     $con->{rbuf} = '';
-    return $con->_send_error (400, 'Bad Request');
+
+    if (defined $con->{write_mode}) {
+      ## A response is being sent or has been sent.
+      return $con->abort; # XXX {$status $status_text}
+    }
+
+    my $status = 400;
+    my $reason = 'Bad Request';
+    my $headers = [];
+    if (ref $error eq 'HASH' and $error->{failed} and
+        defined $error->{status} and not $error->{ws}) {
+      $status = $error->{status};
+      $reason = $error->{reason};
+      $headers = $error->{headers} || [];
+    }
+
+    my $stream = $con->{stream};
+    my $res = qq{<!DOCTYPE html><html>
+<head><title>$status $reason</title></head>
+<body>$status $reason</body></html>\x0A};
+    return $stream->send_response
+        ({status => $status, status_text => $reason,
+          headers => [
+            @{$headers or []},
+            ['Content-Type' => 'text/html; charset=utf-8'],
+          ]}, close => 1, content_length => length $res)->then (sub { # XXX if head
+      my $w = $_[0]->{body}->get_writer;
+      $w->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)))
+          unless $stream->{request}->{method} eq 'HEAD';
+      return $w->close;
+    });
   } else {
     $con->_send_done;
     $con->_receive_done;
   }
 } # _connection_error
-
-sub _send_error ($$$;$) {
-  my ($con, $status, $status_text, $headers) = @_;
-
-  if (defined $con->{write_mode}) {
-    ## A response is being sent or has been sent.
-    return $con->abort; # XXX {$status $status_text}
-  }
-
-  my $stream = $con->{stream};
-  my $res = qq{<!DOCTYPE html><html>
-<head><title>$status $status_text</title></head>
-<body>$status $status_text};
-  #$res .= Carp::longmess;
-  $res .= qq{</body></html>\x0A};
-  $stream->send_response
-      ({status => $status, status_text => $status_text,
-        headers => [
-          @{$headers or []},
-          ['Content-Type' => 'text/html; charset=utf-8'],
-        ]}, close => 1, content_length => length $res)->then (sub { # XXX if head
-    my $w = $_[0]->{body}->get_writer;
-    $w->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)))
-        unless $stream->{request}->{method} eq 'HEAD';
-    return $w->close;
-  });
-  return;
-} # _send_error
 
 sub _send_done ($;$) {
   my ($con, $error) = @_;
@@ -2931,8 +2933,11 @@ sub _ondata ($$) {
         $stream = $self->{stream};
         $stream->{request}->{method} = 'GET';
         $stream->{request}->{version} = 1.1;
-        $self->_receive_done;
-        return $self->_send_error (414, 'Request-URI Too Large');
+        return $self->_connection_error ({
+          failed => 1,
+          status => 414,
+          reason => 'Request-URI Too Large',
+        });
       } else {
         return;
       }
@@ -3265,11 +3270,15 @@ sub _request_headers ($) {
       } # WS_CHECK
 
       if ($status == 426) {
-        $con->_receive_done;
-        $con->_send_error (426, 'Upgrade Required', [
-          ['Upgrade', 'websocket'],
-          ['Sec-WebSocket-Version', '13'],
-        ]);
+        $con->_connection_error ({
+          failed => 1,
+          status => 426,
+          reason => 'Upgrade Required',
+          headers => [
+            ['Upgrade', 'websocket'],
+            ['Sec-WebSocket-Version', '13'],
+          ],
+         });
       } else {
         $con->_connection_error;
       }
@@ -3282,8 +3291,11 @@ sub _request_headers ($) {
 
   ## Transfer-Encoding:
   if (@{$headers{'transfer-encoding'} or []}) {
-    $con->_receive_done;
-    $con->_send_error (411, 'Length Required');
+    $con->_connection_error ({
+      failed => 1,
+      status => 411,
+      reason => 'Length Required',
+    });
     return 0;
   }
 

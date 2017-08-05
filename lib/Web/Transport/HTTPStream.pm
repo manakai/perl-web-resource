@@ -58,7 +58,6 @@ use Web::Encoding;
 # XXX replace {exit} by exception objects
 # XXX restore debug features & id
 # XXX XXX cleanup
-# XXX _connection_error for client
 # XXX abort
 
 sub new ($$) {
@@ -110,9 +109,6 @@ sub _ws_received ($) {
   my $stream = $self->{stream};
   my $ws_failed;
   WS: {
-
-warn "XXX $self->{state}";
-
     if ($self->{state} eq 'before ws frame') {
       my $read_bytes = sub ($) {
         my $want = $_[0] - length $self->{temp_buffer};
@@ -282,21 +278,15 @@ warn "XXX $self->{state}";
             } else {
               $stream->_ws_debug ('S', @$frame_info) if $self->{DEBUG};
               $self->{writer}->write ($frame);
-              $self->_send_done;
+              $self->_send_done (close => 1);
             }
-          }
+          } # not CLOSING
           $self->{state} = 'ws terminating';
           $self->{exit} = {status => defined $status ? $status : 1005,
                            reason => defined $reason ? $reason : '',
                            ws => 1, cleanly => 1};
           if (length ($$ref) - pos ($$ref)) { # ws terminating state
-            if (not $self->{exit}->{failed}) {
-              $self->{exit}->{failed} = 1;
-              $self->{exit}->{ws} = 1;
-              $self->{exit}->{status} = 1006;
-              $self->{exit}->{reason} = '';
-              delete $self->{exit}->{cleanly};
-            }
+            $self->{exit} = {failed => 1, ws => 1, status => 1006, reason => ''};
             $$ref = '';
           }
           if ($self->{is_server}) {
@@ -425,33 +415,6 @@ warn "XXX $self->{state}";
     $ref = \'';
   }
 } # _ws_received
-
-sub _ws_received_eof ($;%) {
-  my ($self, $ref, %args) = @_;
-
-  if ($self->{state} eq 'before ws frame' or
-      $self->{state} eq 'ws data') {
-    $self->{ws_state} = 'CLOSING';
-    my $reason = '';
-    $reason = $self->{exit}->{message}
-        if defined $self->{exit} and
-           defined $self->{exit}->{message} and
-           $self->{is_server};
-    $self->{exit} = {ws => 1, failed => 1, status => 1006, reason => $reason};
-  } elsif ($self->{state} eq 'ws terminating') {
-    $self->{ws_state} = 'CLOSING';
-    if ($args{abort} and not $self->{exit}->{failed}) {
-      $self->{exit}->{failed} = 1;
-      $self->{exit}->{ws} = 1;
-      $self->{exit}->{status} = 1006;
-      $self->{exit}->{reason} = '';
-    }
-  }
-  $self->{to_be_closed} = 1;
-  $self->{write_mode} = 'sent';
-
-  $self->_receive_done;
-} # _ws_received_eof
 
 # XXX
 sub _debug_handshake_done ($$) {
@@ -615,11 +578,8 @@ sub abort ($;%) {
 
   if ($self->{is_server}) {
 
-  if (defined $self->{writer}) {
-    $self->{writer}->abort ($error);
-    $self->_send_done ($error);
-    delete $self->{writer};
-  }
+  $self->{exit} ||= $error; # XXX
+  $self->_send_done (abort => 1);
 
 } else {
 
@@ -659,22 +619,19 @@ sub _connection_error ($$) {
   }
 
   $con->{exit} = $error if defined $error;
-  $con->{to_be_closed} = 1;
 
   if ($con->{state} eq 'ws terminating') {
-    $con->_send_done;
+    $con->_send_done (close => 1);
     $con->_receive_done;
     return;
   }
 
   if ($con->{is_server}) {
-    $con->_receive_done;
-    $con->{state} = 'end';
-    $con->{rbuf} = '';
-
     if (defined $con->{write_mode}) {
       ## A response is being sent or has been sent.
-      return $con->abort; # XXX {$status $status_text}
+      $con->_send_done (close => 1);
+      $con->_receive_done;
+      return;
     }
 
     my $status = 400;
@@ -691,7 +648,7 @@ sub _connection_error ($$) {
     my $res = qq{<!DOCTYPE html><html>
 <head><title>$status $reason</title></head>
 <body>$status $reason</body></html>\x0A};
-    return $stream->send_response
+    my $p = $stream->send_response
         ({status => $status, status_text => $reason,
           headers => [
             @{$headers or []},
@@ -702,40 +659,33 @@ sub _connection_error ($$) {
           unless $stream->{request}->{method} eq 'HEAD';
       return $w->close;
     });
-  } else {
-    $con->_send_done;
+
     $con->_receive_done;
+    return $p;
+  } else {
+    $con->_send_done (close => 1);
+    $con->_receive_done;
+    return;
   }
 } # _connection_error
 
-sub _send_done ($;$) {
-  my ($con, $error) = @_;
+sub _send_done ($;%) {
+  my ($con, %args) = @_;
   my $stream = $con->{stream};
 
-  if ($con->{is_server}) {
-
-  if (defined $error and not defined $con->{exit}) {
-    $con->{exit} = $error;
-  }
-
-  if ($con->{to_be_closed}) {
+  # XXX
+  if ($args{abort}) {
+    $con->{to_be_closed} = 1;
+    $con->{writer}->abort ($con->{exit}) if defined $con->{writer};
+    delete $con->{writer};
+  } elsif ($args{close}) {
+    $con->{to_be_closed} = 1;
     $con->{writer}->close if defined $con->{writer};
     delete $con->{writer};
   }
+
   $con->{write_mode} = 'sent';
   delete $con->{to_be_sent_length};
-  $stream->{send_done} = 1;
-  if (defined $con->{cancel_current_writable_stream}) {
-    $con->{cancel_current_writable_stream}->(undef);
-  }
-  if ($stream->{receive_done}) {
-    $con->_both_done;
-  }
-
-  return;
-  }
-
-  $con->{write_mode} = 'sent';
 
   if (defined $con->{cancel_current_writable_stream}) {
     $con->{cancel_current_writable_stream}->(undef);
@@ -747,15 +697,18 @@ sub _send_done ($;$) {
     delete $con->{writer};
   }
 
-  $con->_both_done if $con->{state} eq 'sending';
+  if ($con->{is_server}) {
+    $stream->{send_done} = 1;
+    $con->_both_done if $stream->{receive_done};
+  } else {
+    $con->_both_done if $con->{state} eq 'sending';
+  }
 } # _send_done
 
 
 sub _receive_done ($) {
   my $con = $_[0];
   my $stream = $con->{stream};
-
-  my $exit = $con->{exit} || {};
 
   if ($con->{is_server}) {
 
@@ -861,7 +814,6 @@ sub _both_done ($) {
   delete $con->{request};
   delete $con->{response};
   delete $con->{write_mode};
-  delete $con->{to_be_sent_length};
   if ($con->{to_be_closed}) {
     if (defined $con->{writer}) {
       # XXX
@@ -887,8 +839,6 @@ sub _terminate ($) {
 } # _terminate
 
 sub DESTROY ($) {
-  $_[0]->abort if $_[0]->{is_server} and defined $_[0]->{transport}; # XXX
-
   local $@;
   eval { die };
   warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
@@ -1105,9 +1055,10 @@ sub _open_sending_stream ($;%) {
           return $sent;
         }
       })->catch (sub {
+        # XXX wrap?
         $con->{cancel_current_writable_stream}->($_[0])
             if defined $con->{cancel_current_writable_stream};
-        $stream->abort (message => $_[0]); # XXX
+        $con->abort (message => $_[0]);
         die $_[0];
       });
     }, # write
@@ -1798,7 +1749,6 @@ sub send_response ($$$;%) {
   return Promise->resolve ({body => $ws});
 } # send_response
 
-# XXX tests
 sub abort ($;%) {
   my $stream = shift;
   $stream->{connection}->abort (@_) if defined $stream->{connection};
@@ -2505,9 +2455,27 @@ sub _process_rbuf_eof ($;%) {
       errno => $args{errno},
     });
   } elsif ($self->{state} eq 'before ws frame' or
-           $self->{state} eq 'ws data' or
-           $self->{state} eq 'ws terminating') {
-    return $self->_ws_received_eof (\($self->{temp_buffer}), %args);
+           $self->{state} eq 'ws data') {
+    $self->{ws_state} = 'CLOSING';
+    $self->{state} = 'ws terminating';
+    my $reason = '';
+    #$reason = $self->{exit}->{message} # XXX
+    #    if defined $self->{exit} and
+    #       defined $self->{exit}->{message} and
+    #       $self->{is_server};
+    return $self->_connection_error ({
+      ws => 1, failed => 1, status => 1006, reason => $reason,
+    });
+  } elsif ($self->{state} eq 'ws terminating') {
+    if ($args{abort} and not $self->{exit}->{failed}) {
+      $self->{exit}->{failed} = 1;
+      $self->{exit}->{ws} = 1;
+      $self->{exit}->{status} = 1006;
+      $self->{exit}->{reason} = '';
+    }
+    $self->_send_done (close => 1);
+    $self->_receive_done;
+    return;
   } else {
     # initial
     # waiting
@@ -3071,10 +3039,28 @@ sub _oneof ($$) {
     $self->{exit} = $error;
     $self->_receive_done;
   } elsif ($self->{state} eq 'before ws frame' or
-           $self->{state} eq 'ws data' or
-           $self->{state} eq 'ws terminating') {
+           $self->{state} eq 'ws data') {
+    $self->{ws_state} = 'CLOSING';
+    $self->{state} = 'ws terminating';
+    my $reason = '';
     $self->{exit} = {failed => 1, message => $error}; # XXX
-    return $self->_ws_received_eof (\'');
+    $reason = $self->{exit}->{message} # XXX
+        if defined $self->{exit} and
+           defined $self->{exit}->{message} and
+           $self->{is_server};
+    return $self->_connection_error ({
+      ws => 1, failed => 1, status => 1006, reason => $reason,
+    });
+  } elsif ($self->{state} eq 'ws terminating') {
+    if (defined $error and not $self->{exit}->{failed}) {
+      $self->{exit}->{failed} = 1;
+      $self->{exit}->{ws} = 1;
+      $self->{exit}->{status} = 1006;
+      $self->{exit}->{reason} = '';
+    }
+    $self->_send_done (close => 1);
+    $self->_receive_done;
+    return;
   } elsif ($self->{state} eq 'ws handshaking') {
     return $self->_connection_error ($error);
   } elsif ($self->{state} eq 'after request') {

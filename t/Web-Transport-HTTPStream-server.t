@@ -337,8 +337,10 @@ test {
           ['Hoge', 'Fuga14'],
         ]})->then (sub {
       my $w = $_[0]->{body}->get_writer;
-      $w->write (d 'abcde'); # can reject
-      $w->abort;
+      return promised_sleep (1)->then (sub { # ensure response headers received
+        $w->write (d 'abcde'); # can reject
+        $w->abort;
+      });
     });
   };
 
@@ -346,7 +348,7 @@ test {
   return $http->request (path => [$path])->then (sub {
     my $res1 = $_[0];
     test {
-      ok $res1->is_network_error;
+      is $res1->status, 201, $res1;
       is 0+@closed, 1;
     } $c;
     return $closed[0];
@@ -356,7 +358,7 @@ test {
       is $error->name, 'Error';
       is $error->message, "Something's wrong";
       is $error->file_name, __FILE__;
-      is $error->line_number, __LINE__-18;
+      is $error->line_number, __LINE__-19;
     } $c;
   })->then (sub {
     return $http->close;

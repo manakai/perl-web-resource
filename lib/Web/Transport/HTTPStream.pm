@@ -533,34 +533,14 @@ sub close_after_current_stream ($) {
     return Promise->reject ("Connection has not been established");
   }
 
-  # XXX
-  if ($con->{is_server}) {
-    if (defined $con->{stream}) {
-      $con->{to_be_closed} = 1;
-    } else {
-      if (defined $con->{writer}) {
-        my $w = $con->{writer};
-        # XXX
-        $w->write (DataView->new (ArrayBuffer->new))->then (sub {
-          my $error = 'Close by |close_after_current_stream|'; # XXX
-          $w->abort ($error);
-          $con->{reader}->cancel ($error)->catch (sub { });
-        });
-        delete $con->{writer};
-      }
-      $con->{state} = 'end';
-    }
-    return $con->{closed};
-  }
-
   $con->{to_be_closed} = 1;
   if ($con->{state} eq 'initial' or
+      $con->{state} eq 'before request-line' or
       $con->{state} eq 'waiting') {
-    $con->{writer}->close; # can fail
-    delete $con->{writer};
-    $con->_read;
+    $con->{exit} = {failed => 0,
+                    message => 'Close by |close_after_current_stream|'};
+    $con->_send_done (close => 1);
   }
-
   return $con->{closed};
 } # close_after_current_stream
 
@@ -627,7 +607,7 @@ sub _connection_error ($$) {
   }
 
   if ($con->{is_server}) {
-    if (defined $con->{write_mode}) {
+    if (not defined $con or defined $con->{write_mode}) {
       ## A response is being sent or has been sent.
       $con->_send_done (close => 1);
       $con->_receive_done;
@@ -671,72 +651,38 @@ sub _connection_error ($$) {
 
 sub _send_done ($;%) {
   my ($con, %args) = @_;
-  my $stream = $con->{stream};
 
   # XXX
   if ($args{abort}) {
     $con->{to_be_closed} = 1;
     $con->{writer}->abort ($con->{exit}) if defined $con->{writer};
     delete $con->{writer};
+warn "abort";
   } elsif ($args{close}) {
     $con->{to_be_closed} = 1;
     $con->{writer}->close if defined $con->{writer};
     delete $con->{writer};
+warn "close";
   }
 
+warn "sent done [$con->{to_be_closed}]";
+
   $con->{write_mode} = 'sent';
-  delete $con->{to_be_sent_length};
+  delete $con->{to_be_sent_length}; # XXX spec
 
   if (defined $con->{cancel_current_writable_stream}) {
     $con->{cancel_current_writable_stream}->(undef);
   }
 
-  # XXX
-  if ($con->{to_be_closed}) {
-    $con->{writer}->close if defined $con->{writer};
-    delete $con->{writer};
-  }
-
-  if ($con->{is_server}) {
-    $stream->{send_done} = 1;
-    $con->_both_done if $stream->{receive_done};
-  } else {
-    $con->_both_done if $con->{state} eq 'sending';
-  }
+  $con->{send_done} = 1; # XXX spec
+  $con->_both_done if $con->{receive_done};
 } # _send_done
-
 
 sub _receive_done ($) {
   my $con = $_[0];
   my $stream = $con->{stream};
 
-  if ($con->{is_server}) {
-
-  delete $con->{timer};
-  $con->{disable_timer} = 1;
-  delete $con->{unread_length};
-  delete $con->{ws_timer};
-  delete $con->{write_mode};
-
-  if (defined $stream->{messages_controller}) {
-    $stream->{messages_controller}->close;
-    delete $stream->{messages_controller};
-  }
-
-  if ($con->{to_be_closed} or
-      not defined $con->{writer}) { # _send_done already called with to_be_closed
-    $con->{state} = 'end';
-  } else {
-    $con->{state} = 'after request';
-  }
-  $stream->{receive_done} = 1;
-  if ($stream->{send_done}) {
-    $con->_both_done;
-  }
-
-  return;
-  }
-
+warn "receiv done";
   return if $con->{state} eq 'stopped';
 
   if (defined $stream->{messages_controller}) {
@@ -744,31 +690,34 @@ sub _receive_done ($) {
     delete $stream->{messages_controller};
   }
 
+  delete $con->{unread_length}; # XXX spec
   delete $con->{timer};
+  $con->{disable_timer} = 1; # XXX spec
   delete $con->{ws_timer};
-  if (defined $con->{write_mode} and
-      $con->{write_mode} eq 'raw') {
+  if (defined $con->{write_mode} and not $con->{write_mode} eq 'sent') {
     $con->{state} = 'sending';
-  } else {
-    $con->_both_done;
   }
+  $con->{receive_done} = 1; # XXX spec
+  $con->_both_done if $con->{send_done};
 } # _receive_done
-
 
 sub _both_done ($) {
   my $con = $_[0];
   my $stream = $con->{stream};
 
+warn "both";
   if ($con->{is_server}) {
 
   delete $con->{stream};
   my $error = $con->{exit} || {};
+  if (defined $stream) {
   if (Web::DOM::Error->is_error ($error)) { # XXX
     $stream->{closed_reject}->($error);
   } elsif (eval { $error->{failed} }) { # XXX
     $stream->{closed_reject}->($error);
   } else {
     $stream->{closed_resolve}->();
+  }
   }
   if (defined $stream->{headers_received} and
       defined $stream->{headers_received}->[1]) {
@@ -783,6 +732,25 @@ sub _both_done ($) {
   delete $con->{disable_timer};
   $con->{timer} = AE::timer $Web::Transport::HTTPStream::ServerConnection::ReadTimeout, 0, sub { $con->_timeout };
   delete $stream->{connection};
+
+  if ($con->{to_be_closed}) {
+    if (defined $con->{writer}) {
+      my $writer = $con->{writer};
+      $writer->close;
+      $con->{timer} = AE::timer 1, 0, sub {
+        $writer->abort ("HTTP completion timer (1)");
+      };
+      delete $con->{writer};
+    }
+    # XXX and reader?
+    $con->{state} = 'stopped';
+  } else {
+    if ($con->{rbuf} =~ /[^\x0D\x0A]/) {
+      $con->{state} = 'before request-line';
+    } else {
+      $con->{state} = 'waiting';
+    }
+  }
 
   return;
   }
@@ -816,14 +784,14 @@ sub _both_done ($) {
   delete $con->{write_mode};
   if ($con->{to_be_closed}) {
     if (defined $con->{writer}) {
-      # XXX
       my $writer = $con->{writer};
-      $writer->close->catch (sub { }); # can fail
+      $writer->close;
       $con->{timer} = AE::timer 1, 0, sub {
-        $writer->abort ("HTTP completion timer (1)"); # XXX and reader?
+        $writer->abort ("HTTP completion timer (1)");
       };
       delete $con->{writer};
     }
+    # XXX and reader?
     $con->{state} = 'stopped';
   } else {
     $con->{state} = 'waiting';
@@ -1619,6 +1587,7 @@ sub send_response ($$$;%) {
   my ($stream, $response, %args) = @_;
   my $con = $stream->{connection};
 
+warn "XXX $con";
   return Promise->reject (Web::DOM::TypeError->new ("Response is not allowed"))
       if not defined $con or defined $con->{write_mode} or not $con->{is_server};
 
@@ -2476,11 +2445,17 @@ sub _process_rbuf_eof ($;%) {
     $self->_send_done (close => 1);
     $self->_receive_done;
     return;
+  } elsif ($self->{state} eq 'sending') {
+    return $self->_connection_error ({
+      failed => 1,
+      message => 'Connection closed',
+    }) if $args{abort};
+    return $self->_receive_done;
+  } elsif ($self->{state} eq 'stopped') {
+    #
   } else {
     # initial
     # waiting
-    # sending
-    # stopped
     return $self->_connection_error ({
       failed => $args{abort},
       message => 'Connection closed',
@@ -2619,7 +2594,6 @@ sub new ($$) {
   my $self = bless {DEBUG => DEBUG, is_server => 1,
                     id => rand,
                     #XXX id => $args{transport}->id, req_id => 0,
-                    #XXX transport => $args{transport},
                     rbuf => '', state => 'initial'}, $class;
   $self->{DEBUG} = $args->{debug} if defined $args->{debug};
 
@@ -2760,7 +2734,7 @@ sub _new_stream ($) {
       headers => [],
       # method target_url version
     },
-    # cb target
+    # target
   }, 'Web::Transport::HTTPStream::Stream';
 
   if ($con->{DEBUG}) { # XXX
@@ -2768,6 +2742,7 @@ sub _new_stream ($) {
     warn "$con->{id}: startstream $req->{id} @{[scalar gmtime]}\n";
   }
 
+warn "XXX new";
   my ($resolve_stream, $reject_stream);
   $req->{headers_received} = [promised_cv];
 
@@ -2814,14 +2789,6 @@ sub _ondata ($$) {
       $self->{rbuf} .= $$inref;
       if ($self->{rbuf} =~ s/^\x0D?\x0A// or
           2 <= length $self->{rbuf}) {
-        $self->{state} = 'before request-line';
-      } else {
-        return;
-      }
-    } elsif ($self->{state} eq 'after request') {
-      $self->{rbuf} .= $$inref;
-      $self->{rbuf} =~ s/^[\x0D\x0A]+//;
-      if ($self->{rbuf} =~ /^[^\x0D\x0A]/) {
         $self->{state} = 'before request-line';
       } else {
         return;
@@ -3000,7 +2967,19 @@ sub _ondata ($$) {
     } elsif ($self->{state} eq 'ws handshaking') {
       return unless length $$inref;
       return $self->_connection_error;
-    } elsif ($self->{state} eq 'end') {
+    } elsif ($self->{state} eq 'sending') {
+      $self->{rbuf} .= $$inref;
+      $self->{rbuf} =~ s/^[\x0D\x0A]+//;
+      return;
+    } elsif ($self->{state} eq 'waiting') {
+      $self->{rbuf} .= $$inref;
+      $self->{rbuf} =~ s/^[\x0D\x0A]+//;
+      if ($self->{rbuf} =~ /^[^\x0D\x0A]/) {
+        $self->{state} = 'before request-line';
+      } else {
+        return;
+      }
+    } elsif ($self->{state} eq 'stopped') {
       return;
     } else {
       die "Bad state |$self->{state}|";
@@ -3012,19 +2991,7 @@ sub _ondata ($$) {
 sub _oneof ($$) {
   my ($self, $error) = @_;
   delete $self->{writer} if defined $error; # XXX
-  if ($self->{state} eq 'initial' or
-      $self->{state} eq 'before request-line') {
-    if (not defined $self->{writer}) {
-      delete $self->{timer};
-      $self->{state} = 'end';
-      return;
-    } else {
-      my $stream = $self->_new_stream;
-      $stream->{request}->{version} = 0.9;
-      $stream->{request}->{method} = 'GET';
-      return $self->_connection_error ($error);
-    }
-  } elsif ($self->{state} eq 'before request header') {
+  if ($self->{state} eq 'before request header') {
     $self->{to_be_closed} = 1;
     return $self->_connection_error ($error);
   } elsif ($self->{state} eq 'request body') {
@@ -3063,26 +3030,21 @@ sub _oneof ($$) {
     return;
   } elsif ($self->{state} eq 'ws handshaking') {
     return $self->_connection_error ($error);
-  } elsif ($self->{state} eq 'after request') {
-    if (length $self->{rbuf}) { # XXX
+  } elsif ($self->{state} eq 'sending') {
+    return $self->_connection_error ($error) if defined $error;
+    return $self->_receive_done;
+  } elsif ($self->{state} eq 'stopped') {
+    #
+  } else {
+    # $self->{state} eq 'initial'
+    # $self->{state} eq 'before request-line'
+    # $self->{state} eq 'waiting'
+    if (defined $self->{writer}) {
       my $stream = $self->_new_stream;
       $stream->{request}->{version} = 0.9;
       $stream->{request}->{method} = 'GET';
-      return $self->_connection_error ($error);
-    } elsif (defined $self->{stream}) {
-      return $self->_connection_error ($error);
-    } else {
-      # XXX
-      $self->{writer}->close if defined $self->{writer};
-      delete $self->{writer};
-      $self->{state} = 'end';
     }
-  } elsif ($self->{state} eq 'end') {
-    # XXX
-    $self->{writer}->close if defined $self->{writer};
-    delete $self->{writer};
-  } else {
-    die "Bad state |$self->{state}|";
+    return $self->_connection_error ($error);
   }
 } # _oneof
 

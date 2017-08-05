@@ -533,6 +533,9 @@ sub close_after_current_stream ($) {
     return Promise->reject ("Connection has not been established");
   }
 
+warn "server reader cancel";
+$con->{reader}->cancel;
+
   $con->{to_be_closed} = 1;
   if ($con->{state} eq 'initial' or
       $con->{state} eq 'before request-line' or
@@ -542,6 +545,7 @@ sub close_after_current_stream ($) {
     $con->_send_done (close => 1);
     $con->_read;
   }
+
   return $con->{closed};
 } # close_after_current_stream
 
@@ -639,6 +643,7 @@ sub _connection_error ($$) {
 
 sub _send_done ($;%) {
   my ($con, %args) = @_;
+warn "s";
 
   # XXX
   if ($args{abort}) {
@@ -646,10 +651,19 @@ sub _send_done ($;%) {
     $con->{to_be_closed} = 1;
     $con->{writer}->abort ($con->{exit}) if defined $con->{writer};
     delete $con->{writer};
+warn "write abort";
   } elsif ($args{close}) {
     $con->{to_be_closed} = 1;
-    $con->{writer}->close if defined $con->{writer};
+    $con->{writer}->close
+->then (sub {
+warn "XXX close 1";
+}, sub {
+warn "XXX close 2";
+})
+
+ if defined $con->{writer};
     delete $con->{writer};
+warn "writer close";
   }
 
   $con->{write_mode} = 'sent';
@@ -666,6 +680,7 @@ sub _send_done ($;%) {
 sub _receive_done ($;%) {
   my ($con, %args) = @_;
   my $stream = $con->{stream};
+warn "r";
 
   return if $con->{state} eq 'stopped';
 
@@ -688,6 +703,7 @@ sub _receive_done ($;%) {
 sub _both_done ($) {
   my $con = $_[0];
   my $stream = $con->{stream};
+warn "both";
 
   # XXX
   my $error = $con->{exit};
@@ -705,19 +721,22 @@ sub _both_done ($) {
 
   delete $con->{stream};
   if (defined $stream) {
-    if (defined $error) {
-      $stream->{closed_reject}->($error);
-    } else {
-      $stream->{closed_resolve}->($con->{exit} || {});
-    }
-
-    if (defined $stream->{headers_received} and
-        defined $stream->{headers_received}->[1]) {
+    if (defined $stream->{headers_received}->[1]) {
+warn 1;
       (delete $stream->{headers_received}->[1])->(Promise->reject ($error));
     }
 
-  delete $stream->{closed_resolve};
-  delete $stream->{closed_reject};
+    if (defined $stream->{closed}->[1]) {
+      if (defined $error) {
+warn 2;
+        (delete $stream->{closed}->[1])->(Promise->reject ($error));
+
+        # XXX
+      } else {
+warn 3;
+        (delete $stream->{closed}->[1])->($con->{exit} || {});
+      }
+    }
   }
 
   if ($con->{DEBUG}) { #XXX
@@ -734,7 +753,9 @@ sub _both_done ($) {
       delete $con->{reader};
     }
 
+warn "w...";
     if (defined $con->{writer}) {
+warn 1;
       my $writer = $con->{writer};
       $writer->close;
       $con->{timer} = AE::timer 1, 0, sub {
@@ -760,14 +781,17 @@ sub _both_done ($) {
       (delete $stream->{headers_received}->[1])->(Promise->reject ($error));
     }
 
-    if (defined $error) {
-      $con->{response}->{stream_reject}->($error);
+    if (defined $stream->{closed}->[1]) {
+      if (defined $error) {
+        (delete $stream->{closed}->[1])->(Promise->reject ($error));
 
-      if (defined (my $rc = delete $stream->{body_controller})) {
-        $rc->error ($con->{exit});
+        # XXX
+        if (defined (my $rc = delete $stream->{body_controller})) {
+          $rc->error ($con->{exit});
+        }
+      } else {
+        (delete $stream->{closed}->[1])->($con->{exit} || {});
       }
-    } else {
-      $con->{response}->{stream_resolve}->($con->{exit} || {});
     }
   }
 
@@ -1279,19 +1303,13 @@ sub _send_request ($$;%) {
   }
 
   $stream->{headers_received} = [promised_cv];
-  my ($resolve_stream, $reject_stream);
-  my $stream_closed = Promise->new
-      (sub { ($resolve_stream, $reject_stream) = @_ });
-  $stream_closed->catch (sub { # XXX
-    (delete $stream->{headers_received}->[1])->(Promise->reject ($_[0]))
-        if defined $stream->{headers_received} and
-           defined $stream->{headers_received}->[1];
-  });
+  $stream->{closed} = [promised_cv];
+
   if ($con->{DEBUG}) { # XXX
-    promised_cleanup {
-      warn "$con->{id}: endstream $req->{id} @{[scalar gmtime]}\n";
-      warn "$con->{id}: ========== @{[ref $con]}\n";
-    } $stream_closed;
+    #promised_cleanup {
+    #  warn "$con->{id}: endstream $req->{id} @{[scalar gmtime]}\n";
+    #  warn "$con->{id}: ========== @{[ref $con]}\n";
+    #} after {closed}
   }
 
   $con->{stream} = $stream;
@@ -1300,11 +1318,8 @@ sub _send_request ($$;%) {
   my $res = $con->{response} = {
     status => 200, reason => 'OK', version => '0.9',
     headers => [],
-    stream_resolve => $resolve_stream, # XXX
-    stream_reject => $reject_stream, # XXX
   };
   $con->{state} = 'before response';
-warn "set $con->{state}";
   $con->{temp_buffer} = '';
   # XXX Connection: close
   if ($args{ws}) {
@@ -1341,7 +1356,7 @@ warn "set $con->{state}";
   my ($ws) = $stream->_open_sending_stream (is_ws => $args{ws});
   $con->_read;
   return $sent->then (sub {
-    return {stream => $stream, body => $ws, closed => $stream_closed};
+    return {stream => $stream, body => $ws, closed => $stream->{closed}->[0]};
   }); ## could be rejected when connection aborted
 } # _send_request
 
@@ -1476,7 +1491,7 @@ sub send_ws_close ($;$$) {
       $con->_send_done;
     }
 
-    return $stream->{closed};
+    return $stream->{closed}->[0];
   }
 
   die "XXX bad state";
@@ -1726,7 +1741,7 @@ sub abort ($;%) {
 } # abort
 
 sub closed ($) {
-  return $_[0]->{closed};
+  return $_[0]->{closed}->[0];
 } # closed
 
 sub DESTROY ($) {
@@ -2540,6 +2555,7 @@ sub connect ($) {
           warn "$id: S: EOF\n";
         }
       }, sub {
+        delete $self->{writer};
         if ($self->{DEBUG}) {
           my $data = $_[0];
           my $id = $self->{id};
@@ -2647,6 +2663,7 @@ sub new ($$) {
       if ($self->{DEBUG}) {
         my $id = ''; # XXX $transport->id;
         warn "$id: R: EOF\n";
+warn "XXX got eof";
       }
       delete $self->{timer};
       $self->_oneof (undef);
@@ -2664,7 +2681,6 @@ sub new ($$) {
     });
 
     my $p2 = $self->{writer}->closed->then (sub {
-      delete $self->{writer};
       if ($self->{DEBUG}) {
         my $id = ''; # XXX $transport->id;
         warn "$id: S: EOF\n";
@@ -2686,6 +2702,8 @@ sub new ($$) {
           if defined $self->{stream_controller};
       delete $self->{stream_controller};
       $self->_terminate;
+
+warn "XXXX server closed";
       return undef;
     });
   })->catch (sub {
@@ -2730,7 +2748,7 @@ sub _url_hostport ($) {
 
 sub _new_stream ($) {
   my $con = $_[0];
-  my $req = $con->{stream} = bless {
+  my $stream = $con->{stream} = bless {
     is_server => 1, DEBUG => $con->{DEBUG},
     connection => $con,
     id => $con->{id} . '.' . ++$con->{req_id},
@@ -2743,21 +2761,16 @@ sub _new_stream ($) {
 
   if ($con->{DEBUG}) { # XXX
     warn "$con->{id}: ========== @{[ref $con]}\n";
-    warn "$con->{id}: startstream $req->{id} @{[scalar gmtime]}\n";
+    warn "$con->{id}: startstream $stream->{id} @{[scalar gmtime]}\n";
   }
 
-warn "XXX new";
-  my ($resolve_stream, $reject_stream);
-  $req->{headers_received} = [promised_cv];
+  $stream->{headers_received} = [promised_cv];
+  $stream->{closed} = [promised_cv];
 
-  $req->{closed} = Promise->new (sub {
-    $req->{closed_resolve} = $_[0];
-    $req->{closed_reject} = $_[1];
-  }); # XXX
+  $con->{stream_controller}->enqueue
+      ({stream => $stream, closed => $stream->{closed}->[0]}); # XXX and headers_received?
 
-  $con->{stream_controller}->enqueue ({stream => $req, closed => $req->{closed}});
-
-  return $req;
+  return $stream;
 } # _new_stream
 
 sub _read ($) {
@@ -2994,7 +3007,6 @@ sub _ondata ($$) {
 
 sub _oneof ($$) {
   my ($self, $error) = @_;
-  delete $self->{writer} if defined $error; # XXX
   if ($self->{state} eq 'before request header') {
     $self->{to_be_closed} = 1;
     return $self->_connection_error ($error);

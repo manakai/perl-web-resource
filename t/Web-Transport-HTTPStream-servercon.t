@@ -841,6 +841,46 @@ test {
   });
 } n => 2, name => '$con->server_header';
 
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }, server_header => "ab\x0Avd"});
+    my $r = $x->streams->get_reader;
+    $x->ready->then (sub {
+      $r->cancel;
+    });
+    $con ||= $x;
+  }; # $server
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $http->request (path => [])->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    return $con->closed;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'streams cancel';
+
 run_tests;
 
 =head1 LICENSE

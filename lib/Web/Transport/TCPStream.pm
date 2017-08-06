@@ -175,7 +175,7 @@ sub create ($$) {
     }, # pull
     cancel => sub {
       my $reason = defined $_[1] ? $_[1] : "$class reader canceled";
-      $rcancel->($reason);
+      $rcancel->($reason) if defined $rcancel;
       $read_active = $rcancel = undef;
       if (defined $wc) {
         $wc->error ($reason);

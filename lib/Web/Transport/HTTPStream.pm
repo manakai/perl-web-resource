@@ -18,11 +18,46 @@ push our @CARP_NOT, qw(Web::Transport::HTTPStream::Stream);
 ## This module is not public.  It should not be used by external
 ## applications and modules.
 
-## server: Whether it is a server or not.
+sub _e4d ($) {
+  return $_[0] unless $_[0] =~ /[^\x20-\x5B\x5D-\x7E]/;
+  my $x = $_[0];
+  $x =~ s/([^\x20-\x5B\x5D-\x7E])/sprintf '\x%02X', ord $1/ge;
+  return $x;
+} # _e4d
+
+sub _e4d_t ($) {
+  return encode_web_utf8 $_[0] unless $_[0] =~ /[^\x20-\x5B\x5D-\x7E]/;
+  my $x = $_[0];
+  $x =~ s{([^\x20-\x5B\x5D-\x7E])}{
+    my $c = ord $1;
+    if ($c < 0x10000) {
+      sprintf '\u%04X', $c;
+    } else {
+      sprintf '\U%08X', $c;
+    }
+  }ge;
+  return encode_web_utf8 $x;
+} # _e4d_t
+
+## Create and return a new HTTP connection object.
 ##
-## server_header: The value of the |Server:| header for the responses.
-## If it is not defined, the value |Server| is used.  It must be a
-## character string.  It is encoded in UTF-8.
+## The argument is a hash reference with following key/value pairs:
+##
+##   parent: A hash reference defining the underlying transport.  If
+##   it represents new transport, a new connection is initiated as
+##   soon as possible.
+##
+##   server: Whether it is a server or not.
+##
+##   server_header: The value of the |Server:| header for the
+##   responses.  If it is not defined, the value |Server| is used.  It
+##   must be a character string.  It is encoded in UTF-8.
+##
+##   debug: The debug level for the connection.  The value can be |2|
+##   (very verbose), |1| (verbose), or |0| (normal; default).  If the
+##   value is not defined but there is the |WEBUA_DEBUG| (for client)
+##   or |WEBSERVER_DEBUG| (for server) environment variable set when
+##   the constructor is invoked, that value is used.
 sub new ($$) {
   my $args = $_[1];
   my $con = bless {
@@ -51,8 +86,6 @@ sub new ($$) {
     #warn "$id: Connect (@{[$self->{transport}->layered_type]})... @{[scalar gmtime]}\n";
   }
 
-  if ($con->{is_server}) {
-
   $con->{streams} = ReadableStream->new ({
     start => sub {
       $con->{streams_controller} = $_[1];
@@ -61,9 +94,8 @@ sub new ($$) {
       return $con->_read;
     }, # pull
     cancel => sub {
-      # XXX test
       delete $con->{streams_controller};
-      $con->abort ($_[1]);
+      return $con->abort (message => $_[1]);
     }, # cancel
   }); # streams
   $con->{streams_done} = sub {
@@ -71,6 +103,8 @@ sub new ($$) {
     delete $con->{streams_controller};
     $con->{streams_done} = sub { };
   };
+
+  if ($con->{is_server}) {
 
   $args->{parent}->{class}->create ($args->{parent})->then (sub {
     my $info = $_[0];
@@ -222,6 +256,7 @@ sub new ($$) {
 
     (delete $con->{ready}->[1])->(undef);
     return Promise->all ([$p1, $p2, $info->{closed}])->then (sub {
+      $con->{streams_done}->();
       (delete $con->{closed}->[1])->(undef);
     });
   })->catch (sub {
@@ -236,6 +271,7 @@ sub new ($$) {
     $con->{writer}->abort ('XXX 1') if defined $con->{writer}; # XXX and reader?
 
     (delete $con->{ready}->[1])->(Promise->reject ($error));
+    $con->{streams_done}->();
     (delete $con->{closed}->[1])->(undef);
   });
 
@@ -299,27 +335,6 @@ sub new ($$) {
 
 sub MAX_BYTES () { 2**31-1 }
 
-sub _e4d ($) {
-  return $_[0] unless $_[0] =~ /[^\x20-\x5B\x5D-\x7E]/;
-  my $x = $_[0];
-  $x =~ s/([^\x20-\x5B\x5D-\x7E])/sprintf '\x%02X', ord $1/ge;
-  return $x;
-} # _e4d
-
-sub _e4d_t ($) {
-  return encode_web_utf8 $_[0] unless $_[0] =~ /[^\x20-\x5B\x5D-\x7E]/;
-  my $x = $_[0];
-  $x =~ s{([^\x20-\x5B\x5D-\x7E])}{
-    my $c = ord $1;
-    if ($c < 0x10000) {
-      sprintf '\u%04X', $c;
-    } else {
-      sprintf '\U%08X', $c;
-    }
-  }ge;
-  return encode_web_utf8 $x;
-} # _e4d_t
-
 ## Return a promise which is fulfilled with |undef| if the connection
 ## is ready.  A connection is ready if an underlying transport has
 ## been established.  It is rejected instead if a transport cannot be
@@ -327,6 +342,15 @@ sub _e4d_t ($) {
 sub ready ($) {
   return $_[0]->{ready}->[0];
 } # ready
+
+## Returns a readable stream of zero or more HTTP stream objects.  If
+## the connection is client, this is an empty stream.  If the
+## connection is server, a new HTTP stream object is created and
+## appended to the readable stream whenever it receives a request.  If
+## the readable stream is canceled, the HTTP stream is aborted.
+sub streams ($) {
+  return $_[0]->{streams};
+} # streams
 
 sub _ws_received ($) {
   my ($self, $ref) = @_;
@@ -1808,7 +1832,8 @@ sub _new_stream ($) {
   $stream->{headers_received} = [promised_cv];
   $stream->{closed} = [promised_cv];
 
-  $con->{streams_controller}->enqueue ($stream);
+  $con->{streams_controller}->enqueue ($stream)
+      if defined $con->{streams_controller}; # XXX
 
   return $stream;
 } # _new_stream
@@ -2351,10 +2376,6 @@ sub _timeout ($) {
   my $error = Web::DOM::TypeError->new ("Read timeout ($ReadTimeout)");
   return $self->abort (message => $error);
 } # _timeout
-
-sub streams ($) {
-  return $_[0]->{streams};
-} # streams
 
 # End of ::ServerConnection
 

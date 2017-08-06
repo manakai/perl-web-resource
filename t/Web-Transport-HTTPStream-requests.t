@@ -3821,6 +3821,80 @@ test {
   });
 } n => 4, name => 'close_after_current_stream when no connection';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+
+    my $ss = $http->streams;
+    test {
+      isa_ok $ss, 'ReadableStream';
+    } $c;
+
+    return $http->ready->then (sub {
+      return $http->close_after_current_stream;
+    })->then (sub {
+      my $reader = $ss->get_reader;
+      return $reader->read->then (sub {
+        my $v = $_[0];
+        test {
+          ok $v->{done};
+        } $c;
+        return $reader->closed;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'streams readable stream';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+
+    my $ss = $http->streams;
+    my $reason = {};
+
+    return $http->ready->then (sub {
+      return $ss->cancel ($reason);
+    })->then (sub {
+      return $http->closed;
+    })->then (sub {
+      test {
+        ok 1;
+      } $c;
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'streams readable stream cancel';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

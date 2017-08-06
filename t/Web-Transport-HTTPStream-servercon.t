@@ -78,8 +78,8 @@ test {
   my $ready2;
   my @con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -143,8 +143,8 @@ test {
   my $error2;
   my @con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            host => Web::Host->parse_string ($_[1]), port => $_[2],
@@ -197,8 +197,8 @@ test {
 
   my @con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -274,8 +274,8 @@ test {
 
   my $con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -358,8 +358,8 @@ test {
 
   my $con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -440,8 +440,8 @@ test {
   my @con;
   my $p;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -491,8 +491,8 @@ test {
   my $p;
   my @con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -550,8 +550,8 @@ test {
 
   my $con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -598,8 +598,8 @@ test {
 
   my $con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -646,8 +646,8 @@ test {
 
   my $con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -694,8 +694,8 @@ test {
 
   my $con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -742,8 +742,8 @@ test {
 
   my $con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -796,8 +796,8 @@ test {
 
   my $con;
   my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],

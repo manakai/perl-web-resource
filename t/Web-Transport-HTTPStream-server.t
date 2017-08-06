@@ -154,8 +154,8 @@ my $HandleRequestHeaders = {};
   }; # $server_process
 
   our $server = tcp_server $host, $port, sub {
-    my $con = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $con = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TCPStream',
            server => 1,
            fh => $_[0],
@@ -179,8 +179,8 @@ my $HandleRequestHeaders = {};
   my $cert_args = {host => 'tlstestserver.test'};
   Test::Certificates->wait_create_cert ($cert_args);
   our $tls_server = tcp_server $host, $tls_port, sub {
-    my $con = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $con = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
            class => 'Web::Transport::TLSStream',
            server => 1,
            parent => {
@@ -199,8 +199,8 @@ my $HandleRequestHeaders = {};
   };
 
   our $unix_server = tcp_server 'unix/', $UnixPath, sub {
-    my $con = Web::Transport::HTTPStream->new_XXXserver
-        ({parent => {
+    my $con = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
             class => 'Web::Transport::UnixStream',
             server => 1,
             fh => $_[0],

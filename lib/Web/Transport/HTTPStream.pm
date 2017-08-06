@@ -1779,11 +1779,102 @@ sub new ($$) {
                     req_id => 0,
                     temp_buffer => '',
                     DEBUG => DEBUG}, shift;
-  $con->{args} = $_[0];
-  $con->{DEBUG} = delete $con->{args}->{debug} if defined $con->{args}->{debug};
+  my $args = $_[0];
+  $con->{DEBUG} = delete $args->{debug} if defined $args->{debug};
 
   $con->{ready} = [promised_cv];
   $con->{closed} = [promised_cv];
+
+  if ($con->{DEBUG}) {
+    #XXX
+    #my $id = $self->{id};
+    #warn "$id: Connect (@{[$self->{transport}->layered_type]})... @{[scalar gmtime]}\n";
+  }
+
+  $args->{parent}->{class}->create ($args->{parent})->then (sub {
+    my $info = $_[0];
+
+    if ($con->{DEBUG}) { # XXX
+      warn "$con->{id}: openconnection @{[scalar gmtime]}\n";
+      $con->_debug_handshake_done ({});
+    }
+
+    $con->{state} = 'initial';
+    $con->{response_received} = 1;
+
+    $con->{reader} = $info->{read_stream}->get_reader ('byob');
+    $con->{writer} = $info->{write_stream}->get_writer;
+    #$con->_read;
+
+    my $p1 = $con->{reader}->closed->then (sub { # XXX
+      delete $con->{reader};
+      if ($con->{DEBUG}) {
+        my $id = $con->{id};
+        warn "$id: R: EOF\n";
+      }
+
+      $con->_process_rbuf (undef);
+      $con->_process_rbuf_eof;
+      return undef;
+    }, sub {
+      delete $con->{reader};
+      my $data = {failed => 1, message => $_[0]}; # XXX
+      my $error = Web::DOM::Error->wrap ($_[0]);
+
+      if ($con->{DEBUG}) {
+        my $id = $con->{id};
+        warn "$id: R: EOF ($data->{message})\n";
+      }
+
+      if (UNIVERSAL::isa ($error, 'Streams::IOError') and
+          $error->errno == ECONNRESET) {
+        return $con->_connection_error ({failed => 1, reset => 1});
+      } else {
+        $con->_process_rbuf (undef);
+        $con->_process_rbuf_eof
+            (abort => $data->{failed},
+             errno => $data->{errno},
+             error_message => $data->{message});
+        return;
+      }
+    });
+
+    my $p2 = $con->{writer}->closed->then (sub { # XXX
+      if ($con->{DEBUG}) {
+        my $id = $con->{id};
+        warn "$id: S: EOF\n";
+      }
+    }, sub {
+      delete $con->{writer};
+      if ($con->{DEBUG}) {
+        my $data = $_[0];
+        my $id = $con->{id};
+        if (ref $data eq 'HASH' and defined $data->{message}) { # XXX
+          warn "$id: S: EOF ($data->{message})\n";
+        } else {
+          warn "$id: S: EOF\n";
+        }
+      }
+    });
+
+    (delete $con->{ready}->[1])->(undef);
+    return Promise->all ([$p1, $p2, $info->{closed}])->then (sub {
+      (delete $con->{closed}->[1])->(undef);
+    });
+  })->catch (sub {
+    my $error = $_[0];
+    unless (ref $error eq 'HASH' and $error->{failed}) {
+      $error = {failed => 1, message => ''.$error};
+    }
+    if ($con->{DEBUG}) { # XXX
+      warn "$con->{id}: openconnection @{[scalar gmtime]}\n";
+      $con->_debug_handshake_done ($error);
+    }
+    $con->{writer}->abort ('XXX 1') if defined $con->{writer}; # XXX and reader?
+
+    (delete $con->{ready}->[1])->(Promise->reject ($error));
+    (delete $con->{closed}->[1])->(undef);
+  });
 
   return $con;
 } # new
@@ -2477,105 +2568,6 @@ sub _process_rbuf_eof ($;%) {
     });
   }
 } # _process_rbuf_eof
-
-# XXX merge with new?
-sub connect ($) {
-  my $con = $_[0];
-  croak "Bad state" if not defined $con->{args};
-  my $args = delete $con->{args};
-  $con->{state} = 'initial';
-  $con->{response_received} = 1;
-
-  if ($con->{DEBUG}) {
-    #XXX
-    #my $id = $self->{id};
-    #warn "$id: Connect (@{[$self->{transport}->layered_type]})... @{[scalar gmtime]}\n";
-  }
-
-  $args->{parent}->{class}->create ($args->{parent})->then (sub {
-    my $info = $_[0];
-
-    if ($con->{DEBUG}) { # XXX
-      warn "$con->{id}: openconnection @{[scalar gmtime]}\n";
-      $con->_debug_handshake_done ({});
-    }
-
-    $con->{reader} = $info->{read_stream}->get_reader ('byob');
-    $con->{writer} = $info->{write_stream}->get_writer;
-    #$con->_read;
-
-    my $p1 = $con->{reader}->closed->then (sub { # XXX
-      delete $con->{reader};
-      if ($con->{DEBUG}) {
-        my $id = $con->{id};
-        warn "$id: R: EOF\n";
-      }
-
-      $con->_process_rbuf (undef);
-      $con->_process_rbuf_eof;
-      return undef;
-    }, sub {
-      delete $con->{reader};
-      my $data = {failed => 1, message => $_[0]}; # XXX
-      my $error = Web::DOM::Error->wrap ($_[0]);
-
-      if ($con->{DEBUG}) {
-        my $id = $con->{id};
-        warn "$id: R: EOF ($data->{message})\n";
-      }
-
-      if (UNIVERSAL::isa ($error, 'Streams::IOError') and
-          $error->errno == ECONNRESET) {
-        return $con->_connection_error ({failed => 1, reset => 1});
-      } else {
-        $con->_process_rbuf (undef);
-        $con->_process_rbuf_eof
-            (abort => $data->{failed},
-             errno => $data->{errno},
-             error_message => $data->{message});
-        return;
-      }
-    });
-
-    my $p2 = $con->{writer}->closed->then (sub { # XXX
-      if ($con->{DEBUG}) {
-        my $id = $con->{id};
-        warn "$id: S: EOF\n";
-      }
-    }, sub {
-      delete $con->{writer};
-      if ($con->{DEBUG}) {
-        my $data = $_[0];
-        my $id = $con->{id};
-        if (ref $data eq 'HASH' and defined $data->{message}) { # XXX
-          warn "$id: S: EOF ($data->{message})\n";
-        } else {
-          warn "$id: S: EOF\n";
-        }
-      }
-    });
-
-    (delete $con->{ready}->[1])->(undef);
-    return Promise->all ([$p1, $p2, $info->{closed}])->then (sub {
-      (delete $con->{closed}->[1])->(undef);
-    });
-  })->catch (sub {
-    my $error = $_[0];
-    unless (ref $error eq 'HASH' and $error->{failed}) {
-      $error = {failed => 1, message => ''.$error};
-    }
-    if ($con->{DEBUG}) { # XXX
-      warn "$con->{id}: openconnection @{[scalar gmtime]}\n";
-      $con->_debug_handshake_done ($error);
-    }
-    $con->{writer}->abort ('XXX 1') if defined $con->{writer}; # XXX and reader?
-
-    (delete $con->{ready}->[1])->(Promise->reject ($error));
-    (delete $con->{closed}->[1])->(undef);
-  });
-
-  return $con->{ready}->[0];
-} # connect
 
 # End of ::ClientConnection
 

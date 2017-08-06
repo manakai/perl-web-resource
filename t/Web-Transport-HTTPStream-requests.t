@@ -167,7 +167,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -206,7 +206,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       my $p1 = $http->send_request ({method => 'GET', target => '/'});
       my $p = $http->send_request ({method => 'GET', target => '/'});
       test {
@@ -242,7 +242,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       my @p;
       for my $subtest (
         [['' => 'abc']],
@@ -293,7 +293,7 @@ test {
     my $closed;
     my $closed_fulfilled;
     my $closed_rejected;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -357,7 +357,7 @@ test {
     my $closed;
     my $closed_fulfilled;
     my $closed_rejected;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -419,7 +419,7 @@ test {
       port => $server->{port},
     }});
     my $error;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -475,7 +475,7 @@ test {
     my $closed;
     my $closed_fulfilled;
     my $closed_rejected;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -534,7 +534,7 @@ test {
     }});
     my $closed;
     my $closed_fulfilled;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -625,7 +625,7 @@ test {
       port => $server->{port},
     }});
     my $error;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       my $p = $http->send_request ({method => 'GET', target => '/'});
       my $q = $http->send_request ({method => 'GET', target => '/'});
       return $q->catch (sub {
@@ -683,7 +683,7 @@ test {
       port => $server->{port},
     }});
     my $error;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->close_after_current_stream;
     })->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
@@ -739,7 +739,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'PUT', target => '/'}, content_length => 0);
     })->then (sub {
       my $got = $_[0];
@@ -801,7 +801,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'POST', target => '/'}, content_length => 0);
     })->then (sub {
       my $got = $_[0];
@@ -863,7 +863,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
     })->then (sub {
       my $got = $_[0];
@@ -926,7 +926,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
     })->then (sub {
       my $got = $_[0];
@@ -977,7 +977,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
     })->then (sub {
       my $got = $_[0];
@@ -1027,7 +1027,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
     })->then (sub {
       my $got = $_[0];
@@ -1078,7 +1078,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
     })->then (sub {
       my $got = $_[0];
@@ -1128,7 +1128,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
     })->then (sub {
       my $got = $_[0];
@@ -1188,7 +1188,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
     })->then (sub {
       my $got = $_[0];
@@ -1229,7 +1229,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
     })->then (sub {
       my $got = $_[0];
@@ -1274,7 +1274,7 @@ test {
     }});
     my $response;
     my $closed;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $got = $_[0];
@@ -1332,7 +1332,7 @@ test {
     }});
     my $response;
     my $closed;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $got = $_[0];
@@ -1396,7 +1396,7 @@ test {
       port => $server->{port},
     }});
     my $closed;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $got = $_[0];
@@ -1449,7 +1449,7 @@ test {
       port => $server->{port},
     }});
     my $closed;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $got = $_[0];
@@ -1495,7 +1495,7 @@ test {
       port => $server->{port},
     }});
     my $closed;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, content_length => 3);
     })->then (sub {
       my $got = $_[0];
@@ -1541,7 +1541,7 @@ test {
       port => $server->{port},
     }});
     my $closed;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, content_length => 3);
     })->then (sub {
       my $got = $_[0];
@@ -1582,7 +1582,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $got = $_[0];
@@ -1619,7 +1619,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       return $_[0]->{stream}->headers_received;
@@ -1661,7 +1661,7 @@ for my $is_binary (0, 1) {
         port => $server->{port},
       }});
       my $error;
-      $http->connect->then (sub {
+      $http->ready->then (sub {
         return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
       })->then (sub {
         my $closed = $_[0]->{closed};
@@ -1715,7 +1715,7 @@ close
         host => Web::Host->parse_string ($server->{addr}),
         port => $server->{port},
       }});
-      $http->connect->then (sub {
+      $http->ready->then (sub {
         return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
       })->then (sub {
         my $closed = $_[0]->{closed};
@@ -1766,7 +1766,7 @@ close
         host => Web::Host->parse_string ($server->{addr}),
         port => $server->{port},
       }});
-      $http->connect->then (sub {
+      $http->ready->then (sub {
         return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
       })->then (sub {
         my $stream = $_[0]->{stream};
@@ -1814,7 +1814,7 @@ close
         port => $server->{port},
       }});
       my @p;
-      $http->connect->then (sub {
+      $http->ready->then (sub {
         return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
       })->then (sub {
         my $stream = $_[0]->{stream};
@@ -1879,7 +1879,7 @@ close
         host => Web::Host->parse_string ($server->{addr}),
         port => $server->{port},
       }});
-      $http->connect->then (sub {
+      $http->ready->then (sub {
         return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
       })->then (sub {
         my $stream = $_[0]->{stream};
@@ -1942,7 +1942,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -1993,7 +1993,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2045,7 +2045,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2097,7 +2097,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2153,7 +2153,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2209,7 +2209,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2257,7 +2257,7 @@ CRLF
       port => $server->{port},
     }});
     my $body;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       return $_[0]->{stream}->headers_received;
@@ -2299,7 +2299,7 @@ CRLF
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2340,7 +2340,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2384,7 +2384,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2427,7 +2427,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2470,7 +2470,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2525,7 +2525,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2579,7 +2579,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2630,7 +2630,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2669,7 +2669,7 @@ CRLF
       port => $server->{port},
     }});
     my $error = Web::DOM::Error->new ("Custom error");
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2715,7 +2715,7 @@ CRLF
       port => $server->{port},
     }});
     my $error = Web::DOM::Error->new ("Custom error");
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2764,7 +2764,7 @@ ws-send-header opcode=1 length=3
       port => $server->{port},
     }});
     my $error = Web::DOM::Error->new ("Custom error");
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2818,7 +2818,7 @@ ws-send-header opcode=2 length=3
       port => $server->{port},
     }});
     my $error = Web::DOM::Error->new ("Custom error");
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2873,7 +2873,7 @@ ws-send-header opcode=8
       port => $server->{port},
     }});
     my $error;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2935,7 +2935,7 @@ ws-send-header opcode=8
       port => $server->{port},
     }});
     my $error;
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -2989,7 +2989,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'CONNECT', target => 'test'});
     })->then (sub {
       my $got = $_[0];
@@ -3029,7 +3029,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'CONNECT', target => 'test'}, content_length => 12);
     })->catch (sub {
       my $error = $_[0];
@@ -3064,7 +3064,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'CONNECT', target => 'test'}, content_length => 0);
     })->catch (sub {
       my $error = $_[0];
@@ -3099,7 +3099,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'CONNECT', target => 'test'});
     })->then (sub {
       my $got = $_[0];
@@ -3142,7 +3142,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'CONNECT', target => 'test'});
     })->then (sub {
       my $got = $_[0];
@@ -3178,7 +3178,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'CONNECT', target => 'test'});
     })->then (sub{
       my $got = $_[0];
@@ -3218,7 +3218,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'CONNECT', target => 'test'});
     })->then (sub{
       my $got = $_[0];
@@ -3261,7 +3261,7 @@ CRLF
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request
           ({method => 'GET', target => 'test'}, content_length => 4);
     })->then (sub {
@@ -3315,7 +3315,7 @@ CRLF
       si_host_name => Web::Host->parse_string (Test::Certificates->cert_name),
       ca_file => Test::Certificates->ca_path ('cert.pem'),
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/test'});
     })->then (sub {
       return $_[0]->{stream}->headers_received;
@@ -3353,7 +3353,7 @@ test {
          si_host_name => Web::Host->parse_string (Test::Certificates->cert_name),
          ca_file => Test::Certificates->ca_path ('cert.pem'));
     my $http = Web::Transport::HTTPClientConnection->new (transport => $tls);
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request_headers ({method => 'GET',
                                            target => '/test'}, cb => sub { });
     })->then (sub { test { ok 0 } $c }, sub {
@@ -3377,7 +3377,7 @@ test {
     my $connect = Web::Transport::H1CONNECTTransport->new
         (http => $proxy, target => 'hoge.test');
     my $http = Web::Transport::HTTPClientConnection->new (transport => $connect);
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request_headers ({method => 'GET',
                                            target => '/test'}, cb => sub { });
     })->then (sub { test { ok 0 } $c }, sub {
@@ -3406,7 +3406,7 @@ CRLF
       class => 'Web::Transport::UnixStream',
       path => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       return $_[0]->{stream}->headers_received;
@@ -3441,7 +3441,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -3496,7 +3496,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -3551,7 +3551,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->close_after_current_stream;
     })->then (sub{
       test {
@@ -3580,7 +3580,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -3638,7 +3638,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'CONNECT', target => 'test'});
     })->then (sub {
       my $got = $_[0];
@@ -3678,7 +3678,7 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    $http->connect->then (sub {
+    $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => 'test'}, content_length => 3);
     })->then (sub {
       my $got = $_[0];
@@ -3729,7 +3729,7 @@ test {
     my $closed;
     my $closed_fulfilled;
     my $closed_rejected;
-    $http->connect;
+    $http->ready;
     $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
@@ -3779,7 +3779,6 @@ test {
   my $http = Web::Transport::HTTPStream->new ({parent => {
     class => 'Web::Transport::TCPStream',
   }});
-  $http->connect;
   $http->ready->then (sub {
     test {
       ok 0;

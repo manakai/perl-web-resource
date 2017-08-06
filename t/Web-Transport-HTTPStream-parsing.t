@@ -217,7 +217,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
         my $http = Web::Transport::HTTPStream->new ({parent => $tparams});
         my $test_type = $test->{'test-type'}->[1]->[0] || '';
 
-        $http->connect ()->then (sub {
+        $http->ready->then (sub {
           if ($test_type eq 'ws') {
             my $req = {
               method => _a 'GET',
@@ -278,7 +278,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                     port => $server->{port},
                   };
                   $http = Web::Transport::HTTPStream->new ({parent => $tparams});
-                  return $http->connect;
+                  return $http->ready;
                 })->then (sub {
                   return $try->();
                 });

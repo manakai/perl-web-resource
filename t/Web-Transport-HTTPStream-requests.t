@@ -297,7 +297,7 @@ test {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
-      $closed = $_[0]->{closed};
+      $closed = $stream->closed;
       $closed->then (sub { $closed_fulfilled = 1 }, sub { $closed_rejected = 1 });
       test {
         isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
@@ -361,7 +361,7 @@ test {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
-      $closed = $_[0]->{closed};
+      $closed = $stream->closed;
       $closed->then (sub { $closed_fulfilled = 1 }, sub { $closed_rejected = 1 });
       test {
         isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
@@ -479,7 +479,7 @@ test {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
-      $closed = $_[0]->{closed};
+      $closed = $stream->closed;
       $closed->then (sub { $closed_fulfilled = 1 }, sub { $closed_rejected = 1 });
       test {
         isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
@@ -538,7 +538,7 @@ test {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
-      $closed = $_[0]->{closed};
+      $closed = $stream->closed;
       $closed->then (sub { $closed_fulfilled = 1 });
       test {
         isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
@@ -1200,7 +1200,7 @@ test {
       $writer->write (d "1234");
       my $thrown = Web::DOM::TypeError->new;
       $writer->abort ($thrown);
-      return $got->{closed}->catch (sub {
+      return $stream->closed->catch (sub {
         my $error = $_[0];
         test {
           is $error, $thrown;
@@ -1240,7 +1240,7 @@ test {
       } $c;
       $writer->write (d "1234");
       $writer->abort;
-      return $got->{closed}->catch (sub {
+      return $stream->closed->catch (sub {
         my $error = $_[0];
         test {
           is $error->name, 'Error';
@@ -1279,7 +1279,7 @@ test {
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
-      $closed = $got->{closed};
+      $closed = $stream->closed;
       return $stream->headers_received;
     })->then (sub {
       $response = my $got = $_[0];
@@ -1337,7 +1337,7 @@ test {
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
-      $closed = $got->{closed};
+      $closed = $stream->closed;
       return $stream->headers_received;
     })->then (sub {
       $response = my $got = $_[0];
@@ -1402,7 +1402,7 @@ test {
       my $got = $_[0];
       my $stream = $got->{stream};
       my $writer = $got->{body}->get_writer;
-      $closed = $got->{closed};
+      $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
         return (read_rbs $got->{body});
@@ -1455,7 +1455,7 @@ test {
       my $got = $_[0];
       my $stream = $got->{stream};
       my $writer = $got->{body}->get_writer;
-      $closed = $got->{closed};
+      $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
         return (read_rbs $got->{body});
@@ -1501,7 +1501,7 @@ test {
       my $got = $_[0];
       my $stream = $got->{stream};
       my $writer = $got->{body}->get_writer;
-      $closed = $got->{closed};
+      $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
         return (read_rbs $got->{body});
@@ -1547,7 +1547,7 @@ test {
       my $got = $_[0];
       my $stream = $got->{stream};
       my $writer = $got->{body}->get_writer;
-      $closed = $got->{closed};
+      $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
         return (read_rbs $got->{body});
@@ -1586,7 +1586,7 @@ test {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $got = $_[0];
-      return $got->{closed};
+      return $got->{stream}->closed;
     })->catch (sub {
       my $error = $_[0];
       test {
@@ -1622,11 +1622,12 @@ test {
     $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
-      return $_[0]->{stream}->headers_received;
-    })->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'});
-    })->then (sub {
-      return $_[0]->{closed};
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        return $http->send_request ({method => 'GET', target => '/'});
+      })->then (sub {
+        return $stream->closed;
+      });
     })->catch (sub {
       my $error = $_[0];
       test {
@@ -1664,8 +1665,8 @@ for my $is_binary (0, 1) {
       $http->ready->then (sub {
         return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
       })->then (sub {
-        my $closed = $_[0]->{closed};
         my $stream = $_[0]->{stream};
+        my $closed = $stream->closed;
         return Promise->resolve->then (sub {
           return $stream->send_ws_message (3, $is_binary);
         })->then (sub {
@@ -1718,8 +1719,8 @@ close
       $http->ready->then (sub {
         return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
       })->then (sub {
-        my $closed = $_[0]->{closed};
         my $stream = $_[0]->{stream};
+        my $closed = $stream->closed;
         return $stream->headers_received->then (sub {
           rsread $_[0]->{messages};
           return $stream->send_ws_message (3, $is_binary);
@@ -1946,7 +1947,7 @@ close
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
-      my $closed = $_[0]->{closed};
+      my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         rsread $_[0]->{messages};
         return $stream->send_ws_close;
@@ -2761,7 +2762,7 @@ CRLF
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
-      my $closed = $_[0]->{closed};
+      my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         $_[0]->{messages}->cancel ($error);
         return $closed;
@@ -2807,7 +2808,7 @@ CRLF
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
-      my $closed = $_[0]->{closed};
+      my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         $stream->send_ws_close;
         $_[0]->{messages}->cancel ($error);
@@ -2856,7 +2857,7 @@ ws-send-header opcode=1 length=3
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
-      my $closed = $_[0]->{closed};
+      my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         $stream->send_ws_close;
         my $reader = $_[0]->{messages}->get_reader;
@@ -2910,7 +2911,7 @@ ws-send-header opcode=2 length=3
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
-      my $closed = $_[0]->{closed};
+      my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         $stream->send_ws_close;
         my $reader = $_[0]->{messages}->get_reader;
@@ -2965,7 +2966,7 @@ ws-send-header opcode=8
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
-      my $closed = $_[0]->{closed};
+      my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         $stream->send_ping;
         return $stream->send_ws_message (2, 'binary')->then (sub {
@@ -3027,7 +3028,7 @@ ws-send-header opcode=8
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
-      my $closed = $_[0]->{closed};
+      my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         $stream->send_ping;
         return $stream->send_ws_message (2, 'binary')->then (sub {
@@ -3272,7 +3273,7 @@ close
       my $got = $_[0];
       my $stream = $got->{stream};
       my $writer = $got->{body}->get_writer;
-      my $closed = $got->{closed};
+      my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
         return read_rbs $got->{body};
@@ -3312,7 +3313,7 @@ close
       my $got = $_[0];
       my $stream = $got->{stream};
       my $writer = $got->{body}->get_writer;
-      my $closed = $got->{closed};
+      my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
         return read_rbs $got->{body};
@@ -3822,7 +3823,7 @@ test {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
-      $closed = $_[0]->{closed};
+      $closed = $stream->closed;
       $closed->then (sub { $closed_fulfilled = 1 }, sub { $closed_rejected = 1 });
       test {
         isa_ok $stream, 'Web::Transport::HTTPStream::Stream';

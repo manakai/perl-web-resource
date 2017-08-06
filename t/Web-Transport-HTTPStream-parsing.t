@@ -229,7 +229,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                  ws => 1,
                  ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}])->then (sub {
               my $stream = $_[0]->{stream};
-              my $closed = $_[0]->{closed};
+              my $closed = $stream->closed;
               return $stream->headers_received->then (sub {
                 my $got = $_[0];
 
@@ -290,7 +290,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               return $http->send_request ($req, content_length => ($test_type eq 'largerequest-second' ? 1024*1024 : undef))->then (sub {
                 my $stream = $_[0]->{stream};
                 my $reqbody = $_[0]->{body}->get_writer;
-                my $closed = $_[0]->{closed};
+                my $closed = $stream->closed;
                 my $result = {};
                 return $stream->headers_received->then (sub {
                   my $got = $_[0];
@@ -354,7 +354,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             };
             return $http->send_request ($req, content_length => ($test_type eq 'largerequest' ? 1024*1024 : undef))->then (sub {
               my $stream = $_[0]->{stream};
-              my $closed = $_[0]->{closed};
+              my $closed = $stream->closed;
               my $reqbody = $_[0]->{body}->get_writer;
               return $stream->headers_received->then (sub {
                 my $got = $_[0];

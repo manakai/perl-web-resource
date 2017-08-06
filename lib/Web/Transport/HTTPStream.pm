@@ -2763,6 +2763,9 @@ sub _headers_received ($;%) {
       }, # cancel
     });
     $return->{messages} = $read_message_stream;
+    #XXX
+    #$stream->{closing} = [promised_cv];
+    #$return->{closing} = $stream->{closing}->[0];
   } else { # not is_ws
     my $read_stream = ReadableStream->new ({
       type => 'bytes',
@@ -2910,7 +2913,7 @@ sub _send_request ($$;%) {
   my ($ws) = $stream->_open_sending_stream (is_ws => $args{ws});
   $con->_read;
   return $sent->then (sub {
-    return {stream => $stream, body => $ws, closed => $stream->{closed}->[0]};
+    return {stream => $stream, body => $ws};
   }); ## could be rejected when connection aborted
 } # _send_request
 

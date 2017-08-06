@@ -1,6 +1,8 @@
 package Web::Transport::HTTPStream;
 use strict;
 use warnings;
+no warnings 'utf8';
+use warnings FATAL => 'recursion';
 our $VERSION = '1.0';
 use AnyEvent;
 use Web::Encoding;
@@ -95,7 +97,7 @@ sub new ($$) {
     }, # pull
     cancel => sub {
       delete $con->{streams_controller};
-      return $con->abort (message => $_[1]);
+      return $con->abort ($_[1]);
     }, # cancel
   }); # streams
   $con->{streams_done} = sub {
@@ -181,12 +183,13 @@ sub new ($$) {
     }
 
     $con->{exit} = $error; # XXX$error->{exit};
-    (delete $con->{ready}->[1])->(Promise->reject ($error));
+    (delete $con->{ready}->[1])->(Promise->reject ($error))
+        if defined $con->{ready}->[1];
     $con->{streams_done}->();
     (delete $con->{closed}->[1])->(undef);
   });
 
-  } else {
+  } else { # client
 
   $args->{parent}->{class}->create ($args->{parent})->then (sub {
     my $info = $_[0];
@@ -270,7 +273,8 @@ sub new ($$) {
     }
     $con->{writer}->abort ('XXX 1') if defined $con->{writer}; # XXX and reader?
 
-    (delete $con->{ready}->[1])->(Promise->reject ($error));
+    (delete $con->{ready}->[1])->(Promise->reject ($error))
+        if defined $con->{ready}->[1];
     $con->{streams_done}->();
     (delete $con->{closed}->[1])->(undef);
   });
@@ -330,11 +334,11 @@ sub new ($$) {
 # XXX httpserver tests
 # XXX replace {exit} by exception objects
 # XXX restore debug features & id
-# XXX abort argument
 # XXX {request}/{response} API
 # XXX closing
 # XXX open sending stream
 # XXX specing
+# XXX rewrite parsing test runner
 
 sub MAX_BYTES () { 2**31-1 }
 
@@ -564,7 +568,7 @@ sub _ws_received ($) {
               }, # pull
               cancel => sub {
                 undef $rc;
-                return $self->abort (message => $_[1]);
+                return $self->abort ($_[1]);
               }, # cancel
             });
 
@@ -588,6 +592,10 @@ sub _ws_received ($) {
               ($is_text ? 'text_body' : 'body') => $rs,
             });
             $rc->close;
+            unless ($is_text) {
+              my $req = $rc->byob_request;
+              $req->respond (0) if defined $req;
+            }
             delete $self->{ws_data_frame};
           }
         } elsif ($self->{ws_frame}->[0] == 9) {
@@ -776,7 +784,9 @@ sub send_request ($$;%) {
 } # send_request
 
 ## Return the |closed| promise, which is fulfilled with |undef| when
-## the connection has been closed or aborted.
+## the connection has been closed or aborted.  Unlike HTTP stream's
+## |closed| promise, his promise is fulfilled rather than rejected
+## even when the connection is abnormally closed.
 sub closed ($) {
   return $_[0]->{closed}->[0];
 } # closed
@@ -809,22 +819,27 @@ sub is_active ($) {
   return defined $_[0]->{state} && !$_[0]->{to_be_closed};
 } # is_active
 
-sub abort ($;%) {
-  my ($con, %args) = @_;
+## Abort the connection.  It must be invoked after the connection
+## becomes ready.  The optional argument can be specified to provide
+## the reason of the abort, which might be used to reject various
+## relevant promises and various debug outputs.  It should be an
+## exception object, though any value is allowed.  It returns the
+## |closed| promise of the connection.
+sub abort ($;$) {
+  my ($con, $reason) = @_;
   if (not defined $con->{state}) {
     # XXX abort any connection handshake and invalidate $con
     return Promise->reject ("Connection has not been established");
   }
-  my $error = Web::DOM::Error->wrap ($args{message});
 
-  $con->{exit} = $error; # XXX spec # referenced by _send_done
+  my $error = Web::DOM::Error->wrap ($reason);
+  $con->{exit} = $error; # referenced by _send_done
 
-  # XXX spec
   $con->{writer}->abort ($error) if defined $con->{writer};
+
   delete $con->{writer};
   $con->_send_done (close => 1);
 
-  # XXX spec
   $con->{reader}->cancel ($error)->catch (sub { })
       if defined $con->{reader};
   delete $con->{reader};
@@ -993,7 +1008,7 @@ sub _both_done ($) {
       my $writer = $con->{writer};
       &promised_cleanup ($s_written, $writer->close);
       $con->{timer} = AE::timer 1, 0, sub {
-        $writer->abort ("HTTP completion timer (1)");
+        $writer->abort ("HTTP completion timer (1)"); # XXX exception
         $s_written->();
       };
       delete $con->{writer};
@@ -1053,7 +1068,7 @@ sub _both_done ($) {
       my $writer = $con->{writer};
       &promised_cleanup ($s_written, $writer->close);
       $con->{timer} = AE::timer 1, 0, sub {
-        $writer->abort ("HTTP completion timer (1)");
+        $writer->abort ("HTTP completion timer (1)"); # XXX exception
         $s_written->();
       };
       delete $con->{writer};
@@ -1644,6 +1659,7 @@ sub _process_rbuf_eof ($;%) {
   my $stream = $self->{stream};
   # XXX %args
   
+warn "XXX $self->{state}";
   if ($self->{state} eq 'before response') {
     if (length $self->{temp_buffer}) {
       if ($self->{request}->{method} eq 'PUT' or
@@ -1854,7 +1870,7 @@ sub _read ($) {
     });
   }; # $read;
   return $read->()->catch (sub {
-    $self->abort (message => $_[0]);
+    $self->abort ($_[0]);
     return undef;
   })->then (sub { undef $read });
 } # _read
@@ -2370,8 +2386,8 @@ sub _request_headers ($) {
 sub _timeout ($) {
   my $self = $_[0];
   delete $self->{timer};
-  my $error = Web::DOM::TypeError->new ("Read timeout ($ReadTimeout)");
-  return $self->abort (message => $error);
+  return $self->abort
+      (Web::DOM::TypeError->new ("Read timeout ($ReadTimeout)"));
 } # _timeout
 
 # End of ::ServerConnection
@@ -2476,7 +2492,7 @@ sub _open_sending_stream ($;%) {
             }
           }
         })->catch (sub {
-          $con->abort (message => $_[0]);
+          $con->abort ($_[0]);
           $con->{cancel_current_writable_stream}->($_[0])
               if defined $con->{cancel_current_writable_stream};
           die $_[0];
@@ -2486,7 +2502,7 @@ sub _open_sending_stream ($;%) {
       if ($con->{to_be_sent_length} > 0) {
         my $error = Web::DOM::TypeError->new
             (sprintf "Closed before bytes (n = %d) are sent", $con->{to_be_sent_length});
-        $con->abort (message => $error);
+        $con->abort ($error);
         $con->{cancel_current_writable_stream}->($error)
             if defined $con->{cancel_current_writable_stream};
         delete $con->{ws_message_stream_controller};
@@ -2590,7 +2606,7 @@ sub _open_sending_stream ($;%) {
         # XXX wrap?
         $con->{cancel_current_writable_stream}->($_[0])
             if defined $con->{cancel_current_writable_stream};
-        $con->abort (message => $_[0]);
+        $con->abort ($_[0]);
         die $_[0];
       });
     }, # write
@@ -2602,7 +2618,7 @@ sub _open_sending_stream ($;%) {
                    $con->{to_be_sent_length});
           $con->{cancel_current_writable_stream}->($error)
               if defined $con->{cancel_current_writable_stream};
-          $con->abort (message => $error); # XXX
+          $con->abort ($error);
           die $error;
         }
       }
@@ -2623,7 +2639,7 @@ sub _open_sending_stream ($;%) {
     abort => sub {
       $con->{cancel_current_writable_stream}->($_[1])
           if defined $con->{cancel_current_writable_stream};
-      return $con->abort (message => $_[1]); # XXX
+      return $con->abort ($_[1]);
     },
   });
 
@@ -2695,7 +2711,7 @@ sub _open_sending_stream ($;%) {
       })->catch (sub {
         $con->{cancel_current_writable_stream}->($_[0])
             if defined $con->{cancel_current_writable_stream};
-        $con->abort (message => $_[0]); # XXX
+        $con->abort ($_[0]);
         die $_[0];
       });
     }, # write
@@ -2707,7 +2723,7 @@ sub _open_sending_stream ($;%) {
                    $con->{to_be_sent_length});
           $con->{cancel_current_writable_stream}->($error)
               if defined $con->{cancel_current_writable_stream};
-          $con->abort (message => $error); # XXX
+          $con->abort ($error);
           die $error;
         }
       } else {
@@ -2718,7 +2734,7 @@ sub _open_sending_stream ($;%) {
     abort => sub {
       $con->{cancel_current_writable_stream}->($_[1])
           if defined $con->{cancel_current_writable_stream};
-      return $con->abort (message => $_[1]); # XXX
+      return $con->abort ($_[1]);
     }, # abort
   });
 
@@ -2743,7 +2759,7 @@ sub _headers_received ($;%) {
       cancel => sub {
         delete $stream->{messages_controller};
         my $con = $stream->{connection};
-        return $con->abort (message => $_[1]);
+        return $con->abort ($_[1]);
       }, # cancel
     });
     $return->{messages} = $read_message_stream;
@@ -2761,7 +2777,7 @@ sub _headers_received ($;%) {
       cancel => sub {
         delete $stream->{body_controller};
         my $con = $stream->{connection};
-        return $con->abort (message => $_[1]);
+        return $con->abort ($_[1]);
       },
     });
     $return->{body} = $read_stream;
@@ -2773,10 +2789,9 @@ sub _receive_bytes_done ($) {
   my $stream = $_[0];
   if (defined (my $rc = delete $stream->{body_controller})) {
     $rc->close;
-    while (defined (my $req = $rc->byob_request)) {
-      $req->manakai_respond_with_new_view
-          (DataView->new (ArrayBuffer->new (0)));
-    }
+    my $req = $rc->byob_request;
+    $req->manakai_respond_with_new_view
+        (DataView->new (ArrayBuffer->new (0))) if defined $req;
   }
   return undef;
 } # _receive_bytes_done
@@ -3267,7 +3282,11 @@ sub send_response ($$$;%) {
   return Promise->resolve ({body => $ws});
 } # send_response
 
-sub abort ($;%) {
+## Abort the HTTP stream.  It effectively abort the underlying HTTP
+## connection.  The optional argument is the reason of the abort (see
+## connection's |abort| method).  It returns the HTTP stream's
+## |closed| promise (which might fulfill or reject).
+sub abort ($;$) {
   my $stream = shift;
   $stream->{connection}->abort (@_) if defined $stream->{connection};
   return $stream->{closed}->[0];

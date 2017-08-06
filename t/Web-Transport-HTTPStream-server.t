@@ -4596,7 +4596,7 @@ test {
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /stuvw/) {
           $serverreq->{body} = $_[0]->{body};
-          $self->abort (message => "Test abort\x{6001}");
+          $self->abort ("Test abort\x{6001}");
         }
       };
       $self->closed->catch (sub {

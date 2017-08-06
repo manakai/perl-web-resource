@@ -3983,6 +3983,42 @@ test {
   });
 } n => 1, name => 'streams readable stream cancel';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $reason = Web::DOM::Error->new;
+    $http->ready->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      test {
+        is $got->{status}, 203;
+        rsread $got->{body};
+      } $c;
+      return $http->abort ($reason);
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'abort';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

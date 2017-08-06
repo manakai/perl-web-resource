@@ -2246,6 +2246,94 @@ test {
   server_as_cv (q{
 receive "GET", start capture
 receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=1 length=3
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->ready->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->send_ws_close (1234, 'x')->catch (sub {
+        my $error = $_[0];
+        test {
+          is $error->name, 'TypeError';
+          is $error->message, 'Stream is busy';
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__+3;
+        } $c;
+        return $http->abort;
+      });
+    })->then (sub {
+      return $http->closed;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'ws close ws_status CONNECTING';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-receive-header
+ws-receive-data
+ws-send-header opcode=8
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    $http->ready->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        $stream->send_ws_close;
+        return $stream->send_ws_close (1234, 'x');
+      });
+    })->then (sub {
+      test {
+        ok ! $http->is_active;
+      } $c;
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'ws close ws_status CLOSING';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
 "HTTP/1.1 200 OK"CRLF
 CRLF
 "abc"

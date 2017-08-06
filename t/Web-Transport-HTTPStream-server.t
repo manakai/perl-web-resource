@@ -3063,6 +3063,64 @@ test {
   });
 } n => 5, name => 'WS data bad state';
 
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      $serverreq = $self;
+      $self->{wstext} = sub {
+        if ($_[0]->{text} =~ /stuvw/) {
+          $serverreq->{text} = $_[0]->{text};
+          return $self->send_ws_close (5678, 'abc');
+        }
+      };
+      return promised_sleep (5)->then (sub {
+        return $self->send_ws_message (5, not 'binary');
+      })->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "abcde");
+        return $writer->close;
+      });
+    });
+  };
+
+  my $received = '';
+  my $sent = 0;
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      if ($is_text) {
+        if (defined $data) {
+          $received .= $data;
+        } else {
+          $received .= '(end)';
+        }
+      }
+      if ($received =~ /abcde/ and not $sent) {
+        $client->send_text ('stuvw');
+        $sent = 1;
+      }
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      is $serverreq->{text}, 'stuvw';
+      is $received, 'abcde(end)';
+      ok ! $res->is_network_error;
+      ok $res->ws_closed_cleanly;
+      is $res->ws_code, 5678;
+      is $res->ws_reason, 'abc';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'WS no timeout';
+
 {
   package TestURLForCONNECT;
   push our @ISA, qw(Web::URL);
@@ -3674,6 +3732,33 @@ test {
     undef $c;
   });
 } n => 2, name => 'request-target GET asterisk-path';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $invoked = 0;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    return $self->send_response
+        ({status => 201, status_text => 'o'}, close => 1)->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      $w->write (d ($req->{target_url}->stringify));
+      $invoked++;
+      return $w->close;
+    });
+  };
+
+  rawtcp (qq{HEAD * HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1.1 400 Bad Request};
+      is $invoked, 0;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'request-target HEAD asterisk-path';
 
 test {
   my $c = shift;

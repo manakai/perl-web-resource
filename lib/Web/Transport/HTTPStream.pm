@@ -330,8 +330,11 @@ sub new ($$) {
 # XXX httpserver tests
 # XXX replace {exit} by exception objects
 # XXX restore debug features & id
-# XXX XXX cleanup
 # XXX abort argument
+# XXX {request}/{response} API
+# XXX closing
+# XXX open sending stream
+# XXX specing
 
 sub MAX_BYTES () { 2**31-1 }
 
@@ -869,18 +872,24 @@ sub _connection_error ($$) {
     }
 
     my $stream = $con->{stream};
+    my $with_body = not ($stream->{request}->{method} eq 'HEAD');
     my $res = qq{<!DOCTYPE html><html>
 <head><title>$status $reason</title></head>
 <body>$status $reason</body></html>\x0A};
-    my $p = $stream->send_response
-        ({status => $status, status_text => $reason,
-          headers => [
-            @{$headers or []},
-            ['Content-Type' => 'text/html; charset=utf-8'],
-          ]}, close => 1, content_length => length $res)->then (sub { # XXX if head
+    my $p = $stream->send_response (
+      {
+        status => $status, status_text => $reason,
+        headers => [
+          @{$headers or []},
+          ['Content-Type' => 'text/html; charset=utf-8'],
+        ],
+      },
+      close => 1,
+      content_length => ($with_body ? length $res : undef),
+    )->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)))
-          unless $stream->{request}->{method} eq 'HEAD';
+          if $with_body;
       return $w->close;
     });
 
@@ -1386,17 +1395,6 @@ sub _process_rbuf ($$) {
           $self->{to_be_closed} = 1;
           $self->{state} = 'before ws frame';
           $self->{temp_buffer} = '';
-          if (defined $self->{pending_frame}) {
-            $self->{ws_state} = 'CLOSING';
-            $self->{writer}->write
-                (DataView->new (ArrayBuffer->new_from_scalarref (\($self->{pending_frame}))));
-            $stream->_ws_debug ('S', @{$self->{pending_frame_info}}) if $self->{DEBUG};
-            $self->{ws_timer} = AE::timer 20, 0, sub {
-              warn "$self->{request}->{id}: WS timeout (20)\n" if $self->{DEBUG};
-              $self->_receive_done;
-            };
-            $self->_send_done;
-          }
         }
       } elsif (100 <= $res->{status} and $res->{status} <= 199) {
         if ($self->{request}->{method} eq 'CONNECT' or
@@ -1477,7 +1475,8 @@ sub _process_rbuf ($$) {
         $self->_receive_done;
       }
     } else {
-      $stream->{body_controller}->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\substr $$ref, pos $$ref)))
+      $stream->{body_controller}->enqueue
+          (DataView->new (ArrayBuffer->new_from_scalarref (\substr $$ref, pos $$ref)))
           if (length $$ref) - (pos $$ref);
       $ref = \'';
     }
@@ -1832,8 +1831,7 @@ sub _new_stream ($) {
   $stream->{headers_received} = [promised_cv];
   $stream->{closed} = [promised_cv];
 
-  $con->{streams_controller}->enqueue ($stream)
-      if defined $con->{streams_controller}; # XXX
+  $con->{streams_controller}->enqueue ($stream);
 
   return $stream;
 } # _new_stream
@@ -2041,7 +2039,7 @@ sub _ondata ($$) {
              $self->{state} eq 'ws terminating') {
       my $ref = $inref;
       if (length $self->{rbuf}) {
-        $ref = \($self->{rbuf} . $$inref); # string copy!
+        $ref = \($self->{rbuf} . $$inref); # XXX string copy!
         $self->{rbuf} = '';
       }
       pos ($$ref) = 0;
@@ -2328,8 +2326,6 @@ sub _request_headers ($) {
     return 0;
   }
 
-  $con->{state} = 'request body' if $stream->{request}->{method} eq 'CONNECT';
-
   ## Content-Length:
   my $l = 0;
   if (@{$headers{'content-length'} or []} == 1 and
@@ -2350,17 +2346,18 @@ sub _request_headers ($) {
     $stream->_headers_received (is_ws => 1, is_request => 1);
     $con->{state} = 'ws handshaking';
     $con->{to_be_closed} = 1;
-    # XXX disable timer
+    delete $con->{timer};
+    $con->{disable_timer} = 1;
   } elsif ($stream->{request}->{method} eq 'CONNECT') {
     $stream->_headers_received (is_request => 1);
+    $con->{state} = 'request body';
+    $con->{to_be_closed} = 1;
     delete $con->{timer};
     $con->{disable_timer} = 1;
   } elsif ($l == 0) {
     $stream->_headers_received (is_request => 1);
     $stream->_receive_bytes_done;
-    unless (defined $stream->{ws_key}) {
-      $con->_receive_done;
-    }
+    $con->_receive_done;
   } else {
     $stream->_headers_received (is_request => 1);
     $con->{unread_length} = $l;
@@ -2619,7 +2616,7 @@ sub _open_sending_stream ($;%) {
         $con->_send_done;
         return $p;
       } elsif (not defined $con->{to_be_sent_length}) {
-        $con->_send_done;
+        $con->_send_done (close => 1);
         return;
       }
     }, # close
@@ -2973,13 +2970,20 @@ sub send_ping ($;%) {
   # XXX return promise waiting pong?
 } # send_ping
 
+## Send a WebSocket Close frame, if applicable.  This method must be
+## invoked while the WebSocket state of the connection is OPEN or
+## CLOSING (i.e. after |headers_received| promise has been fulfilled)
+## and there is no sending WebSocket message.  Then it returns the
+## |closed| promise of the stream.
 sub send_ws_close ($;$$) {
   my ($stream, $status, $reason) = @_;
 
   my $con = $stream->{connection};
   return Promise->reject (Web::DOM::TypeError->new ("Stream is busy"))
-      if not (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') or
+      if not defined $con->{ws_state} or
+         not ($con->{ws_state} eq 'OPEN' or $con->{ws_state} eq 'CLOSING') or
          defined $con->{cancel_current_writable_stream};
+  return $stream->{closed}->[0] if $con->{ws_state} eq 'CLOSING';
 
   if (defined $status and $status > 0xFFFF) {
     return Promise->reject ("Bad status");
@@ -2991,52 +2995,39 @@ sub send_ws_close ($;$$) {
         if 0x7D < length $reason;
   }
 
-# XXX CONNECTING test
-  if (defined $con->{ws_state} and
-      ($con->{ws_state} eq 'OPEN' or
-       $con->{ws_state} eq 'CONNECTING')) {
-    my $masked = 0;
-    my $mask = '';
+  my $masked = 0;
+  my $mask = '';
+  unless ($con->{is_server}) {
+    $masked = 0b10000000;
+    $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
+  }
+  my $data = '';
+  my $frame_info = $con->{DEBUG} ? [$reason, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $status] : undef;
+  if (defined $status) {
+    $data = pack 'n', $status;
+    $data .= $reason if defined $reason;
     unless ($con->{is_server}) {
-      $masked = 0b10000000;
-      $mask = pack 'CCCC', rand 256, rand 256, rand 256, rand 256;
-    }
-    my $data = '';
-    my $frame_info = $con->{DEBUG} ? [$reason, FIN => 1, opcode => 8, mask => $mask, length => length $data, status => $status] : undef;
-    if (defined $status) {
-      $data = pack 'n', $status;
-      $data .= $reason if defined $reason;
-      unless ($con->{is_server}) {
-        for (0..((length $data)-1)) {
-          substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
-        }
+      for (0..((length $data)-1)) {
+        substr ($data, $_, 1) = substr ($data, $_, 1) ^ substr ($mask, $_ % 4, 1);
       }
     }
-    my $frame = pack ('CC', 0b10000000 | 8, $masked | length $data) .
-        $mask . $data;
-    if ($con->{ws_state} eq 'CONNECTING') {
-      $con->{pending_frame} = $frame;
-      $con->{pending_frame_info} = $frame_info if $con->{DEBUG};
-    } else {
-      $stream->_ws_debug ('S', @$frame_info) if $con->{DEBUG};
-      $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$frame)));
-      $con->{ws_state} = 'CLOSING';
-      $con->{ws_timer} = AE::timer 20, 0, sub {
-        if ($con->{DEBUG}) {
-          my $id = $con->{is_server} ? $con->{id} : $con->{request}->{id};
-          warn "$id: WS timeout (20)\n";
-        }
-        # XXX set exit ?
-        $con->_receive_done;
-      };
-      #$con->_ev ('closing'); # XXX
-      $con->_send_done;
-    }
-
-    return $stream->{closed}->[0];
   }
+  my $frame = pack ('CC', 0b10000000 | 8, $masked | length $data) . $mask . $data;
+  $stream->_ws_debug ('S', @$frame_info) if $con->{DEBUG};
+  $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$frame)));
+  $con->{ws_state} = 'CLOSING';
+  $con->{ws_timer} = AE::timer 20, 0, sub {
+    if ($con->{DEBUG}) {
+      my $id = $con->{is_server} ? $con->{id} : $con->{request}->{id};
+      warn "$id: WS timeout (20)\n";
+    }
+    # XXX set exit ?
+    $con->_receive_done;
+  };
+  #$con->_ev ('closing'); # XXX
+  $con->_send_done;
 
-  die "XXX bad state";
+  return $stream->{closed}->[0];
 } # send_ws_close
 
 sub _ws_debug ($$$%) {

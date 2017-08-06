@@ -95,6 +95,7 @@ package Web::Transport::HTTPStream::Connection;
 use AnyEvent;
 use Web::Encoding;
 use Encode qw(decode); # XXX
+use Promised::Flow;
 
 push our @CARP_NOT, qw(Web::Transport::HTTPStream::Stream);
 
@@ -533,12 +534,9 @@ sub close_after_current_stream ($) {
     return Promise->reject ("Connection has not been established");
   }
 
-warn "server reader cancel";
-$con->{reader}->cancel;
-
   $con->{to_be_closed} = 1;
   if ($con->{state} eq 'initial' or
-      $con->{state} eq 'before request-line' or
+      $con->{state} eq 'before request-line' or # XXXspec
       $con->{state} eq 'waiting') {
     $con->{exit} = {failed => 0,
                     message => 'Close by |close_after_current_stream|'};
@@ -733,7 +731,6 @@ warn 2;
 
         # XXX
       } else {
-warn 3;
         (delete $stream->{closed}->[1])->($con->{exit} || {});
       }
     }
@@ -748,21 +745,24 @@ warn 3;
   delete $stream->{connection};
 
   if ($con->{to_be_closed}) {
-    if (defined $con->{reader}) {
-      $con->{reader}->cancel ($con->{exit});
-      delete $con->{reader};
-    }
-
-warn "w...";
+    my ($r_written, $s_written) = promised_cv;
     if (defined $con->{writer}) {
-warn 1;
       my $writer = $con->{writer};
-      $writer->close;
+      &promised_cleanup ($s_written, $writer->close);
       $con->{timer} = AE::timer 1, 0, sub {
         $writer->abort ("HTTP completion timer (1)");
+        $s_written->();
       };
       delete $con->{writer};
+    } else {
+      $s_written->();
     }
+    $r_written->then (sub {
+      if (defined $con->{reader}) {
+        $con->{reader}->cancel ($con->{exit});
+        delete $con->{reader};
+      }
+    });
     $con->{state} = 'stopped';
   } else {
     if ($con->{rbuf} =~ /[^\x0D\x0A]/) {
@@ -802,21 +802,24 @@ warn 1;
   delete $con->{response};
   delete $con->{write_mode};
   if ($con->{to_be_closed}) {
-    # XXX spec
-    if (defined $con->{reader}) {
-      $con->{reader}->cancel ($con->{exit});
-      delete $con->{reader};
-    }
-
+    my ($r_written, $s_written) = promised_cv;
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
-      $writer->close;
+      &promised_cleanup ($s_written, $writer->close);
       $con->{timer} = AE::timer 1, 0, sub {
         $writer->abort ("HTTP completion timer (1)");
+        $s_written->();
       };
       delete $con->{writer};
+    } else {
+      $s_written->();
     }
-
+    $r_written->then (sub {
+      if (defined $con->{reader}) { # XXX spec
+        $con->{reader}->cancel ($con->{exit});
+        delete $con->{reader};
+      }
+    });
     $con->{state} = 'stopped';
   } else {
     $con->{state} = 'waiting';

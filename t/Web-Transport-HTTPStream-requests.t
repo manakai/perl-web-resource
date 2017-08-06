@@ -1896,6 +1896,14 @@ close
           return $stream->send_ws_message (0, $is_binary);
         })->then (sub {
           return $stream->send_ws_close;
+        })->catch (sub {
+          my $error = $_[0];
+          test {
+            ok $error->{failed};
+            ok $error->{ws};
+            is $error->{status}, 1006;
+            is $error->{reason}, '';
+          } $c;
         });
       })->then (sub{
         return $http->closed;
@@ -1907,7 +1915,7 @@ close
         undef $c;
       });
     });
-  } n => 1, name => ['send_ws_message zero length', $is_binary];
+  } n => 5, name => ['send_ws_message zero length', $is_binary];
 }
 
 test {
@@ -1992,6 +2000,14 @@ close
       return $stream->headers_received->then (sub {
         rsread $_[0]->{messages};
         return $stream->send_ws_close (1234);
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          ok $error->{failed};
+          ok $error->{ws};
+          is $error->{status}, 1006;
+          is $error->{reason}, '';
+        } $c;
       });
     })->then (sub{
       return $http->closed;
@@ -2003,7 +2019,7 @@ close
       undef $c;
     });
   });
-} n => 1, name => 'ws close ok with status';
+} n => 5, name => 'ws close ok with status';
 
 test {
   my $c = shift;
@@ -2036,6 +2052,14 @@ close
       return $stream->headers_received->then (sub {
         rsread $_[0]->{messages};
         return $stream->send_ws_close (1234, 'av c');
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          ok $error->{failed};
+          ok $error->{ws};
+          is $error->{status}, 1006;
+          is $error->{reason}, '';
+        } $c;
       });
     })->then (sub{
       test {
@@ -2047,7 +2071,7 @@ close
       undef $c;
     });
   });
-} n => 1, name => 'ws close ok with status and reason';
+} n => 5, name => 'ws close ok with status and reason';
 
 test {
   my $c = shift;
@@ -2087,6 +2111,14 @@ close
         } $c;
       })->then (sub {
         return $stream->send_ws_close;
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          ok $error->{failed};
+          ok $error->{ws};
+          is $error->{status}, 1006;
+          is $error->{reason}, '';
+        } $c;
       });
     })->then (sub{
       return $http->close_after_current_stream;
@@ -2095,7 +2127,7 @@ close
       undef $c;
     });
   });
-} n => 1, name => 'ws close with bad status';
+} n => 5, name => 'ws close with bad status';
 
 test {
   my $c = shift;
@@ -2135,6 +2167,14 @@ close
         } $c;
       })->then (sub {
         return $stream->send_ws_close;
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          ok $error->{failed};
+          ok $error->{ws};
+          is $error->{status}, 1006;
+          is $error->{reason}, '';
+        } $c;
       });
     })->then (sub{
       return $http->close_after_current_stream;
@@ -2143,7 +2183,7 @@ close
       undef $c;
     });
   });
-} n => 1, name => 'ws close with bad reason';
+} n => 5, name => 'ws close with bad reason';
 
 test {
   my $c = shift;
@@ -2183,6 +2223,14 @@ close
         } $c;
       })->then (sub {
         return $stream->send_ws_close;
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          ok $error->{failed};
+          ok $error->{ws};
+          is $error->{status}, 1006;
+          is $error->{reason}, '';
+        } $c;
       });
     })->then (sub {
       return $http->closed;
@@ -2191,7 +2239,7 @@ close
       undef $c;
     });
   });
-} n => 1, name => 'ws close with long reason';
+} n => 5, name => 'ws close with long reason';
 
 test {
   my $c = shift;
@@ -2435,6 +2483,14 @@ close
         } $c;
       })->then (sub {
         return $stream->send_ws_close;
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          ok $error->{failed};
+          ok $error->{ws};
+          is $error->{status}, 1006;
+          is $error->{reason}, '';
+        } $c;
       });
     })->then (sub{
       return $http->close_after_current_stream;
@@ -2443,7 +2499,7 @@ close
       undef $c;
     });
   });
-} n => 1, name => 'ws ping utf8 data';
+} n => 5, name => 'ws ping utf8 data';
 
 test {
   my $c = shift;
@@ -2481,6 +2537,14 @@ close
           like $error, qr{^Data too large};
         } $c;
         return $stream->send_ws_close;
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          ok $error->{failed};
+          ok $error->{ws};
+          is $error->{status}, 1006;
+          is $error->{reason}, '';
+        } $c;
       });
     })->then (sub{
       return $http->close_after_current_stream;
@@ -2489,7 +2553,7 @@ close
       undef $c;
     });
   });
-} n => 1, name => 'ws ping long data';
+} n => 5, name => 'ws ping long data';
 
 test {
   my $c = shift;
@@ -2520,7 +2584,7 @@ close
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
-        return $stream->send_ws_close;
+        return $stream->send_ws_close->catch (sub { });
       })->then (sub {
         $stream->send_ping (data => 'x');
       })->catch (sub {

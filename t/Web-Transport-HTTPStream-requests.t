@@ -3710,6 +3710,118 @@ close
   });
 } n => 5, name => 'send_response';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $closed;
+    my $closed_fulfilled;
+    my $closed_rejected;
+    $http->connect;
+    $http->ready->then (sub {
+      return $http->send_request ({method => 'GET', target => '/'});
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      $closed = $_[0]->{closed};
+      $closed->then (sub { $closed_fulfilled = 1 }, sub { $closed_rejected = 1 });
+      test {
+        isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
+      } $c;
+      return $stream->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      test {
+        is $got->{failed}, undef;
+        is $got->{message}, undef;
+        isa_ok $got->{body}, 'ReadableStream';
+        is $got->{messages}, undef;
+        is $got->{version}, '1.1';
+        is $got->{status}, 203;
+        is $got->{reason}, 'ok';
+        is $got->{headers}->[0]->[0], 'X-hoge';
+        is $got->{headers}->[0]->[1], 'Foo bar';
+        ok ! $got->{incomplete};
+        ok ! $closed_fulfilled;
+        ok ! $closed_rejected;
+      } $c;
+      return read_rbs ($got->{body})->then (sub {
+        my $bytes = $_[0];
+        test {
+          is $bytes, "abc";
+          ok ! $got->{incomplete};
+        } $c;
+      });
+    })->then (sub{
+      return $closed;
+    })->then (sub {
+      return $http->close_after_current_stream;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 15, name => 'ready promise';
+
+test {
+  my $c = shift;
+  my $http = Web::Transport::HTTPStream->new ({parent => {
+    class => 'Web::Transport::TCPStream',
+  }});
+  $http->connect;
+  $http->ready->then (sub {
+    test {
+      ok 0;
+    } $c;
+  }, sub {
+    my $error = $_[0];
+    test {
+      ok $error;
+    } $c;
+    return $http->closed;
+  })->then (sub {
+    test {
+      ok 1;
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'ready promise';
+
+test {
+  my $c = shift;
+  my $http = Web::Transport::HTTPStream->new ({parent => {
+    class => 'Web::Transport::TCPStream',
+  }});
+  $http->close_after_current_stream->then (sub {
+    test {
+      ok 0;
+    } $c;
+  }, sub {
+    my $error = $_[0];
+    test {
+      is $error->name, 'TypeError';
+      is $error->message, 'Connection is not ready';
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__+5;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'close_after_current_stream when no connection';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

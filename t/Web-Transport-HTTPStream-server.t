@@ -71,12 +71,11 @@ my $HandleRequestHeaders = {};
 
   my $server_process = sub {
     my $con = $_[0];
-    my $req_reader = $con->received_streams->get_reader;
+    my $req_reader = $con->streams->get_reader;
     my $run; $run = sub {
       return $req_reader->read->then (sub {
         return 0 if $_[0]->{done};
-        my $stream = $_[0]->{value}->{stream};
-        my $closed = $_[0]->{value}->{closed};
+        my $stream = $_[0]->{value};
         $stream->headers_received->then (sub {
           my $got = $_[0];
           my $req = $stream->{request};
@@ -135,7 +134,7 @@ my $HandleRequestHeaders = {};
               };
               $run->()->then (sub { undef $run }, sub { undef $run });
             }
-            $handler->($stream, $req, $closed);
+            $handler->($stream, $req);
           } elsif ($req->{target_url}->path eq '/') {
             return $stream->send_response
                 ({status => 404, status_text => 'Not Found (/)'}, close => 1)->then (sub {
@@ -330,8 +329,8 @@ test {
   my $path = rand;
   my @closed;
   $HandleRequestHeaders->{"/$path"} = sub {
-    my ($self, $req, $closed) = @_;
-    push @closed, $closed;
+    my ($self, $req) = @_;
+    push @closed, $self->closed;
     return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga14'],
@@ -852,8 +851,8 @@ test {
   my $path = rand;
   my @closed;
   $HandleRequestHeaders->{"/$path"} = sub {
-    my ($self, $req, $closed) = @_;
-    push @closed, $closed;
+    my ($self, $req) = @_;
+    push @closed, $self->closed;
     return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga14'],
@@ -895,8 +894,8 @@ test {
   my $path = rand;
   my @closed;
   $HandleRequestHeaders->{"/$path"} = sub {
-    my ($self, $req, $closed) = @_;
-    push @closed, $closed;
+    my ($self, $req) = @_;
+    push @closed, $self->closed;
     return $self->send_response
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga14'],
@@ -5907,7 +5906,7 @@ test {
   my $path = rand;
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
-    my ($self, $req, $closed) = @_;
+    my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => "OK"}, close => 1)->then (sub {
       return $_[0]->{body}->get_writer->close;

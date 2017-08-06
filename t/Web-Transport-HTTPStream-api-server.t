@@ -74,7 +74,9 @@ test {
   my $port = find_listenable_port;
   my $origin = Web::URL->parse_string ("http://$host:$port");
 
-  my $con;
+  my $ready1;
+  my $ready2;
+  my @con;
   my $server = tcp_server $host, $port, sub {
     my $x = Web::Transport::HTTPStream->new_XXXserver
         ({parent => {
@@ -83,21 +85,143 @@ test {
            fh => $_[0],
            host => Web::Host->parse_string ($_[1]), port => $_[2],
          }});
-    my $r = $x->received_streams->get_reader;
+
+    $x->ready->then (sub {
+      $ready1 = 1;
+    }, sub {
+      $ready1 = 0;
+    });
+
+    my $r = $x->streams->get_reader;
     $r->read->then (sub {
       return 0 if $_[0]->{done};
-      my $stream = $_[0]->{value}->{stream};
+      $ready2 = $ready1;
+      my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         my $path = $stream->{request}->{target_url}->path;
 
-        $stream->send_response
+        return $stream->send_response
             ({status => 210, status_text => $stream->{id}})->then (sub {
           return $_[0]->{body}->get_writer->close;
         });
       })->then (sub { return 1 });
+    })->then (sub {
+      $r->release_lock;
+      return rsread $x->streams;
     });
 
-    $con ||= $x;
+    push @con, $x;
+  }; # $server
+
+  my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $client->request (path => [])->then (sub {
+    my $res = $_[0];
+    test {
+      is $ready1, 1;
+      is $ready2, 1;
+    } $c;
+    return $client->close;
+  })->then (sub {
+    return Promise->all ([map { $_->closed } @con]);
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'server connection ready promise';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $ready1;
+  my $closed1;
+  my $error1;
+  my $error2;
+  my @con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new_XXXserver
+        ({parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }});
+
+    $x->ready->then (sub {
+      $ready1 = 1;
+    }, sub {
+      $ready1 = 0;
+      $error1 = $_[0];
+    });
+
+    $x->closed->then (sub {
+      $closed1 = 1;
+    }, sub {
+      $closed1 = 0;
+      $error2 = $_[0];
+    });
+
+    rsread $x->streams;
+
+    push @con, $x;
+  }; # $server
+
+  my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $client->request (path => [])->then (sub {
+    my $res = $_[0];
+    test {
+      is $ready1, 0;
+      like $error1, qr{^TypeError: Bad \|fh\| at };
+      is $closed1, 1;
+    } $c;
+  })->then (sub {
+    return Promise->all ([map { $_->closed } @con]);
+  })->then (sub {
+    return $client->close;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'server connection ready promise rejected';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my @con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new_XXXserver
+        ({parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }});
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      return 0 if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->headers_received->then (sub {
+        my $path = $stream->{request}->{target_url}->path;
+
+        return $stream->send_response
+            ({status => 210, status_text => $stream->{id}})->then (sub {
+          return $_[0]->{body}->get_writer->close;
+        });
+      })->then (sub { return 1 });
+    })->then (sub {
+      $r->release_lock;
+      return rsread $x->streams;
+    });
+
+    push @con, $x;
   }; # $server
 
   my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
@@ -105,12 +229,16 @@ test {
   $client->request (path => [])->then (sub {
     my $res = $_[0];
     test {
-      $id = $con->id;
+      $id = $con[-1]->id;
       is $res->status, 210;
       like $res->status_text, qr{^\Q$id\E};
       is $res->header ('Connection'), undef;
     } $c;
-    return $con->close_after_current_stream;
+    my $p = $con[-1]->close_after_current_stream;
+    test {
+      ok ! $con[-1]->is_active;
+    } $c;
+    return $p;
   })->then (sub {
     return $client->request (path => []);
   })->then (sub {
@@ -126,13 +254,13 @@ test {
     } $c;
     return $client->close;
   })->then (sub {
-    return $con->closed;
+    return Promise->all ([map { $_->closed } @con]);
   })->then (sub {
     undef $server;
     done $c;
     undef $c;
   });
-} n => 5, name => 'server closed after request/response';
+} n => 6, name => 'server closed after request/response';
 
 test {
   my $c = shift;
@@ -153,9 +281,10 @@ test {
            fh => $_[0],
            host => Web::Host->parse_string ($_[1]), port => $_[2],
          }});
-    $x->received_streams->get_reader->read->then (sub {
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
       return if $_[0]->{done};
-      my $stream = $_[0]->{value}->{stream};
+      my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         my $path = $stream->{request}->{target_url}->path;
         if ($path eq '/404') {
@@ -170,6 +299,9 @@ test {
           });
         }
       });
+    })->then (sub {
+      $r->release_lock;
+      return rsread $x->streams;
     });
 
     $con ||= $x;
@@ -233,9 +365,10 @@ test {
            fh => $_[0],
            host => Web::Host->parse_string ($_[1]), port => $_[2],
          }});
-    $x->received_streams->get_reader->read->then (sub {
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
       return if $_[0]->{done};
-      my $stream = $_[0]->{value}->{stream};
+      my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         my $path = $stream->{request}->{target_url}->path;
         if ($path eq '/404') {
@@ -247,6 +380,9 @@ test {
           $response_header_sent->($stream);
         }
       });
+    })->then (sub {
+      $r->release_lock;
+      return rsread $x->streams;
     });
     $con ||= $x;
   }; # $server
@@ -301,10 +437,7 @@ test {
   my $port = find_listenable_port;
   my $origin = Web::URL->parse_string ("http://$host:$port");
 
-  my $response_header_sent;
-  my $after_response_header = Promise->new (sub { $response_header_sent = $_[0] });
-
-  my $con;
+  my @con;
   my $p;
   my $server = tcp_server $host, $port, sub {
     my $x = Web::Transport::HTTPStream->new_XXXserver
@@ -316,8 +449,8 @@ test {
          }});
 
     $p = $x->send_request ({method => 'GET', target => '/'});
-    rsread $x->received_streams;
-    $con = $x;
+    rsread $x->streams;
+    push @con, $x;
   }; # $server
 
   my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
@@ -337,13 +470,76 @@ test {
     } $c;
     return $client->abort;
   })->then (sub {
-    return $con->abort;
+    return Promise->all ([map { $_->abort } @con]);
+  })->then (sub {
+    undef $server;
+    test {
+      ok 1;
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'send_request on server connection';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $p;
+  my @con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new_XXXserver
+        ({parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }});
+
+    $p = $x->close_after_current_stream->then (sub {
+      test {
+        ok 0;
+      } $c;
+    }, sub {
+      my $error = $_[0];
+      test {
+        is $error->name, 'TypeError';
+        is $error->message, 'Connection is not ready';
+        is $error->file_name, __FILE__;
+        is $error->line_number, __LINE__+2;
+      } $c;
+    });
+    test {
+      ok ! $x->is_active, 'connection not ready';
+    } $c;
+
+    $x->ready->then (sub {
+      test {
+        ok $x->is_active, 'connection ready';
+      } $c;
+
+      $x->abort;
+      rsread $x->streams;
+
+      push @con, $x;
+    });
+  }; # $server
+
+  my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $client->request (path => [])->then (sub {
+    my $res = $_[0];
+    return $p;
+  })->then (sub {
+    return $client->abort;
   })->then (sub {
     undef $server;
     done $c;
     undef $c;
   });
-} n => 5, name => 'send_request on server connection';
+} n => 6, name => 'close_after_current_stream-';
 
 run_tests;
 

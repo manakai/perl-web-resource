@@ -184,7 +184,9 @@ sub create ($$) {
       $handshake_ok = $handshake_ng = undef;
     }
     if (defined $rc) {
-      $rc->error ($_[0]);
+      eval { $rc->error ($_[0]) };
+      my $req = $rc->byob_request;
+      $req->respond (0) if defined $req;
       undef $rc;
     }
     if (defined $wc) {

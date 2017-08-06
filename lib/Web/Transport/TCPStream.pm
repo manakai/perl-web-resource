@@ -86,15 +86,29 @@ sub create ($$) {
   my $wcancel;
 
   my $pull = sub {
-    my ($rc, $req, $cancelref) = @_;
+    my ($rc, $req, $rcancelref) = @_;
     return Promise->new (sub {
       my $ready = $_[0];
       my $failed = $_[1];
+      return $failed->() unless defined $fh;
+
       my $w;
-      $$cancelref = sub { $rc->error ($_[0]); undef $w; $failed->($_[0]) };
-      $w = AE::io $fh, 0, sub {
+      $$rcancelref = sub {
+        eval { $rc->error ($_[0]) } if $read_active;
+        my $req = $rc->byob_request;
+        $req->respond (0) if defined $req;
+
         undef $w;
-        $$cancelref = sub { $rc->error ($_[0]) };
+        $failed->($_[0]);
+      };
+      $w = AE::io $fh, 0, sub {
+        $$rcancelref = sub {
+          eval { $rc->error ($_[0]) } if $read_active;
+          my $req = $rc->byob_request;
+          $req->respond (0) if defined $req;
+        };
+
+        undef $w;
         $ready->();
       };
     })->then (sub {
@@ -104,7 +118,7 @@ sub create ($$) {
         my $errno = $error->isa ('Streams::IOError') ? $error->errno : 0;
         if ($errno != EAGAIN && $errno != EINTR &&
             $errno != EWOULDBLOCK && $errno != WSAEWOULDBLOCK) {
-          $rc->error ($error);
+          $rcancel->($error);
           $read_active = $rcancel = undef;
           if (defined $wc) {
             $wc->error ($error);
@@ -120,7 +134,9 @@ sub create ($$) {
       if (defined $bytes_read and $bytes_read <= 0) {
         $rc->close;
         $req->respond (0);
-        $read_active = $rcancel = undef;
+        $read_active = undef;
+        $rcancel->(undef);
+        $rcancel = undef;
         unless (defined $wc) {
           undef $fh;
           $s_fh_closed->();
@@ -143,7 +159,11 @@ sub create ($$) {
     auto_allocate_chunk_size => 1024*2,
     pull => sub {
       my $rc = $_[1];
-      $rcancel = sub { $rc->error ($_[0]) };
+      $rcancel = sub {
+        eval { $rc->error ($_[0]) } if $read_active;
+        my $req = $rc->byob_request;
+        $req->respond (0) if defined $req;
+      };
       my $run; $run = sub {
         my $req = $rc->byob_request;
         return Promise->resolve unless defined $req;
@@ -154,9 +174,10 @@ sub create ($$) {
       return $run->()->then (sub { undef $run });
     }, # pull
     cancel => sub {
+      my $reason = defined $_[1] ? $_[1] : "$class reader canceled";
+      $rcancel->($reason);
       $read_active = $rcancel = undef;
       if (defined $wc) {
-        my $reason = defined $_[1] ? $_[1] : "$class reader canceled";
         $wc->error ($reason);
         $wcancel->() if defined $wcancel;
         $wc = $wcancel = undef;

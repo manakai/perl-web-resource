@@ -922,6 +922,190 @@ test {
   });
 } n => 4, name => 'bad write';
 
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+
+  my $destroyed = 0;
+  my $server = tcp_server undef, $port, sub {
+    create_tls_server ($_[0], $_[1], $_[2])->then (sub {
+      my $info = $_[0];
+
+      my $w = $info->{write_stream}->get_writer;
+      my $r = $info->{read_stream}->get_reader ('byob');
+
+      $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+
+      my $read; $read = sub {
+        return $r->read (dv "x" x 10)->then (sub {
+          if ($_[0]->{done}) {
+            $w->close;
+            return;
+          }
+          $w->write ($_[0]->{value});
+          return $read->();
+        });
+      };
+      return $read->()->then (sub { undef $read }, sub { undef $read });
+    });
+  }; # $server
+
+  create_tls_client ($host, $port)->then (sub {
+    my $info = $_[0];
+    my $w = $info->{write_stream}->get_writer;
+    my $r = $info->{read_stream}->get_reader ('byob');
+
+    $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+
+    $w->write (dv "abcdef");
+    $w->write (dv "foo bar 123");
+
+    my $result = '';
+    my $q;
+    my $s;
+    my $reason = {};
+    my $try; $try = sub {
+      my $p = $r->read (dv "x" x 10)->then (sub {
+        my $v = $_[0];
+        return if $v->{done};
+        $result .= $v->{value}->manakai_to_string;
+        return $try->();
+      });
+      if ($result =~ /^abcdeff/) {
+        $s = $r->cancel ($reason);
+      }
+      return $p;
+    }; # $try
+
+    return ((promised_cleanup { undef $try } $try->())->then (sub {
+      test {
+        like $result, qr{^abcdeff};
+      } $c;
+      return Promise->all ([$q, $s]);
+    })->then (sub {
+      test {
+        ok 1;
+      } $c;
+    }));
+  })->catch (sub {
+    my $e = $_[0];
+    test {
+      ok 0, $e;
+    } $c;
+  })->then (sub {
+    return promised_wait_until { $destroyed == 4 } timeout => 3;
+  })->then (sub {
+    test {
+      is $destroyed, 4;
+    } $c;
+    done $c;
+    undef $c;
+    undef $server;
+  });
+} n => 3, name => 'read cancel 1';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+
+  my $destroyed = 0;
+  my $server = tcp_server undef, $port, sub {
+    create_tls_server ($_[0], $_[1], $_[2])->then (sub {
+      my $info = $_[0];
+
+      my $w = $info->{write_stream}->get_writer;
+      my $r = $info->{read_stream}->get_reader ('byob');
+
+      $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+
+      my $read; $read = sub {
+        return $r->read (dv "x" x 10)->then (sub {
+          if ($_[0]->{done}) {
+            $w->close;
+            return;
+          }
+          $w->write ($_[0]->{value});
+          return $read->();
+        });
+      };
+      return $read->()->then (sub { undef $read }, sub { undef $read });
+    });
+  }; # $server
+
+  create_tls_client ($host, $port)->then (sub {
+    my $info = $_[0];
+    my $w = $info->{write_stream}->get_writer;
+    my $r = $info->{read_stream}->get_reader ('byob');
+
+    $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+
+    $w->write (dv "abcdef");
+    $w->write (dv "foo bar 123");
+
+    my $result = '';
+    my $q;
+    my $s;
+    my $reason = {};
+    my $try; $try = sub {
+      my $p = $r->read (dv "x" x 10)->then (sub {
+        my $v = $_[0];
+        return if $v->{done};
+        $result .= $v->{value}->manakai_to_string;
+        return $try->();
+      });
+      if (not defined $q and $result =~ /^abcdeff/) {
+        $q = $w->close;
+        $s = $r->cancel ($reason);
+      }
+      return $p;
+    }; # $try
+
+    return ((promised_cleanup { undef $try } $try->())->then (sub {
+      test {
+        like $result, qr{^abcdeff};
+      } $c;
+      return $q;
+    })->then (sub {
+      test {
+        ok 1, 'Writer close succeeded';
+      } $c;
+    }, sub {
+      my $error = $_[0];
+      test {
+        is $error, $reason, 'Writer close failed because cancel is processed before close';
+      } $c;
+    })->then (sub {
+      return $s;
+    })->then (sub {
+      test {
+        ok 1;
+      } $c;
+    }));
+  })->catch (sub {
+    my $e = $_[0];
+    test {
+      ok 0, $e;
+    } $c;
+  })->then (sub {
+    return promised_wait_until { $destroyed == 4 } timeout => 3;
+  })->then (sub {
+    test {
+      is $destroyed, 4;
+    } $c;
+    done $c;
+    undef $c;
+    undef $server;
+  });
+} n => 4, name => 'read cancel 2';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

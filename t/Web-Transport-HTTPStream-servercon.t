@@ -541,6 +541,306 @@ test {
   });
 } n => 6, name => 'close_after_current_stream-';
 
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new_XXXserver
+        ({parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }, server_header => 'Hoge/1.4.6'});
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->headers_received->then (sub {
+        return $stream->send_response
+            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+      });
+    })->then (sub {
+      $r->release_lock;
+      return rsread $x->streams;
+    });
+    $con ||= $x;
+  }; # $server
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $http->request (path => [])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->header ('Server'), 'Hoge/1.4.6';
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    return $con->closed;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 1, name => '$con->server_header';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new_XXXserver
+        ({parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }, server_header => "\x{3000}a\x00"});
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->headers_received->then (sub {
+        return $stream->send_response
+            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+      });
+    })->then (sub {
+      $r->release_lock;
+      return rsread $x->streams;
+    });
+    $con ||= $x;
+  }; # $server
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $http->request (path => [])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->header ('Server'), "\xE3\x80\x80a\x00";
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    return $con->closed;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 1, name => '$con->server_header';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new_XXXserver
+        ({parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }, server_header => ""});
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->headers_received->then (sub {
+        return $stream->send_response
+            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+      });
+    })->then (sub {
+      $r->release_lock;
+      return rsread $x->streams;
+    });
+    $con ||= $x;
+  }; # $server
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $http->request (path => [])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->header ('Server'), "";
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    return $con->closed;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 1, name => '$con->server_header';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new_XXXserver
+        ({parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }, server_header => "0"});
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->headers_received->then (sub {
+        return $stream->send_response
+            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+      });
+    })->then (sub {
+      $r->release_lock;
+      return rsread $x->streams;
+    });
+    $con ||= $x;
+  }; # $server
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $http->request (path => [])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->header ('Server'), "0";
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    return $con->closed;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 1, name => '$con->server_header';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new_XXXserver
+        ({parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }, server_header => "ab\x0Dvd"});
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->headers_received->then (sub {
+        return $stream->send_response
+            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          like $error, qr{^Bad header value \|Server: ab\\x0Dvd\| at @{[__FILE__]} line @{[__LINE__-5]}};
+        } $c;
+        return $stream->abort;
+      });
+    })->then (sub {
+      $r->release_lock;
+      return rsread $x->streams;
+    });
+    $con ||= $x;
+  }; # $server
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $http->request (path => [])->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    return $con->closed;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 2, name => '$con->server_header';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new_XXXserver
+        ({parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }, server_header => "ab\x0Avd"});
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->headers_received->then (sub {
+        return $stream->send_response
+            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+      })->catch (sub {
+        my $error = $_[0];
+        test {
+          like $error, qr{^Bad header value \|Server: ab\\x0Avd\| at @{[__FILE__]} line @{[__LINE__-5]}};
+        } $c;
+        return $stream->abort;
+      });
+    })->then (sub {
+      $r->release_lock;
+      return rsread $x->streams;
+    });
+    $con ||= $x;
+  }; # $server
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $http->request (path => [])->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    return $con->closed;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 2, name => '$con->server_header';
+
 run_tests;
 
 =head1 LICENSE

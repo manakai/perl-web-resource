@@ -17,7 +17,7 @@ use Web::Encoding;
 ##     $_[0]->{messages}
 ##   })
 ## Server:
-##   $con->received_streams->read->then (sub { $stream = $_[0]->{value} })
+##   $con->streams->read->then (sub { $stream = $_[0]->{value} })
 ##   $stream->headers_received->then (sub {
 ##     $_[0]->{body}
 ##     $_[0]->{messages}
@@ -58,7 +58,7 @@ use Web::Encoding;
 # XXX replace {exit} by exception objects
 # XXX restore debug features & id
 # XXX XXX cleanup
-# XXX abort
+# XXX abort argument
 
 sub new ($$) {
   return Web::Transport::HTTPStream::ClientConnection->new ($_[1]); # XXX
@@ -1598,7 +1598,6 @@ sub send_response ($$$;%) {
   my ($stream, $response, %args) = @_;
   my $con = $stream->{connection};
 
-warn "XXX $con";
   return Promise->reject (Web::DOM::TypeError->new ("Response is not allowed"))
       if not defined $con or defined $con->{write_mode} or not $con->{is_server};
 
@@ -1652,7 +1651,7 @@ warn "XXX $con";
   }
 
   unless ($args{proxying}) {
-    push @header, ['Server', encode_web_utf8 (defined $con ? $con->server_header : '')];
+    push @header, ['Server', $con->{server_header}];
 
     my $dt = Web::DateTime->new_from_unix_time
         (Web::DateTime::Clock->realtime_clock->()); # XXX
@@ -1867,7 +1866,6 @@ sub _process_rbuf ($$) {
   }
   my $stream = $self->{stream};
 
-warn "XXX $self->{state}";
   HEADER: {
     if ($self->{state} eq 'before response') {
       my $head = $self->{temp_buffer} . substr $$ref, pos ($$ref), 9;
@@ -2588,6 +2586,7 @@ use Promise;
 use Promised::Flow;
 use Web::Host;
 use Web::URL;
+use Web::Encoding;
 
 use constant DEBUG => $ENV{WEBSERVER_DEBUG} || 0;
 our $ReadTimeout ||= 60;
@@ -2598,6 +2597,9 @@ BEGIN {
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
 
+## server_header: The value of the |Server:| header for the responses.
+## If it is not defined, the value |Server| is used.  It must be a
+## character string.  It is encoded in UTF-8.
 sub new ($$) {
   my ($class, $args) = @_;
   my $con = bless {DEBUG => DEBUG, is_server => 1,
@@ -2605,6 +2607,9 @@ sub new ($$) {
                     #XXX id => $args{transport}->id, req_id => 0,
                     rbuf => ''}, $class;
   $con->{DEBUG} = $args->{debug} if defined $args->{debug};
+
+  $con->{server_header} = encode_web_utf8
+      (defined $args->{server_header} ? $args->{server_header} : 'Server');
 
   $con->{ready} = [promised_cv];
   $con->{closed} = [promised_cv];
@@ -2715,14 +2720,6 @@ sub id ($) { # XXX
   return $_[0]->{id};
 } # id
 
-# XXX constructor
-sub server_header ($;$) {
-  if (@_ > 1) {
-    $_[0]->{server_header} = $_[1];
-  }
-  return defined $_[0]->{server_header} ? $_[0]->{server_header} : 'Server';
-} # server_header
-
 sub _url_scheme ($) {
   return $_[0]->{url_scheme};
 } # _url_scheme
@@ -2767,7 +2764,6 @@ sub _read ($) {
       if ($self->{disable_timer}) {
         delete $self->{timer};
       } else {
-warn "XXX set timer";
         $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
       }
       $self->_ondata ($_[0]->{value});

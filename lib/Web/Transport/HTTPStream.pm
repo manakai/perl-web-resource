@@ -389,8 +389,6 @@ sub new ($$) {
 # XXX replace {exit} by exception objects
 # XXX restore debug features & id
 # XXX {request}/{response} API
-# XXX open sending stream
-# XXX specing
 # XXX rewrite parsing test runner
 # XXX {stream} -> {body}
 
@@ -890,9 +888,6 @@ sub abort ($;$) {
 
   my $error = Web::DOM::Error->wrap ($reason);
   $con->{exit} = $error; # referenced by _send_done
-
-warn "=================";
-warn "XXX $error";
 
   $con->{writer}->abort ($error) if defined $con->{writer};
 
@@ -2494,122 +2489,6 @@ sub _open_sending_stream ($$;%) {
   my $con = $stream->{connection};
   my $canceled = 0;
 
-  if ($args{XXX_ws_message}) {
-  my $ws = WritableStream->new ({
-    start => sub {
-      my $wc = $_[1];
-      $con->{cancel_current_writable_stream} = sub {
-        $wc->error ($_[0]) if defined $_[0];
-        $canceled = 1;
-        delete $con->{cancel_current_writable_stream};
-      };
-    }, # start
-      write => sub {
-        my $chunk = $_[1];
-        # XXX error location
-        return Promise->resolve->then (sub {
-          die Web::DOM::TypeError->new ("The argument is not an ArrayBufferView")
-              unless UNIVERSAL::isa ($chunk, 'ArrayBufferView');
-
-          my $byte_length = $chunk->byte_length; # or throw
-          die Web::DOM::TypeError->new
-              (sprintf "Byte length %d is greater than expected length %d",
-                   $byte_length, ($canceled ? 0 : $slot_length || 0))
-                  if $canceled or
-                     (defined $slot_length and $slot_length < $byte_length);
-          return unless $byte_length;
-
-        if ($con->{DEBUG}) {
-          if ($con->{DEBUG} > 1 or $byte_length <= 40) {
-            for (split /\x0A/, 'XXX', -1) {
-              warn "$con->{request}->{id}: S: @{[_e4d $_]}\n";
-            }
-          } else {
-            warn "$con->{request}->{id}: S: @{[_e4d substr $_, 0, 40]}... (@{[length $_]})\n";
-          }
-        }
-
-          my $sent;
-          my $mask = $con->{ws_encode_mask_key};
-          if (defined $mask) {
-            my @data;
-            $chunk = DataView->new ($chunk->buffer, $chunk->byte_offset, $byte_length); # or throw
-            my $ref = \($chunk->manakai_to_string);
-            my $o = $con->{ws_sent_length};
-            for (0..($byte_length-1)) {
-              push @data, substr ($$ref, $_, 1) ^ substr ($mask, ($o+$_) % 4, 1);
-            }
-            $sent = $con->{writer}->write
-                (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
-            } else {
-              $sent = $con->{writer}->write ($chunk);
-            }
-
-            $con->{ws_sent_length} += $byte_length;
-          $slot_length -= $byte_length;
-          if ($slot_length <= 0) {
-            delete $con->{cancel_current_writable_stream};
-            $canceled = 1;
-
-
-            delete $con->{ws_message_stream_controller};
-            $con->{write_mode} = 'ws';
-
-            for (@{$con->{ws_pendings}}) {
-              $stream->_ws_debug ('S', @{$_->[2]}) if $con->{DEBUG};
-              $con->{writer}->write ($_->[1]);
-              if ($_->[0] == 8) { # close
-                $con->_send_done;
-              }
-            }
-          }
-          return $sent;
-        })->catch (sub {
-          # XXX wrap
-          $con->abort ($_[0]);
-          $con->{cancel_current_writable_stream}->($_[0])
-              if defined $con->{cancel_current_writable_stream};
-          die $_[0];
-        });
-      }, # write
-      close => sub {
-      return if $canceled;
-      if ($slot_length > 0) {
-        my $error = Web::DOM::TypeError->new
-            (sprintf "Closed before bytes (n = %d) are sent", $slot_length);
-        $con->{cancel_current_writable_stream}->($error)
-            if defined $con->{cancel_current_writable_stream};
-        $con->abort ($error);
-
-        delete $con->{ws_message_stream_controller};
-
-        die $error;
-      }
-
-      }, # close
-      abort => sub {
-        my $error = Web::DOM::Error->wrap ($_[1]);
-        $con->{cancel_current_writable_stream}->($error)
-            if defined $con->{cancel_current_writable_stream};
-        my $r = $con->abort ($error);
-
-        delete $con->{ws_message_stream_controller};
-        $con->{write_mode} = 'ws';
-
-        return $r;
-      }, # abort
-    }); # $ws
-
-    $con->{ws_pendings} = [];
-    if ($slot_length <= 0) {
-      $con->{cancel_current_writable_stream}->();
-      delete $con->{ws_message_stream_controller};
-      $con->{write_mode} = 'ws';
-    }
-
-  return ($ws);
-  }
-
   my $ws = $con->{write_mode} eq 'ws' ? undef : WritableStream->new ({
     start => sub {
       my $wc = $_[1];
@@ -2621,9 +2500,10 @@ sub _open_sending_stream ($$;%) {
     }, # start
     write => sub {
       my $chunk = $_[1];
+      # XXX error location
       return Promise->resolve->then (sub {
         die Web::DOM::TypeError->new ("The argument is not an ArrayBufferView")
-            unless UNIVERSAL::isa ($chunk, 'ArrayBufferView'); # XXX location
+            unless UNIVERSAL::isa ($chunk, 'ArrayBufferView');
 
       my $wm = $con->{write_mode} || '';
       if ($wm eq 'chunked') {
@@ -2670,15 +2550,41 @@ sub _open_sending_stream ($$;%) {
             }
           } # DEBUG
 
-          my $sent = $con->{writer}->write ($chunk);
+          my $sent;
+          my $mask = $con->{ws_encode_mask_key};
+          if (defined $mask) {
+            my @data;
+            $chunk = DataView->new ($chunk->buffer, $chunk->byte_offset, $byte_length); # or throw
+            my $ref = \($chunk->manakai_to_string);
+            my $o = $con->{ws_sent_length};
+            for (0..($byte_length-1)) {
+              push @data, substr ($$ref, $_, 1) ^ substr ($mask, ($o+$_) % 4, 1);
+            }
+            $sent = $con->{writer}->write
+                (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
+          } else {
+            $sent = $con->{writer}->write ($chunk);
+          }
+
           if (defined $slot_length) {
             $slot_length -= $byte_length;
-            if (defined $slot_length and $slot_length <= 0) {
+            $con->{ws_sent_length} += $byte_length if defined $con->{ws_pendings};
+            if ($slot_length <= 0) {
               delete $con->{cancel_current_writable_stream};
               $canceled = 1;
-              return $sent->then (sub {
+              if (defined $con->{ws_pendings}) {
+                $con->{write_mode} = 'ws';
+                delete $con->{ws_pendings};
+                for (@{$con->{ws_pendings}}) {
+                  $stream->_ws_debug ('S', @{$_->[2]}) if $con->{DEBUG};
+                  $con->{writer}->write ($_->[1]);
+                  if ($_->[0] == 8) { # close
+                    $con->_send_done;
+                  }
+                }
+              } else {
                 $con->_send_done;
-              });
+              }
             }
           }
           return $sent;
@@ -2728,7 +2634,10 @@ sub _open_sending_stream ($$;%) {
   if (defined $slot_length and $slot_length <= 0) {
     delete $con->{cancel_current_writable_stream};
     $canceled = 1;
-    if ($con->{write_mode} eq 'chunked') {
+    if (defined $con->{ws_pendings}) {
+      $con->{write_mode} = 'ws';
+      delete $con->{ws_pendings};
+    } elsif ($con->{write_mode} eq 'chunked') {
       # XXX trailer headers
       $con->{writer}->write
           (DataView->new (ArrayBuffer->new_from_scalarref (\"0\x0D\x0A\x0D\x0A")));
@@ -2962,8 +2871,8 @@ sub send_ws_message ($$$) {
   $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | ($is_binary ? 2 : 1), $masked | $length0) . $len . $mask))));
   $con->{write_mode} = 'raw';
-  my ($ws) = $con->{stream}->_open_sending_stream
-      ($length, XXX_ws_message => 1);
+  $con->{ws_pendings} = [];
+  my ($ws) = $con->{stream}->_open_sending_stream ($length);
 
   return Promise->resolve ({stream => $ws});
 } # send_ws_message

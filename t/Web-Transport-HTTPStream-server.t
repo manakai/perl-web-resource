@@ -101,6 +101,7 @@ my $HandleRequestHeaders = {};
                 return $r->read->then (sub {
                   return if $_[0]->{done};
                   my $msg = $_[0]->{value};
+                  $stream->{wsmsg}->($msg) if defined $stream->{wsmsg};
                   if (defined $msg->{text_body}) {
                     my $r = $msg->{text_body}->get_reader;
                     $msg->{text} = '';
@@ -125,8 +126,7 @@ my $HandleRequestHeaders = {};
                       });
                     }; # $read
                     promised_cleanup { undef $read } $read->()->then (sub {
-                      return $stream->{wsbinary}->($msg)
-                          if defined $stream->{wsbinary};
+                      return $stream->{wsbinary}->($msg) if defined $stream->{wsbinary};
                     });
                   }
                   return $run->();
@@ -134,7 +134,7 @@ my $HandleRequestHeaders = {};
               };
               $run->()->then (sub { undef $run }, sub { undef $run });
             }
-            $handler->($stream, $req);
+            $handler->($stream, $req, $got);
           } elsif ($req->{target_url}->path eq '/') {
             return $stream->send_response
                 ({status => 404, status_text => 'Not Found (/)'}, close => 1)->then (sub {
@@ -144,10 +144,9 @@ my $HandleRequestHeaders = {};
             die "No handler for |@{[$req->{target_url}->stringify]}|";
           }
         });
-        promised_cleanup {
-          delete $stream->{$_} for qw(ondata wsbinary wstext);
-        } $stream->closed;
-        return $run->();
+        return promised_cleanup {
+          delete $stream->{$_} for qw(ondata wstext wsbinary wsmsg);
+        } $run->();
       });
     }; # $run
     $run->()->then (sub { undef $run }, sub { undef $run });
@@ -1848,8 +1847,31 @@ test {
   my $c = shift;
   my $path = rand;
   my $invoked;
+  my $closing;
+  my $closed;
+  my $closed_promise;
+  my @ev;
   $HandleRequestHeaders->{"/$path"} = sub {
-    my ($self, $req) = @_;
+    my ($self, $req, $got) = @_;
+    test {
+      isa_ok $got->{messages}, 'ReadableStream';
+      isa_ok $got->{closing}, 'Promise';
+      is $got->{body}, undef;
+    } $c;
+    $got->{closing}->then (sub {
+      $closing = 'fulfilled';
+      push @ev, 'closing';
+    }, sub {
+      $closing = $_[0];
+      push @ev, 'closing';
+    });
+    $closed_promise = $self->closed->then (sub {
+      $closed = 'fulfilled';
+      push @ev, 'closed';
+    }, sub {
+      $closed = $_[0];
+      push @ev, 'closed';
+    });
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
@@ -1872,6 +1894,13 @@ test {
       is $res->header ('Connection'), 'close';
       is $res->body_bytes, q{};
     } $c;
+    return $closed_promise;
+  })->then (sub {
+    test {
+      is join (";", @ev), 'closing;closed';
+      is $closed, $closing;
+      ok $closing->{failed}; # XXX
+    } $c;
   }, sub {
     test {
       ok 0;
@@ -1882,14 +1911,14 @@ test {
     done $c;
     undef $c;
   });
-} n => 5, name => 'WS handshake - not handshake response 3';
+} n => 11, name => 'WS handshake - not handshake response 3';
 
 test {
   my $c = shift;
   my $path = rand;
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
-    my ($self, $req) = @_;
+    my ($self, $req, $got) = @_;
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
@@ -2346,7 +2375,7 @@ test {
   my $path = rand;
   my $invoked;
   $HandleRequestHeaders->{"/$path"} = sub {
-    my ($self, $req) = @_;
+    my ($self, $req, $got) = @_;
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
       $invoked = 1;
@@ -3120,6 +3149,182 @@ test {
     undef $c;
   });
 } n => 6, name => 'WS no timeout';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  my @ev;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req, $got) = @_;
+    $got->{closing}->then (sub { push @ev, 'closing' });
+    $self->closed->then (sub { push @ev, 'closed' });
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      push @ev, 'headerssent';
+      $serverreq = $self;
+      $self->{wstext} = sub {
+        if ($_[0]->{text} =~ /stuvw/) {
+          push @ev, 'text';
+          $serverreq->{text} = $_[0]->{text};
+          return $self->send_ws_close (5678, 'abc');
+        }
+      };
+      return $self->send_ws_message (5, not 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "abcde");
+        return $writer->close;
+      });
+    });
+  };
+
+  my $received = '';
+  my $sent = 0;
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      if ($is_text) {
+        if (defined $data) {
+          $received .= $data;
+        } else {
+          $received .= '(end)';
+        }
+      }
+      if ($received =~ /abcde/ and not $sent) {
+        $client->send_text ('stuvw');
+        $sent = 1;
+      }
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      is $serverreq->{text}, 'stuvw';
+      is $received, 'abcde(end)';
+      is join (";", @ev), 'headerssent;text;closing;closed';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'WS closing (by send_ws_close)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  my @ev;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req, $got) = @_;
+    $got->{closing}->then (sub { push @ev, 'closing' });
+    $self->closed->then (sub { push @ev, 'closed' });
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      push @ev, 'headerssent';
+      $serverreq = $self;
+      $self->{wsmsg} = sub {
+        push @ev, 'text';
+      };
+      $self->{wstext} = sub {
+        if ($_[0]->{text} =~ /stuvw/) {
+          $serverreq->{text} = $_[0]->{text};
+        }
+      };
+      return $self->send_ws_message (5, not 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "abcde");
+        return $writer->close;
+      });
+    });
+  };
+
+  my $received = '';
+  my $sent = 0;
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      if ($is_text) {
+        if (defined $data) {
+          $received .= $data;
+        } else {
+          $received .= '(end)';
+        }
+      }
+      if ($received =~ /abcde/ and not $sent) {
+        $client->send_text ('stuvw');
+        $client->close;
+        $sent = 1;
+      }
+    },
+  )->then (sub {
+    my $res = $_[0];
+    test {
+      is $serverreq->{text}, 'stuvw';
+      is $received, 'abcde(end)';
+      is join (";", @ev), 'headerssent;text;closing;closed';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'WS closing (by receiving Close)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $serverreq;
+  my @ev;
+  my $closed_promise;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req, $got) = @_;
+    $got->{closing}->catch (sub { push @ev, 'closing' });
+    $closed_promise = $self->closed->catch (sub { push @ev, 'closed' });
+    return $self->send_response
+        ({status => 101, status_text => 'Switched!'})->then (sub {
+      push @ev, 'headerssent';
+      $serverreq = $self;
+      $self->{wstext} = sub {
+        if ($_[0]->{text} =~ /stuvw/) {
+          $serverreq->{text} = $_[0]->{text};
+        }
+      };
+      return $self->send_ws_message (5, not 'binary')->then (sub {
+        my $writer = $_[0]->{stream}->get_writer;
+        $writer->write (d "abcde");
+        return $writer->close;
+      });
+    });
+  };
+
+  my $received = '';
+  my $sent = 0;
+  Web::Transport::WSClient->new (
+    url => Web::URL->parse_string (qq</$path>, $WSOrigin),
+    cb => sub {
+      my ($client, $data, $is_text) = @_;
+      if ($is_text) {
+        if (defined $data) {
+          $received .= $data;
+        } else {
+          $received .= '(end)';
+        }
+      }
+      if ($received =~ /abcde/ and not $sent) {
+        $client->send_text ('stuvw');
+        $client->{client}->abort;
+        $sent = 1;
+      }
+    },
+  )->then (sub {
+    my $res = $_[0];
+    return $closed_promise;
+  })->then (sub {
+    test {
+      is join (";", @ev), 'headerssent;closing;closed';
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'WS closing (by parse error)';
 
 {
   package TestURLForCONNECT;

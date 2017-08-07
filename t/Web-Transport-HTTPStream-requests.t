@@ -1343,6 +1343,7 @@ test {
       $response = my $got = $_[0];
       test {
         isa_ok $got->{body}, 'ReadableStream';
+        is $got->{closing}, undef;
         is $got->{messages}, undef;
       } $c;
       my $reader = $got->{body}->get_reader ('byob');
@@ -1377,7 +1378,7 @@ test {
       undef $c;
     });
   });
-} n => 5, name => 'send_request response body aborted';
+} n => 6, name => 'send_request response body aborted';
 
 test {
   my $c = shift;
@@ -1626,7 +1627,7 @@ test {
       return $stream->headers_received->then (sub {
         return $http->send_request ({method => 'GET', target => '/'});
       })->then (sub {
-        return $stream->closed;
+        return $_[0]->{stream}->closed;
       });
     })->catch (sub {
       my $error = $_[0];
@@ -1943,12 +1944,16 @@ close
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
+    my $closing;
     $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
+      my @ev;
       my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
+        $_[0]->{closing}->then (sub { push @ev, 'closing' });
+        $stream->closed->catch (sub { push @ev, 'closed' });
         rsread $_[0]->{messages};
         return $stream->send_ws_close;
       })->then (sub {
@@ -1959,6 +1964,7 @@ close
           ok $error->{ws};
           is $error->{status}, 1006;
           is $error->{reason}, '';
+          is join (';', @ev), 'closing;closed';
         } $c;
       });
     })->then (sub{
@@ -1968,7 +1974,7 @@ close
       undef $c;
     });
   });
-} n => 3, name => 'ws close ok no args';
+} n => 4, name => 'ws close ok no args (no close response)';
 
 test {
   my $c = shift;

@@ -41,7 +41,9 @@ sub _e4d_t ($) {
   return encode_web_utf8 $x;
 } # _e4d_t
 
-## Create and return a new HTTP connection object.
+## This class, with its two subclasses, represents an HTTP connection.
+
+## Create and return a new HTTP connection.
 ##
 ## The argument is a hash reference with following key/value pairs:
 ##
@@ -292,69 +294,78 @@ sub new ($$) {
 ##   $stream->headers_received->then (sub {
 ##     $_[0]->{body}
 ##     $_[0]->{messages}
+##     $_[0]->{closing}
 ##   })
 ## Server:
 ##   $con->streams->read->then (sub { $stream = $_[0]->{value} })
 ##   $stream->headers_received->then (sub {
 ##     $_[0]->{body}
 ##     $_[0]->{messages}
+##     $_[0]->{closing}
 ##   })
 ##   $stream->send_response->then (sub {
 ##     $_[0]->{body}
 ##   })
 ##
-## If the connection is NOT in the WebSocket mode,
-## |headers_received|'s |body| is a ReadableStream.  It is a readable
-## byte stream containing received body's byte sequence.  If the
-## readable stream is canceled, the underlying HTTP stream (or the
-## entire HTTP connection in HTTP/1) is aborted.  If the connection is
-## in the WebSocket mode, |headers_received|'s |body| is not defined.
+## For the purpose of this API, an HTTP connection is in the WS mode
+## if it is a client and it has sent a WebSocket request, or it is a
+## server and it has received a WebSocket request.
 ##
-## If the connection is in the WebSocket mode, |headers_received|'s
+## If the HTTP connection is NOT in the WS mode, |headers_received|'s
+## |body| is a ReadableStream.  It is a readable byte stream of the
+## received body's byte sequence.  If the readable stream is canceled,
+## the HTTP stream is aborted.  If the HTTP connection is in the WS
+## mode, |headers_received|'s |body| is not defined.
+##
+## If the HTTP connection is in the WS mode, |headers_received|'s
 ## |messages| is a ReadableStream.  If the readable stream is
-## canceled, the underlying HTTP stream (in fact the entire HTTP
-## connection) is aborted.  If the connection is NOT in the WebSocket
-## mode, |headers_received|'s |messages| is not defined.
+## canceled, the HTTP stream is aborted.  If the HtTP connection is
+## NOT in the WS mode, |headers_received|'s |messages| is not defined.
 ##
 ## The |messages| stream is a readable stream of zero or more
 ## WebSocket messages.  A WebSocket messages is represented by a hash
 ## reference with following key/value pairs:
 ##
-##   $_->{body}       If it is a binary message, the data of the message,
-##                    as a readable byte stream.  Otherwise, not defined.
-##   $_->{text_body}  If it is a text message, the data of the message,
-##                    as a readable stream of zero or more scalar
-##                    references to texts.  The concatenation of the
-##                    texts in order is the data of the message.  Otherwise,
-##                    not defined.
+##   body - If it is a binary message, the data of the message, as a
+##   readable byte stream.  Otherwise, not defined.
 ##
-## If the readable stream is canceled, the underlying HTTP stream (in
-## fact the entire HTTP connection) is aborted.
+##   text_body - If it is a text message, the data of the message, as
+##   a readable stream of zero or more scalar references to texts.
+##   The concatenation of the texts in order is the data of the
+##   message.  Otherwise, not defined.
+##
+## If the readable stream is canceled, the HTTP stream is aborted.
+##
+## In the WS mode, the |headers_received|'s |closing| is a promise
+## which is to be fulfilled when the |closing| event should be fired
+## on a WebSocket client object (or equivalent).  It is rejected if a
+## WebSocket request is responded by a non-WebSocket response or if
+## the WebSocket session is abnormally terminated.
 
 # XXX httpserver tests
 # XXX replace {exit} by exception objects
 # XXX restore debug features & id
 # XXX {request}/{response} API
-# XXX closing
 # XXX open sending stream
 # XXX specing
 # XXX rewrite parsing test runner
 
 sub MAX_BYTES () { 2**31-1 }
 
-## Return a promise which is fulfilled with |undef| if the connection
-## is ready.  A connection is ready if an underlying transport has
-## been established.  It is rejected instead if a transport cannot be
+## Return the |ready| promise of the HTTP connection, which is
+## fulfilled with |undef| when the HTTP connection becomes ready.  An
+## HTTP connection becomes ready once an underlying transport has been
+## established.  It is rejected instead if the transport cannot be
 ## successfully initiated.
 sub ready ($) {
   return $_[0]->{ready}->[0];
 } # ready
 
-## Returns a readable stream of zero or more HTTP stream objects.  If
-## the connection is client, this is an empty stream.  If the
-## connection is server, a new HTTP stream object is created and
-## appended to the readable stream whenever it receives a request.  If
-## the readable stream is canceled, the HTTP stream is aborted.
+## Returns a readable stream of zero or more HTTP streams.  If the
+## HTTP connection is client, this is an empty stream.  If the HTTP
+## connection is server, a new HTTP stream is created and appended to
+## the readable stream whenever it receives a request.  If the
+## readable stream is canceled, the HTTP stream is aborted.
 sub streams ($) {
   return $_[0]->{streams};
 } # streams
@@ -514,7 +525,7 @@ sub _ws_received ($) {
           }
           unless ($self->{ws_state} eq 'CLOSING') {
             $self->{ws_state} = 'CLOSING';
-            #$self->_ev ('closing');  #XXX
+            (delete $stream->{closing}->[1])->(undef);
             my $mask = '';
             my $masked = 0;
             unless ($self->{is_server}) {
@@ -783,18 +794,19 @@ sub send_request ($$;%) {
   return $stream->_send_request ($req, @_);
 } # send_request
 
-## Return the |closed| promise, which is fulfilled with |undef| when
-## the connection has been closed or aborted.  Unlike HTTP stream's
-## |closed| promise, his promise is fulfilled rather than rejected
-## even when the connection is abnormally closed.
+## Return the |closed| promise of the HTTP connection, which is
+## fulfilled with |undef| when the HTTP connection has been closed or
+## aborted.  Unlike HTTP stream's |closed| promise, this is fulfilled
+## rather than rejected even when the HTTP connection is abnormally
+## closed.
 sub closed ($) {
   return $_[0]->{closed}->[0];
 } # closed
 
-## Stop accepting new requests and close the connection AFTER any
-## ongoing stream has been completed.  If the connection is not ready,
-## a rejected promise is returned.  Otherwise, it returns the |closed|
-## promise.
+## Stop the HTTP connection accepting new requests and close the
+## connection AFTER any ongoing stream has been completed.  If the
+## HTTP connection is not ready yet, a rejected promise is returned.
+## Otherwise, it returns the |closed| promise.
 sub close_after_current_stream ($) {
   my $con = $_[0];
   return Promise->reject (Web::DOM::TypeError->new ("Connection is not ready"))
@@ -813,18 +825,18 @@ sub close_after_current_stream ($) {
   return $con->{closed}->[0];
 } # close_after_current_stream
 
-## Return whether the connection is ready and accepting new requests
-## or not.
+## Return whether the HTTP connection is ready and accepting new
+## requests or not.
 sub is_active ($) {
   return defined $_[0]->{state} && !$_[0]->{to_be_closed};
 } # is_active
 
-## Abort the connection.  It must be invoked after the connection
-## becomes ready.  The optional argument can be specified to provide
-## the reason of the abort, which might be used to reject various
-## relevant promises and various debug outputs.  It should be an
-## exception object, though any value is allowed.  It returns the
-## |closed| promise of the connection.
+## Abort the HTTP connection.  It must be invoked after the HTTP
+## connection becomes ready.  An optional argument can be specified to
+## provide the reason of the abort, which might be used to reject
+## various relevant promises and in various debug outputs.  It should
+## be an exception object, though any value is allowed.  It returns
+## the |closed| promise of the HTTP connection.
 sub abort ($;$) {
   my ($con, $reason) = @_;
   if (not defined $con->{state}) {
@@ -980,9 +992,11 @@ sub _both_done ($) {
 
   delete $con->{stream};
   if (defined $stream) {
-    if (defined $stream->{headers_received}->[1]) {
-      (delete $stream->{headers_received}->[1])->(Promise->reject ($error));
-    }
+    (delete $stream->{headers_received}->[1])->(Promise->reject ($error))
+        if defined $stream->{headers_received}->[1];
+
+    (delete $stream->{closing}->[1])->(Promise->reject ($error))
+        if defined $stream->{closing}->[1];
 
     if (defined $stream->{closed}->[1]) {
       if (defined $error) {
@@ -1037,10 +1051,11 @@ sub _both_done ($) {
   }
 
   if (defined $stream) {
-    if (defined $stream->{headers_received} and
-        defined $stream->{headers_received}->[1]) {
-      (delete $stream->{headers_received}->[1])->(Promise->reject ($error));
-    }
+    (delete $stream->{headers_received}->[1])->(Promise->reject ($error))
+        if defined $stream->{headers_received}->[1];
+
+    (delete $stream->{closing}->[1])->(Promise->reject ($error))
+        if defined $stream->{closing}->[1];
 
     if (defined $stream->{closed}->[1]) {
       if (defined $error) {
@@ -1659,7 +1674,6 @@ sub _process_rbuf_eof ($;%) {
   my $stream = $self->{stream};
   # XXX %args
   
-warn "XXX $self->{state}";
   if ($self->{state} eq 'before response') {
     if (length $self->{temp_buffer}) {
       if ($self->{request}->{method} eq 'PUT' or
@@ -2411,8 +2425,8 @@ push our @CARP_NOT, qw(
   WritableStream WritableStreamDefaultWriter
 );
 
-## Represents an HTTP stream, which is an interchange of a request and
-## response pair.
+## This class represents an HTTP stream, which is an interchange of a
+## request and response pair.
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
@@ -2741,6 +2755,9 @@ sub _open_sending_stream ($;%) {
   return ($ws);
 } # _open_sending_stream
 
+## Return the |headers_received| promise of the HTTP stream, which is
+## fulfilled when a header section has been received.  It is rejected
+## if there is an error before receiving the headers.
 sub headers_received ($) {
   return $_[0]->{headers_received}->[0];
 } # headers_received
@@ -2763,9 +2780,8 @@ sub _headers_received ($;%) {
       }, # cancel
     });
     $return->{messages} = $read_message_stream;
-    #XXX
-    #$stream->{closing} = [promised_cv];
-    #$return->{closing} = $stream->{closing}->[0];
+    $stream->{closing} = [promised_cv];
+    $return->{closing} = $stream->{closing}->[0];
   } else { # not is_ws
     my $read_stream = ReadableStream->new ({
       type => 'bytes',
@@ -3042,7 +3058,7 @@ sub send_ws_close ($;$$) {
     # XXX set exit ?
     $con->_receive_done;
   };
-  #$con->_ev ('closing'); # XXX
+  (delete $stream->{closing}->[1])->(undef);
   $con->_send_done;
 
   return $stream->{closed}->[0];

@@ -292,7 +292,12 @@ sub new ($$) {
 ##     $_[0]->{body}
 ##   })
 ##   $stream->headers_received->then (sub {
+##     $_[0]->{version}
+##     $_[0]->{status}
+##     $_[0]->{reason}
+##     $_[0]->{headers}
 ##     $_[0]->{body}
+##     $_[0]->{incomplete}
 ##     $_[0]->{messages}
 ##     $_[0]->{closing}
 ##     $_[0]->{reading}
@@ -301,6 +306,10 @@ sub new ($$) {
 ## Server:
 ##   $con->streams->read->then (sub { $stream = $_[0]->{value} })
 ##   $stream->headers_received->then (sub {
+##     $_[0]->{version}
+##     $_[0]->{method}
+##     $_[0]->{target_url}
+##     $_[0]->{headers}
 ##     $_[0]->{body}
 ##     $_[0]->{messages}
 ##     $_[0]->{closing}
@@ -328,26 +337,44 @@ sub new ($$) {
 ##   stream - If the method is |send_request|, the HTTP stream
 ##   initiated by the request.
 ##
+##   version - If the method is the server's |headers_received|,
+##   request's HTTP version.  If the method is the client's
+##   |headers_received|, the response's HTTP version.  The value is
+##   one of |0.9|, |1.0|, or |1.1|.
+##
+##   method - If the method is the server's |headers_received|, the
+##   request's method.
+##
+##   target - If the method is the server's |headers_received|, the
+##   request's target URL.  The value is a |Web::URL| object.
+##
+##   status - If the method is the client's |headers_received|, the
+##   response's status.
+##
+##   reason - If the method is the client's |headers_received|, the
+##   response's status text.
+##
+##   headers - If the method is the server's |headers_received|, the
+##   request's headers.  If the method is the client's
+##   |headers_received|, the response's headers.  It is an array
+##   reference of zero or more array references of (header name,
+##   header value, lowercased header name).
+##
 ##   body - If the method is |send_request|, the writable stream for
 ##   the request body.  If the method is |send_response|, the writable
 ##   stream for the response body.  These writable streams accept
 ##   |ArrayBufferView|s.  If the |content_length| option was specified
 ##   to the |send_request| or |send_response| method, the total byte
 ##   length must be equal to the |content_length| option value.  If
-##   the method is |headers_received| of an HTTP stream object
-##   obtained from the |stream| of the returned promise of the
-##   |send_request|, the readable byte stream for the response body.
-##   If the method is |headers_received| of an HTTP stream object
-##   obtained from the |streams| readable stream of a server HTTP
-##   connection, the readable byte stream for the request body.  If
-##   the HTTP connection is in the WS mode, in the tunnel mode, the
-##   method is |send_request| and the request's method is |CONNECT|,
-##   or the method is |headers_received| of an HTTP stream object
-##   obtained from the |streams| readable stream of a server HTTP
-##   connection and the request's method is |CONNECT|, however, not
-##   defined.  If these readable streams are canceled, or these
-##   writable streams are aborted, the relevant HTTP stream is
-##   aborted.
+##   the method is client's |headers_received|, the readable byte
+##   stream for the response body.  If the method is server's
+##   |headers_received|, the readable byte stream for the request
+##   body.  If the HTTP connection is in the WS mode, in the tunnel
+##   mode, the method is |send_request| and the request's method is
+##   |CONNECT|, or the method is server's |headers_received| and the
+##   request's method is |CONNECT|, however, not defined.  If these
+##   readable streams are canceled, or these writable streams are
+##   aborted, the relevant HTTP stream is aborted.
 ##
 ##   messages - If the method is |headers_received| and the HTTP
 ##   connection is in the WS mode, a readable stream of zero or more
@@ -373,24 +400,28 @@ sub new ($$) {
 ##   responded by a non-WebSocket response or if the WebSocket session
 ##   is abnormally terminated.
 ##
-##   readable - If the method is |send_response| or the method is
-##   |headers_received| of an HTTP stream object obtained from the
-##   |streams| readable stream of a server HTTP connection, a readable
-##   byte stream of the tunnel data received.  If the readable stream
-##   is canceled, the HTTP stream is aborted.
+##   readable - If the method is |send_response| or the method is the
+##   client's |headers_received|, a readable byte stream of the tunnel
+##   data received.  If the readable stream is canceled, the HTTP
+##   stream is aborted.
 ##
-##   writable - If the method is |send_response| or the method is
-##   |headers_received| of an HTTP stream object obtained from the
-##   |streams| readable stream of a server HTTP connection, a writable
-##   stream of the tunnel data sent.  It accepts |ArrayBufferView|s.
-##   If the writable stream is aborted, the HTTP stream is aborted.
+##   writable - If the method is |send_response| or the method is the
+##   client's |headers_received|, a writable stream of the tunnel data
+##   sent.  It accepts |ArrayBufferView|s.  If the writable stream is
+##   aborted, the HTTP stream is aborted.
+##
+## The server's |headers_received| method is the |headers_received| of
+## an HTTP stream obtained from the |streams| readable stream of a
+## server HTTP connection.
+##
+## The client's |headers_received| method is the |headers_received| of
+## an HTTP stream obtained from the |stream| key of the hash reference
+## of the returned promise of the |send_request| method.
 
 # XXX httpserver tests
 # XXX replace {exit} by exception objects
 # XXX restore debug features & id
-# XXX {request}/{response} API
 # XXX rewrite parsing test runner
-# XXX {stream} -> {body}
 
 sub MAX_BYTES () { 2**31-1 }
 
@@ -1886,7 +1917,6 @@ sub _url_hostport ($) {
 
 sub _new_stream ($) {
   my $con = $_[0];
-warn "XXX $con", Carp::longmess;
 
   my $stream = $con->{stream} = bless {
     is_server => 1, DEBUG => $con->{DEBUG},
@@ -1957,22 +1987,22 @@ sub _ondata ($$) {
         $stream = $self->{stream};
         $line =~ s/\x0D\z//;
         if ($line =~ /[\x00\x0D]/) {
-          $stream->{request}->{version} = 0.9;
+          $stream->{request}->{version} = '0.9';
           $stream->{request}->{method} = 'GET';
           return $self->_connection_error;
         }
         if ($line =~ s{\x20+(H[^\x20]*)\z}{}) {
           my $version = $1;
           if ($version =~ m{\AHTTP/1\.([0-9]+)\z}) {
-            $stream->{request}->{version} = $1 =~ /[^0]/ ? 1.1 : 1.0;
+            $stream->{request}->{version} = $1 =~ /[^0]/ ? '1.1' : '1.0';
           } elsif ($version =~ m{\AHTTP/0+1?\.}) {
-            $stream->{request}->{version} = 0.9;
+            $stream->{request}->{version} = '0.9';
             $stream->{request}->{method} = 'GET';
             return $self->_connection_error;
           } elsif ($version =~ m{\AHTTP/[0-9]+\.[0-9]+\z}) {
             $stream->{request}->{version} = 1.1;
           } else {
-            $stream->{request}->{version} = 0.9;
+            $stream->{request}->{version} = '0.9';
             $stream->{request}->{method} = 'GET';
             return $self->_connection_error;
           }
@@ -1983,7 +2013,7 @@ sub _ondata ($$) {
             return $self->_connection_error;
           }
         } else { # no version
-          $stream->{request}->{version} = 0.9;
+          $stream->{request}->{version} = '0.9';
           $stream->{request}->{method} = 'GET';
           unless ($line =~ s{\AGET\x20+}{}) {
             return $self->_connection_error;
@@ -2013,7 +2043,7 @@ sub _ondata ($$) {
             return $self->_connection_error;
           }
         }
-        if ($stream->{request}->{version} == 0.9) {
+        if ($stream->{request}->{version} eq '0.9') {
           $self->_request_headers or return;
         } else { # 1.0 / 1.1
           return $self->_connection_error unless length $line;
@@ -2197,7 +2227,7 @@ sub _oneof ($$) {
     if (defined $error or not $self->{state} eq 'waiting') {
       if (defined $self->{writer}) {
         my $stream = $self->_new_stream;
-        $stream->{request}->{version} = 0.9;
+        $stream->{request}->{version} = '0.9';
         $stream->{request}->{method} = 'GET';
       }
       return $self->_connection_error ($error);
@@ -2693,7 +2723,7 @@ sub _headers_received ($;%) {
         return $con->abort ($_[1]);
       },
     });
-    if ($con->{write_mode} eq 'before tunnel data') {
+    if (defined $con->{write_mode} and $con->{write_mode} eq 'before tunnel data') {
       if ($args{is_tunnel}) {
         $con->{write_mode} = 'raw';
         my ($ws) = $stream->_open_sending_stream (undef);
@@ -2797,7 +2827,7 @@ sub _send_request ($$;%) {
 
   $con->{stream} = $stream;
   $con->{request} = $req;
-  my $res = $con->{response} = {
+  my $res = $stream->{response} = $con->{response} = {
     status => 200, reason => 'OK', version => '0.9',
     headers => [],
   };
@@ -2826,7 +2856,6 @@ sub _send_request ($$;%) {
       warn "$req->{id}: S: @{[_e4d $_]}\n";
     }
   }
-    $stream->{response} =  $res; # XXX
   my $sent = $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\$header)));
   $con->{write_mode} = $args{ws} ? 'ws' : $method eq 'CONNECT' ? 'before tunnel data' : 'raw';
@@ -2837,6 +2866,17 @@ sub _send_request ($$;%) {
   }); ## could be rejected when connection aborted
 } # _send_request
 
+## Send a WebSocket message.  The first argument must be the byte
+## length of the message's data.  The second argument must be a
+## boolean value of whether it is a binary message (true) or text
+## message (false).  This method must be invoked while the WebSocket
+## state of the HTTP connection is OPEN and there is no sending
+## WebSocket message.  The method returns a promise, which is to be
+## fulfilled with a hash reference with a key/value pair: |body|,
+## whose value is a writable stream of the message's data.  It accepts
+## |ArrayBufferView|s.  The total byte length must be equal to the
+## byte length.  If the writable stream is aborted, the HTTP stream is
+## aborted.
 sub send_ws_message ($$$) {
   my ($self, $length, $is_binary) = @_;
   croak "Data too large" if MAX_BYTES < $length; # spec limit 2**63
@@ -2874,7 +2914,7 @@ sub send_ws_message ($$$) {
   $con->{ws_pendings} = [];
   my ($ws) = $con->{stream}->_open_sending_stream ($length);
 
-  return Promise->resolve ({stream => $ws});
+  return Promise->resolve ({body => $ws});
 } # send_ws_message
 
 sub send_ping ($;%) {
@@ -3081,7 +3121,7 @@ sub send_response ($$$;%) {
 
   my $close = $args{close} ||
               $con->{to_be_closed} ||
-              $stream->{request}->{version} == 0.9;
+              $stream->{request}->{version} eq '0.9';
   my $connect = 0;
   my $is_ws = 0;
   my @header;
@@ -3147,7 +3187,7 @@ sub send_response ($$$;%) {
   } else {
     if ($close and not $connect) {
       push @header, ['Connection', 'close'];
-    } elsif ($stream->{request}->{version} == 1.0) {
+    } elsif ($stream->{request}->{version} eq '1.0') {
       push @header, ['Connection', 'keep-alive'];
     }
     if ($write_mode eq 'chunked') {
@@ -3177,7 +3217,7 @@ sub send_response ($$$;%) {
     $con->{temp_buffer} = '';
   }
 
-  if ($stream->{request}->{version} != 0.9) {
+  if ($stream->{request}->{version} ne '0.9') {
     my $res = sprintf qq{HTTP/1.1 %d %s\x0D\x0A},
         $response->{status},
         $response->{status_text};

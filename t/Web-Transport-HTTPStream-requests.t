@@ -1726,7 +1726,7 @@ close
           rsread $_[0]->{messages};
           return $stream->send_ws_message (3, $is_binary);
         })->then (sub {
-          my $writer = $_[0]->{stream}->get_writer;
+          my $writer = $_[0]->{body}->get_writer;
           $writer->write (d 'abc');
           return $writer->close;
         })->then (sub {
@@ -1775,7 +1775,7 @@ close
         return $stream->headers_received->then (sub {
           return $stream->send_ws_message (2, $is_binary);
         })->then (sub {
-          my $writer = $_[0]->{stream}->get_writer;
+          my $writer = $_[0]->{body}->get_writer;
           return $writer->write (d 'abc');
         })->catch (sub {
           my $error = $_[0];
@@ -1823,7 +1823,7 @@ close
         return $stream->headers_received->then (sub {
           return $stream->send_ws_message (3, $is_binary);
         })->then (sub {
-          my $writer = $_[0]->{stream}->get_writer;
+          my $writer = $_[0]->{body}->get_writer;
           $writer->write (d "ab");
           for my $code (
             sub { $stream->send_ws_message (4, 0); },
@@ -1884,7 +1884,7 @@ close
         return $stream->headers_received->then (sub {
           return $stream->send_ws_message (3, $is_binary);
         })->then (sub {
-          my $writer = $_[0]->{stream}->get_writer;
+          my $writer = $_[0]->{body}->get_writer;
           $writer->write (d "ab");
           return $writer->abort;
         })->then (sub {
@@ -1945,7 +1945,7 @@ close
         })->then (sub {
           return $stream->send_ws_message (3, $is_binary);
         })->then (sub {
-          my $writer = $_[0]->{stream}->get_writer;
+          my $writer = $_[0]->{body}->get_writer;
           $writer->write (d 'a');
           $writer->write (d 'bc');
         })->then (sub {
@@ -3030,7 +3030,7 @@ ws-send-header opcode=8
       return $stream->headers_received->then (sub {
         $stream->send_ping;
         return $stream->send_ws_message (2, 'binary')->then (sub {
-          my $writer = $_[0]->{stream}->get_writer;
+          my $writer = $_[0]->{body}->get_writer;
           return promised_sleep (1)->then (sub {
             $writer->write (d "ab")->catch (sub { $error = $_[0] });
             return $closed;
@@ -3092,14 +3092,14 @@ ws-send-header opcode=8
       return $stream->headers_received->then (sub {
         $stream->send_ping;
         return $stream->send_ws_message (2, 'binary')->then (sub {
-          my $writer = $_[0]->{stream}->get_writer;
+          my $writer = $_[0]->{body}->get_writer;
           return promised_sleep (1)->then (sub {
             $writer->write (d "ab")->catch (sub { $error = $_[0] });
           });
         })->then (sub {
           return $stream->send_ws_message (3, 'binary');
         })->then (sub {
-          my $writer = $_[0]->{stream}->get_writer;
+          my $writer = $_[0]->{body}->get_writer;
           $writer->write (d "123");
           return $closed;
         });

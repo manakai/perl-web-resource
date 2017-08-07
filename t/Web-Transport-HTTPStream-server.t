@@ -93,7 +93,7 @@ my $HandleRequestHeaders = {};
         my $stream = $_[0]->{value};
         $stream->headers_received->then (sub {
           my $got = $_[0];
-          my $req = $stream->{request};
+          my $req = $got;
           my $handler = $HandleRequestHeaders->{$req->{target_url}->path} ||
                         $HandleRequestHeaders->{$req->{target_url}->hostport};
           if (defined $handler) {
@@ -2474,7 +2474,7 @@ test {
       };
       return $self->send_ws_message (5, 'binary')->then (sub {
         my $ctx = $_[0];
-        my $writer = $ctx->{stream}->get_writer;
+        my $writer = $ctx->{body}->get_writer;
         $writer->write (d "abcde");
         return $writer->close;
       });
@@ -2528,7 +2528,7 @@ test {
         }
       };
       return $self->send_ws_message (5, not 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "abcde");
         return $writer->close;
       });
@@ -2577,7 +2577,7 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       return $self->send_ws_message (5, not 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "abc");
         return $writer->write ("foo");
       })->catch (sub {
@@ -2627,7 +2627,7 @@ test {
       };
       $self->send_ping (data => "abbba");
       return $self->send_ws_message (5, not 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "abcde");
         return $writer->close;
       });
@@ -2715,7 +2715,7 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       return $self->send_ws_message (5, 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         return $writer->write (d "abcdef")->catch (sub {
           $error = $_[0];
           return $writer->write (d "123");
@@ -2764,7 +2764,7 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       return $self->send_ws_message (5, not 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         return $writer->write (d "abcdef")->catch (sub {
           $error = $_[0];
           return $writer->write (d "123");
@@ -2813,7 +2813,7 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       return $self->send_ws_message (5, not 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "123");
         return $writer->write (d "abcdef")->catch (sub {
           $error = $_[0];
@@ -2862,7 +2862,7 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       return $self->send_ws_message (0, not 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         return $writer->write (d "abcdef")->catch (sub {
           $error = $_[0];
           return $writer->close;
@@ -2942,7 +2942,7 @@ test {
         is $self->{response}->{body}, undef;
       } $c;
       return $self->send_ws_message (5, 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "123");
         return $self->send_ws_message (4, not 'binary')->catch (sub {
           $error = $_[0];
@@ -2985,7 +2985,7 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       return $self->send_ws_message (5, 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "123");
         return $self->send_ws_message (4, 'binary')->catch (sub {
           $error = $_[0];
@@ -3028,7 +3028,7 @@ test {
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       return $self->send_ws_message (5, not 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "123");
         return $writer->close;
       })->catch (sub {
@@ -3152,7 +3152,7 @@ test {
       return promised_sleep (5)->then (sub {
         return $self->send_ws_message (5, not 'binary');
       })->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "abcde");
         return $writer->close;
       });
@@ -3213,7 +3213,7 @@ test {
         }
       };
       return $self->send_ws_message (5, not 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "abcde");
         return $writer->close;
       });
@@ -3272,7 +3272,7 @@ test {
         }
       };
       return $self->send_ws_message (5, not 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "abcde");
         return $writer->close;
       });
@@ -3330,7 +3330,7 @@ test {
         }
       };
       return $self->send_ws_message (5, not 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "abcde");
         return $writer->close;
       });
@@ -4868,7 +4868,7 @@ test {
         $exit = $_[0];
       });
       return $self->send_ws_message (5, 'binary')->then (sub {
-        my $writer = $_[0]->{stream}->get_writer;
+        my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "abcde");
         return $writer->close;
       });
@@ -6221,6 +6221,123 @@ test {
     undef $c;
   });
 } n => 12, name => 'response body writer - empty close (raw content-length)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $p;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id})->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      test {
+        is $req->{version}, '1.1';
+        isa_ok $req->{target_url}, 'Web::URL';
+        is $req->{target_url}->stringify, Web::URL->parse_string ("/$path", $Origin)->stringify;
+        is $req->{method}, 'GET';
+        is ref $req->{headers}, 'ARRAY';
+        my $v = [grep { $_->[0] eq 'X-Foo' } @{$req->{headers}}]->[0];
+        is $v->[1], 'a bc';
+        is $v->[2], 'x-foo';
+      } $c;
+      return $w->close;
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  my $id1;
+  $http->request (path => [$path], headers => {'X-Foo' => 'a bc'})->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 201;
+    } $c;
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 8, name => 'response data fields';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $p;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id})->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      test {
+        is $req->{version}, '1.0';
+        isa_ok $req->{target_url}, 'Web::URL';
+        is $req->{target_url}->stringify, Web::URL->parse_string ("/$path", $Origin)->stringify;
+        is $req->{method}, 'HEAD';
+        is ref $req->{headers}, 'ARRAY';
+        my $v = [grep { $_->[0] eq 'X-Foo' } @{$req->{headers}}]->[0];
+        is $v->[1], 'a bc';
+        is $v->[2], 'x-foo';
+      } $c;
+      return $w->close;
+    });
+  };
+
+  rawtcp ("HEAD /$path HTTP/1.0\x0D\x0AX-Foo:a bc \x0D\x0A\x0D\x0A")->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 7, name => 'response data fields HTTP/1.0';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $p;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id})->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      test {
+        is $req->{version}, '0.9';
+        isa_ok $req->{target_url}, 'Web::URL';
+        is $req->{target_url}->stringify, Web::URL->parse_string ("/$path", $Origin)->stringify;
+        is $req->{method}, 'GET';
+        is ref $req->{headers}, 'ARRAY';
+        is 0+@{$req->{headers}}, 0;
+      } $c;
+      return $w->close;
+    });
+  };
+
+  rawtcp ("GET /$path\x0D\x0A")->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'response data fields HTTP/0.9';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $p;
+  $HandleRequestHeaders->{"$path.test:123"} = sub {
+    my ($self, $req) = @_;
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id})->then (sub {
+      test {
+        is $req->{version}, '1.0';
+        isa_ok $req->{target_url}, 'Web::URL';
+        is $req->{target_url}->stringify, Web::URL->parse_string ("http://$path.test:123")->stringify;
+        is $req->{method}, 'CONNECT';
+        is ref $req->{headers}, 'ARRAY';
+        my $v = [grep { $_->[0] eq 'X-Foo' } @{$req->{headers}}]->[0];
+        is $v->[1], 'a bc';
+        is $v->[2], 'x-foo';
+      } $c;
+      return $_[0]->{writable}->get_writer->close;
+    });
+  };
+
+  rawtcp ("CONNECT $path.test:123 HTTP/1.0\x0D\x0AX-Foo:a bc \x0D\x0A\x0D\x0A")->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 7, name => 'response data fields CONNECT';
 
 Test::Certificates->wait_create_cert;
 $GlobalCV->begin;

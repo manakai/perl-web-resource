@@ -238,7 +238,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   $result->{ws_established} = 1;
                   if ($test_type eq 'ws' and $test->{'ws-send'}) {
                     $stream->send_ws_message (3, not 'binary')->then (sub {
-                      my $writer = $_[0]->{stream}->get_writer;
+                      my $writer = $_[0]->{body}->get_writer;
                       $writer->write (DataView->new (ArrayBuffer->new_from_scalarref (\'stu')));
                       return $writer->close;
                     });

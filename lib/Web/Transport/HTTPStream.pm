@@ -295,6 +295,8 @@ sub new ($$) {
 ##     $_[0]->{body}
 ##     $_[0]->{messages}
 ##     $_[0]->{closing}
+##     $_[0]->{reading}
+##     $_[0]->{writing}
 ##   })
 ## Server:
 ##   $con->streams->read->then (sub { $stream = $_[0]->{value} })
@@ -305,42 +307,83 @@ sub new ($$) {
 ##   })
 ##   $stream->send_response->then (sub {
 ##     $_[0]->{body}
+##     $_[0]->{reading}
+##     $_[0]->{writing}
 ##   })
 ##
-## For the purpose of this API, an HTTP connection is in the WS mode
-## if it is a client and it has sent a WebSocket request, or it is a
-## server and it has received a WebSocket request.
+## An HTTP connection is in the WS mode if it is a client and it has
+## sent a WebSocket request, or it is a server and it has received a
+## WebSocket request.
 ##
-## If the HTTP connection is NOT in the WS mode, |headers_received|'s
-## |body| is a ReadableStream.  It is a readable byte stream of the
-## received body's byte sequence.  If the readable stream is canceled,
-## the HTTP stream is aborted.  If the HTTP connection is in the WS
-## mode, |headers_received|'s |body| is not defined.
+## An HTTP connection is in the tunnel mode if it is a client, it has
+## sent a request whose method is |CONNECT|, and it has received a
+## |200| response, or if it is a server, it has received a request
+## whose method is |CONNECT|, and it has sent a |2/xx/| response.
 ##
-## If the HTTP connection is in the WS mode, |headers_received|'s
-## |messages| is a ReadableStream.  If the readable stream is
-## canceled, the HTTP stream is aborted.  If the HtTP connection is
-## NOT in the WS mode, |headers_received|'s |messages| is not defined.
+## Methods |send_request|, |send_response|, and |headers_received|
+## returns a promise which is fulfilled with a hash reference.  The
+## hash reference contains following key/value pairs, which are
+## defined only where applicable:
 ##
-## The |messages| stream is a readable stream of zero or more
-## WebSocket messages.  A WebSocket messages is represented by a hash
-## reference with following key/value pairs:
+##   stream - If the method is |send_request|, the HTTP stream
+##   initiated by the request.
 ##
-##   body - If it is a binary message, the data of the message, as a
-##   readable byte stream.  Otherwise, not defined.
+##   body - If the method is |send_request|, the writable stream for
+##   the request body.  If the method is |send_response|, the writable
+##   stream for the response body.  These writable streams accept
+##   |ArrayBufferView|s.  If the |content_length| option was specified
+##   to the |send_request| or |send_response| method, the total byte
+##   length must be equal to the |content_length| option value.  If
+##   the method is |headers_received| of an HTTP stream object
+##   obtained from the |stream| of the returned promise of the
+##   |send_request|, the readable byte stream for the response body.
+##   If the method is |headers_received| of an HTTP stream object
+##   obtained from the |streams| readable stream of a server HTTP
+##   connection, the readable byte stream for the request body.  If
+##   the HTTP connection is in the WS mode, in the tunnel mode, the
+##   method is |send_request| and the request's method is |CONNECT|,
+##   or the method is |headers_received| of an HTTP stream object
+##   obtained from the |streams| readable stream of a server HTTP
+##   connection and the request's method is |CONNECT|, however, not
+##   defined.  If these readable streams are canceled, or these
+##   writable streams are aborted, the relevant HTTP stream is
+##   aborted.
 ##
-##   text_body - If it is a text message, the data of the message, as
-##   a readable stream of zero or more scalar references to texts.
-##   The concatenation of the texts in order is the data of the
-##   message.  Otherwise, not defined.
+##   messages - If the method is |headers_received| and the HTTP
+##   connection is in the WS mode, a readable stream of zero or more
+##   received WebSocket messages.  If the readable stream is canceled,
+##   the HTTP stream is aborted.  A WebSocket messages is represented
+##   by a hash reference with following key/value pairs, which are
+##   only defined where applicable:
 ##
-## If the readable stream is canceled, the HTTP stream is aborted.
+##     body - If it is a binary message, a readable byte stream of the
+##     data of the message.  If the readable stream is canceled, the
+##     HTTP stream is aborted.
 ##
-## In the WS mode, the |headers_received|'s |closing| is a promise
-## which is to be fulfilled when the |closing| event should be fired
-## on a WebSocket client object (or equivalent).  It is rejected if a
-## WebSocket request is responded by a non-WebSocket response or if
-## the WebSocket session is abnormally terminated.
+##     text_body - If it is a text message, a readable stream of zero
+##     or more scalar references to texts (possibly utf8-flagged Perl
+##     strings of characters), whose concatenation in order is the
+##     data of the message.  If the readable stream is canceled, the
+##     HTTP stream is aborted.
+##
+##   closing - If the method is |headers_received| and the HTTP
+##   connection is in the WS mode, a promise which is to be fulfilled
+##   when the |closing| event should be fired on a WebSocket client
+##   object (or equivalent).  It is rejected if a WebSocket request is
+##   responded by a non-WebSocket response or if the WebSocket session
+##   is abnormally terminated.
+##
+##   readable - If the method is |send_response| or the method is
+##   |headers_received| of an HTTP stream object obtained from the
+##   |streams| readable stream of a server HTTP connection, a readable
+##   byte stream of the tunnel data received.  If the readable stream
+##   is canceled, the HTTP stream is aborted.
+##
+##   writable - If the method is |send_response| or the method is
+##   |headers_received| of an HTTP stream object obtained from the
+##   |streams| readable stream of a server HTTP connection, a writable
+##   stream of the tunnel data sent.  It accepts |ArrayBufferView|s.
+##   If the writable stream is aborted, the HTTP stream is aborted.
 
 # XXX httpserver tests
 # XXX replace {exit} by exception objects
@@ -349,6 +392,7 @@ sub new ($$) {
 # XXX open sending stream
 # XXX specing
 # XXX rewrite parsing test runner
+# XXX {stream} -> {body}
 
 sub MAX_BYTES () { 2**31-1 }
 
@@ -847,6 +891,9 @@ sub abort ($;$) {
   my $error = Web::DOM::Error->wrap ($reason);
   $con->{exit} = $error; # referenced by _send_done
 
+warn "=================";
+warn "XXX $error";
+
   $con->{writer}->abort ($error) if defined $con->{writer};
 
   delete $con->{writer};
@@ -940,7 +987,6 @@ sub _send_done ($;%) {
   }
 
   $con->{write_mode} = 'sent';
-  delete $con->{to_be_sent_length}; # XXX spec
 
   if (defined $con->{cancel_current_writable_stream}) {
     $con->{cancel_current_writable_stream}->(undef);
@@ -990,7 +1036,6 @@ sub _both_done ($) {
 
   if ($con->{is_server}) {
 
-  delete $con->{stream};
   if (defined $stream) {
     (delete $stream->{headers_received}->[1])->(Promise->reject ($error))
         if defined $stream->{headers_received}->[1];
@@ -1014,6 +1059,10 @@ sub _both_done ($) {
     warn "$con->{id}: ========== @{[ref $con]}\n";
   }
   delete $stream->{connection};
+  delete $con->{stream};
+  delete $con->{send_done};
+  delete $con->{receive_done};
+  delete $con->{write_mode};
 
   delete $con->{disable_timer};
   if ($con->{to_be_closed}) {
@@ -1364,10 +1413,10 @@ sub _process_rbuf ($$) {
 
       if ($res->{status} == 200 and
           $self->{request}->{method} eq 'CONNECT') {
-        $stream->_headers_received;
+        $stream->_headers_received (is_tunnel => 1);
         $self->{to_be_closed} = 1;
         $self->{state} = 'tunnel';
-        delete $self->{to_be_sent_length};
+        delete $self->{unread_length};
       } elsif (defined $self->{ws_state} and
                $self->{ws_state} eq 'CONNECTING' and
                $res->{status} == 101) {
@@ -1842,6 +1891,8 @@ sub _url_hostport ($) {
 
 sub _new_stream ($) {
   my $con = $_[0];
+warn "XXX $con", Carp::longmess;
+
   my $stream = $con->{stream} = bless {
     is_server => 1, DEBUG => $con->{DEBUG},
     connection => $con,
@@ -2148,12 +2199,16 @@ sub _oneof ($$) {
     # $self->{state} eq 'initial'
     # $self->{state} eq 'before request-line'
     # $self->{state} eq 'waiting'
-    if (defined $self->{writer}) {
-      my $stream = $self->_new_stream;
-      $stream->{request}->{version} = 0.9;
-      $stream->{request}->{method} = 'GET';
+    if (defined $error or not $self->{state} eq 'waiting') {
+      if (defined $self->{writer}) {
+        my $stream = $self->_new_stream;
+        $stream->{request}->{version} = 0.9;
+        $stream->{request}->{method} = 'GET';
+      }
+      return $self->_connection_error ($error);
     }
-    return $self->_connection_error ($error);
+    $self->_send_done (close => 1);
+    return $self->_receive_done;
   }
 } # _oneof
 
@@ -2379,7 +2434,7 @@ sub _request_headers ($) {
     delete $con->{timer};
     $con->{disable_timer} = 1;
   } elsif ($stream->{request}->{method} eq 'CONNECT') {
-    $stream->_headers_received (is_request => 1);
+    $stream->_headers_received (is_tunnel => 1, is_request => 1);
     $con->{state} = 'request body';
     $con->{to_be_closed} = 1;
     delete $con->{timer};
@@ -2434,8 +2489,8 @@ BEGIN {
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
 }
 
-sub _open_sending_stream ($;%) {
-  my ($stream, %args) = @_;
+sub _open_sending_stream ($$;%) {
+  my ($stream, $slot_length, %args) = @_;
   my $con = $stream->{connection};
   my $canceled = 0;
 
@@ -2459,10 +2514,9 @@ sub _open_sending_stream ($;%) {
           my $byte_length = $chunk->byte_length; # or throw
           die Web::DOM::TypeError->new
               (sprintf "Byte length %d is greater than expected length %d",
-                   $byte_length, ($canceled ? 0 : $con->{to_be_sent_length} || 0))
+                   $byte_length, ($canceled ? 0 : $slot_length || 0))
                   if $canceled or
-                     (defined $con->{to_be_sent_length} and
-                      $con->{to_be_sent_length} < $byte_length);
+                     (defined $slot_length and $slot_length < $byte_length);
           return unless $byte_length;
 
         if ($con->{DEBUG}) {
@@ -2475,6 +2529,7 @@ sub _open_sending_stream ($;%) {
           }
         }
 
+          my $sent;
           my $mask = $con->{ws_encode_mask_key};
           if (defined $mask) {
             my @data;
@@ -2484,18 +2539,21 @@ sub _open_sending_stream ($;%) {
             for (0..($byte_length-1)) {
               push @data, substr ($$ref, $_, 1) ^ substr ($mask, ($o+$_) % 4, 1);
             }
-              $con->{writer}->write
-                  (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
+            $sent = $con->{writer}->write
+                (DataView->new (ArrayBuffer->new_from_scalarref (\join '', @data)));
             } else {
-              $con->{writer}->write ($chunk);
+              $sent = $con->{writer}->write ($chunk);
             }
 
             $con->{ws_sent_length} += $byte_length;
-            $con->{to_be_sent_length} -= $byte_length;
-          if ($con->{to_be_sent_length} <= 0) {
+          $slot_length -= $byte_length;
+          if ($slot_length <= 0) {
             delete $con->{cancel_current_writable_stream};
             $canceled = 1;
+
+
             delete $con->{ws_message_stream_controller};
+            $con->{write_mode} = 'ws';
 
             for (@{$con->{ws_pendings}}) {
               $stream->_ws_debug ('S', @{$_->[2]}) if $con->{DEBUG};
@@ -2505,7 +2563,9 @@ sub _open_sending_stream ($;%) {
               }
             }
           }
+          return $sent;
         })->catch (sub {
+          # XXX wrap
           $con->abort ($_[0]);
           $con->{cancel_current_writable_stream}->($_[0])
               if defined $con->{cancel_current_writable_stream};
@@ -2513,39 +2573,44 @@ sub _open_sending_stream ($;%) {
         });
       }, # write
       close => sub {
-      if ($con->{to_be_sent_length} > 0) {
+      return if $canceled;
+      if ($slot_length > 0) {
         my $error = Web::DOM::TypeError->new
-            (sprintf "Closed before bytes (n = %d) are sent", $con->{to_be_sent_length});
-        $con->abort ($error);
+            (sprintf "Closed before bytes (n = %d) are sent", $slot_length);
         $con->{cancel_current_writable_stream}->($error)
             if defined $con->{cancel_current_writable_stream};
+        $con->abort ($error);
+
         delete $con->{ws_message_stream_controller};
+
         die $error;
       }
 
       }, # close
       abort => sub {
-        delete $con->{ws_message_stream_controller};
-        $con->{cancel_current_writable_stream}->($_[1])
+        my $error = Web::DOM::Error->wrap ($_[1]);
+        $con->{cancel_current_writable_stream}->($error)
             if defined $con->{cancel_current_writable_stream};
-      # XXX
+        my $r = $con->abort ($error);
 
-      },
+        delete $con->{ws_message_stream_controller};
+        $con->{write_mode} = 'ws';
+
+        return $r;
+      }, # abort
     }); # $ws
 
     $con->{ws_pendings} = [];
-    # XXX
-    if ($con->{to_be_sent_length} <= 0) {
+    if ($slot_length <= 0) {
       $con->{cancel_current_writable_stream}->();
       delete $con->{ws_message_stream_controller};
+      $con->{write_mode} = 'ws';
     }
 
   return ($ws);
   }
 
-# XXX busy check by cancel_current_writable_stream
-  if ($args{XXX_response}) {
-    my $ws = $args{is_ws} ? undef : WritableStream->new ({
+  my $ws = $con->{write_mode} eq 'ws' ? undef : WritableStream->new ({
     start => sub {
       my $wc = $_[1];
       $con->{cancel_current_writable_stream} = sub {
@@ -2556,10 +2621,9 @@ sub _open_sending_stream ($;%) {
     }, # start
     write => sub {
       my $chunk = $_[1];
-      # XXX error location
       return Promise->resolve->then (sub {
         die Web::DOM::TypeError->new ("The argument is not an ArrayBufferView")
-            unless UNIVERSAL::isa ($chunk, 'ArrayBufferView');
+            unless UNIVERSAL::isa ($chunk, 'ArrayBufferView'); # XXX location
 
       my $wm = $con->{write_mode} || '';
       if ($wm eq 'chunked') {
@@ -2588,25 +2652,28 @@ sub _open_sending_stream ($;%) {
           my $byte_length = $chunk->byte_length; # can throw
           die Web::DOM::TypeError->new
               (sprintf "Byte length %d is greater than expected length %d",
-                   $byte_length, ($canceled ? 0 : $con->{to_be_sent_length} || 0))
+                   $byte_length, ($canceled ? 0 : $slot_length || 0))
                   if $canceled or
-                     (defined $con->{to_be_sent_length} and
-                      $con->{to_be_sent_length} < $byte_length);
+                     (defined $slot_length and $slot_length < $byte_length);
           return unless $byte_length;
 
-          if ($stream->{DEBUG} > 1) {
+          if ($stream->{DEBUG}) {
             my $dv = UNIVERSAL::isa ($chunk, 'DataView')
                 ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $byte_length); # or throw
-            for (split /\x0A/, $dv->manakai_to_string, -1) {
-              warn "$stream->{id}: S: @{[_e4d $_]}\n";
+            if ($con->{DEBUG} > 1 or $byte_length <= 40) {
+              for (split /\x0A/, $dv->manakai_to_string, -1) {
+                warn "$stream->{id}: S: @{[_e4d $_]}\n";
+              }
+            } else {
+              warn "$con->{request}->{id}: S: @{[_e4d substr $_, 0, 40]}... (@{[length $_]})\n"
+                  for $dv->manakai_to_string;
             }
-          }
+          } # DEBUG
 
           my $sent = $con->{writer}->write ($chunk);
-          if (defined $con->{to_be_sent_length}) {
-            $con->{to_be_sent_length} -= $byte_length;
-            if (defined $con->{to_be_sent_length} and
-                $con->{to_be_sent_length} <= 0) {
+          if (defined $slot_length) {
+            $slot_length -= $byte_length;
+            if (defined $slot_length and $slot_length <= 0) {
               delete $con->{cancel_current_writable_stream};
               $canceled = 1;
               return $sent->then (sub {
@@ -2617,19 +2684,19 @@ sub _open_sending_stream ($;%) {
           return $sent;
         }
       })->catch (sub {
-        # XXX wrap?
-        $con->{cancel_current_writable_stream}->($_[0])
+        my $error = Web::DOM::Error->wrap ($_[0]);
+        $con->{cancel_current_writable_stream}->($error)
             if defined $con->{cancel_current_writable_stream};
-        $con->abort ($_[0]);
-        die $_[0];
+        $con->abort ($error);
+        die $error;
       });
     }, # write
     close => sub {
-      if (defined $con->{to_be_sent_length}) {
-        if ($con->{to_be_sent_length} > 0) {
+      return if $canceled;
+      if (defined $slot_length) {
+        if ($slot_length > 0) {
           my $error = Web::DOM::TypeError->new
-              (sprintf "Closed before bytes (n = %d) are sent",
-                   $con->{to_be_sent_length});
+              (sprintf "Closed before bytes (n = %d) are sent", $slot_length);
           $con->{cancel_current_writable_stream}->($error)
               if defined $con->{cancel_current_writable_stream};
           $con->abort ($error);
@@ -2645,23 +2712,20 @@ sub _open_sending_stream ($;%) {
             (DataView->new (ArrayBuffer->new_from_scalarref (\"0\x0D\x0A\x0D\x0A")));
         $con->_send_done;
         return $p;
-      } elsif (not defined $con->{to_be_sent_length}) {
+      } elsif (not defined $slot_length) {
         $con->_send_done (close => 1);
         return;
       }
     }, # close
     abort => sub {
-      $con->{cancel_current_writable_stream}->($_[1])
+      my $error = Web::DOM::Error->wrap ($_[1]);
+      $con->{cancel_current_writable_stream}->($error)
           if defined $con->{cancel_current_writable_stream};
-      return $con->abort ($_[1]);
-    },
-  });
+      return $con->abort ($error);
+    }, # abort
+  }); # $ws
 
-# XXX length:0 then ws->close
-    $con->{to_be_closed} = 1
-        if $stream->{request}->{method} eq 'CONNECT';
-  if (defined $con->{to_be_sent_length} and
-      $con->{to_be_sent_length} <= 0) {
+  if (defined $slot_length and $slot_length <= 0) {
     delete $con->{cancel_current_writable_stream};
     $canceled = 1;
     if ($con->{write_mode} eq 'chunked') {
@@ -2673,84 +2737,6 @@ sub _open_sending_stream ($;%) {
       $con->_send_done;
     }
   }
-    return ($ws);
-  }
-
-  my $ws = $args{is_ws} ? undef : WritableStream->new ({
-    start => sub {
-      my $wc = $_[1];
-      $con->{cancel_current_writable_stream} = sub {
-        $wc->error ($_[0]) if defined $_[0];
-        $canceled = 1;
-        delete $con->{cancel_current_writable_stream};
-      };
-    }, # start
-    write => sub {
-      my $chunk = $_[1];
-      return Promise->resolve->then (sub {
-        die Web::DOM::TypeError->new ("The argument is not an ArrayBufferView")
-            unless UNIVERSAL::isa ($chunk, 'ArrayBufferView'); # XXX location
-
-        my $byte_length = $chunk->byte_length;
-        die Web::DOM::TypeError->new
-              (sprintf "Byte length %d is greater than expected length %d",
-                   $byte_length, ($canceled ? 0 : $con->{to_be_sent_length} || 0))
-                  if $canceled or
-                     (defined $con->{to_be_sent_length} and
-                      $con->{to_be_sent_length} < $byte_length);
-        return unless $byte_length;
-
-        if ($con->{DEBUG}) {
-          if ($con->{DEBUG} > 1 or $byte_length <= 40) {
-            for (split /\x0A/, 'XXX', -1) {
-              warn "$con->{request}->{id}: S: @{[_e4d $_]}\n";
-            }
-          } else {
-            warn "$con->{request}->{id}: S: @{[_e4d substr $_, 0, 40]}... (@{[length $_]})\n";
-          }
-        }
-
-        my $sent = $con->{writer}->write ($chunk);
-        if (defined $con->{to_be_sent_length}) {
-          $con->{to_be_sent_length} -= $byte_length;
-          if ($con->{to_be_sent_length} <= 0) {
-            delete $con->{cancel_current_writable_stream};
-            $canceled = 1;
-            return $sent->then (sub {
-              $con->_send_done;
-            });
-          }
-        }
-        return $sent;
-      })->catch (sub {
-        $con->{cancel_current_writable_stream}->($_[0])
-            if defined $con->{cancel_current_writable_stream};
-        $con->abort ($_[0]);
-        die $_[0];
-      });
-    }, # write
-    close => sub {
-      if (defined $con->{to_be_sent_length}) {
-        if ($con->{to_be_sent_length} > 0) {
-          my $error = Web::DOM::TypeError->new
-              (sprintf "Closed before bytes (n = %d) are sent",
-                   $con->{to_be_sent_length});
-          $con->{cancel_current_writable_stream}->($error)
-              if defined $con->{cancel_current_writable_stream};
-          $con->abort ($error);
-          die $error;
-        }
-      } else {
-        $con->_send_done;
-        return;
-      }
-    }, # close
-    abort => sub {
-      $con->{cancel_current_writable_stream}->($_[1])
-          if defined $con->{cancel_current_writable_stream};
-      return $con->abort ($_[1]);
-    }, # abort
-  });
 
   return ($ws);
 } # _open_sending_stream
@@ -2764,6 +2750,7 @@ sub headers_received ($) {
 
 sub _headers_received ($;%) {
   my ($stream, %args) = @_;
+  my $con = $stream->{connection};
   my $return = $args{is_request} ? $stream->{request} : $stream->{response};
   if ($args{is_ws}) {
     my $read_message_stream = ReadableStream->new ({
@@ -2775,7 +2762,6 @@ sub _headers_received ($;%) {
       },
       cancel => sub {
         delete $stream->{messages_controller};
-        my $con = $stream->{connection};
         return $con->abort ($_[1]);
       }, # cancel
     });
@@ -2795,11 +2781,26 @@ sub _headers_received ($;%) {
       },
       cancel => sub {
         delete $stream->{body_controller};
-        my $con = $stream->{connection};
         return $con->abort ($_[1]);
       },
     });
-    $return->{body} = $read_stream;
+    if ($con->{write_mode} eq 'before tunnel data') {
+      if ($args{is_tunnel}) {
+        $con->{write_mode} = 'raw';
+        my ($ws) = $stream->_open_sending_stream (undef);
+        $return->{writable} = $ws;
+        $return->{readable} = $read_stream;
+      } else {
+        $con->_send_done;
+        $return->{body} = $read_stream;
+      }
+    } else {
+      if ($args{is_tunnel}) {
+        $stream->{tunnel_readable} = $read_stream;
+      } else {
+        $return->{body} = $read_stream;
+      }
+    }
   } # not is_ws
   (delete $stream->{headers_received}->[1])->($return);
 } # _headers_received
@@ -2886,7 +2887,6 @@ sub _send_request ($$;%) {
   }
 
   $con->{stream} = $stream;
-  $con->{to_be_sent_length} = $args{content_length};
   $con->{request} = $req;
   my $res = $con->{response} = {
     status => 200, reason => 'OK', version => '0.9',
@@ -2920,13 +2920,8 @@ sub _send_request ($$;%) {
     $stream->{response} =  $res; # XXX
   my $sent = $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\$header)));
-  $con->{write_mode} = 'raw';
-  if (defined $con->{to_be_sent_length} and $con->{to_be_sent_length} <= 0) {
-    $sent = $sent->then (sub {
-      $con->_send_done;
-    });
-  }
-  my ($ws) = $stream->_open_sending_stream (is_ws => $args{ws});
+  $con->{write_mode} = $args{ws} ? 'ws' : $method eq 'CONNECT' ? 'before tunnel data' : 'raw';
+  my ($ws) = $stream->_open_sending_stream ($args{content_length});
   $con->_read;
   return $sent->then (sub {
     return {stream => $stream, body => $ws};
@@ -2952,7 +2947,6 @@ sub send_ws_message ($$$) {
   }
 
   $con->{ws_sent_length} = 0;
-  $con->{to_be_sent_length} = $length;
 
   my $length0 = $length;
   my $len = '';
@@ -2967,7 +2961,9 @@ sub send_ws_message ($$$) {
                     length => $length) if $self->{DEBUG}; # XXX
   $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | ($is_binary ? 2 : 1), $masked | $length0) . $len . $mask))));
-  my ($ws) = $con->{stream}->_open_sending_stream (XXX_ws_message => 1);
+  $con->{write_mode} = 'raw';
+  my ($ws) = $con->{stream}->_open_sending_stream
+      ($length, XXX_ws_message => 1);
 
   return Promise->resolve ({stream => $ws});
 } # send_ws_message
@@ -3004,11 +3000,11 @@ sub send_ping ($;%) {
   # XXX return promise waiting pong?
 } # send_ping
 
-## Send a WebSocket Close frame, if applicable.  This method must be
-## invoked while the WebSocket state of the connection is OPEN or
-## CLOSING (i.e. after |headers_received| promise has been fulfilled)
-## and there is no sending WebSocket message.  Then it returns the
-## |closed| promise of the stream.
+## Send a WebSocket Close frame over the HTTP stream, if applicable.
+## This method must be invoked while the WebSocket state of the HTTP
+## connection is OPEN or CLOSING (i.e. after |headers_received|
+## promise has been fulfilled) and there is no sending WebSocket
+## message.  Then it returns the |closed| promise of the HTTP stream.
 sub send_ws_close ($;$$) {
   my ($stream, $status, $reason) = @_;
 
@@ -3196,6 +3192,7 @@ sub send_response ($$$;%) {
     croak "|content_length| not allowed" if defined $args{content_length};
     $write_mode = 'raw';
     $connect = 1;
+    $close = 1;
   } elsif (100 <= $response->{status} and $response->{status} < 200) {
     ## No response body by definition
     croak "|content_length| not allowed" if defined $args{content_length};
@@ -3295,10 +3292,14 @@ sub send_response ($$$;%) {
 
   $con->{to_be_closed} = 1 if $close;
   $con->{write_mode} = $write_mode;
-  $con->{to_be_sent_length} = $to_be_sent; # or undef
-  my ($ws) = $stream->_open_sending_stream (is_ws => $is_ws, XXX_response => 1);
+  my ($ws) = $stream->_open_sending_stream ($to_be_sent);
 
-  return Promise->resolve ({body => $ws});
+  if (defined $stream->{tunnel_readable}) {
+    return Promise->resolve ({readable => delete $stream->{tunnel_readable},
+                              writable => $ws});
+  } else {
+    return Promise->resolve ({body => $ws});
+  }
 } # send_response
 
 ## Abort the HTTP stream.  It effectively abort the underlying HTTP

@@ -55,6 +55,21 @@ my $GlobalCV = AE::cv;
   } # find_listenable_port
 }
 
+sub rsread_cb ($$) {
+  my $rs = shift;
+  my $cb = shift;
+  return Promise->resolve (undef) unless defined $rs;
+  my $r = $rs->get_reader ('byob');
+  my $run; $run = sub {
+    return $r->read (DataView->new (ArrayBuffer->new (1024)))->then (sub {
+      return if $_[0]->{done};
+      $cb->($_[0]->{value}->manakai_to_string);
+      return $run->();
+    });
+  }; # $run
+  return $run->()->then (sub { undef $run; }, sub { undef $run; return "Error: $_[0]" });
+} # rsread_cb
+
 my $Origin;
 my $TLSOrigin;
 my $WSOrigin;
@@ -1609,7 +1624,15 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga28'],
         ]})->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $got = $_[0];
+      test {
+        isa_ok $got->{writable}, 'WritableStream';
+        isa_ok $got->{readable}, 'ReadableStream';
+        is $got->{messages}, undef;
+        is $got->{closing}, undef;
+        is $got->{body}, undef;
+      } $c;
+      my $w = $got->{writable}->get_writer;
       $w->write (d 'abc');
       $w->write (d '');
       $w->write (d 'xyz');
@@ -1630,7 +1653,7 @@ abcxyz\z};
     done $c;
     undef $c;
   });
-} n => 1, name => 'CONNECT HTTP/1.0';
+} n => 6, name => 'CONNECT HTTP/1.0';
 
 test {
   my $c = shift;
@@ -1640,7 +1663,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga29'],
         ]})->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $w = $_[0]->{writable}->get_writer;
       $w->write (d 'abc');
       $w->write (d '');
       $w->write (d 'xyz');
@@ -1671,11 +1694,15 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga30'],
         ]})->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $got = $_[0];
+      my $w = $got->{writable}->get_writer;
       $w->write (d 'abc');
       $w->write (d '');
       $w->write (d 'xyz');
       $serverreq = $self;
+      rsread_cb $got->{readable}, sub {
+        $self->{body} .= $_[0];
+      };
       return $w->close;
     });
   };
@@ -1704,7 +1731,7 @@ test {
         ({status => 201, status_text => 'OK', headers => [
           ['Hoge', 'Fuga31'],
         ]})->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $w = $_[0]->{writable}->get_writer;
       $w->write (d 'abc');
       $w->write (d '');
       $w->write (d 'xyz');
@@ -1742,11 +1769,22 @@ test {
         ({status => 200, status_text => 'OK', headers => [
           ['Hoge', 'Fuga32'],
         ]})->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $got = $_[0];
+      test {
+        is $got->{readable}, undef;
+        is $got->{writable}, undef;
+        isa_ok $got->{body}, 'WritableStream';
+        is $got->{messages}, undef;
+        is $got->{closing}, undef;
+      } $c;
+      my $w = $got->{body}->get_writer;
       $w->write (d 'abc');
       $w->write (d '');
       $w->write (d 'xyz');
       $serverreq = $self;
+      rsread_cb $got->{readable}, sub {
+        $self->{body} .= $_[0];
+      };
       return $w->close;
     });
   };
@@ -1765,7 +1803,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 1, name => 'WS not handshake-able endpoint';
+} n => 6, name => 'WS not handshake-able endpoint';
 
 test {
   my $c = shift;
@@ -1776,7 +1814,11 @@ test {
         ({status => 101, status_text => 'OK', headers => [
           ['Hoge', 'Fuga33'],
         ]})->then (sub {
+      my $got = $_[0];
       $serverreq = $self;
+      rsread_cb $got->{readable}, sub {
+        $self->{body} .= $_[0];
+      };
       return $self->send_ws_close (5678);
     });
   };
@@ -3349,10 +3391,19 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 200, status_text => 'Switched!'})->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $got = $_[0];
+      test {
+        isa_ok $got->{readable}, 'ReadableStream';
+        isa_ok $got->{writable}, 'WritableStream';
+        is $got->{body}, undef;
+        is $got->{messages}, undef;
+        is $got->{closing}, undef;
+      } $c;
+      my $w = $got->{writable}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
-      $self->{ondata} = sub {
+      rsread_cb $got->{readable}, sub {
+        $self->{body} .= $_[0];
         if ($self->{body} =~ /stuvw/) {
           return $w->close;
         }
@@ -3401,7 +3452,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 4, name => 'CONNECT data';
+} n => 9, name => 'CONNECT data';
 
 test {
   my $c = shift;
@@ -3411,10 +3462,12 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 200, status_text => 'Switched!'})->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $got = $_[0];
+      my $w = $got->{writable}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
-      $self->{ondata} = sub {
+      rsread_cb $got->{readable}, sub {
+        $self->{body} .= $_[0];
         promised_sleep (2)->then (sub {
           $w->write (d "12345");
           return $w->close;
@@ -3470,12 +3523,14 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 200, status_text => 'Switched!'})->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $got = $_[0];
+      my $w = $got->{writable}->get_writer;
       $w->write (d "abcde");
       $self->{connection}->close_after_current_stream;
       $w->write (d "123123");
       $serverreq = $self;
-      $self->{ondata} = sub {
+      rsread_cb $got->{readable}, sub {
+        $self->{body} .= $_[0];
         if ($self->{body} =~ /stuvw/) {
           return $w->close;
         }
@@ -3524,7 +3579,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 4, name => 'CONNECT data';
+} n => 4, name => 'CONNECT data 4';
 
 test {
   my $c = shift;
@@ -3535,10 +3590,12 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 200, status_text => 'Switched!'})->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $got = $_[0];
+      my $w = $got->{writable}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
-      $self->{ondata} = sub {
+      rsread_cb $got->{readable}, sub {
+        $self->{body} .= $_[0];
         if (not defined $p and $self->{body} =~ /stuvw/) {
           $p = promised_sleep (5)->then (sub { # 5 > 3 (timeout)
             $w->write (d "123");
@@ -3604,10 +3661,12 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 200, status_text => 'Switched!'})->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $got = $_[0];
+      my $w = $got->{writable}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
-      $self->{ondata} = sub {
+      rsread_cb $got->{readable}, sub {
+        $self->{body} .= $_[0];
         if ($self->{body} =~ /stuvw/) {
           return $w->close;
         }
@@ -3663,12 +3722,13 @@ test {
     return $self->send_response
         ({status => 200, status_text => 'Switched!',
           headers => [['Content-Length', '12']]})->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $got = $_[0];
+      my $w = $got->{writable}->get_writer;
       $w->write (d "abcde");
       $serverreq = $self;
-      $self->{ondata} = sub {
+      rsread_cb $got->{readable}, sub {
+        $self->{body} .= $_[0];
         if ($self->{body} =~ /stuvw/) {
-          # XXX $self->close_response (status => 5678, reason => 'abc');
           return $w->close;
         }
       };
@@ -4485,7 +4545,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $w = $_[0]->{writable}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -4512,7 +4572,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $w = $_[0]->{writable}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -4566,7 +4626,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $w = $_[0]->{writable}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -4593,7 +4653,7 @@ test {
     my ($self, $req) = @_;
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
-      my $w = $_[0]->{body}->get_writer;
+      my $w = $_[0]->{writable}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
       return $w->close;
@@ -4621,7 +4681,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
       $invoked++;
-      return $_[0]->{body}->get_writer->close;
+      return $_[0]->{writable}->get_writer->close;
     });
   };
 
@@ -4646,7 +4706,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
       $invoked++;
-      return $_[0]->{body}->get_writer->close;
+      return $_[0]->{writable}->get_writer->close;
     });
   };
 
@@ -4671,7 +4731,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
       $invoked++;
-      return $_[0]->{body}->get_writer->close;
+      return $_[0]->{writable}->get_writer->close;
     });
   };
 
@@ -4696,7 +4756,7 @@ test {
     return $self->send_response
         ({status => 201, status_text => 'o'}, close => 1)->then (sub {
       $invoked++;
-      return $_[0]->{body}->get_writer->close;
+      return $_[0]->{writable}->get_writer->close;
     });
   };
 
@@ -6073,6 +6133,94 @@ test {
     undef $c;
   });
 } n => 2, name => 'send_response after close';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $p;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id})->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      return $w->close;
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  my $id1;
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 201;
+      ok $res->status_text;
+      $id1 = $res->status_text;
+      is $res->header ('Content-Length'), undef;
+      is $res->header ('Transfer-Encoding'), 'chunked';
+      is $res->body_bytes, '';
+      ok ! $res->incomplete;
+    } $c;
+    return $http->request (path => [$path]);
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 201;
+      is $res->status_text, $id1, 'Same connection';
+      is $res->header ('Content-Length'), undef;
+      is $res->header ('Transfer-Encoding'), 'chunked';
+      is $res->body_bytes, '';
+      ok ! $res->incomplete;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 12, name => 'response body writer - empty close (chunked)';
+
+test {
+  my $c = shift;
+  my $path = rand;
+  my $p;
+  $HandleRequestHeaders->{"/$path"} = sub {
+    my ($self, $req) = @_;
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id}, content_length => 0)->then (sub {
+      my $w = $_[0]->{body}->get_writer;
+      return $w->close;
+    });
+  };
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
+  my $id1;
+  $http->request (path => [$path])->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 201;
+      ok $res->status_text;
+      $id1 = $res->status_text;
+      is $res->header ('Content-Length'), '0';
+      is $res->header ('Transfer-Encoding'), undef;
+      is $res->body_bytes, '';
+      ok ! $res->incomplete;
+    } $c;
+    return $http->request (path => [$path]);
+  })->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 201;
+      is $res->status_text, $id1, 'Same connection';
+      is $res->header ('Content-Length'), '0';
+      is $res->header ('Transfer-Encoding'), undef;
+      is $res->body_bytes, '';
+      ok ! $res->incomplete;
+    } $c;
+  })->then (sub {
+    return $http->close;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 12, name => 'response body writer - empty close (raw content-length)';
 
 Test::Certificates->wait_create_cert;
 $GlobalCV->begin;

@@ -1867,6 +1867,60 @@ ws-accept
 CRLF
 "Connection: Upgrade"CRLF
 CRLF
+sleep 1
+close
+    })->cb (sub {
+      my $server = $_[0]->recv;
+      my $http = Web::Transport::HTTPStream->new ({parent => {
+        class => 'Web::Transport::TCPStream',
+        host => Web::Host->parse_string ($server->{addr}),
+        port => $server->{port},
+      }});
+      my @p;
+      $http->ready->then (sub {
+        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      })->then (sub {
+        my $stream = $_[0]->{stream};
+        return $stream->headers_received->then (sub {
+          return $stream->send_ws_message (3, $is_binary);
+        })->then (sub {
+          my $writer = $_[0]->{stream}->get_writer;
+          $writer->write (d "ab");
+          return $writer->abort;
+        })->then (sub {
+          return $stream->closed;
+        })->catch (sub {
+          my $error = $_[0];
+          test {
+            ok $error->{failed};
+            ok $error->{ws};
+            is $error->{status}, 1006;
+            #is $error->name, 'Error';
+            #is $error->file_name, __FILE__;
+            #is $error->line_number, __LINE__-6;
+          } $c;
+        });
+      })->then (sub{
+        return Promise->all (\@p);
+      })->then (sub {
+        done $c;
+        undef $c;
+      });
+    });
+  } n => 3, name => ['send_ws_message writer abort', $is_binary];
+
+  test {
+    my $c = shift;
+    server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
 ws-receive-header
 ws-receive-header
 ws-receive-data
@@ -3089,12 +3143,12 @@ close
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
-      my $writer = $got->{body}->get_writer;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
+        my $writer = $got->{writable}->get_writer;
         $writer->write (d 'abc');
         $writer->close;
-        return read_rbs $got->{body};
+        return read_rbs $got->{readable};
       })->then (sub {
         my $received = $_[0];
         test {
@@ -3199,14 +3253,14 @@ close
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
-      my $writer = $got->{body}->get_writer;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
+        my $writer = $got->{writable}->get_writer;
         $writer->write (d 'ab');
         $writer->write (d '');
         $writer->write (d 'c');
         $writer->close;
-        return read_rbs $got->{body};
+        return read_rbs $got->{readable};
       })->then (sub {
         my $received = $_[0];
         test {
@@ -3242,10 +3296,10 @@ close
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
-      my $writer = $got->{body}->get_writer;
       return $stream->headers_received->then (sub {
+        my $writer = $_[0]->{writable}->get_writer;
         $writer->close;
-        return read_rbs $_[0]->{body};
+        return read_rbs $_[0]->{readable};
       })->then (sub {
         my $received = $_[0];
         test {
@@ -3278,19 +3332,19 @@ close
     })->then (sub{
       my $got = $_[0];
       my $stream = $got->{stream};
-      my $writer = $got->{body}->get_writer;
       my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
-        return read_rbs $got->{body};
-      })->then (sub {
-        my $received = $_[0];
-        test {
-          is $received, '';
-        } $c;
-        $writer->write (d 'abc');
-        $writer->close;
-        return $closed;
+        my $writer = $got->{writable}->get_writer;
+        return read_rbs ($got->{readable})->then (sub {
+          my $received = $_[0];
+          test {
+            is $received, '';
+          } $c;
+          $writer->write (d 'abc');
+          $writer->close;
+          return $closed;
+        });
       });
     })->then (sub {
       done $c;
@@ -3318,21 +3372,21 @@ close
     })->then (sub{
       my $got = $_[0];
       my $stream = $got->{stream};
-      my $writer = $got->{body}->get_writer;
       my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
-        return read_rbs $got->{body};
-      })->then (sub {
-        my $received = $_[0];
-        test {
-          is $received, '';
-        } $c;
-        return promised_sleep 1;
-      })->then (sub {
-        $writer->write (d 'abc');
-        Promise->resolve->then (sub { $writer->close });
-        return $closed;
+        my $writer = $got->{writable}->get_writer;
+        return read_rbs ($got->{readable})->then (sub {
+          my $received = $_[0];
+          test {
+            is $received, '';
+          } $c;
+          return promised_sleep 1;
+        })->then (sub {
+          $writer->write (d 'abc');
+          Promise->resolve->then (sub { $writer->close });
+          return $closed;
+        });
       });
     })->then (sub {
       done $c;
@@ -3738,13 +3792,13 @@ close
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
-      my $writer = $got->{body}->get_writer;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
+        my $writer = $got->{writable}->get_writer;
         $http->close_after_current_stream;
         $writer->write (d 'abc');
         $writer->close;
-        return read_rbs $got->{body};
+        return read_rbs $got->{readable};
       })->then (sub {
         my $received = $_[0];
         test {

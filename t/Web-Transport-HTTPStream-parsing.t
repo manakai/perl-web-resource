@@ -252,7 +252,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 return (
                   defined $got->{messages}
                     ? rsread_messages ($test, $got->{messages})
-                    : rsread ($test, $got->{body})
+                    : defined $got->{readable}
+                      ? rsread ($test, $got->{readable})
+                      : rsread ($test, $got->{body})
                 )->then (sub {
                   $result->{response_body} = $_[0];
                 })->then (sub {
@@ -289,11 +291,12 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               };
               return $http->send_request ($req, content_length => ($test_type eq 'largerequest-second' ? 1024*1024 : undef))->then (sub {
                 my $stream = $_[0]->{stream};
-                my $reqbody = $_[0]->{body}->get_writer;
+                my $body = $_[0]->{body};
                 my $closed = $stream->closed;
                 my $result = {};
                 return $stream->headers_received->then (sub {
                   my $got = $_[0];
+                  my $reqbody = ($got->{writable} || $body)->get_writer;
                   if ($test_type eq 'largerequest-second') {
                     $reqbody->write
                         (DataView->new (ArrayBuffer->new_from_scalarref
@@ -313,7 +316,9 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                   return (
                     defined $got->{messages}
                       ? rsread_messages ($test, $got->{messages})
-                      : rsread ($test, $got->{body})
+                      : defined $got->{readable}
+                        ? rsread ($test, $got->{readable})
+                        : rsread ($test, $got->{body})
                   )->then (sub {
                     $result->{response_body} = $_[0];
                   })->then (sub {
@@ -355,9 +360,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             return $http->send_request ($req, content_length => ($test_type eq 'largerequest' ? 1024*1024 : undef))->then (sub {
               my $stream = $_[0]->{stream};
               my $closed = $stream->closed;
-              my $reqbody = $_[0]->{body}->get_writer;
+              my $body = $_[0]->{body};
               return $stream->headers_received->then (sub {
                 my $got = $_[0];
+                my $reqbody = ($body || $got->{writable})->get_writer;
                 if ($test_type eq 'largerequest') {
                   $reqbody->write
                       (DataView->new
@@ -375,7 +381,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 my $result = {
                   response => $stream->{response},
                 };
-                return rsread ($test, $got->{body})->then (sub {
+                return rsread ($test, $got->{body} || $got->{readable})->then (sub {
                   $result->{response_body} = $_[0];
                 })->then (sub {
                   return $closed;

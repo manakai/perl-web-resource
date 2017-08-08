@@ -1888,7 +1888,7 @@ test {
 test {
   my $c = shift;
   my $path = rand;
-  my $invoked;
+  my $invoked = 0;
   my $closing;
   my $closed;
   my $closed_promise;
@@ -1916,7 +1916,7 @@ test {
     });
     return $self->send_response
         ({status => 201, status_text => 'OK'}, content_length => 0)->then (sub {
-      $invoked = 1;
+      $invoked++;
       return $_[0]->{body}->get_writer->close;
     });
   };
@@ -1930,7 +1930,7 @@ test {
   })->then (sub {
     my $res = $_[0];
     test {
-      ok $invoked;
+      is $invoked, 1;
       is $res->status, 201;
       is $res->status_text, 'OK';
       is $res->header ('Connection'), 'close';
@@ -1940,8 +1940,11 @@ test {
   })->then (sub {
     test {
       is join (";", @ev), 'closing;closed';
-      is $closed, $closing;
-      ok $closing->{failed}; # XXX
+      is $closing->name, 'TypeError';
+      is $closing->message, 'WebSocket handshake rejected';
+      is $closing->file_name, __FILE__;
+      is $closing->line_number, __LINE__-25;
+      is $closed, 'fulfilled';
     } $c;
   }, sub {
     test {
@@ -1953,7 +1956,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 11, name => 'WS handshake - not handshake response 3';
+} n => 14, name => 'WS handshake - not handshake response 3';
 
 test {
   my $c = shift;
@@ -4903,13 +4906,14 @@ test {
       ok $exit->{failed}, $exit;
       ok $exit->{ws};
       is $exit->{status}, 1006;
-      like $exit->{reason}, qr{^Error: Test abort\x{6001} at @{[__FILE__]} line @{[__LINE__-42]}};
+      is $exit->{reason}, '';
+      like $exit->{error}, qr{^Error: Test abort\x{6001} at @{[__FILE__]} line @{[__LINE__-43]}};
       ok ! $exit->{cleanly};
     } $c;
     done $c;
     undef $c;
   });
-} n => 11, name => 'server abort - WS';
+} n => 12, name => 'server abort - WS';
 
 test {
   my $c = shift;

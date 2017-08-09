@@ -123,35 +123,40 @@ sub new ($$) {
     $con->{streams_done} = sub { };
   }; # streams_done
 
-  if ($con->{is_server}) {
-
   $args->{parent}->{class}->create ($args->{parent})->then (sub {
     my $info = $_[0];
 
-    my $tinfo = $info;
-    if ($info->{type} eq 'TLS') {
-      $con->{url_scheme} = 'https';
-      $tinfo = $tinfo->{parent};
-    } else { # TCP or Unix
-      $con->{url_scheme} = 'http';
-    }
-    if ($tinfo->{type} eq 'TCP') {
-      $con->{url_hostport} = $tinfo->{local_host}->to_ascii . ':' . $tinfo->{local_port};
-    } else { # Unix
-      $con->{url_hostport} = '0.0.0.0';
+    if ($con->{DEBUG}) { # XXX
+      warn "$con->{id}: openconnection @{[scalar gmtime]}\n";
+      $con->_debug_handshake_done ({});
     }
 
     $con->{reader} = $info->{read_stream}->get_reader ('byob');
     $con->{writer} = $info->{write_stream}->get_writer;
     $con->{state} = 'initial';
-    $con->{timer} = AE::timer $Web::Transport::HTTPStream::ServerConnection::ReadTimeout, 0, sub { $con->_timeout };
-    if ($con->{DEBUG}) { # XXX
-      warn "$con->{id}: openconnection @{[scalar gmtime]}\n";
-      $con->_debug_handshake_done ({});
-    }
-    $con->_read;
 
-    my $p1 = $con->{reader}->closed->then (sub {
+    if ($con->{is_server}) {
+      my $tinfo = $info;
+      if ($info->{type} eq 'TLS') {
+        $con->{url_scheme} = 'https';
+        $tinfo = $tinfo->{parent};
+      } else { # TCP or Unix
+        $con->{url_scheme} = 'http';
+      }
+      if ($tinfo->{type} eq 'TCP') {
+        $con->{url_hostport} = $tinfo->{local_host}->to_ascii . ':' . $tinfo->{local_port};
+      } else { # Unix
+        $con->{url_hostport} = '0.0.0.0';
+      }
+
+      $con->{timer} = AE::timer $Web::Transport::HTTPStream::ServerConnection::ReadTimeout, 0, sub { $con->_timeout };
+      $con->_read;
+    } else { # client
+      $con->{response_received} = 1;
+      #$con->_read;
+    }
+
+    my $p1 = $con->{is_server} ? $con->{reader}->closed->then (sub {
       delete $con->{reader};
       if ($con->{DEBUG}) {
         my $id = ''; # XXX $transport->id;
@@ -170,62 +175,7 @@ sub new ($$) {
       $con->_oneof ($_[0]);
       delete $con->{timer};
       return undef;
-    }); # reader closed
-
-    my $p2 = $con->{writer}->closed->then (sub {
-      if ($con->{DEBUG}) {
-        my $id = ''; # XXX $transport->id;
-        warn "$id: S: EOF\n";
-      }
-      return undef;
-    }, sub {
-      delete $con->{writer};
-      if ($con->{DEBUG}) {
-        my $error = Web::DOM::Error->wrap ($_[0]);
-        my $id = ''; # XXX $transport->id;
-        warn "$id: S: EOF (@{[_e4d_t $error]})\n";
-      }
-      return undef;
-    }); # writer closed
-
-    (delete $con->{ready}->[1])->(undef), delete $con->{ready}->[2];
-    return Promise->all ([$p1, $p2, $info->{closed}])->then (sub {
-      $con->{streams_done}->();
-      (delete $con->{closed}->[1])->(undef), delete $con->{closed}->[2];
-    });
-  })->catch (sub {
-    my $error = Web::DOM::Error->wrap ($_[0]);
-    if ($con->{DEBUG}) { # XXX
-      warn "$con->{id}: openconnection @{[scalar gmtime]}\n";
-      $con->_debug_handshake_done ($error);
-    }
-
-    # XXX abort reader and writer
-
-    (delete $con->{ready}->[2])->($error), delete $con->{ready}->[1]
-        if defined $con->{ready}->[1];
-    $con->{streams_done}->();
-    (delete $con->{closed}->[1])->(undef), delete $con->{closed}->[2];
-  });
-
-  } else { # client
-
-  $args->{parent}->{class}->create ($args->{parent})->then (sub {
-    my $info = $_[0];
-
-    if ($con->{DEBUG}) { # XXX
-      warn "$con->{id}: openconnection @{[scalar gmtime]}\n";
-      $con->_debug_handshake_done ({});
-    }
-
-    $con->{state} = 'initial';
-    $con->{response_received} = 1;
-
-    $con->{reader} = $info->{read_stream}->get_reader ('byob');
-    $con->{writer} = $info->{write_stream}->get_writer;
-    #$con->_read;
-
-    my $p1 = $con->{reader}->closed->then (sub {
+    }) : $con->{reader}->closed->then (sub {
       delete $con->{reader};
       if ($con->{DEBUG}) {
         my $id = $con->{id};
@@ -251,7 +201,7 @@ sub new ($$) {
         $con->_process_rbuf_eof ($error);
         return;
       }
-    });
+    }); # reader closed
 
     my $p2 = $con->{writer}->closed->then (sub {
       if ($con->{DEBUG}) {
@@ -265,7 +215,7 @@ sub new ($$) {
         my $id = $con->{id};
         warn "$id: S: EOF (@{[_e4d $error]})\n";
       }
-    });
+    }); # writer closed
 
     (delete $con->{ready}->[1])->(undef), delete $con->{ready}->[2];
     return Promise->all ([$p1, $p2, $info->{closed}])->then (sub {
@@ -274,12 +224,12 @@ sub new ($$) {
     });
   })->catch (sub {
     my $error = Web::DOM::Error->wrap ($_[0]);
-
     if ($con->{DEBUG}) { # XXX
       warn "$con->{id}: openconnection @{[scalar gmtime]}\n";
       $con->_debug_handshake_done ($error);
     }
 
+    # XXX abort reader and writer
     $con->{writer}->abort ('XXX 1') if defined $con->{writer}; # XXX and reader?
 
     (delete $con->{ready}->[2])->($error), delete $con->{ready}->[1]
@@ -287,8 +237,6 @@ sub new ($$) {
     $con->{streams_done}->();
     (delete $con->{closed}->[1])->(undef), delete $con->{closed}->[2];
   });
-
-  }
 
   return $con;
 } # new

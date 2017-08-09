@@ -11,9 +11,9 @@ use ArrayBuffer;
 use TypedArray;
 use Promised::Flow;
 use Streams;
-use Errno qw(ECONNRESET);
 use Web::DOM::Error;
 use Web::DOM::TypeError;
+use Web::Transport::ProtocolError;
 
 push our @CARP_NOT, qw(Web::Transport::HTTPStream::Stream);
 
@@ -46,6 +46,14 @@ sub _pcap () {
   my $p = Promise->new (sub { ($x, $y) = @_ });
   return [$p, $x, $y];
 } # _pcap
+
+sub _pe ($) {
+  return Web::Transport::ProtocolError::HTTPParseError->_new_fatal ($_[0]);
+} # _pe
+
+sub _pw ($) {
+  return Web::Transport::ProtocolError::HTTPParseError->_new_non_fatal ($_[0]);
+} # _pw
 
 ## This class, with its two subclasses, represents an HTTP connection.
 
@@ -225,7 +233,7 @@ sub new ($$) {
       }
 
       $con->_process_rbuf (undef);
-      $con->_process_rbuf_eof;
+      $con->_process_rbuf_eof (undef);
       return undef;
     }, sub {
       my $error = Web::DOM::Error->wrap ($_[0]);
@@ -236,18 +244,11 @@ sub new ($$) {
         warn "$id: R: EOF (@{[_e4d $error]})\n";
       }
 
-      if (UNIVERSAL::isa ($error, 'Streams::IOError') and
-          $error->errno == ECONNRESET) {
-        # XXXerror
-        return $con->_connection_error ({failed => 1, reset => 1});
+      if (Web::Transport::ProtocolError->is_reset ($error)) {
+        return $con->_connection_error ($error);
       } else {
         $con->_process_rbuf (undef);
-        # XXXerror
-        my $data = {failed => 1, message => $_[0]}; # XXX
-        $con->_process_rbuf_eof
-            (abort => $data->{failed},
-             errno => $data->{errno},
-             error_message => $data->{message});
+        $con->_process_rbuf_eof ($error);
         return;
       }
     });
@@ -425,9 +426,7 @@ sub new ($$) {
 ## of the returned promise of the |send_request| method.
 
 # XXX httpserver tests
-# XXX replace {exit} by exception objects
 # XXX restore debug features & id
-# XXX rewrite parsing test runner
 # XXX replace croak
 
 sub MAX_BYTES () { 2**31-1 }
@@ -629,14 +628,14 @@ sub _ws_received ($) {
           } # not CLOSING
           $self->{state} = 'ws terminating';
           if (length ($$ref) - pos ($$ref)) { # ws terminating state
-            # XXXerror
-            $self->{exit} = {failed => 1, ws => 1, status => 1006, reason => ''};
+            $self->{exit} = Web::Transport::ProtocolError::WebSocketClose->new
+                (1006, '', _pe 'Invalid byte after WebSocket Close frame');
             $$ref = '';
           } else {
-            # XXXerror
-            $self->{exit} = {status => defined $status ? $status : 1005,
-                             reason => defined $reason ? $reason : '',
-                             ws => 1, cleanly => 1};
+            $self->{exit} = Web::Transport::ProtocolError::WebSocketClose->new
+                (defined $status ? $status : 1005,
+                 defined $reason ? $reason : '',
+                 undef); # closed cleanly
           }
           if ($self->{is_server}) {
             $self->_receive_done;
@@ -670,6 +669,7 @@ sub _ws_received ($) {
               my $buffer = join '', @{$self->{ws_frame}->[1]}; # XXX string copy!
               $self->{ws_frame}->[1] = [eval { decode 'utf-8', $buffer, Encode::FB_CROAK }]; # XXX Encoding Standard # XXX streaming decoder
               if (length $buffer) {
+                $rc->error;
                 $ws_failed = 'Invalid UTF-8 in text frame';
                 last WS;
               }
@@ -730,10 +730,10 @@ sub _ws_received ($) {
     $self->{ws_state} = 'CLOSING';
     $ws_failed = 'WebSocket Protocol Error' unless length $ws_failed;
     $ws_failed = '' if $ws_failed eq '-';
-    # XXXerror
-    my $exit = {ws => 1, failed => 1, status => 1002, reason => $ws_failed};
-    my $data = pack 'n', $exit->{status};
-    $data .= $exit->{reason};
+    my $exit = Web::Transport::ProtocolError::WebSocketClose->new
+        (1002, $ws_failed, _pe $ws_failed);
+    my $data = pack 'n', 1002;
+    $data .= $ws_failed;
     my $mask = '';
     my $masked = 0;
     unless ($self->{is_server}) {
@@ -744,9 +744,9 @@ sub _ws_received ($) {
       }
     }
     # length $data must be < 126
-    $stream->_ws_debug ('S', $exit->{reason}, FIN => 1, opcode => 8,
+    $stream->_ws_debug ('S', $ws_failed, FIN => 1, opcode => 8,
                         mask => $mask, length => length $data,
-                        status => $exit->{status}) if $self->{DEBUG};
+                        status => 1002) if $self->{DEBUG};
     $self->{writer}->write
         (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | 8, $masked | length $data) . $mask . $data))));
     $self->{state} = 'ws terminating';
@@ -754,14 +754,9 @@ sub _ws_received ($) {
   }
   if ($self->{state} eq 'ws terminating') {
     if ((length $$ref) - (pos $$ref)) {
-      # XXXerror
-      if (not $self->{exit}->{failed}) {
-        $self->{exit}->{failed} = 1;
-        $self->{exit}->{ws} = 1;
-        $self->{exit}->{status} = 1006;
-        $self->{exit}->{reason} = '';
-        delete $self->{exit}->{cleanly};
-      }
+      $self->{exit} = Web::Transport::ProtocolError::WebSocketClose->new
+          (1006, '', _pe 'Invalid byte after WebSocket Close frame')
+              if not Web::Transport::ProtocolError->is_error ($self->{exit});
       $ref = \'';
     }
   }
@@ -867,6 +862,27 @@ sub _debug_handshake_done ($$) {
 
 # XXX can_create_stream is_active && (if h1: no current request)
 
+## Send a request.  The argument must be a hash reference of following
+## key/value pairs:
+##
+##   method - The request method.  It must be a non-empty byte string
+##   of canonicalized (as specified in Fetch Standard) method name.
+##
+##   target - The request target.  It must be a byte string.
+##
+##   length - The byte length of the request body, if any.
+##
+##   ws - Whether the request is part of the WebSocket handshake or
+##   not.
+##
+##   ws_protocols - An array reference of zero or more byte strings
+##   representing WebSocket subprotocol names, if |ws| is true.
+##
+## This method must be invoked while the HTTP connection is ready, is
+## not to be closed, and is not sending another request.  It returns a
+## promise which is to be fulfilled with a hash reference that might
+## contain a writable stream of the request body, as described
+## earlier.
 sub send_request ($$;%) {
   my $con = shift;
   my $req = shift;
@@ -901,9 +917,7 @@ sub close_after_current_stream ($) {
   if ($con->{state} eq 'initial' or
       $con->{state} eq 'before request-line' or # XXXspec
       $con->{state} eq 'waiting') {
-    # XXXerror
-    $con->{exit} = {failed => 0,
-                    message => 'Close by |close_after_current_stream|'};
+    $con->{exit} = _pw 'Close by |close_after_current_stream|';
     $con->_send_done (close => 1);
     $con->_read;
   }
@@ -945,22 +959,9 @@ sub abort ($;$) {
   return $con->{closed}->[0];
 } # abort
 
-sub _connection_error ($$) {
+sub _connection_error ($$;$$$) {
   my $con = $_[0];
-
-  # XXXerror
-  my $error;
-  if (defined $_[1]) {
-    if (ref $_[1]) {
-      $error = $_[1];
-    } else {
-      $error = {failed => 1, message => $_[1]};
-    }
-  } else {
-    $error = {failed => 1, message => 'Parse error'}; # XXX
-  }
-
-  $con->{exit} = $error if defined $error;
+  $con->{exit} = $_[1];
 
   if ($con->{state} eq 'ws terminating') {
     $con->_send_done (close => 1);
@@ -976,15 +977,9 @@ sub _connection_error ($$) {
       return;
     }
 
-    my $status = 400;
-    my $reason = 'Bad Request';
-    my $headers = [];
-    if (ref $error eq 'HASH' and $error->{failed} and
-        defined $error->{status} and not $error->{ws}) {
-      $status = $error->{status};
-      $reason = $error->{reason};
-      $headers = $error->{headers} || [];
-    }
+    my $status = $_[2] || 400;
+    my $reason = $_[3] || 'Bad Request';
+    my $headers = $_[4] || [];
 
     my $stream = $con->{stream};
     my $with_body = not ($stream->{request}->{method} eq 'HEAD');
@@ -1061,51 +1056,37 @@ sub _both_done ($) {
   my $con = $_[0];
   my $stream = $con->{stream};
 
-  # XXXerror
   my $error = $con->{exit};
-  if (Web::DOM::Error->is_error ($error)) {
-    #
-  } elsif ($error->{failed} and Web::DOM::Error->is_error ($error->{message})) {
-    $error = $error->{message};
-  } elsif ($error->{failed}) {
-    #
-  } else {
-    $error = undef;
-  }
-
-  if ($con->{is_server}) {
+  $error = _pw 'HTTP stream closed' unless defined $error;
 
   if (defined $stream) {
     (delete $stream->{headers_received}->[2])->($error), delete $stream->{headers_received}->[1]
         if defined $stream->{headers_received}->[1];
 
-    if (defined $stream->{closing}->[1]) {
-      my $error = $error;
-      $error = Web::DOM::TypeError->new ("WebSocket handshake rejected")
-          unless defined $error;
-      (delete $stream->{closing}->[2])->($error), delete $stream->{closing}->[1];
-    }
+    (delete $stream->{closing}->[2])->($error), delete $stream->{closing}->[1]
+        if defined $stream->{closing}->[1];
 
-    if (defined $stream->{closed}->[1]) {
-      if (defined $error) {
-        (delete $stream->{closed}->[2])->($error), delete $stream->{closed}->[1];
+    # XXXspec
+    (delete $stream->{body_controller})->error ($error)
+        if defined $stream->{body_controller};
 
-        # XXXerror
-      } else {
-        (delete $stream->{closed}->[1])->($con->{exit} || {}), delete $stream->{closed}->[2];
-      }
-    }
-  }
+    (delete $stream->{closed}->[1])->($error), delete $stream->{closed}->[2]
+        if defined $stream->{closed}->[1];
+  } # $stream
 
   if ($con->{DEBUG}) { #XXX
     warn "$con->{id}: endstream $stream->{id} @{[scalar gmtime]}\n";
     warn "$con->{id}: ========== @{[ref $con]}\n";
   }
+
+  if ($con->{is_server}) {
+
   delete $stream->{connection};
   delete $con->{stream};
   delete $con->{send_done};
   delete $con->{receive_done};
   delete $con->{write_mode};
+  delete $con->{exit};
 
   delete $con->{disable_timer};
   if ($con->{to_be_closed}) {
@@ -1114,7 +1095,7 @@ sub _both_done ($) {
       my $writer = $con->{writer};
       &promised_cleanup ($s_written, $writer->close);
       $con->{timer} = AE::timer 1, 0, sub {
-        $writer->abort ("HTTP completion timer (1)"); # XXX exception
+        $writer->abort (_pe "HTTP completion timer (1)");
         $s_written->();
       };
       delete $con->{writer};
@@ -1123,9 +1104,13 @@ sub _both_done ($) {
       $s_written->();
     }
     $r_written->then (sub {
-      if (defined $con->{reader}) {
-        $con->{reader}->cancel ($con->{exit});
-        delete $con->{reader};
+      if (defined $con->{reader}) { # XXX spec
+        $con->closed->then (sub { delete $con->{timer} });
+        $con->{timer} = AE::timer 1, 0, sub {
+          return unless defined $con->{reader};
+          $con->{reader}->cancel ($error);
+          delete $con->{reader};
+        };
       }
     });
     $con->{state} = 'stopped';
@@ -1142,40 +1127,20 @@ sub _both_done ($) {
   return;
   }
 
-  if (defined $stream) {
-    (delete $stream->{headers_received}->[2])->($error), delete $stream->{headers_received}->[1]
-        if defined $stream->{headers_received}->[1];
-
-    (delete $stream->{closing}->[2])->($error), delete $stream->{closing}->[1]
-        if defined $stream->{closing}->[1];
-
-    if (defined $stream->{closed}->[1]) {
-      if (defined $error) {
-        (delete $stream->{closed}->[2])->($error), delete $stream->{closed}->[1];
-
-        # XXXerror
-        if (defined (my $rc = delete $stream->{body_controller})) {
-          $rc->error ($con->{exit});
-        }
-      } else {
-        (delete $stream->{closed}->[1])->($con->{exit} || {}), delete $stream->{closed}->[2];
-      }
-    }
-  }
-
   delete $con->{stream};
   delete $con->{send_done};
   delete $con->{receive_done};
-  delete $con->{request};
   delete $con->{response};
   delete $con->{write_mode};
+  delete $con->{exit};
+
   if ($con->{to_be_closed}) {
     my ($r_written, $s_written) = promised_cv;
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
       &promised_cleanup ($s_written, $writer->close);
       $con->{timer} = AE::timer 1, 0, sub {
-        $writer->abort ("HTTP completion timer (1)"); # XXX exception
+        $writer->abort (_pe "HTTP completion timer (1)");
         $s_written->();
       };
       delete $con->{writer};
@@ -1184,8 +1149,12 @@ sub _both_done ($) {
     }
     $r_written->then (sub {
       if (defined $con->{reader}) { # XXX spec
-        $con->{reader}->cancel ($con->{exit});
-        delete $con->{reader};
+        $con->closed->then (sub { delete $con->{timer} });
+        $con->{timer} = AE::timer 1, 0, sub {
+          return unless defined $con->{reader};
+          $con->{reader}->cancel ($error);
+          delete $con->{reader};
+        };
       }
     });
     $con->{state} = 'stopped';
@@ -1213,12 +1182,12 @@ use AnyEvent;
 use Promise;
 use Promised::Flow;
 
-push our @CARP_NOT, qw(Web::DOM::Error);
-
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
   *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
+  *_pe = \&Web::Transport::HTTPStream::_pe;
+  *_pw = \&Web::Transport::HTTPStream::_pw;
 }
 
 my $BytesDataStates = {
@@ -1309,9 +1278,9 @@ sub _process_rbuf ($$) {
         $self->{state} = 'before response header';
       } elsif (8 <= length $head) {
         $self->{response_received} = 1;
-        if ($self->{request}->{method} eq 'PUT' or
-            $self->{request}->{method} eq 'CONNECT') {
-          return $self->_connection_error ("HTTP/0.9 response to non-GET request");
+        if ($stream->{request_method} eq 'PUT' or
+            $stream->{request_method} eq 'CONNECT') {
+          return $self->_connection_error (_pe "HTTP/0.9 response");
         } else {
           $stream->_headers_received;
           $stream->{body_controller}->enqueue
@@ -1347,13 +1316,13 @@ sub _process_rbuf ($$) {
           return;
         } elsif ($$ref =~ /\G(.*?)\x0A\x0D?\x0A/gcs) {
           if (2**18-1 < (length $self->{temp_buffer}) + (length $1)) {
-            return $self->_connection_error ("Header section too large");
+            return $self->_connection_error (_pe "Header section too large");
           }
           $self->{temp_buffer} .= $1;
           #
         } else {
           if (2**18-1 + 2 < (length $self->{temp_buffer}) + (length $$ref) - (pos $$ref)) {
-            return $self->_connection_error ("Header section too large");
+            return $self->_connection_error (_pe "Header section too large");
           }
           $self->{temp_buffer} .= substr $$ref, pos $$ref;
           return;
@@ -1442,7 +1411,8 @@ sub _process_rbuf ($$) {
         $chunked = 0;
       }
       if (($has_broken_length and keys %length) or 1 < keys %length) {
-        return $self->_connection_error ("Inconsistent content-length values");
+        return $self->_connection_error
+            (_pe "Inconsistent content-length values");
       } elsif (1 == keys %length) {
         my $length = each %length;
         $length =~ s/\A0+//;
@@ -1450,12 +1420,12 @@ sub _process_rbuf ($$) {
         if ($length eq 0+$length) { # overflow check
           $self->{unread_length} = $res->{content_length} = 0+$length;
         } else {
-          return $self->_connection_error ("Inconsistent content-length values");
+          return $self->_connection_error
+              (_pe "Inconsistent content-length values");
         }
       }
 
-      if ($res->{status} == 200 and
-          $self->{request}->{method} eq 'CONNECT') {
+      if ($res->{status} == 200 and $stream->{request_method} eq 'CONNECT') {
         $stream->_headers_received (is_tunnel => 1);
         $self->{to_be_closed} = 1;
         $self->{state} = 'tunnel';
@@ -1509,7 +1479,8 @@ sub _process_rbuf ($$) {
         if ($failed) {
           $stream->_headers_received;
           $stream->_receive_bytes_done;
-          return $self->_connection_error ({ws => 1, failed => 1, status => 1006, reason => ''});
+          return $self->_connection_error
+              (Web::Transport::ProtocolError::WebSocketClose->new (1006, '', _pe 'Bad WebSocket handshake'));
         } else {
           $self->{ws_state} = 'OPEN';
           $stream->_headers_received (is_ws => 1);
@@ -1519,10 +1490,11 @@ sub _process_rbuf ($$) {
           $self->{temp_buffer} = '';
         }
       } elsif (100 <= $res->{status} and $res->{status} <= 199) {
-        if ($self->{request}->{method} eq 'CONNECT' or
+        if ($stream->{request_method} eq 'CONNECT' or
             (defined $self->{ws_state} and
              $self->{ws_state} eq 'CONNECTING')) {
-          return $self->_connection_error ("1xx response to CONNECT or WS");
+          return $self->_connection_error
+              (_pe "1xx response to CONNECT or WS");
         } else {
           #push @{$res->{'1xxes'} ||= []}, {
           #  version => $res->{version},
@@ -1541,12 +1513,12 @@ sub _process_rbuf ($$) {
       } elsif ($res->{status} == 204 or
                $res->{status} == 205 or
                $res->{status} == 304 or
-               $self->{request}->{method} eq 'HEAD') {
-        $self->{stream}->_headers_received;
+               $stream->{request_method} eq 'HEAD') {
+        $stream->_headers_received;
         $self->{unread_length} = 0;
         $self->{state} = 'response body';
       } else {
-        $self->{stream}->_headers_received;
+        $stream->_headers_received;
         if ($chunked) {
           $self->{state} = 'before response chunk';
         } else {
@@ -1593,7 +1565,6 @@ sub _process_rbuf ($$) {
         }
         $self->{to_be_closed} = 1 unless $keep_alive;
 
-        $self->{exit} = {};
         $self->_receive_done;
       }
     } else {
@@ -1612,10 +1583,7 @@ sub _process_rbuf ($$) {
       } elsif ((length $$ref) - (pos $$ref)) {
         $self->{response}->{incomplete} = 1;
         $self->{stream}->_receive_bytes_done;
-        return $self->_connection_error ({
-          failed => 0,
-          message => 'Invalid chunk size',
-        });
+        return $self->_connection_error (_pw 'Invalid chunk size');
       }
     }
     if ($self->{state} eq 'response chunk size') {
@@ -1632,10 +1600,7 @@ sub _process_rbuf ($$) {
         unless ($self->{temp_buffer} eq sprintf '%x', $n) { # overflow
           $self->{response}->{incomplete} = 1;
           $self->{stream}->_receive_bytes_done;
-          return $self->_connection_error ({
-            failed => 0,
-            message => 'Chunk size overflow',
-          });
+          return $self->_connection_error (_pw 'Chunk size overflow');
         }
         if ($n == 0) {
           $self->{stream}->_receive_bytes_done;
@@ -1683,10 +1648,7 @@ sub _process_rbuf ($$) {
           delete $self->{unread_length};
           $self->{response}->{incomplete} = 1;
           $self->{stream}->_receive_bytes_done;
-          return $self->_connection_error ({
-            failed => 0,
-            message => 'No CRLF after chunk',
-          });
+          return $self->_connection_error (_pw 'No CRLF after chunk');
         }
       }
     }
@@ -1699,29 +1661,20 @@ sub _process_rbuf ($$) {
         delete $self->{unread_length};
         $self->{response}->{incomplete} = 1;
         $self->{stream}->_receive_bytes_done;
-        return $self->_connection_error ({
-          failed => 0,
-          message => 'No CRLF after chunk',
-        });
+        return $self->_connection_error (_pw 'No CRLF after chunk');
       }
     }
   } # CHUNK
   if ($self->{state} eq 'before response trailer') {
     if ($$ref =~ /\G(.*?)\x0A\x0D?\x0A/gcs) {
       if (2**18-1 < $self->{temp_buffer} + (length $1)) {
-        return $self->_connection_error ({
-          failed => 0,
-          message => 'Header section too large',
-        });
+        return $self->_connection_error (_pw 'Header section too large');
       }
       $self->{temp_buffer} += length $1;
       #
     } else {
       if (2**18-1 < $self->{temp_buffer} + (length $$ref) - (pos $$ref)) {
-        return $self->_connection_error ({
-          failed => 0,
-          message => 'Header section too large',
-        });
+        return $self->_connection_error (_pw 'Header section too large');
       }
       $self->{temp_buffer} += (length $$ref) - (pos $$ref);
       return;
@@ -1740,7 +1693,6 @@ sub _process_rbuf ($$) {
         last;
       }
     }
-    $self->{exit} = {};
     $self->_receive_done;
     return;
   } # before response trailer
@@ -1761,70 +1713,60 @@ sub _process_rbuf ($$) {
   #}
 } # _process_rbuf
 
-sub _process_rbuf_eof ($;%) {
-  my ($self, %args) = @_;
+sub _process_rbuf_eof ($$) {
+  my ($self, $error) = @_;
   my $stream = $self->{stream};
-  # XXX %args
   
   if ($self->{state} eq 'before response') {
     if (length $self->{temp_buffer}) {
-      if ($self->{request}->{method} eq 'PUT' or
-          $self->{request}->{method} eq 'CONNECT') {
-        return $self->_connection_error ("HTTP/0.9 response to non-GET request");
+      if ($stream->{request_method} eq 'PUT' or
+          $stream->{request_method} eq 'CONNECT') {
+        return $self->_connection_error
+            (defined $error ? $error : _pe "HTTP/0.9 response");
       } else {
         $stream->_headers_received;
-        $stream->{body_controller}->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\($self->{temp_buffer}))));
-        $self->{response}->{incomplete} = 1 if $args{abort};
+        $stream->{body_controller}->enqueue
+            (DataView->new (ArrayBuffer->new_from_scalarref (\($self->{temp_buffer}))));
+        $self->{response}->{incomplete} = 1 if defined $error;
         $stream->_receive_bytes_done;
-        return $self->_connection_error ({
-          failed => 0,
-          message => 'Connection truncated',
-        }) if $args{abort};
+        return $self->_connection_error (_pw 'Connection truncated') # XXX associate $error
+            if defined $error;
 
-        $self->{exit} = {};
         $self->{to_be_closed} = 1;
         $self->_receive_done;
         return;
       }
     } else { # empty
-      return $self->_connection_error ({
-        failed => 1,
-        message => $args{error_message} || "Connection closed without response",
-        errno => $args{errno}, # XXX
-        can_retry => !$args{abort} && !$self->{response_received},
-      });
+      return $self->_connection_error ($error) if defined $error;
+      return $self->_connection_error
+          (Web::Transport::ProtocolError::HTTPParseError->_new_retry ("Connection closed without response", !$self->{response_received}));
     }
   } elsif ($self->{state} eq 'response body') {
     if (defined $self->{unread_length}) {
       if ($self->{unread_length} > 0) {
         $self->{response}->{incomplete} = 1;
         $self->{stream}->_receive_bytes_done;
-        return $self->_connection_error ({
-          failed => ($self->{response}->{version} eq '1.1'),
-          message => $args{error_message} || "Connection truncated", # XXX
-          errno => $args{errno}, # XXX
-        });
+        if ($self->{response}->{version} eq '1.1') {
+          return $self->_connection_error
+              (defined $error ? $error : _pe 'Connection truncated');
+        } else {
+          return $self->_connection_error (_pw 'Connection truncated'); # XXX associate $error
+        }
       } else { # all data read
         $self->{stream}->_receive_bytes_done;
-        return $self->_connection_error ({
-          failed => 0,
-          message => 'Connection truncated',
-        }) if $args{abort};
+        return $self->_connection_error (_pw 'Connection truncated') # XXX associate $error
+            if defined $error;
 
-        $self->{exit} = {};
         $self->{to_be_closed} = 1;
         $self->_receive_done;
         return;
       }
     } else {
-      $self->{response}->{incomplete} = 1 if $args{abort};
+      $self->{response}->{incomplete} = 1 if defined $error;
       $self->{stream}->_receive_bytes_done;
-      return $self->_connection_error ({
-        failed => 0,
-        message => 'Connection truncated',
-      }) if $args{abort};
+      return $self->_connection_error (_pw 'Connection truncated') # XXX associate $error
+          if defined $error;
 
-      $self->{exit} = {};
       $self->{to_be_closed} = 1;
       $self->_receive_done;
       return;
@@ -1838,67 +1780,43 @@ sub _process_rbuf_eof ($;%) {
   }->{$self->{state}}) {
     $self->{response}->{incomplete} = 1;
     $self->{stream}->_receive_bytes_done;
-    return $self->_connection_error ({
-      failed => 0,
-      message => 'Connection truncated within chunk',
-    });
+    return $self->_connection_error (_pw 'Connection truncated within chunk'); # XXX associate $error
   } elsif ($self->{state} eq 'before response trailer') {
-    return $self->_connection_error ({
-      failed => 0,
-      message => 'Connection truncated within trailer',
-    });
+    return $self->_connection_error
+        (_pw 'Connection truncated within trailer'); # XXX associate $error
   } elsif ($self->{state} eq 'tunnel') {
     $self->{stream}->_receive_bytes_done;
-    return $self->_connection_error ("Connection truncated")
-        if $args{abort};
-    $self->{exit} = {};
+    return $self->_connection_error ($error) if defined $error;
     $self->{to_be_closed} = 1;
     $self->_receive_done;
     return;
   } elsif ($self->{state} eq 'before response header') {
-    return $self->_connection_error ({
-      failed => 1,
-      message => $args{error_message} || "Connection closed within response headers",
-      errno => $args{errno},
-    });
+    return $self->_connection_error
+        (defined $error ? $error : _pe 'Connection truncated');
   } elsif ($self->{state} eq 'before ws frame' or
            $self->{state} eq 'ws data') {
     $self->{ws_state} = 'CLOSING';
     $self->{state} = 'ws terminating';
-    # XXXerror
-    my $reason = '';
-    #$reason = $self->{exit}->{message} # XXX
-    #    if defined $self->{exit} and
-    #       defined $self->{exit}->{message} and
-    #       $self->{is_server};
-    return $self->_connection_error ({
-      ws => 1, failed => 1, status => 1006, reason => $reason,
-    });
+    return $self->_connection_error
+        (Web::Transport::ProtocolError::WebSocketClose->new (1006, '', defined $error ? $error : _pe 'Connection truncated'));
   } elsif ($self->{state} eq 'ws terminating') {
-    if ($args{abort} and not $self->{exit}->{failed}) {
-      $self->{exit}->{failed} = 1;
-      $self->{exit}->{ws} = 1;
-      $self->{exit}->{status} = 1006;
-      $self->{exit}->{reason} = '';
-    }
+    $self->{exit} = Web::Transport::ProtocolError::WebSocketClose->new
+        (1006, '', $error)
+            if defined $error and
+               not Web::Transport::ProtocolError->is_error ($self->{exit});
     $self->_send_done (close => 1);
     $self->_receive_done;
     return;
   } elsif ($self->{state} eq 'sending') {
-    return $self->_connection_error ({
-      failed => 1,
-      message => 'Connection closed',
-    }) if $args{abort};
+    return $self->_connection_error ($error) if defined $error;
     return $self->_receive_done;
   } elsif ($self->{state} eq 'stopped') {
     #
   } else {
     # initial
     # waiting
-    return $self->_connection_error ({
-      failed => $args{abort},
-      message => 'Connection closed',
-    });
+    return $self->_connection_error ($error) if defined $error;
+    return $self->_connection_error (_pw 'Connection closed');
   }
 } # _process_rbuf_eof
 
@@ -1920,6 +1838,7 @@ BEGIN {
   *_e4d_t = \&Web::Transport::HTTPStream::_e4d_t;
   *MAX_BYTES = \&Web::Transport::HTTPStream::MAX_BYTES;
   *_pcap = \&Web::Transport::HTTPStream::_pcap;
+  *_pe = \&Web::Transport::HTTPStream::_pe;
 }
 
 sub id ($) { # XXX
@@ -1983,30 +1902,6 @@ sub _read ($) {
     return undef;
   })->then (sub { undef $read });
 } # _read
-
-sub _pe ($) {
-  return Web::DOM::TypeError->new ($_[0]); # XXXerror
-} # _pe
-
-sub _pes ($$$) {
-  return {
-    failed => 1,
-    status => $_[0],
-    reason => $_[1],
-    headers => $_[2],
-  }; # XXXerror
-} # _pes
-
-sub _exit ($) {
-  return {message => $_[0]}; # XXXerror
-} # _exit
-
-sub _wserror ($$$) {
-  return {
-    ws => 1, failed => 1, status => $_[0], reason => $_[1],
-    error => $_[2],
-  }; # XXXerror
-} # _wserror
 
 sub _ondata ($$) {
   my ($con, $in) = @_;
@@ -2097,7 +1992,8 @@ sub _ondata ($$) {
         $stream = $con->{stream};
         $stream->{request}->{method} = 'GET';
         $stream->{request}->{version} = 1.1;
-        return $con->_connection_error (_pes 414, 'Request-URI Too Large', []);
+        return $con->_connection_error
+            (_pe ('Bad target URL'), 414, 'Request-URI Too Large', []);
       } else {
         return;
       }
@@ -2235,9 +2131,11 @@ sub _oneof ($$) {
     $con->{ws_state} = 'CLOSING';
     $con->{state} = 'ws terminating';
     $error = _pe 'Connection truncated' unless defined $error;
-    return $con->_connection_error (_wserror 1006, '', $error);
+    return $con->_connection_error
+        (Web::Transport::ProtocolError::WebSocketClose->new (1006, '', $error));
   } elsif ($con->{state} eq 'ws terminating') {
-    $con->{exit} = _wserror 1006, '', $error if defined $error;
+    $con->{exit} = Web::Transport::ProtocolError::WebSocketClose->new
+        (1006, '', $error) if defined $error;
     $con->_send_done (close => 1);
     $con->_receive_done;
     return;
@@ -2286,11 +2184,11 @@ sub _request_headers ($) {
     $host = $headers{host}->[0];
     $host =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
   } elsif (@{$headers{host} or []}) { # multiple Host:
-    $con->_connection_error;
+    $con->_connection_error (_pe "Bad |Host:|");
     return 0;
   } else { # no Host:
     if ($stream->{request}->{version} == 1.1) {
-      $con->_connection_error;
+      $con->_connection_error (_pe "Bad |Host:|");
       return 0;
     }
   }
@@ -2303,7 +2201,7 @@ sub _request_headers ($) {
     if (defined $host) {
       ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
       unless (defined $host_host) {
-        $con->_connection_error;
+        $con->_connection_error (_pe 'Bad |Host:|');
         return 0;
       }
     }
@@ -2312,7 +2210,7 @@ sub _request_headers ($) {
     $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
     my ($target_host, $target_port) = Web::Host->parse_hostport_string ($target);
     unless (defined $target_host) {
-      $con->_connection_error;
+      $con->_connection_error (_pe 'Bad |Host:|');
       return 0;
     }
     $target_url = Web::URL->parse_string ("http://$target/");
@@ -2320,21 +2218,21 @@ sub _request_headers ($) {
     if (defined $host) {
       ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
       unless (defined $host_host) {
-        $con->_connection_error;
+        $con->_connection_error (_pe 'Bad |Host:|');
         return 0;
       }
       my $scheme = $con->_url_scheme;
       $target_url = Web::URL->parse_string ("$scheme://$host/");
       delete $stream->{target};
     } else {
-      $con->_connection_error;
+      $con->_connection_error (_pe 'Bad |Host:|');
       return 0;
     }
   } elsif ($stream->{target} =~ m{\A/}) {
     if (defined $host) {
       ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
       unless (defined $host_host) {
-        $con->_connection_error;
+        $con->_connection_error (_pe 'Bad |Host:|');
         return 0;
       }
     }
@@ -2349,7 +2247,7 @@ sub _request_headers ($) {
       $target_url = Web::URL->parse_string ("$scheme://$hostport$target");
     }
     if (not defined $target_url or not defined $target_url->host) {
-      $con->_connection_error;
+      $con->_connection_error (_pe 'Bad request-target URL');
       return 0;
     }
   } else { # absolute URL
@@ -2357,21 +2255,21 @@ sub _request_headers ($) {
     $target =~ s/([\x80-\xFF])/sprintf '%%%02X', ord $1/ge;
     $target_url = Web::URL->parse_string ($target);
     if (not defined $target_url or not defined $target_url->host) {
-      $con->_connection_error;
+      $con->_connection_error (_pe 'Bad request-target URL');
       return 0;
     }
 
     if (defined $host) {
       ($host_host, $host_port) = Web::Host->parse_hostport_string ($host);
       unless (defined $host_host) {
-        $con->_connection_error;
+        $con->_connection_error (_pe 'Bad |Host:|');
         return 0;
       }
     }
   }
   if (defined $host_host and defined $target_url) {
     unless ($host_host->equals ($target_url->host)) {
-      $con->_connection_error;
+      $con->_connection_error (_pe 'Bad |Host:|');
       return 0;
     }
     my $target_port = $target_url->port;
@@ -2382,7 +2280,7 @@ sub _request_headers ($) {
     } elsif (not defined $host_port and not defined $target_port) {
       #
     } else {
-      $con->_connection_error;
+      $con->_connection_error (_pe 'Bad |Host:|');
       return 0;
     }
   }
@@ -2437,32 +2335,24 @@ sub _request_headers ($) {
       } # WS_CHECK
 
       if ($status == 426) {
-        $con->_connection_error ({
-          failed => 1,
-          status => 426,
-          reason => 'Upgrade Required',
-          headers => [
-            ['Upgrade', 'websocket'],
-            ['Sec-WebSocket-Version', '13'],
-          ],
-         });
+        $con->_connection_error ((_pe 'Bad WebSocket version'), 426, 'Upgrade Required', [
+          ['Upgrade', 'websocket'],
+          ['Sec-WebSocket-Version', '13'],
+        ]);
       } else {
-        $con->_connection_error;
+        $con->_connection_error (_pe 'WebSocket handshake error');
       }
       return 0;
     } # WS_OK
   } elsif (@{$headers{upgrade} or []}) {
-    $con->_connection_error;
+    $con->_connection_error (_pe 'Bad |Upgrade:|');
     return 0;
   }
 
   ## Transfer-Encoding:
   if (@{$headers{'transfer-encoding'} or []}) {
-    $con->_connection_error ({
-      failed => 1,
-      status => 411,
-      reason => 'Length Required',
-    });
+    $con->_connection_error
+        (_pe ('|Transfer-Encoding:| in request'), 411, 'Length Required', []);
     return 0;
   }
 
@@ -2473,14 +2363,14 @@ sub _request_headers ($) {
     $l = 0+$headers{'content-length'}->[0]
         unless $stream->{request}->{method} eq 'CONNECT';
   } elsif (@{$headers{'content-length'} or []}) { # multiple headers or broken
-    $con->_connection_error;
+    $con->_connection_error (_pe 'Bad |Content-Length:|');
     return 0;
   }
   $stream->{request}->{body_length} = $l;
 
   if (defined $stream->{ws_key}) {
     unless ($l == 0) {
-      $con->_connection_error;
+      $con->_connection_error (_pe 'Bad |Content-Length:|');
       return 0;
     }
     $stream->_headers_received (is_ws => 1, is_request => 1);
@@ -2528,8 +2418,11 @@ use Promise;
 use Promised::Flow;
 use Web::DateTime;
 use Web::DateTime::Clock;
+
 push our @CARP_NOT, qw(
   Web::DOM::TypeError
+  Web::Transport::ProtocolError::HTTPParseError
+  Web::Transport::ProtocolError::WebSocketClose
   Web::Transport::HTTPStream::ClientConnection
   Web::Transport::HTTPStream::ServerConnection
   WritableStream WritableStreamDefaultWriter
@@ -2550,7 +2443,7 @@ sub _open_sending_stream ($$;%) {
   my $con = $stream->{connection};
   my $canceled = 0;
 
-  my $ws = $con->{write_mode} eq 'ws' ? undef : WritableStream->new ({
+  my $ws = ($con->{write_mode} eq 'ws' || $con->{write_mode} eq 'before tunnel data') ? undef : WritableStream->new ({
     start => sub {
       my $wc = $_[1];
       $con->{cancel_current_writable_stream} = sub {
@@ -2754,7 +2647,8 @@ sub _headers_received ($;%) {
         return $con->abort (Web::DOM::Error->wrap ($_[1]));
       },
     });
-    if (defined $con->{write_mode} and $con->{write_mode} eq 'before tunnel data') {
+    if (defined $con->{write_mode} and
+        $con->{write_mode} eq 'before tunnel data') {
       if ($args{is_tunnel}) {
         $con->{write_mode} = 'raw';
         my ($ws) = $stream->_open_sending_stream (undef);
@@ -2786,8 +2680,8 @@ sub _receive_bytes_done ($) {
   return undef;
 } # _receive_bytes_done
 
-sub _send_request ($$;%) {
-  my ($stream, $req, %args) = @_;
+sub _send_request ($$) {
+  my ($stream, $req) = @_;
 
   # XXX input validation
   my $method = defined $req->{method} ? $req->{method} : '';
@@ -2809,19 +2703,17 @@ sub _send_request ($$;%) {
         unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
   }
 
+  my $cl = $req->{length};
   if ($method eq 'CONNECT') {
     return Promise->reject
-        (Web::DOM::TypeError->new ("Bad byte length $args{content_length}"))
-            if defined $args{content_length};
+        (Web::DOM::TypeError->new ("Bad byte length $cl")) if defined $cl;
   } else {
-    $args{content_length} = 0+($args{content_length} || 0);
+    $cl = 0+($cl || 0);
     return Promise->reject
-        (Web::DOM::TypeError->new ("Bad byte length $args{content_length}"))
-            unless $args{content_length} =~ /\A[0-9]+\z/;
-    if ($args{content_length} > 0 or
-        $method eq 'POST' or $method eq 'PUT') {
-      push @{$req->{headers} ||= []},
-          ['Content-Length', $args{content_length}];
+        (Web::DOM::TypeError->new ("Bad byte length $cl"))
+            unless $cl =~ /\A[0-9]+\z/;
+    if ($cl > 0 or $method eq 'POST' or $method eq 'PUT') {
+      push @{$req->{headers} ||= []}, ['Content-Length', $cl];
     }
   }
 
@@ -2839,8 +2731,7 @@ sub _send_request ($$;%) {
     return Promise->reject (Web::DOM::TypeError->new ("Connection is busy"));
   }
 
-  # XXX
-  $req->{id} = $con->{id} . '.' . ++$con->{req_id};
+  # XXX  $req->{id} = $con->{id} . '.' . ++$con->{req_id};
   if ($con->{DEBUG}) { # XXX
     warn "$con->{id}: ========== @{[ref $con]}\n";
     warn "$con->{id}: startstream $req->{id} @{[scalar gmtime]}\n";
@@ -2857,7 +2748,7 @@ sub _send_request ($$;%) {
   }
 
   $con->{stream} = $stream;
-  $con->{request} = $req;
+  $stream->{request_method} = $method;
   my $res = $stream->{response} = $con->{response} = {
     status => 200, reason => 'OK', version => '0.9',
     headers => [],
@@ -2865,13 +2756,13 @@ sub _send_request ($$;%) {
   $con->{state} = 'before response';
   $con->{temp_buffer} = '';
   # XXX Connection: close
-  if ($args{ws}) {
+  if ($req->{ws}) {
     $con->{ws_state} = 'CONNECTING';
     $con->{ws_key} = encode_base64 join ('', map { pack 'C', rand 256 } 1..16), '';
     push @{$req->{headers} ||= []},
         ['Sec-WebSocket-Key', $con->{ws_key}],
         ['Sec-WebSocket-Version', '13'];
-    $con->{ws_protos} = $args{ws_protocols} || [];
+    $con->{ws_protos} = $req->{ws_protocols} || [];
     if (@{$con->{ws_protos}}) {
       push @{$req->{headers}},
           ['Sec-WebSocket-Protocol', join ',', @{$con->{ws_protos}}];
@@ -2889,8 +2780,8 @@ sub _send_request ($$;%) {
   }
   my $sent = $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\$header)));
-  $con->{write_mode} = $args{ws} ? 'ws' : $method eq 'CONNECT' ? 'before tunnel data' : 'raw';
-  my ($ws) = $stream->_open_sending_stream ($args{content_length});
+  $con->{write_mode} = $req->{ws} ? 'ws' : $method eq 'CONNECT' ? 'before tunnel data' : 'raw';
+  my ($ws) = $stream->_open_sending_stream ($cl);
   $con->_read;
   return $sent->then (sub {
     return {stream => $stream, body => $ws};

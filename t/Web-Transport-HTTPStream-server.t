@@ -365,7 +365,7 @@ test {
       is 0+@closed, 1;
     } $c;
     return $closed[0];
-  })->catch (sub {
+  })->then (sub {
     my $error = $_[0];
     test {
       is $error->name, 'Error';
@@ -886,11 +886,9 @@ test {
     } $c;
     return $closed[0];
   })->then (sub {
-    test { ok 0 } $c;
-  }, sub {
     my $error = $_[0];
     test {
-      is $error->name, 'TypeError';
+      is $error->name, 'TypeError', $error;
       is $error->message, 'Closed before bytes (n = 3) are sent';
       #is $error->file_name, __FILE__; XXX
       #is $error->line_number, __LINE__-18;
@@ -929,14 +927,12 @@ test {
     } $c;
     return $closed[0];
   })->then (sub {
-    test { ok 0 } $c;
-  }, sub {
     my $error = $_[0];
     test {
       is $error->name, 'Error';
       is $error->message, "Something's wrong";
       is $error->file_name, __FILE__;
-      is $error->line_number, __LINE__-20;
+      is $error->line_number, __LINE__-18;
     } $c;
   })->then (sub {
     return $http->close;
@@ -1940,8 +1936,8 @@ test {
   })->then (sub {
     test {
       is join (";", @ev), 'closing;closed';
-      is $closing->name, 'TypeError';
-      is $closing->message, 'WebSocket handshake rejected';
+      is $closing->name, 'HTTP parse error';
+      is $closing->message, 'HTTP stream closed (non-fatal)';
       is $closing->file_name, __FILE__;
       is $closing->line_number, __LINE__-25;
       is $closed, 'fulfilled';
@@ -3200,10 +3196,11 @@ test {
   my $path = rand;
   my $serverreq;
   my @ev;
+  my $closed;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req, $got) = @_;
     $got->{closing}->then (sub { push @ev, 'closing' });
-    $self->closed->then (sub { push @ev, 'closed' });
+    $self->closed->then (sub { push @ev, 'closed'; $closed = $_[0] });
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       push @ev, 'headerssent';
@@ -3247,21 +3244,31 @@ test {
       is $serverreq->{text}, 'stuvw';
       is $received, 'abcde(end)';
       is join (";", @ev), 'headerssent;text;closing;closed';
+
+      isa_ok $closed, 'Web::Transport::ProtocolError::WebSocketClose';
+      is $closed->name, 'WebSocket Close';
+      is $closed->message, '(5678 abc) WebSocket closed cleanly';
+      #is $closed->file_name, __FILE__; # XXXlocation
+      #is $closed->line_number, __LINE__;
+      is $closed->ws_status, 5678;
+      is $closed->ws_reason, 'abc';
+      ok $closed->ws_cleanly;
     } $c;
     done $c;
     undef $c;
   });
-} n => 3, name => 'WS closing (by send_ws_close)';
+} n => 9, name => 'WS closing (by send_ws_close)';
 
 test {
   my $c = shift;
   my $path = rand;
   my $serverreq;
   my @ev;
+  my $closed;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req, $got) = @_;
     $got->{closing}->then (sub { push @ev, 'closing' });
-    $self->closed->then (sub { push @ev, 'closed' });
+    $self->closed->then (sub { push @ev, 'closed'; $closed = $_[0] });
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       push @ev, 'headerssent';
@@ -3307,11 +3314,20 @@ test {
       is $serverreq->{text}, 'stuvw';
       is $received, 'abcde(end)';
       is join (";", @ev), 'headerssent;text;closing;closed';
+
+      isa_ok $closed, 'Web::Transport::ProtocolError::WebSocketClose';
+      is $closed->name, 'WebSocket Close';
+      is $closed->message, '(1005 ) WebSocket closed cleanly';
+      #is $closed->file_name, __FILE__; # XXXlocation
+      #is $closed->line_number, __LINE__;
+      is $closed->ws_status, 1005;
+      is $closed->ws_reason, '';
+      ok $closed->ws_cleanly;
     } $c;
     done $c;
     undef $c;
   });
-} n => 3, name => 'WS closing (by receiving Close)';
+} n => 9, name => 'WS closing (by receiving Close)';
 
 test {
   my $c = shift;
@@ -3319,10 +3335,11 @@ test {
   my $serverreq;
   my @ev;
   my $closed_promise;
+  my $closed;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req, $got) = @_;
     $got->{closing}->catch (sub { push @ev, 'closing' });
-    $closed_promise = $self->closed->catch (sub { push @ev, 'closed' });
+    $closed_promise = $self->closed->then (sub { push @ev, 'closed'; $closed = $_[0] });
     return $self->send_response
         ({status => 101, status_text => 'Switched!'})->then (sub {
       push @ev, 'headerssent';
@@ -3365,11 +3382,20 @@ test {
   })->then (sub {
     test {
       is join (";", @ev), 'headerssent;closing;closed';
+
+      isa_ok $closed, 'Web::Transport::ProtocolError::WebSocketClose';
+      is $closed->name, 'WebSocket Close';
+      is $closed->message, '(1006 ) Connection truncated';
+      #is $closed->file_name, __FILE__; # XXXlocation
+      #is $closed->line_number, __LINE__;
+      is $closed->ws_status, 1006;
+      is $closed->ws_reason, '';
+      ok ! $closed->ws_cleanly;
     } $c;
     done $c;
     undef $c;
   });
-} n => 1, name => 'WS closing (by parse error)';
+} n => 7, name => 'WS closing (by parse error)';
 
 {
   package TestURLForCONNECT;
@@ -3444,6 +3470,17 @@ test {
       ok ! $result->{failed};
       is $result->{message}, undef;
     } $c;
+    return $serverreq->closed;
+  })->then (sub {
+    my $closed = $_[0];
+    test {
+      is $closed->name, 'HTTP parse error';
+      is $closed->message, 'HTTP stream closed (non-fatal)';
+      #is $closed->file_name, __FILE__; # XXXlocation
+      #is $closed->line_number, __LINE__;
+      ok ! $closed->http_fatal;
+      ok ! $closed->http_can_retry;
+    } $c;
   })->catch (sub {
     my $error = $_[0];
     test {
@@ -3455,7 +3492,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 9, name => 'CONNECT data';
+} n => 13, name => 'CONNECT data';
 
 test {
   my $c = shift;
@@ -4867,7 +4904,7 @@ test {
           $self->abort ("Test abort\x{6001}");
         }
       };
-      $self->closed->catch (sub {
+      $self->closed->then (sub {
         $exit = $_[0];
       });
       return $self->send_ws_message (5, 'binary')->then (sub {
@@ -4903,17 +4940,21 @@ test {
       ok ! $res->ws_closed_cleanly;
       is $res->ws_code, 1006;
       is $res->ws_reason, '';
-      ok $exit->{failed}, $exit;
-      ok $exit->{ws};
-      is $exit->{status}, 1006;
-      is $exit->{reason}, '';
-      like $exit->{error}, qr{^Error: Test abort\x{6001} at @{[__FILE__]} line @{[__LINE__-43]}};
-      ok ! $exit->{cleanly};
+
+      isa_ok $exit, 'Web::Transport::ProtocolError::WebSocketClose', $exit;
+      is $exit->name, 'WebSocket Close';
+      is $exit->message, "(1006 ) Test abort\x{6001}";
+      is $exit->ws_status, 1006;
+      is $exit->ws_reason, '';
+      is $exit->file_name, __FILE__;
+      is $exit->line_number, __LINE__-46;
+      ok ! $exit->ws_cleanly;
+      like $exit->{ws_error}, qr{^Error: Test abort\x{6001} at \Q@{[$exit->file_name]}\E line \Q@{[$exit->line_number]}\E};
     } $c;
     done $c;
     undef $c;
   });
-} n => 12, name => 'server abort - WS';
+} n => 15, name => 'server abort - WS';
 
 test {
   my $c = shift;

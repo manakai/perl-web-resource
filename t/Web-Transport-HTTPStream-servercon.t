@@ -12,6 +12,7 @@ use Web::URL;
 use Web::Transport::ConnectionClient;
 use Web::Transport::TCPStream;
 use Web::Transport::HTTPStream;
+use Web::Transport::TCPTransport;
 
 sub rsread ($) {
   my $rs = shift;
@@ -848,7 +849,6 @@ test {
   my $port = find_listenable_port;
   my $origin = Web::URL->parse_string ("http://$host:$port");
 
-  my $con;
   my $server = tcp_server $host, $port, sub {
     my $x = Web::Transport::HTTPStream->new
         ({server => 1, parent => {
@@ -856,12 +856,11 @@ test {
            server => 1,
            fh => $_[0],
            host => Web::Host->parse_string ($_[1]), port => $_[2],
-         }, server_header => "ab\x0Avd"});
+         }});
     my $r = $x->streams->get_reader;
     $x->ready->then (sub {
       $r->cancel;
     });
-    $con ||= $x;
   }; # $server
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
@@ -873,13 +872,74 @@ test {
   })->then (sub {
     return $http->close;
   })->then (sub {
-    return $con->closed;
-  })->then (sub {
     undef $server;
     done $c;
     undef $c;
   });
 } n => 1, name => 'streams cancel';
+
+sub rawtcp ($$$) {
+  my $input = $_[2];
+  my $tcp = Web::Transport::TCPTransport->new (host => $_[0], port => $_[1]);
+  my $data = '';
+  my $p = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        $tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      return $tcp->push_write (\$input);
+    });
+  });
+  return $p;
+} # rawtcp
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $closed;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }});
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      return $_[0]->{value}->closed;
+    })->then (sub {
+      $closed = $_[0];
+    });
+  }; # $server
+
+  rawtcp ($origin->host, $origin->port, "GET foo HTTP/1.0\x0D\x0A\x0D\x0A")->then (sub {
+    test {
+      isa_ok $closed, 'Web::Transport::ProtocolError::HTTPParseError';
+      is $closed->name, 'HTTP parse error';
+      is $closed->message, 'Bad request-target';
+      #is $closed->file_name, __FILE__; # XXXlocation
+      #is $closed->line_number, __LINE__;
+      ok $closed->http_fatal;
+      ok ! $closed->http_can_retry;
+    } $c;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'HTTP parse error';
 
 run_tests;
 

@@ -473,14 +473,11 @@ test {
       port => $server->{port},
     }});
     my $closed;
-    my $closed_fulfilled;
-    my $closed_rejected;
     $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
-      $closed = $stream->closed;
-      $closed->then (sub { $closed_fulfilled = 1 }, sub { $closed_rejected = 1 });
+      $stream->closed->then (sub { $closed = $_[0] });
       test {
         isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
       } $c;
@@ -488,19 +485,15 @@ test {
     })->then (sub {
       test { ok 0 } $c;
     }, sub {
-      my $got = $_[0]; # XXX
+      my $got = $_[0];
       test {
-        ok $got->{failed};
-        is $got->{message}, 'Inconsistent content-length values';
-        is $got->{body}, undef;
-        is $got->{messages}, undef;
-        is $got->{version}, undef;
-        is $got->{status}, undef;
-        is $got->{reason}, undef;
-        is $got->{headers}, undef;
-        is $got->{incomplete}, undef;
-        ok ! $closed_fulfilled;
-        ok $closed_rejected;
+        is $got, $closed;
+        isa_ok $got, 'Web::Transport::ProtocolError::HTTPParseError';
+        is $got->name, 'HTTP parse error';
+        is $got->message, 'Inconsistent content-length values';
+        # XXXlocation
+        ok $got->http_fatal;
+        ok ! $got->http_can_retry;
       } $c;
     })->then (sub {
       return $http->close_after_current_stream;
@@ -509,7 +502,7 @@ test {
       undef $c;
     });
   });
-} n => 12, name => 'send_request response error';
+} n => 7, name => 'send_request response error';
 
 test {
   my $c = shift;
@@ -740,7 +733,7 @@ test {
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'PUT', target => '/'}, content_length => 0);
+      return $http->send_request ({method => 'PUT', target => '/', length => 0});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -802,7 +795,7 @@ test {
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'POST', target => '/'}, content_length => 0);
+      return $http->send_request ({method => 'POST', target => '/', length => 0});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -864,7 +857,7 @@ test {
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+      return $http->send_request ({method => 'GET', target => '/', length => 5});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -927,7 +920,7 @@ test {
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+      return $http->send_request ({method => 'GET', target => '/', length => 5});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -978,7 +971,7 @@ test {
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+      return $http->send_request ({method => 'GET', target => '/', length => 5});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -1028,7 +1021,7 @@ test {
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+      return $http->send_request ({method => 'GET', target => '/', length => 5});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -1079,7 +1072,7 @@ test {
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+      return $http->send_request ({method => 'GET', target => '/', length => 5});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -1129,7 +1122,7 @@ test {
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+      return $http->send_request ({method => 'GET', target => '/', length => 5});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -1189,7 +1182,7 @@ test {
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+      return $http->send_request ({method => 'GET', target => '/', length => 5});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -1200,7 +1193,7 @@ test {
       $writer->write (d "1234");
       my $thrown = Web::DOM::TypeError->new;
       $writer->abort ($thrown);
-      return $stream->closed->catch (sub {
+      return $stream->closed->then (sub {
         my $error = $_[0];
         test {
           is $error, $thrown;
@@ -1230,7 +1223,7 @@ test {
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, content_length => 5);
+      return $http->send_request ({method => 'GET', target => '/', length => 5});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -1240,7 +1233,7 @@ test {
       } $c;
       $writer->write (d "1234");
       $writer->abort;
-      return $stream->closed->catch (sub {
+      return $stream->closed->then (sub {
         my $error = $_[0];
         test {
           is $error->name, 'Error';
@@ -1497,7 +1490,7 @@ test {
     }});
     my $closed;
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, content_length => 3);
+      return $http->send_request ({method => 'GET', target => '/', length => 3});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -1543,7 +1536,7 @@ test {
     }});
     my $closed;
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, content_length => 3);
+      return $http->send_request ({method => 'GET', target => '/', length => 3});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};
@@ -1588,12 +1581,13 @@ test {
     })->then (sub {
       my $got = $_[0];
       return $got->{stream}->closed;
-    })->catch (sub {
+    })->then (sub {
       my $error = $_[0];
       test {
-        ok $error->{failed};
-        is $error->{message}, 'Connection closed without response';
-        ok ! $error->{can_retry};
+        is $error->name, 'HTTP parse error';
+        is $error->message, 'Connection closed without response';
+        ok $error->http_fatal;
+        ok ! $error->http_can_retry;
       } $c;
     })->then (sub{
       return $http->close_after_current_stream;
@@ -1602,7 +1596,7 @@ test {
       undef $c;
     });
   });
-} n => 3, name => 'first empty response';
+} n => 4, name => 'first empty response';
 
 test {
   my $c = shift;
@@ -1629,12 +1623,13 @@ test {
       })->then (sub {
         return $_[0]->{stream}->closed;
       });
-    })->catch (sub {
+    })->then (sub {
       my $error = $_[0];
       test {
-        ok $error->{failed};
-        is $error->{message}, 'Connection closed without response';
-        ok $error->{can_retry};
+        is $error->name, 'HTTP parse error';
+        is $error->message, 'Connection closed without response (can retry)';
+        ok $error->http_fatal;
+        ok $error->http_can_retry;
       } $c;
     })->then (sub{
       return $http->close_after_current_stream;
@@ -1643,7 +1638,7 @@ test {
       undef $c;
     });
   });
-} n => 3, name => 'second empty response';
+} n => 4, name => 'second empty response';
 
 for my $is_binary (0, 1) {
   test {
@@ -1664,7 +1659,7 @@ for my $is_binary (0, 1) {
       }});
       my $error;
       $http->ready->then (sub {
-        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+        return $http->send_request ({method => 'GET', target => '/', ws => 1});
       })->then (sub {
         my $stream = $_[0]->{stream};
         my $closed = $stream->closed;
@@ -1718,7 +1713,7 @@ close
         port => $server->{port},
       }});
       $http->ready->then (sub {
-        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+        return $http->send_request ({method => 'GET', target => '/', ws => 1});
       })->then (sub {
         my $stream = $_[0]->{stream};
         my $closed = $stream->closed;
@@ -1734,11 +1729,11 @@ close
         })->then (sub {
           return $closed;
         });
-      })->catch (sub {
+      })->then (sub {
         my $error = $_[0];
         test {
-          ok $error->{ws};
-          is $error->{status}, 1006;
+          is $error->name, 'WebSocket Close';
+          is $error->ws_status, 1006;
         } $c;
       })->then (sub {
         done $c;
@@ -1769,7 +1764,7 @@ close
         port => $server->{port},
       }});
       $http->ready->then (sub {
-        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+        return $http->send_request ({method => 'GET', target => '/', ws => 1});
       })->then (sub {
         my $stream = $_[0]->{stream};
         return $stream->headers_received->then (sub {
@@ -1817,7 +1812,7 @@ close
       }});
       my @p;
       $http->ready->then (sub {
-        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+        return $http->send_request ({method => 'GET', target => '/', ws => 1});
       })->then (sub {
         my $stream = $_[0]->{stream};
         return $stream->headers_received->then (sub {
@@ -1878,7 +1873,7 @@ close
       }});
       my @p;
       $http->ready->then (sub {
-        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+        return $http->send_request ({method => 'GET', target => '/', ws => 1});
       })->then (sub {
         my $stream = $_[0]->{stream};
         return $stream->headers_received->then (sub {
@@ -1889,15 +1884,14 @@ close
           return $writer->abort;
         })->then (sub {
           return $stream->closed;
-        })->catch (sub {
+        })->then (sub {
           my $error = $_[0];
           test {
-            ok $error->{failed};
-            ok $error->{ws};
-            is $error->{status}, 1006;
-            #is $error->name, 'Error';
-            #is $error->file_name, __FILE__;
-            #is $error->line_number, __LINE__-6;
+            is $error->name, 'WebSocket Close';
+            is $error->message, "(1006 ) Something's wrong";
+            is $error->ws_status, 1006;
+            is $error->file_name, __FILE__;
+            is $error->line_number, __LINE__-10;
           } $c;
         });
       })->then (sub{
@@ -1907,7 +1901,7 @@ close
         undef $c;
       });
     });
-  } n => 3, name => ['send_ws_message writer abort', $is_binary];
+  } n => 5, name => ['send_ws_message writer abort', $is_binary];
 
   test {
     my $c = shift;
@@ -1936,7 +1930,7 @@ close
         port => $server->{port},
       }});
       $http->ready->then (sub {
-        return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+        return $http->send_request ({method => 'GET', target => '/', ws => 1});
       })->then (sub {
         my $stream = $_[0]->{stream};
         return $stream->headers_received->then (sub {
@@ -1952,13 +1946,15 @@ close
           return $stream->send_ws_message (0, $is_binary);
         })->then (sub {
           return $stream->send_ws_close;
-        })->catch (sub {
+        })->then (sub {
           my $error = $_[0];
           test {
-            ok $error->{failed};
-            ok $error->{ws};
-            is $error->{status}, 1006;
-            is $error->{reason}, '';
+            isa_ok $error, 'Web::Transport::ProtocolError::WebSocketClose';
+            is $error->name, 'WebSocket Close';
+            is $error->message, '(1006 ) Connection truncated';
+            is $error->ws_status, 1006;
+            is $error->ws_reason, '';
+            ok ! $error->ws_cleanly;
           } $c;
         });
       })->then (sub{
@@ -1971,7 +1967,7 @@ close
         undef $c;
       });
     });
-  } n => 5, name => ['send_ws_message zero length', $is_binary];
+  } n => 7, name => ['send_ws_message zero length', $is_binary];
 }
 
 test {
@@ -2000,24 +1996,28 @@ close
     }});
     my $closing;
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       my @ev;
       my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         $_[0]->{closing}->then (sub { push @ev, 'closing' });
-        $stream->closed->catch (sub { push @ev, 'closed' });
+        $stream->closed->then (sub { push @ev, 'closed' });
         rsread $_[0]->{messages};
         return $stream->send_ws_close;
       })->then (sub {
         return $closed;
-      })->catch (sub {
+      })->then (sub {
         my $error = $_[0];
         test {
-          ok $error->{ws};
-          is $error->{status}, 1006;
-          is $error->{reason}, '';
+          isa_ok $error, 'Web::Transport::ProtocolError::WebSocketClose', $error;
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Connection truncated';
+          #XXXlocation
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
+          ok ! $error->ws_cleanly;
           is join (';', @ev), 'closing;closed';
         } $c;
       });
@@ -2028,7 +2028,7 @@ close
       undef $c;
     });
   });
-} n => 4, name => 'ws close ok no args (no close response)';
+} n => 7, name => 'ws close ok no args (no close response)';
 
 test {
   my $c = shift;
@@ -2055,19 +2055,19 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
         rsread $_[0]->{messages};
         return $stream->send_ws_close (1234);
-      })->catch (sub {
+      })->then (sub {
         my $error = $_[0];
         test {
-          ok $error->{failed};
-          ok $error->{ws};
-          is $error->{status}, 1006;
-          is $error->{reason}, '';
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Connection truncated';
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
         } $c;
       });
     })->then (sub{
@@ -2107,19 +2107,19 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
         rsread $_[0]->{messages};
         return $stream->send_ws_close (1234, 'av c');
-      })->catch (sub {
+      })->then (sub {
         my $error = $_[0];
         test {
-          ok $error->{failed};
-          ok $error->{ws};
-          is $error->{status}, 1006;
-          is $error->{reason}, '';
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Connection truncated';
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
         } $c;
       });
     })->then (sub{
@@ -2159,7 +2159,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2172,13 +2172,13 @@ close
         } $c;
       })->then (sub {
         return $stream->send_ws_close;
-      })->catch (sub {
+      })->then (sub {
         my $error = $_[0];
         test {
-          ok $error->{failed};
-          ok $error->{ws};
-          is $error->{status}, 1006;
-          is $error->{reason}, '';
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Connection truncated';
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
         } $c;
       });
     })->then (sub{
@@ -2215,7 +2215,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2228,13 +2228,13 @@ close
         } $c;
       })->then (sub {
         return $stream->send_ws_close;
-      })->catch (sub {
+      })->then (sub {
         my $error = $_[0];
         test {
-          ok $error->{failed};
-          ok $error->{ws};
-          is $error->{status}, 1006;
-          is $error->{reason}, '';
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Connection truncated';
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
         } $c;
       });
     })->then (sub{
@@ -2271,7 +2271,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2284,13 +2284,13 @@ close
         } $c;
       })->then (sub {
         return $stream->send_ws_close;
-      })->catch (sub {
+      })->then (sub {
         my $error = $_[0];
         test {
-          ok $error->{failed};
-          ok $error->{ws};
-          is $error->{status}, 1006;
-          is $error->{reason}, '';
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Connection truncated';
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
         } $c;
       });
     })->then (sub {
@@ -2327,7 +2327,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->send_ws_close (1234, 'x')->catch (sub {
@@ -2373,7 +2373,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2449,7 +2449,7 @@ CRLF
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2490,7 +2490,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2534,7 +2534,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2577,7 +2577,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2620,7 +2620,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2632,13 +2632,13 @@ close
         } $c;
       })->then (sub {
         return $stream->send_ws_close;
-      })->catch (sub {
+      })->then (sub {
         my $error = $_[0];
         test {
-          ok $error->{failed};
-          ok $error->{ws};
-          is $error->{status}, 1006;
-          is $error->{reason}, '';
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Connection truncated';
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
         } $c;
       });
     })->then (sub{
@@ -2675,7 +2675,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2686,13 +2686,13 @@ close
           like $error, qr{^Data too large};
         } $c;
         return $stream->send_ws_close;
-      })->catch (sub {
+      })->then (sub {
         my $error = $_[0];
         test {
-          ok $error->{failed};
-          ok $error->{ws};
-          is $error->{status}, 1006;
-          is $error->{reason}, '';
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Connection truncated';
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
         } $c;
       });
     })->then (sub{
@@ -2729,7 +2729,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2780,7 +2780,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       return $stream->headers_received->then (sub {
@@ -2819,20 +2819,22 @@ CRLF
     }});
     my $error = Web::DOM::Error->new ("Custom error");
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       my $closed = $stream->closed;
       return $stream->headers_received->then (sub {
         $_[0]->{messages}->cancel ($error);
         return $closed;
-      })->catch (sub {
-        my $e = $_[0];
+      })->then (sub {
+        my $error = $_[0];
         test {
-          ok $e->{ws};
-          ok $e->{failed};
-          is $e->{status}, 1006;
-          is $e->{reason}, '';
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Custom error';
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-17;
         } $c;
       });
     })->then (sub{
@@ -2842,7 +2844,7 @@ CRLF
       undef $c;
     });
   });
-} n => 4, name => 'ws messages cancel';
+} n => 6, name => 'ws messages cancel';
 
 test {
   my $c = shift;
@@ -2865,7 +2867,7 @@ CRLF
     }});
     my $error = Web::DOM::Error->new ("Custom error");
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       my $closed = $stream->closed;
@@ -2873,13 +2875,15 @@ CRLF
         $stream->send_ws_close;
         $_[0]->{messages}->cancel ($error);
         return $closed;
-      })->catch (sub {
-        my $e = $_[0];
+      })->then (sub {
+        my $error = $_[0];
         test {
-          ok $e->{ws};
-          ok $e->{failed};
-          is $e->{status}, 1006;
-          is $e->{reason}, '';
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Custom error';
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-18;
         } $c;
       });
     })->then (sub{
@@ -2889,7 +2893,7 @@ CRLF
       undef $c;
     });
   });
-} n => 4, name => 'ws messages cancel';
+} n => 6, name => 'ws messages cancel';
 
 test {
   my $c = shift;
@@ -2914,7 +2918,7 @@ ws-send-header opcode=1 length=3
     }});
     my $error = Web::DOM::Error->new ("Custom error");
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       my $closed = $stream->closed;
@@ -2927,13 +2931,15 @@ ws-send-header opcode=1 length=3
           $reader->cancel ($error);
           return $closed;
         });
-      })->catch (sub {
-        my $e = $_[0];
+      })->then (sub {
+        my $error = $_[0];
         test {
-          ok $e->{ws};
-          ok $e->{failed};
-          is $e->{status}, 1006;
-          is $e->{reason}, '';
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Custom error';
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-23;
         } $c;
       });
     })->then (sub{
@@ -2943,7 +2949,7 @@ ws-send-header opcode=1 length=3
       undef $c;
     });
   });
-} n => 4, name => 'ws messages text cancel';
+} n => 6, name => 'ws messages text cancel';
 
 test {
   my $c = shift;
@@ -2968,7 +2974,7 @@ ws-send-header opcode=2 length=3
     }});
     my $error = Web::DOM::Error->new ("Custom error");
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       my $closed = $stream->closed;
@@ -2981,13 +2987,15 @@ ws-send-header opcode=2 length=3
           $reader->cancel ($error);
           return $closed;
         });
-      })->catch (sub {
-        my $e = $_[0];
+      })->then (sub {
+        my $error = $_[0];
         test {
-          ok $e->{ws};
-          ok $e->{failed};
-          is $e->{status}, 1006;
-          is $e->{reason}, '';
+          is $error->name, 'WebSocket Close';
+          is $error->message, '(1006 ) Custom error';
+          is $error->ws_status, 1006;
+          is $error->ws_reason, '';
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-23;
         } $c;
       });
     })->then (sub{
@@ -2997,7 +3005,7 @@ ws-send-header opcode=2 length=3
       undef $c;
     });
   });
-} n => 4, name => 'ws messages binary cancel';
+} n => 6, name => 'ws messages binary cancel';
 
 test {
   my $c = shift;
@@ -3023,7 +3031,7 @@ ws-send-header opcode=8
     }});
     my $error;
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       my $closed = $stream->closed;
@@ -3039,11 +3047,11 @@ ws-send-header opcode=8
       })->then (sub {
         my $e = $_[0];
         test {
-          ok $e->{ws};
-          ok ! $e->{failed};
-          is $e->{status}, 1005;
-          is $e->{reason}, '';
-          ok $e->{cleanly};
+          is $e->name, 'WebSocket Close';
+          is $e->message, '(1005 ) WebSocket closed cleanly';
+          is $e->ws_status, 1005;
+          is $e->ws_reason, '';
+          ok $e->ws_cleanly;
           is $error, undef;
         } $c;
       });
@@ -3085,7 +3093,7 @@ ws-send-header opcode=8
     }});
     my $error;
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => '/'}, ws => 1);
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
       my $stream = $_[0]->{stream};
       my $closed = $stream->closed;
@@ -3106,11 +3114,11 @@ ws-send-header opcode=8
       })->then (sub {
         my $e = $_[0];
         test {
-          ok $e->{ws};
-          ok ! $e->{failed};
-          is $e->{status}, 1005;
-          is $e->{reason}, '';
-          ok $e->{cleanly};
+          is $e->name, 'WebSocket Close';
+          is $e->message, '(1005 ) WebSocket closed cleanly';
+          is $e->ws_status, 1005;
+          is $e->ws_reason, '';
+          ok $e->ws_cleanly;
         } $c;
       });
     })->then (sub{
@@ -3142,9 +3150,20 @@ close
       return $http->send_request ({method => 'CONNECT', target => 'test'});
     })->then (sub {
       my $got = $_[0];
+      test {
+        isa_ok $got->{stream}, 'Web::Transport::HTTPStream::Stream';
+        is $got->{body}, undef;
+      } $c;
       my $stream = $got->{stream};
       return $stream->headers_received->then (sub {
         my $got = $_[0];
+        test {
+          isa_ok $got->{readable}, 'ReadableStream';
+          isa_ok $got->{writable}, 'WritableStream';
+          is $got->{body}, undef;
+          is $got->{messages}, undef;
+          is $got->{closing}, undef;
+        } $c;
         my $writer = $got->{writable}->get_writer;
         $writer->write (d 'abc');
         $writer->close;
@@ -3160,7 +3179,7 @@ close
       undef $c;
     });
   });
-} n => 1, name => 'connect';
+} n => 8, name => 'connect';
 
 test {
   my $c = shift;
@@ -3179,7 +3198,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'CONNECT', target => 'test'}, content_length => 12);
+      return $http->send_request ({method => 'CONNECT', target => 'test', length => 12});
     })->catch (sub {
       my $error = $_[0];
       test {
@@ -3214,7 +3233,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'CONNECT', target => 'test'}, content_length => 0);
+      return $http->send_request ({method => 'CONNECT', target => 'test', length => 0});
     })->catch (sub {
       my $error = $_[0];
       test {
@@ -3412,7 +3431,7 @@ CRLF
     }});
     $http->ready->then (sub {
       return $http->send_request
-          ({method => 'GET', target => 'test'}, content_length => 4);
+          ({method => 'GET', target => 'test', length => 4});
     })->then (sub {
       my $got = $_[0];
       my $writer = $got->{body}->get_writer;
@@ -3828,7 +3847,7 @@ close
       port => $server->{port},
     }});
     $http->ready->then (sub {
-      return $http->send_request ({method => 'GET', target => 'test'}, content_length => 3);
+      return $http->send_request ({method => 'GET', target => 'test', length => 3});
     })->then (sub {
       my $got = $_[0];
       my $stream = $got->{stream};

@@ -54,7 +54,7 @@ sub _a ($) {
 
 my $server_pids = {};
 END { kill 'KILL', $_ for keys %$server_pids }
-sub server_as_cv ($) {
+sub server ($) {
   my $code = $_[0];
   my $cv = AE::cv;
   my $started = 0;
@@ -65,6 +65,7 @@ sub server_as_cv ($) {
   my $resultdata = [];
   my $after_server_close_cv = AE::cv;
   my $close_server = 0;
+  my ($r_server_done, $s_server_done) = promised_cv;
   local $ENV{SERVER_HOST_NAME} = $host;
   my $run_cv = run_cmd
       ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), '127.0.0.1', $port],
@@ -80,13 +81,13 @@ sub server_as_cv ($) {
           push @$resultdata, json_bytes2perl $1;
         }
         if ($data =~ s/^\[server done\]$//m) {
-          #kill 'TERM', $pid if $close_server;
+          $s_server_done->();
         }
         return if $started;
         if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
           $cv->send ({pid => $pid, addr => $1, port => $2, host => $host,
                       resultdata => $resultdata,
-                      after_server_close_cv => $after_server_close_cv,
+                      done => $r_server_done, #Promise->from_cv ($after_server_close_cv),
                       stop => sub {
                         kill 'TERM', $pid;
                         delete $server_pids->{$pid};
@@ -99,6 +100,7 @@ sub server_as_cv ($) {
   $run_cv->cb (sub {
     my $result = $_[0]->recv;
     warn "Server stopped ($result)" if $ENV{DUMP};
+    $s_server_done->();
     if ($result) {
       $after_server_close_cv->croak ("Server error: $result");
       $cv->croak ("Server error: $result") unless $started;
@@ -106,8 +108,8 @@ sub server_as_cv ($) {
       $after_server_close_cv->send;
     }
   });
-  return $cv;
-} # server_as_cv
+  return Promise->from_cv ($cv);
+} # server
 
 sub rsread ($$) {
   my $test = shift;
@@ -181,17 +183,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               $test->{name}->[0] eq 'TLS renegotiation (no client auth) 2';
     test {
       my $c = shift;
-      server_as_cv ($test->{data}->[0])->cb (sub {
-        my $server = eval { $_[0]->recv };
-        if ($@) {
-          my $error = $@;
-          test {
-            is $error, undef, 'server_as_cv';
-          } $c;
-          done $c;
-          undef $c;
-          return;
-        }
+      server ($test->{data}->[0])->then (sub {
+        my $server = $_[0];
         my $tparams = {
           class => 'Web::Transport::TCPStream',
           host => Web::Host->parse_string ($server->{addr}),
@@ -217,92 +210,81 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
         my $http = Web::Transport::HTTPStream->new ({parent => $tparams});
         my $test_type = $test->{'test-type'}->[1]->[0] || '';
 
-        $http->ready->then (sub {
+        return $http->ready->then (sub {
           if ($test_type eq 'ws') {
-            my $req = {
+            return $http->send_request ({
               method => _a 'GET',
               target => _a $test->{url}->[1]->[0],
               ws => 1,
-            };
-            return $http->send_request
-                ($req,
-                 ws => 1,
-                 ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}])->then (sub {
+              ws_protocols => [map { _a $_->[0] } @{$test->{'ws-protocol'} or []}],
+            })->then (sub {
               my $stream = $_[0]->{stream};
-              my $closed = $stream->closed;
+              my $result = {};
               return $stream->headers_received->then (sub {
                 my $got = $_[0];
-
-                my $result = {};
+                $result->{response} = $got;
                 if ($got->{messages}) {
                   $result->{ws_established} = 1;
-                  if ($test_type eq 'ws' and $test->{'ws-send'}) {
+                  if ($test->{'ws-send'}) {
                     $stream->send_ws_message (3, not 'binary')->then (sub {
                       my $writer = $_[0]->{body}->get_writer;
-                      $writer->write (DataView->new (ArrayBuffer->new_from_scalarref (\'stu')));
+                      $writer->write
+                          (DataView->new (ArrayBuffer->new_from_scalarref (\'stu')));
                       return $writer->close;
                     });
                   }
+                  return rsread_messages ($test, $got->{messages});
                 } else {
-                  if ($test_type eq 'ws') {
-                    Promise->resolve->then (sub { $http->abort });
-                  }
+                  $stream->abort;
+                  return rsread ($test, $got->{readable} || $got->{body});
                 }
-                $result->{response} = $stream->{response};
-                return (
-                  defined $got->{messages}
-                    ? rsread_messages ($test, $got->{messages})
-                    : defined $got->{readable}
-                      ? rsread ($test, $got->{readable})
-                      : rsread ($test, $got->{body})
-                )->then (sub {
-                  $result->{response_body} = $_[0];
-                })->then (sub {
-                  return $closed;
-                })->then (sub {
-                  $result->{error} = $_[0];
-                }, sub {
-                  $result->{error} = $_[0];
-                })->then (sub {
-                  return $result;
-                });
+              })->then (sub {
+                $result->{response_body} = $_[0];
+              })->catch (sub {
+                $result->{headers_received_error} = $_[0];
+              })->then (sub {
+                return $stream->closed;
+              })->then (sub {
+                $result->{exit} = $_[0];
+                return $server->{done};
+              })->then (sub {
+                $result->{resultdata} = perl2json_bytes_for_record $server->{resultdata};
+                return $result;
               });
             });
           } elsif ($test_type eq 'second' or
                    $test_type eq 'largerequest-second') {
             my $try_count = 0;
-            my $try; $try = sub {
+            my $result;
+            return (promised_wait_until {
               unless ($http->is_active) {
                 return $http->close_after_current_stream->then (sub {
-                  $tparams = {
-                    class => 'Web::Transport::TCPStream',
-                    host => Web::Host->parse_string ($server->{addr}),
-                    port => $server->{port},
-                  };
                   $http = Web::Transport::HTTPStream->new ({parent => $tparams});
                   return $http->ready;
                 })->then (sub {
-                  return $try->();
+                  return 0; # retry
                 });
               } # is_active
-              my $req = {
+
+              return $http->send_request ({
                 method => _a $test->{method}->[1]->[0],
                 target => _a $test->{url}->[1]->[0],
-              };
-              return $http->send_request ($req, content_length => ($test_type eq 'largerequest-second' ? 1024*1024 : undef))->then (sub {
+                length => ($test_type eq 'largerequest-second' ? 1024*1024 : undef),
+              })->then (sub {
                 my $stream = $_[0]->{stream};
                 my $body = $_[0]->{body};
-                my $closed = $stream->closed;
-                my $result = {};
+                $result = {};
                 return $stream->headers_received->then (sub {
                   my $got = $_[0];
-                  my $reqbody = ($got->{writable} || $body)->get_writer;
-                  if ($test_type eq 'largerequest-second') {
+                  $result->{response} = $got;
+                  my $writable = $got->{writable} || $body;
+                  my $reqbody = defined $writable ? $writable->get_writer : undef;
+                  if ($test_type eq 'largerequest-second' and defined $reqbody) {
                     $reqbody->write
                         (DataView->new (ArrayBuffer->new_from_scalarref
                                             (\('x' x (1024*1024)))));
                   }
-                  if ($req->{method} eq 'CONNECT') {
+                  if ($test->{method}->[1]->[0] eq 'CONNECT' and defined $reqbody) {
                     for (@{$test->{'tunnel-send'} or []}) {
                       $reqbody->write
                           (DataView->new
@@ -310,180 +292,185 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                                     (\_a $_->[0])));
                     }
                     $reqbody->close;
-                  }
+                  } # CONNECT
 
-                  $result->{response} = $stream->{response};
                   return (
                     defined $got->{messages}
                       ? rsread_messages ($test, $got->{messages})
                       : defined $got->{readable}
                         ? rsread ($test, $got->{readable})
                         : rsread ($test, $got->{body})
-                  )->then (sub {
-                    $result->{response_body} = $_[0];
-                  })->then (sub {
-                    return $closed;
-                  });
+                  );
                 })->then (sub {
-                  $result->{error} = $_[0];
-                }, sub {
-                  $result->{error} = $_[0];
+                  $result->{response_body} = $_[0];
+                })->catch (sub {
+                  $result->{headers_received_error} = $_[0];
                 })->then (sub {
-                  unless ($try_count++) {
-                    return Promise->new (sub {
-                      my $ok = $_[0];
-                      my $timer; $timer = AE::timer 0.1, 0, sub {
-                        undef $timer;
-                        $ok->($try->());
-                      };
-                    });
+                  return $stream->closed;
+                })->then (sub {
+                  $result->{exit} = $_[0];
+
+                  return 0 unless $try_count++;
+
+                  for (@{$result->{response}->{headers} or []}) {
+                    return 0 if $_->[2] eq 'x-test-retry' and $try_count < 10;
                   }
-                  for (@{$result->{response}->{headers}}) {
-                    if ($_->[2] eq 'x-test-retry') {
-                      return $try->() if $try_count < 10;
-                    }
-                  }
-                  if (defined $result->{error} and
-                      $result->{error}->{can_retry}) {
-                    return $try->() if $try_count < 10;
-                  }
-                  return $result;
+                  return 0 if $try_count < 10 and
+                      UNIVERSAL::can ($result->{exit}, 'http_can_retry') and
+                      $result->{exit}->http_can_retry;
+
+                  return 1; # no retry
                 });
               });
-            }; # $try
-            return promised_cleanup { undef $try } $try->();
+            } interval => 0.1, timeout => 30)->then (sub {
+              return $result;
+            });
           } else { # $test_type
-            my $req = {
+            return $http->send_request ({
               method => _a $test->{method}->[1]->[0],
               target => _a $test->{url}->[1]->[0],
-            };
-            return $http->send_request ($req, content_length => ($test_type eq 'largerequest' ? 1024*1024 : undef))->then (sub {
+              length => ($test_type eq 'largerequest' ? 1024*1024 : undef),
+            })->then (sub {
               my $stream = $_[0]->{stream};
-              my $closed = $stream->closed;
               my $body = $_[0]->{body};
+              my $result = {};
               return $stream->headers_received->then (sub {
                 my $got = $_[0];
-                my $reqbody = ($body || $got->{writable})->get_writer;
-                if ($test_type eq 'largerequest') {
+                $result->{response} = $got;
+                my $writable = $body || $got->{writable};
+                my $reqbody = defined $writable ? $writable->get_writer : undef;
+                if ($test_type eq 'largerequest' and defined $reqbody) {
                   $reqbody->write
                       (DataView->new
                            (ArrayBuffer->new_from_scalarref (\('x' x 1024))))
                           for 1..1024;
                 }
-                if ($req->{method} eq 'CONNECT') {
+                if ($test->{method}->[1]->[0] eq 'CONNECT' and defined $reqbody) {
                   for (@{$test->{'tunnel-send'} or []}) {
                     $reqbody->write
                         (DataView->new
                              (ArrayBuffer->new_from_scalarref (\_a $_->[0])));
                   }
                   $reqbody->close;
-                }
-                my $result = {
-                  response => $stream->{response},
-                };
-                return rsread ($test, $got->{body} || $got->{readable})->then (sub {
-                  $result->{response_body} = $_[0];
-                })->then (sub {
-                  return $closed;
-                })->then (sub {
-                  $result->{error} = $_[0];
-                }, sub {
-                  $result->{error} = $_[0];
-                })->then (sub {
-                  return $result;
-                });
+                } # CONNECT
+                return rsread ($test, $got->{body} || $got->{readable});
+              })->then (sub {
+                $result->{response_body} = $_[0];
+              })->catch (sub {
+                $result->{headers_received_error} = $_[0];
+              })->then (sub {
+                return $stream->closed;
+              })->then (sub {
+                $result->{exit} = $_[0];
+                return $result;
               });
             });
-          }
+          } # test type
+        })->catch (sub {
+          my $error = $_[0];
+          my $result = {exit => $error};
+          return $result;
         })->then (sub {
           my $result = $_[0];
-          my $res = $result->{response};
-          return Promise->resolve->then (test {
-            my $is_error;
+          test {
+            my $error_expected;
             if ($test_type eq 'ws') {
-              $is_error = !$result->{ws_established};
-              is !!$is_error, !!$test->{'handshake-error'}, 'is error (ws)';
+              $error_expected = !!$test->{'handshake-error'};
+              is !$result->{ws_established}, $error_expected,
+                 'is error (WS): ' . $result->{exit};
             } else {
-              $is_error = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
-              is !!($result->{error}->{failed}), !!$is_error, 'is error';
+              $error_expected = $test->{status}->[1]->[0] == 0 && !defined $test->{reason};
+              is !!Web::Transport::ProtocolError->is_error ($result->{exit}),
+                 $error_expected, 'is error: ' . $result->{exit};
             }
 
-            if ($is_error) {
-              ok 1;
+            if ($error_expected) {
+              ok 1, 'response version (skipped)';
             } else {
-              is $res->{version}, $test->{version} ? $test->{version}->[1]->[0] : '1.1', 'response version';
+              is $result->{response}->{version},
+                 $test->{version} ? $test->{version}->[1]->[0] : '1.1',
+                 'response version';
             }
-            if ($test_type eq 'ws') {
-              if ($is_error) {
-                ok 1;
-              } else {
-                $result->{response_body} = '(close)' unless length $result->{response_body};
-                if ($test->{'received-length'}) {
-                  is length ($result->{response_body}), $test->{'received-length'}->[1]->[0] + length '(close)', 'received length';
-                } else {
-                  is $result->{response_body}, (defined $test->{received}->[0] ? $test->{received}->[0] : '') . '(close)', 'received';
+
+            if ($error_expected) {
+              ok 1, 'response status (skipped)';
+              ok 1, 'response status text (skipped)';
+            } elsif ($test_type eq 'ws') {
+              my $actual_status = 1006;
+              my $actual_reason = '';
+              if (UNIVERSAL::can ($result->{exit}, 'ws_status')) {
+                $actual_status = $result->{exit}->ws_status;
+                $actual_reason = $result->{exit}->ws_reason;
+                if ($actual_status == 1002) {
+                  $actual_status = 1006;
+                  $actual_reason = '';
                 }
               }
-              if (not $result->{ws_established}) {
-                $result->{error}->{status} = 1006;
-                $result->{error}->{reason} = '';
-              } elsif (not defined $result->{error}->{status}) {
-                $result->{error}->{status} = 1005;
-                $result->{error}->{reason} = '';
-              } elsif ($result->{error}->{status} == 1002) {
-                $result->{error}->{status} = 1006;
-                $result->{error}->{reason} = '';
-              }
-              is $result->{error}->{status}, $test->{'ws-status'} ? $test->{'ws-status'}->[1]->[0] : $test->{'handshake-error'} ? 1006 : undef, 'WS status code';
-              is $result->{error}->{reason}, $test->{'ws-reason'} ? $test->{'ws-reason'}->[0] : $test->{'handshake-error'} ? '' : undef, 'WS reason';
-              is !!$result->{error}->{cleanly}, !!$test->{'ws-was-clean'}, 'WS wasClean';
-              ok 1, 'skip (ws)';
+              is $actual_status,
+                 $test->{'ws-status'} ? $test->{'ws-status'}->[1]->[0] : undef,
+                 'WebSocket status code';
+              is $actual_reason,
+                 $test->{'ws-reason'} ? $test->{'ws-reason'}->[0] : undef,
+                 'WebSocket close reason';
+            } else {
+              is $result->{response}->{status}, $test->{status}->[1]->[0],
+                 'response status';
+              is $result->{response}->{reason},
+                 defined $test->{reason}->[1]->[0] ? $test->{reason}->[1]->[0] : defined $test->{reason}->[0] ? $test->{reason}->[0] : '',
+                 'response status text';
+            }
 
-              return Promise->from_cv ($server->{after_server_close_cv})->then (sub {
-                my $expected = perl2json_bytes_for_record (json_bytes2perl (($test->{"result-data"} || ["[]"])->[0]));
-                my $actual = perl2json_bytes_for_record $server->{resultdata};
-                test {
-                  is $actual, $expected, 'resultdata';
-                } $c;
-              });
+            if ($error_expected or $test_type eq 'ws') {
+              ok 1, 'response headers (skipped)';
             } else {
-              if ($is_error) {
-                ok 1;
-                ok 1;
-                ok 1;
-                ok 1;
-                ok 1;
+              is join ("\x0A", map {
+                $_->[0] . ': ' . $_->[1];
+              } @{$result->{response}->{headers}}),
+              defined $test->{headers}->[0] ? $test->{headers}->[0] : '',
+              'response headers';
+            }
+
+            if ($error_expected) {
+              ok 1, 'response body (skipped)';
+              ok 1, 'response body incomplete (skipped)';
+            } elsif ($test_type eq 'ws') {
+              my $actual = $result->{response_body};
+              $actual = '(close)' unless length $actual;
+              if ($test->{'received-length'}) {
+                is length $actual,
+                   $test->{'received-length'}->[1]->[0] + length '(close)',
+                   'response body length';
               } else {
-                is $res->{status}, $test->{status}->[1]->[0];
-                is $res->{reason}, defined $test->{reason}->[1]->[0] ? $test->{reason}->[1]->[0] : defined $test->{reason}->[0] ? $test->{reason}->[0] : '';
-                is join ("\x0A", map {
-                  $_->[0] . ': ' . $_->[1];
-                } @{$res->{headers}}), defined $test->{headers}->[0] ? $test->{headers}->[0] : '';
-                is $result->{response_body}, $test->{body}->[0], 'body';
-                is !!$result->{response}->{incomplete}, !!$test->{incomplete}, 'incomplete message';
+                is $actual,
+                 (defined $test->{received}->[0] ? $test->{received}->[0] : '') . '(close)',
+                   'response body';
               }
-            }
-          } $c)->then (sub {
-            return $http->close_after_current_stream;
-          });
-        }, sub { # connect failed
-          my $error = $_[0]; # XXX
-          test {
-            # XXXX
-            # XXX ws handshake error
-            my $is_error = $test->{status} ? ($test->{status}->[1]->[0] == 0 && !defined $test->{reason}) : 1;
-            is !!1, !!$is_error, 'is error';
-            ok 1, 'response version (skipped)';
-            is undef, $test->{status}->[1]->[0] || undef, 'status';
-            if ($is_error) {
-              ok 1, $error;
+              is !!(UNIVERSAL::can ($result->{exit}, 'ws_cleanly') and
+                    $result->{exit}->ws_cleanly),
+                 !!$test->{'ws-was-clean'}, 'WebSocket clean flag';
             } else {
-              is $error, undef, 'no error';
+              is $result->{response_body}, $test->{body}->[0], 'response body';
+              is !!$result->{response}->{incomplete}, !!$test->{incomplete},
+                 'response body incomplete';
             }
-            ok 1, 'headers (skipped)';
-            is '(close)', $test->{body}->[0] || '(close)', 'body';
-            ok 1, 'incomplete (skipped)';
+
+            if ($error_expected or not $test_type eq 'ws') {
+              ok 1, 'WebSocket Close (skipped)';
+            } else {
+              my $expected = perl2json_bytes_for_record (json_bytes2perl (($test->{"result-data"} || ["[]"])->[0]));
+              is $result->{resultdata}, $expected, 'WebSocket Close';
+            }
+
+            if (defined $result->{headers_received_error}) {
+              is $result->{headers_received_error}, $result->{exit},
+                 '|headers_received| rejection';
+            } else {
+              ok 1, '|headers_received| rejection (skipped)';
+            }
+
+            like $result->{exit}->name, qr{\A(?:HTTP parse error|WebSocket Close|OpenSSL error|Protocol error|Perl I/O error)\z}, 'error type';
           } $c;
+          return $http->close_after_current_stream;
         })->then (sub {
           $server->{stop}->();
         })->catch (sub {
@@ -491,9 +478,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
         })->then (sub {
           done $c;
           undef $c;
+          undef $server;
         });
       });
-    } n => 7, name => [$path, $test->{name}->[0]], timeout => 120;
+    } n => 10, name => [$path, $test->{name}->[0]], timeout => 120;
   };
 } # $path
 

@@ -5,6 +5,7 @@ our $VERSION = '2.0';
 use Streams::IOError;
 use Web::DOM::Error;
 use Web::DOM::TypeError;
+use Web::Transport::ProtocolError;
 use ArrayBuffer;
 use DataView;
 use Streams::Devel;
@@ -17,7 +18,7 @@ use Web::Transport::OCSP;
 
 push our @CARP_NOT, qw(
   Web::DOM::Error Web::DOM::TypeError Streams::IOError
-  Web::Transport::TLSStream::OpenSSLError
+  Web::Transport::TLSStream::OpenSSLError Web::Transport::ProtocolError
 );
 
 # XXX alert stream
@@ -99,14 +100,13 @@ sub verify_hostname($$) {
    0
 }
 
-
-sub _te ($) {
-  return Web::DOM::TypeError->new ($_[0]);
-} # _te
-
 sub _tep ($) {
   return Promise->reject (Web::DOM::TypeError->new ($_[0]));
 } # _tep
+
+sub _pe ($) {
+  return Web::Transport::ProtocolError->new ($_[0]);
+} # _pe
 
 sub create ($$) {
   my ($class, $args) = @_;
@@ -314,7 +314,7 @@ sub create ($$) {
     }
 
     if ($received_eof) {
-      return $abort->(_te "Underlying transport closed during TLS handshake")
+      return $abort->(_pe "Underlying transport closed during TLS handshake")
           if defined $handshake_ok;
       if (defined $rc) {
         $rc->close;
@@ -366,7 +366,7 @@ sub create ($$) {
     write => sub {
       my $view = $_[1];
       return Promise->resolve->then (sub {
-        die _te "The argument is not an ArrayBufferView"
+        die Web::DOM::TypeError->new ("The argument is not an ArrayBufferView")
             unless UNIVERSAL::isa ($view, 'ArrayBufferView'); # XXX location
         return if $view->byte_length == 0; # or throw
 
@@ -426,7 +426,7 @@ sub create ($$) {
         if ($v->{done}) {
           $process_tls->();
 
-          return $abort->(_te "Underlying transport closed during TLS handshake")
+          return $abort->(_pe "Underlying transport closed during TLS handshake")
               if defined $handshake_ok;
 
           ## Implementation does not always send TLS closure alert.
@@ -520,13 +520,13 @@ sub create ($$) {
         if ($status != Net::SSLeay::OCSP_RESPONSE_STATUS_SUCCESSFUL ()) {
           #$info->{tls_stapling}->{ok} = 0;
           $info->{tls_stapling}->{response_status} = $status;
-          $info->{tls_stapling}->{error} = _te "OCSP response failed ($status)";
+          $info->{tls_stapling}->{error} = _pe "OCSP response failed ($status)";
           return 1;
         }
 
         unless (eval { Net::SSLeay::OCSP_response_verify ($tls, $response) }) {
           #$info->{tls_stapling}->{ok} = 0;
-          $info->{tls_stapling}->{error} = _te "OCSP response verification failed";
+          $info->{tls_stapling}->{error} = _pe "OCSP response verification failed";
           return 1;
         }
 
@@ -534,7 +534,7 @@ sub create ($$) {
         my $certid = eval { Net::SSLeay::OCSP_cert2ids ($tls, $cert) };
         unless ($certid) {
           #$info->{tls_stapling}->{ok} = 0;
-          $info->{tls_stapling}->{error} = _te "Can't get certid from certificate: $@";
+          $info->{tls_stapling}->{error} = _pe "Can't get certid from certificate: $@";
           return 1;
         }
         $certid = substr $certid, 2; # remove SEQUENCE header
@@ -550,7 +550,7 @@ sub create ($$) {
         } else {
           #$info->{tls_stapling}->{ok} = 0;
           $info->{tls_stapling}->{response} = $res;
-          $info->{tls_stapling}->{error} = _te $error;
+          $info->{tls_stapling}->{error} = _pe $error;
           return 0;
         }
       };
@@ -600,7 +600,9 @@ sub create ($$) {
     if (not defined $info->{tls_stapling} and
         defined $info->{tls_cert_chain}->[0] and
         Web::Transport::OCSP->x509_has_must_staple ($info->{tls_cert_chain}->[0])) {
-      return $abort->(_te "There is no stapled OCSP response, which is required by the certificate");
+      my $error = _pe "There is no stapled OCSP response, which is required by the certificate";
+      $abort->($error);
+      die $error;
     }
 
     return $info;
@@ -621,7 +623,7 @@ sub create ($$) {
       my $n = $tls && Net::SSLeay::get_verify_result ($tls);
       if ($n) {
         my $s = Net::SSLeay::X509_verify_cert_error_string ($n);
-        die _te "Certificate verification error $n - $s";
+        die _pe "Certificate verification error $n - $s";
       } else {
         die Web::DOM::Error->wrap ($_[0]);
       }
@@ -630,8 +632,7 @@ sub create ($$) {
 } # start
 
 package Web::Transport::TLSStream::OpenSSLError;
-use Web::DOM::Exception;
-push our @ISA, qw(Web::DOM::Exception);
+push our @ISA, qw(Web::Transport::ProtocolError);
 
 $Web::DOM::Error::L1ObjectClass->{(__PACKAGE__)} = 1;
 

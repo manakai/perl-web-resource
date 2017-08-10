@@ -6185,7 +6185,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       return $w->close;
     });
@@ -6229,7 +6229,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id, length => 0})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}, length => 0})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       return $w->close;
     });
@@ -6273,7 +6273,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       test {
         is $req->{version}, '1.1';
@@ -6309,7 +6309,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       test {
         is $req->{version}, '1.0';
@@ -6337,7 +6337,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       test {
         is $req->{version}, '0.9';
@@ -6363,7 +6363,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"$path.test:123"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->id})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}})->then (sub {
       test {
         is $req->{version}, '1.0';
         isa_ok $req->{target_url}, 'Web::URL';

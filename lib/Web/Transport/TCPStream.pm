@@ -12,6 +12,7 @@ use Promised::Flow;
 use Streams::IOError;
 use Web::DOM::Error;
 use Web::DOM::TypeError;
+use Web::Transport::ProtocolError;
 use DataView;
 use Streams;
 use Web::Host;
@@ -19,6 +20,7 @@ use Web::Host;
 push our @CARP_NOT, qw(
   ReadableStream ReadableStreamBYOBRequest WritableStream
   Web::DOM::Error Web::DOM::TypeError Streams::IOError
+  Web::Transport::ProtocolError
 );
 
 sub _writing (&$$) {
@@ -301,7 +303,7 @@ sub create ($$) {
       $ok->($args->{fh});
     } else {
       if ($args->{addr} eq '127.0.53.53') {
-        return $ng->(_te 'ICANN_NAME_COLLISION');
+        return $ng->(Web::Transport::ProtocolError->new ('ICANN_NAME_COLLISION'));
       }
       tcp_connect $args->{addr}, $args->{port}, sub {
         # XXX exception's location becomes within AnyEvent::Socket...
@@ -326,8 +328,8 @@ sub create ($$) {
     setsockopt $fh, SOL_SOCKET, SO_KEEPALIVE, 1;
     # XXX KA options
 
-    $info->{read_stream} = $read_stream;
-    $info->{write_stream} = $write_stream;
+    $info->{readable} = $read_stream;
+    $info->{writable} = $write_stream;
     $info->{closed} = $r_fh_closed;
 
     if ($args->{debug}) {

@@ -398,7 +398,7 @@ sub create ($$) {
     return undef;
   }; # $process_tls
 
-  $info->{read_stream} = ReadableStream->new ({
+  $info->{readable} = ReadableStream->new ({
     type => 'bytes',
     auto_allocate_chunk_size => 1024*2,
     start => sub {
@@ -415,7 +415,7 @@ sub create ($$) {
       $abort->(defined $_[1] ? $_[1] : "$class reader canceled");
     },
   });
-  $info->{write_stream} = WritableStream->new ({
+  $info->{writable} = WritableStream->new ({
     start => sub {
       $wc = $_[1];
     },
@@ -468,19 +468,24 @@ sub create ($$) {
   my $parent = $args->{parent};
   $parent = {%$parent, debug => $args->{debug}}
       if $args->{debug} and not defined $parent->{debug};
+  local $CARP_NOT[@CARP_NOT] = $parent->{class};
   $parent->{class}->create ($parent)->then (sub {
     $info->{parent} = $_[0];
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};
 
+    $info->{id} = $info->{parent}->{id} . 's';
     if ($args->{debug}) {
-      $info->{id} = $info->{parent}->{id} . 's';
       my $action = $args->{server} ? 'start as server' : 'start as client';
-      warn "$info->{id}: $info->{type}: $action\n";
+      if (defined $args->{si_host} and defined $args->{sni_host}) {
+        warn "$info->{id}: $info->{type}: $action (SNI |@{[$args->{si_host}->to_ascii]}|, SI |@{[$args->{sni_host}->to_ascii]}|)\n";
+      } else {
+        warn "$info->{id}: $info->{type}: $action\n";
+      }
     }
 
     $info->{parent}->{closed}->then ($s_parent_closed);
-    $t_r = (delete $info->{parent}->{read_stream})->get_reader ('byob');
-    $t_w = (delete $info->{parent}->{write_stream})->get_writer;
+    $t_r = (delete $info->{parent}->{readable})->get_reader ('byob');
+    $t_w = (delete $info->{parent}->{writable})->get_writer;
     $t_read = sub {
       return $t_read_pausing = 1 if $t_read_pausing;
       my $view = DataView->new (ArrayBuffer->new (1024));

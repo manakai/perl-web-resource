@@ -11,7 +11,7 @@ use Web::Host;
 use Web::Transport::TCPStream;
 use Web::Transport::UnixStream;
 use Web::Transport::TLSStream;
-use Web::Transport::H1CONNECTTransport; # XXX
+use Web::Transport::H1CONNECTStream;
 use Web::Transport::HTTPStream;
 use Promise;
 use Promised::Flow;
@@ -3468,19 +3468,21 @@ CRLF
 "abc"
   })->cb (sub {
     my $server = $_[0]->recv;
-    my $proxy = Web::Transport::HTTPStream->new ({parent => {
-      class => 'Web::Transport::TCPStream',
-      host => Web::Host->parse_string ($server->{addr}),
-      port => $server->{port},
-    }});
     my $http = Web::Transport::HTTPStream->new ({parent => {
       class => 'Web::Transport::TLSStream',
       parent => {
         class => 'Web::Transport::H1CONNECTStream',
-        http => $proxy, target => 'hoge.test',
+        target => 'hoge.test',
+        parent => {
+          parent => {
+            class => 'Web::Transport::TCPStream',
+            host => Web::Host->parse_string ($server->{addr}),
+            port => $server->{port},
+          },
+        },
       },
-      sni_host_name => Web::Host->parse_string ('hoge.test'),
-      si_host_name => Web::Host->parse_string (Test::Certificates->cert_name),
+      sni_host => Web::Host->parse_string ('hoge.test'),
+      si_host => Web::Host->parse_string (Test::Certificates->cert_name),
       ca_file => Test::Certificates->ca_path ('cert.pem'),
     }});
     $http->ready->then (sub {
@@ -3505,60 +3507,310 @@ CRLF
       undef $c;
     });
   });
-} n => 1, name => 'CONNECT https';
+} n => 1, name => 'H1CONNECT https';
 
 test {
   my $c = shift;
-  {
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ('127.0.53.53'), port => int rand);
-    my $proxy = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $connect = Web::Transport::H1CONNECTTransport->new
-        (http => $proxy, target => 'hoge.test');
-    my $tls = Web::Transport::TLSTransport->new
-        (transport => $connect,
-         sni_host_name => Web::Host->parse_string ('hoge.test'),
-         si_host_name => Web::Host->parse_string (Test::Certificates->cert_name),
-         ca_file => Test::Certificates->ca_path ('cert.pem'));
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $tls);
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+CRLF
+"abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::H1CONNECTStream',
+      target => 'hoge.test',
+      parent => {
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          host => Web::Host->parse_string ($server->{addr}),
+          port => $server->{port},
+        },
+      },
+    }});
     $http->ready->then (sub {
-      return $http->send_request_headers ({method => 'GET',
-                                           target => '/test'}, cb => sub { });
-    })->then (sub { test { ok 0 } $c }, sub {
+      return $http->send_request ({method => 'GET', target => '/test'});
+    })->then (sub {
+      return $_[0]->{stream}->headers_received;
+    })->then (sub {
+      return read_rbs $_[0]->{body};
+    })->then (sub {
+      my $received = $_[0];
       test {
-        ok 1;
+        is $received, 'abc';
       } $c;
       return $http->close_after_current_stream;
+    })->catch (sub {
+      my $error = $_[0];
+      test {
+        ok 0, $error;
+      } $c;
     })->then (sub {
       done $c;
       undef $c;
     });
-  }
-} n => 1, name => 'CONNECT https bad TCP host';
+  });
+} n => 1, name => 'H1CONNECT http';
 
 test {
   my $c = shift;
-  {
-    my $tcp = Web::Transport::TCPTransport->new
-        (host => Web::Host->parse_string ('127.0.53.53'), port => int rand);
-    my $proxy = Web::Transport::HTTPClientConnection->new (transport => $tcp);
-    my $connect = Web::Transport::H1CONNECTTransport->new
-        (http => $proxy, target => 'hoge.test');
-    my $http = Web::Transport::HTTPClientConnection->new (transport => $connect);
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+CRLF
+"abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::H1CONNECTStream',
+      target => 'hoge.test',
+      parent => {
+        parent => {
+          class => 'Web::Transport::H1CONNECTStream',
+          target => 'hoge.test',
+          parent => {
+            parent => {
+              class => 'Web::Transport::TCPStream',
+              host => Web::Host->parse_string ($server->{addr}),
+              port => $server->{port},
+            },
+          },
+        },
+      },
+    }});
     $http->ready->then (sub {
-      return $http->send_request_headers ({method => 'GET',
-                                           target => '/test'}, cb => sub { });
-    })->then (sub { test { ok 0 } $c }, sub {
+      return $http->send_request ({method => 'GET', target => '/test'});
+    })->then (sub {
+      return $_[0]->{stream}->headers_received;
+    })->then (sub {
+      return read_rbs $_[0]->{body};
+    })->then (sub {
+      my $received = $_[0];
       test {
-        ok 1;
+        is $received, 'abc';
       } $c;
       return $http->close_after_current_stream;
+    })->catch (sub {
+      my $error = $_[0];
+      test {
+        ok 0, $error;
+      } $c;
     })->then (sub {
       done $c;
       undef $c;
     });
-  }
-} n => 1, name => 'CONNECT http bad TCP host';
+  });
+} n => 1, name => 'H1CONNECT over H1CONNECT http';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 300 OK"CRLF
+CRLF
+receive "GET"
+"HTTP/1.1 200 OK"CRLF
+"Content-Length: 3"CRLF
+CRLF
+"abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::H1CONNECTStream',
+      target => 'hoge.test',
+      parent => {
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          host => Web::Host->parse_string ($server->{addr}),
+          port => $server->{port},
+        },
+      },
+    }});
+    $http->ready->catch (sub {
+      my $error = $_[0];
+      test {
+        is $error->name, 'HTTP parse error', $error;
+        is $error->message, 'HTTP |300| response';
+        # XXXlocation
+      } $c;
+      return $http->closed->then (sub {
+        my $e = $_[0];
+        test {
+          is $e, undef;
+        } $c;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'H1CONNECT http non-200 response to CONNECT';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "CONNECT"
+"HTTP/1.1 200 OK"CRLF
+CRLF
+receive "CONNECT"
+"HTTP/1.1 300 OK"CRLF
+CRLF
+"abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::H1CONNECTStream',
+      target => 'hoge.test',
+      parent => {
+        parent => {
+          class => 'Web::Transport::H1CONNECTStream',
+          target => 'hoge.test',
+          parent => {
+            parent => {
+              class => 'Web::Transport::TCPStream',
+              host => Web::Host->parse_string ($server->{addr}),
+              port => $server->{port},
+            },
+          },
+        },
+      },
+    }});
+    $http->ready->catch (sub {
+      my $error = $_[0];
+      test {
+        is $error->name, 'HTTP parse error', $error;
+        is $error->message, 'HTTP |300| response';
+        # XXXlocation
+      } $c;
+      return $http->closed->then (sub {
+        my $e = $_[0];
+        test {
+          is $e, undef;
+        } $c;
+      });
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'H1CONNECT over H1CONNECT http non-200';
+
+test {
+  my $c = shift;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TLSStream',
+      parent => {
+        class => 'Web::Transport::H1CONNECTStream',
+        target => 'hoge.test',
+        parent => {
+          parent => {
+            class => 'Web::Transport::TCPStream',
+            host => Web::Host->parse_string ('127.0.53.53'),
+            port => int rand,
+          },
+        },
+      },
+      sni_host => Web::Host->parse_string ('hoge.test'),
+      si_host => Web::Host->parse_string (Test::Certificates->cert_name),
+      ca_file => Test::Certificates->ca_path ('cert.pem'),
+    }});
+  $http->ready->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error->name, 'Protocol error', $error;
+      is $error->message, 'ICANN_NAME_COLLISION';
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__-23;
+    } $c;
+    return $http->closed->then (sub {
+      my $e = $_[0];
+      test {
+        is $e, undef;
+      } $c;
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'H1CONNECT https bad TCP host';
+
+test {
+  my $c = shift;
+  my $http = Web::Transport::HTTPStream->new ({parent => {
+    class => 'Web::Transport::H1CONNECTStream',
+    parent => {
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => Web::Host->parse_string ('127.0.53.53'),
+        port => int rand,
+      },
+    },
+    target => 'hoge.test',
+  }});
+  $http->ready->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error->name, 'Protocol error', $error;
+      is $error->message, 'ICANN_NAME_COLLISION';
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__-17;
+    } $c;
+    return $http->closed->then (sub {
+      my $e = $_[0];
+      test {
+        is $e, undef;
+      } $c;
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'H1CONNECT http bad TCP host';
+
+test {
+  my $c = shift;
+  my $http = Web::Transport::HTTPStream->new ({parent => {
+    class => 'Web::Transport::H1CONNECTStream',
+    parent => {
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => Web::Host->parse_string ('127.0.51.54'),
+        port => int rand,
+      },
+    },
+    target => 'hoge.test',
+  }});
+  $http->ready->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error->name, 'Perl I/O error', $error;
+      ok $error->message;
+      #is $error->file_name, __FILE__; # XXXlocation
+      #is $error->line_number, __LINE__-17;
+    } $c;
+    return $http->closed->then (sub {
+      my $e = $_[0];
+      test {
+        is $e, undef;
+      } $c;
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'H1CONNECT http bad TCP host';
 
 test {
   my $c = shift;

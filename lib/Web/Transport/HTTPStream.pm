@@ -123,18 +123,25 @@ sub new ($$) {
     $con->{streams_done} = sub { };
   }; # streams_done
 
+  local $CARP_NOT[@CARP_NOT] = $parent->{class};
   $parent->{class}->create ($parent)->then (sub {
     my $info = $_[0];
 
     $con->{id} = $info->{id} . 'h1';
+    $con->{info} = {
+      type => 'H1',
+      layered_type => 'H1/' . $info->{layered_type},
+      id => $con->{id},
+      parent => $info,
+    };
     if ($con->{DEBUG}) {
       my $action = $con->{is_server} ? 'start as server' : 'start as client';
       warn "$con->{id}: H1: $action over $info->{layered_type} @{[scalar gmtime]}\n";
       warn "$con->{id}: H1: DEBUG mode |$con->{DEBUG}|\n" unless $con->{DEBUG} eq '1';
     }
 
-    $con->{reader} = $info->{read_stream}->get_reader ('byob');
-    $con->{writer} = $info->{write_stream}->get_writer;
+    $con->{reader} = $info->{readable}->get_reader ('byob');
+    $con->{writer} = $info->{writable}->get_writer;
     $con->{state} = 'initial';
 
     if ($con->{is_server}) {
@@ -384,6 +391,20 @@ sub new ($$) {
 # XXX replace croak
 
 sub MAX_BYTES () { 2**31-1 }
+
+## Returns the "info" hash reference of the HTTP connection, which
+## contains the metadata on the HTTP connection, if the HTTP
+## connection is ready (or |undef| otherwise).  The hash reference
+## contains following key/value pairs:
+##
+##   id - The short string identifying the HTTP connection, provided
+##   for debugging.
+##
+##   parent - The "info" hash reference of the underlying transport of
+##   the HTTP connection.
+sub info ($) {
+  return $_[0]->{info}; # or undef
+} # info
 
 ## Return the |ready| promise of the HTTP connection, which is
 ## fulfilled with |undef| when the HTTP connection becomes ready.  An
@@ -1712,10 +1733,6 @@ BEGIN {
   *_pcap = \&Web::Transport::HTTPStream::_pcap;
   *_pe = \&Web::Transport::HTTPStream::_pe;
 }
-
-sub id ($) { # XXX
-  return $_[0]->{id};
-} # id
 
 sub _url_scheme ($) {
   return $_[0]->{url_scheme};

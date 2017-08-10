@@ -230,7 +230,7 @@ test {
   $client->request (path => [])->then (sub {
     my $res = $_[0];
     test {
-      $id = $con[-1]->id;
+      $id = $con[-1]->info->{id};
       is $res->status, 210;
       like $res->status_text, qr{^\Q$id\E};
       is $res->header ('Connection'), undef;
@@ -323,7 +323,7 @@ test {
   })->then (sub {
     my $res = $_[0];
     test {
-      $id = $con->id;
+      $id = $con->info->{id};
       is $res->status, 210;
       like $res->status_text, qr{^\Q$id\E};
       is $res->header ('Connection'), undef;
@@ -407,7 +407,7 @@ test {
   })->then (sub {
     my $res = $_[0];
     test {
-      $id = $con->id;
+      $id = $con->info->{id};
       is $res->status, 210;
       is $res->header ('Connection'), 'close';
       like $res->status_text, qr{^\Q$id\E};

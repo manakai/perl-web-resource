@@ -100,6 +100,63 @@ sub verify_hostname($$) {
    0
 }
 
+sub _debug_info ($$) {
+  my $info = $_[0];
+  my $debug = $_[1];
+  my $prefix = "$info->{id}:";
+
+  if (defined $info->{openssl_version}) {
+    warn "$prefix OpenSSL: $info->{openssl_version}->[0]\n";
+    if ($debug > 1) {
+      warn "$prefix   $info->{openssl_version}->[1]\n";
+      warn "$prefix   $info->{openssl_version}->[2]\n";
+      warn "$prefix   $info->{openssl_version}->[3]\n";
+    }
+  }
+  if ($debug > 1) {
+    if (defined $info->{net_ssleay_version}) {
+      warn "$prefix Net::SSLeay: $info->{net_ssleay_version} $info->{net_ssleay_path}\n";
+    }
+  }
+
+  if (defined $info->{tls_protocol}) {
+    my $ver = $info->{tls_protocol} == 0x0301 ? '1.0' :
+              $info->{tls_protocol} == 0x0302 ? '1.1' :
+              $info->{tls_protocol} == 0x0303 ? '1.2' :
+              $info->{tls_protocol} == 0x0304 ? '1.3' :
+              sprintf '0x%04X', $info->{tls_protocol};
+    warn "$prefix TLS version: $ver\n";
+  }
+  if (defined $info->{tls_cipher}) {
+    warn "$prefix Cipher suite: $info->{tls_cipher} ($info->{tls_cipher_usekeysize})\n";
+  }
+  warn "$prefix Resumed session\n" if $info->{tls_session_resumed};
+  my $i = 0;
+  for (@{$info->{tls_cert_chain} or []}) {
+    if (defined $_) {
+      warn "$prefix #$i: @{[$_->debug_info]}\n";
+    } else {
+      warn "$prefix #$i: ?\n";
+    }
+    $i++;
+  }
+  if (defined (my $result = $info->{stapling_result})) {
+    if ($result->{failed}) {
+      warn "$prefix OCSP stapling: NG - $result->{message}\n";
+    } else {
+      warn "$prefix OCSP stapling: OK\n";
+    }
+    if (defined (my $res = $result->{response})) {
+      warn "$prefix   Status=$res->{response_status} Produced=$res->{produced}\n";
+      for my $r (values %{$res->{responses} or {}}) {
+        warn "$prefix   - Status=$r->{cert_status} Revocation=$r->{revocation_time} ThisUpdate=$r->{this_update} NextUpdate=$r->{next_update}\n";
+      }
+    }
+  } elsif (defined $info->{tls_protocol}) {
+    warn "$prefix OCSP stapling: N/A\n";
+  }
+} # _debug_info
+
 sub _tep ($) {
   return Promise->reject (Web::DOM::TypeError->new ($_[0]));
 } # _tep
@@ -133,8 +190,7 @@ sub create ($$) {
   my $info = {
     type => 'TLS',
     layered_type => 'TLS',
-    #XXX id => $args->{id},
-    is_server => !!$args->{server},
+    server => !!$args->{server},
   };
 
   my $rc;
@@ -409,10 +465,18 @@ sub create ($$) {
   my ($r_parent_closed, $s_parent_closed) = promised_cv;
   $info->{closed} = Promise->all ([$r_closed, $r_parent_closed]);
 
-  $args->{parent}->{class}->create ($args->{parent})->then (sub {
+  my $parent = $args->{parent};
+  $parent = {%$parent, debug => $args->{debug}}
+      if $args->{debug} and not defined $parent->{debug};
+  $parent->{class}->create ($parent)->then (sub {
     $info->{parent} = $_[0];
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};
-    #XXX $self->{id} = $self->{transport}->id . 's';
+
+    if ($args->{debug}) {
+      $info->{id} = $info->{parent}->{id} . 's';
+      my $action = $args->{server} ? 'start as server' : 'start as client';
+      warn "$info->{id}: $info->{type}: $action\n";
+    }
 
     $info->{parent}->{closed}->then ($s_parent_closed);
     $t_r = (delete $info->{parent}->{read_stream})->get_reader ('byob');
@@ -605,6 +669,14 @@ sub create ($$) {
       die $error;
     }
 
+    if ($args->{debug}) {
+      warn "$info->{id}: $info->{type}: ready\n";
+      _debug_info $info, $args->{debug};
+      $info->{closed}->then (sub {
+        warn "$info->{id}: $info->{type}: closed\n";
+      });
+    }
+
     return $info;
   })->catch (sub {
     if (not defined $info->{tls_protocol} and $tls) {
@@ -615,19 +687,28 @@ sub create ($$) {
       $info->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($tls);
     }
 
-    # XXX pass $info to application
+    my $error;
     if (defined $info->{tls_stapling} and
         not $info->{tls_stapling}->{ok}) {
-      die Web::DOM::Error->wrap ($info->{tls_stapling}->{error});
+      $error = Web::DOM::Error->wrap ($info->{tls_stapling}->{error});
     } else {
       my $n = $tls && Net::SSLeay::get_verify_result ($tls);
       if ($n) {
         my $s = Net::SSLeay::X509_verify_cert_error_string ($n);
-        die _pe "Certificate verification error $n - $s";
+        $error = _pe "Certificate verification error $n - $s";
       } else {
-        die Web::DOM::Error->wrap ($_[0]);
+        $error = Web::DOM::Error->wrap ($_[0]);
       }
     }
+
+    if ($args->{debug} and defined $info->{id}) {
+      warn "$info->{id}: $info->{type}: failed ($error)\n";
+      _debug_info $info, $args->{debug};
+    }
+
+    # XXX pass $info to application
+
+    die $error;
   });
 } # start
 

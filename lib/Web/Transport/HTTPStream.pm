@@ -79,7 +79,7 @@ sub _pw ($) {
 sub new ($$) {
   my $args = $_[1];
   my $con = bless {
-    id => rand, #XXX id => $args{transport}->id, req_id => 0,
+    next_stream_id => 1,
     temp_buffer => '',
   }, ($args->{server} ? __PACKAGE__ . '::ServerConnection' : __PACKAGE__ . '::ClientConnection');
   if ($args->{server}) {
@@ -98,10 +98,10 @@ sub new ($$) {
   $con->{ready} = _pcap;
   $con->{closed} = _pcap;
 
+  my $parent = $args->{parent};
   if ($con->{DEBUG}) {
-    #XXX
-    #my $id = $self->{id};
-    #warn "$id: Connect (@{[$self->{transport}->layered_type]})... @{[scalar gmtime]}\n";
+    $parent = {%$parent};
+    $parent->{debug} = $con->{DEBUG} unless defined $parent->{debug};
   }
 
   $con->{streams} = ReadableStream->new ({
@@ -123,12 +123,14 @@ sub new ($$) {
     $con->{streams_done} = sub { };
   }; # streams_done
 
-  $args->{parent}->{class}->create ($args->{parent})->then (sub {
+  $parent->{class}->create ($parent)->then (sub {
     my $info = $_[0];
 
-    if ($con->{DEBUG}) { # XXX
-      warn "$con->{id}: openconnection @{[scalar gmtime]}\n";
-      $con->_debug_handshake_done ({});
+    $con->{id} = $info->{id} . 'h1';
+    if ($con->{DEBUG}) {
+      my $action = $con->{is_server} ? 'start as server' : 'start as client';
+      warn "$con->{id}: H1: $action over $info->{layered_type} @{[scalar gmtime]}\n";
+      warn "$con->{id}: H1: DEBUG mode |$con->{DEBUG}|\n" unless $con->{DEBUG} eq '1';
     }
 
     $con->{reader} = $info->{read_stream}->get_reader ('byob');
@@ -158,28 +160,30 @@ sub new ($$) {
 
     my $p1 = $con->{is_server} ? $con->{reader}->closed->then (sub {
       delete $con->{reader};
+
       if ($con->{DEBUG}) {
-        my $id = ''; # XXX $transport->id;
-        warn "$id: R: EOF\n";
+        warn "$con->{id}: R: EOF\n";
       }
+
       $con->_oneof (undef);
       delete $con->{timer};
       return undef;
     }, sub {
       my $error = Web::DOM::Error->wrap ($_[0]);
       delete $con->{reader};
+
       if ($con->{DEBUG}) {
-        my $id = ''; # XXX $transport->id;
-        warn "$id: R: EOF (@{[_e4d_t $error]})\n";
+        warn "$con->{id}: R: EOF (@{[_e4d_t $error]})\n";
       }
+
       $con->_oneof ($_[0]);
       delete $con->{timer};
       return undef;
     }) : $con->{reader}->closed->then (sub {
       delete $con->{reader};
+
       if ($con->{DEBUG}) {
-        my $id = $con->{id};
-        warn "$id: R: EOF\n";
+        warn "$con->{id}: R: EOF\n";
       }
 
       $con->_process_rbuf (undef);
@@ -190,8 +194,7 @@ sub new ($$) {
       delete $con->{reader};
 
       if ($con->{DEBUG}) {
-        my $id = $con->{id};
-        warn "$id: R: EOF (@{[_e4d $error]})\n";
+        warn "$con->{id}: R: EOF (@{[_e4d $error]})\n";
       }
 
       if (Web::Transport::ProtocolError->is_reset ($error)) {
@@ -205,17 +208,21 @@ sub new ($$) {
 
     my $p2 = $con->{writer}->closed->then (sub {
       if ($con->{DEBUG}) {
-        my $id = $con->{id};
-        warn "$id: S: EOF\n";
+        warn "$con->{id}: S: EOF\n";
       }
     }, sub {
       delete $con->{writer};
       if ($con->{DEBUG}) {
         my $error = Web::DOM::Error->wrap ($_[0]);
-        my $id = $con->{id};
-        warn "$id: S: EOF (@{[_e4d $error]})\n";
+        warn "$con->{id}: S: EOF (@{[_e4d $error]})\n";
       }
     }); # writer closed
+
+    if ($con->{DEBUG}) {
+      $con->{closed}->[0]->then (sub {
+        warn "$con->{id}: H1: closed @{[scalar gmtime]}\n";
+      });
+    }
 
     (delete $con->{ready}->[1])->(undef), delete $con->{ready}->[2];
     return Promise->all ([$p1, $p2, $info->{closed}])->then (sub {
@@ -224,9 +231,9 @@ sub new ($$) {
     });
   })->catch (sub {
     my $error = Web::DOM::Error->wrap ($_[0]);
-    if ($con->{DEBUG}) { # XXX
-      warn "$con->{id}: openconnection @{[scalar gmtime]}\n";
-      $con->_debug_handshake_done ($error);
+
+    if ($con->{DEBUG} and defined $con->{id}) {
+      warn "$con->{id}: H1: failed @{[scalar gmtime]}\n";
     }
 
     (delete $con->{writer})->abort ($error) if defined $con->{writer};
@@ -374,8 +381,6 @@ sub new ($$) {
 ## an HTTP stream obtained from the |stream| key of the hash reference
 ## of the returned promise of the |send_request| method.
 
-# XXX httpserver tests
-# XXX restore debug features & id
 # XXX replace croak
 
 sub MAX_BYTES () { 2**31-1 }
@@ -547,13 +552,14 @@ sub _ws_received ($) {
             }
           }
           if ($self->{DEBUG} and $self->{unread_length} > 1) {
-            my $id = 'XXX';
-            warn sprintf "$id: R: status=%d %s\n",
+            warn sprintf "%s: R: status=%d %s\n",
+                $stream->{id},
                 unpack ('n', $status), _e4d $reason;
           }
           unless ($self->{ws_state} eq 'CLOSING') {
             $self->{ws_state} = 'CLOSING';
             (delete $stream->{closing}->[1])->(undef), delete $stream->{closing}->[2];
+            warn "$stream->{id}: closing @{[scalar gmtime]}\n" if $self->{DEBUG};
             my $mask = '';
             my $masked = 0;
             unless ($self->{is_server}) {
@@ -591,8 +597,7 @@ sub _ws_received ($) {
           } else {
             $self->{ws_timer} = AE::timer 1, 0, sub { # XXX spec
               if ($self->{DEBUG}) {
-                my $id = defined $self->{request} ? $self->{request}->{id} : $self->{id};
-                warn "$id: WS timeout (1)\n";
+                warn "$stream->{id}: WS timeout (1)\n";
               }
               $self->_receive_done;
             };
@@ -623,12 +628,14 @@ sub _ws_received ($) {
                 last WS;
               }
               for (@{$self->{ws_frame}->[1]}) {
+                $stream->_receive_text (\$_) if $self->{DEBUG};
                 $rc->enqueue (\$_);
               }
             } else { # binary
               for (@{$self->{ws_frame}->[1]}) {
-                $rc->enqueue
-                    (DataView->new (ArrayBuffer->new_from_scalarref (\$_)));
+                my $dv = DataView->new (ArrayBuffer->new_from_scalarref (\$_));
+                $stream->_receive_body ($dv, 1) if $self->{DEBUG};
+                $rc->enqueue ($dv);
               }
             }
             $stream->{messages_controller}->enqueue ({
@@ -663,9 +670,13 @@ sub _ws_received ($) {
             $stream->_ws_debug ('S', @$frame_info) if $self->{DEBUG};
             $self->{writer}->write ($frame);
           }
-          #$stream->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 0);
+          if ($self->{DEBUG}) {
+            warn "$stream->{id}: R: data=@{[_e4d join '', @{$self->{ws_frame}->[1]}]}\n";
+          }
         } elsif ($self->{ws_frame}->[0] == 10) {
-          #$stream->_ev ('ping', (join '', @{$self->{ws_frame}->[1]}), 1);
+          if ($self->{DEBUG}) {
+            warn "$stream->{id}: R: pong data=@{[_e4d join '', @{$self->{ws_frame}->[1]}]}\n";
+          }
         } # frame type
         delete $self->{ws_frame};
         delete $self->{ws_decode_mask_key};
@@ -714,100 +725,6 @@ sub _ws_received ($) {
     $ref = \'';
   }
 } # _ws_received
-
-# XXX
-sub _debug_handshake_done ($$) {
-  my ($self, $exit) = @_;
-  no warnings 'uninitialized';
-  my $id = $self->{id};
-
-  my @transport = (); # XXX$self->{transport});
-  while (@transport) {
-    if (defined $transport[-1]->{transport}) {
-      push @transport, $transport[-1]->{transport};
-    } elsif (defined $transport[-1]->{http}) {
-      push @transport, $transport[-1]->{http};
-    } else {
-      last;
-    }
-  }
-
-  warn "$id: DEBUG mode |$self->{DEBUG}|\n" unless $self->{DEBUG} eq '1';
-  for my $transport (reverse @transport) {
-    warn "$id: + @{[$transport->id]} @{[$transport->type]}\n";
-    my $info = $transport->info;
-
-    if (defined $info->{remote_host}) {
-      my $host = $info->{remote_host}->to_ascii;
-      warn "$id:   + Remote: $host:$info->{remote_port}\n";
-    }
-    if (defined $info->{local_host}) {
-      my $host = $info->{local_host}->to_ascii;
-      if (defined $info->{is_server}) {
-        warn "$id:   + Local: $host:$info->{local_port} " . ($info->{is_server} ? 'Server' : 'Client') . "\n";
-      } else {
-        warn "$id:   + Local: $host:$info->{local_port}\n";
-      }
-    } elsif (defined $info->{is_server}) {
-      warn "$id:   + " . ($info->{is_server} ? 'Server' : 'Client') . "\n";
-    }
-
-    if (defined $info->{openssl_version}) {
-      warn "$id:   + OpenSSL: $info->{openssl_version}->[0]\n";
-      if ($self->{DEBUG} > 1) {
-        warn "$id:   +          $info->{openssl_version}->[1]\n";
-        warn "$id:   +          $info->{openssl_version}->[2]\n";
-        warn "$id:   +          $info->{openssl_version}->[3]\n";
-      }
-    }
-    if ($self->{DEBUG} > 1) {
-      if (defined $info->{net_ssleay_version}) {
-        warn "$id:   + Net::SSLeay: $info->{net_ssleay_version} $info->{net_ssleay_path}\n";
-      }
-    }
-
-    if (defined $info->{tls_protocol}) {
-      my $ver = $info->{tls_protocol} == 0x0301 ? '1.0' :
-                $info->{tls_protocol} == 0x0302 ? '1.1' :
-                $info->{tls_protocol} == 0x0303 ? '1.2' :
-                $info->{tls_protocol} == 0x0304 ? '1.3' :
-                sprintf '0x%04X', $info->{tls_protocol};
-      warn "$id:   + TLS version: $ver\n";
-    }
-    if (defined $info->{tls_cipher}) {
-      warn "$id:   + Cipher suite: $info->{tls_cipher} ($info->{tls_cipher_usekeysize})\n";
-    }
-    warn "$id:   + Resumed session\n" if $info->{tls_session_resumed};
-    my $i = 0;
-    for (@{$info->{tls_cert_chain} or []}) {
-      if (defined $_) {
-        warn "$id:   + #$i: @{[$_->debug_info]}\n";
-      } else {
-        warn "$id:   + #$i: ?\n";
-      }
-      $i++;
-    }
-    if (defined (my $result = $info->{stapling_result})) {
-      if ($result->{failed}) {
-        warn "$id:   + OCSP stapling: NG - $result->{message}\n";
-      } else {
-        warn "$id:   + OCSP stapling: OK\n";
-      }
-      if (defined (my $res = $result->{response})) {
-        warn "$id:   +   Status=$res->{response_status} Produced=$res->{produced}\n";
-        for my $r (values %{$res->{responses} or {}}) {
-          warn "$id:   +   - Status=$r->{cert_status} Revocation=$r->{revocation_time} ThisUpdate=$r->{this_update} NextUpdate=$r->{next_update}\n";
-        }
-      }
-    } elsif (defined $info->{tls_protocol}) {
-      warn "$id:   + OCSP stapling: N/A\n";
-    }
-  } # $transport
-
-  if ($exit->{failed}) {
-    warn "$id: + Failure ($exit->{message})\n";
-  }
-} # _debug_handshake_done
 
 # XXX can_create_stream is_active && (if h1: no current request)
 
@@ -1019,12 +936,15 @@ sub _both_done ($) {
 
     (delete $stream->{closed}->[1])->($error), delete $stream->{closed}->[2]
         if defined $stream->{closed}->[1];
-  } # $stream
 
-  if ($con->{DEBUG}) { #XXX
-    warn "$con->{id}: endstream $stream->{id} @{[scalar gmtime]}\n";
-    warn "$con->{id}: ========== @{[ref $con]}\n";
-  }
+    if ($con->{DEBUG}) {
+      if (defined $con->{response} and $con->{response}->{incomplete}) {
+        warn "$con->{id}: incomplete message\n";
+      }
+      warn "$con->{id}: endstream $stream->{id} @{[scalar gmtime]}\n";
+      warn "$con->{id}: ========== @{[ref $con]}\n";
+    }
+  } # $stream
 
   if ($con->{is_server}) {
 
@@ -1165,13 +1085,14 @@ sub _read ($) {
       $expected_size = $self->{unread_length};
     }
     if ($expected_size > 0) {
-      my $view = TypedArray::Uint8Array->new
+      my $view = DataView->new
           ($req->view->buffer, $req->view->byte_offset, $expected_size);
       return $self->{reader}->read ($view)->then (sub {
         delete $self->{read_running};
         return if $_[0]->{done};
 
         my $length = $_[0]->{value}->byte_length;
+        $stream->_receive_body ($_[0]->{value}, 1) if $self->{DEBUG};
         $req->manakai_respond_with_new_view ($_[0]->{value});
 
         if (defined $self->{unread_length}) {
@@ -1231,7 +1152,7 @@ sub _process_rbuf ($$) {
           return $self->_connection_error (_pe "HTTP/0.9 response");
         } else {
           $stream->_headers_received;
-          $stream->{body_controller}->enqueue
+          $stream->_receive_body
               (DataView->new (ArrayBuffer->new_from_scalarref (\($self->{temp_buffer}))));
           $self->{state} = 'response body';
           delete $self->{unread_length};
@@ -1481,13 +1402,13 @@ sub _process_rbuf ($$) {
       my $len = (length $$ref) - (pos $$ref);
       if ($self->{unread_length} >= $len) {
         if ($len) {
-          $stream->{body_controller}->enqueue
+          $stream->_receive_body
               (DataView->new (ArrayBuffer->new_from_scalarref (\substr $$ref, pos $$ref)));
           $ref = \'';
           $self->{unread_length} -= $len;
         }
       } elsif ($self->{unread_length} > 0) {
-        $stream->{body_controller}->enqueue
+        $stream->_receive_body
             (DataView->new (ArrayBuffer->new_from_scalarref (\substr $$ref, (pos $$ref), $self->{unread_length})));
         pos ($$ref) += $self->{unread_length};
         $self->{unread_length} = 0;
@@ -1516,7 +1437,7 @@ sub _process_rbuf ($$) {
         $self->_receive_done;
       }
     } else {
-      $stream->{body_controller}->enqueue
+      $stream->_receive_body
           (DataView->new (ArrayBuffer->new_from_scalarref (\substr $$ref, pos $$ref)))
           if (length $$ref) - (pos $$ref);
       $ref = \'';
@@ -1576,11 +1497,13 @@ sub _process_rbuf ($$) {
         if ($len <= 0) {
           #
         } elsif ($self->{unread_length} >= $len) {
-          $stream->{body_controller}->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\substr $$ref, pos $$ref)));
+          $stream->_receive_body
+              (DataView->new (ArrayBuffer->new_from_scalarref (\substr $$ref, pos $$ref)));
           $ref = \'';
           $self->{unread_length} -= $len;
         } else {
-          $stream->{body_controller}->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\substr $$ref, (pos $$ref), $self->{unread_length})));
+          $stream->_receive_body
+              (DataView->new (ArrayBuffer->new_from_scalarref (\substr $$ref, (pos $$ref), $self->{unread_length})));
           (pos $$ref) += $self->{unread_length};
           $self->{unread_length} = 0;
         }
@@ -1650,7 +1573,8 @@ sub _process_rbuf ($$) {
     return $self->_ws_received ($ref);
   }
   if ($self->{state} eq 'tunnel') {
-    $stream->{body_controller}->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\substr $$ref, pos $$ref)))
+    $stream->_receive_body
+        (DataView->new (ArrayBuffer->new_from_scalarref (\substr $$ref, pos $$ref)))
         if (length $$ref) - (pos $$ref);
     $ref = \'';
   }
@@ -1673,7 +1597,7 @@ sub _process_rbuf_eof ($$) {
             (defined $error ? $error : _pe "HTTP/0.9 response");
       } else {
         $stream->_headers_received;
-        $stream->{body_controller}->enqueue
+        $stream->_receive_body
             (DataView->new (ArrayBuffer->new_from_scalarref (\($self->{temp_buffer}))));
         $self->{response}->{incomplete} = 1 if defined $error;
         $stream->_receive_bytes_done;
@@ -1805,9 +1729,9 @@ sub _new_stream ($) {
   my $con = $_[0];
 
   my $stream = $con->{stream} = bless {
-    is_server => 1, DEBUG => $con->{DEBUG},
+    is_server => 1,
     connection => $con,
-    id => $con->{id} . '.' . ++$con->{req_id},
+    id => $con->{id} . '.' . $con->{next_stream_id}++,
     request => {
       headers => [],
       # method target_url version
@@ -1815,7 +1739,7 @@ sub _new_stream ($) {
     # target
   }, 'Web::Transport::HTTPStream::Stream';
 
-  if ($con->{DEBUG}) { # XXX
+  if ($con->{DEBUG}) {
     warn "$con->{id}: ========== @{[ref $con]}\n";
     warn "$con->{id}: startstream $stream->{id} @{[scalar gmtime]}\n";
   }
@@ -1832,7 +1756,7 @@ sub _read ($) {
   my $self = $_[0];
   return unless defined $self->{reader};
   my $read; $read = sub {
-    return $self->{reader}->read (DataView->new (ArrayBuffer->new (1024*3)))->then (sub {
+    return $self->{reader}->read (DataView->new (ArrayBuffer->new (1024*2)))->then (sub {
       return if $_[0]->{done};
 
       if ($self->{disable_timer}) {
@@ -1985,7 +1909,7 @@ sub _ondata ($$) {
       }
 
       if (not defined $con->{unread_length}) {
-        $stream->{body_controller}->enqueue
+        $stream->_receive_body
             (DataView->new (ArrayBuffer->new_from_scalarref ($ref)))
                 if length $$ref;
         return;
@@ -1999,7 +1923,7 @@ sub _ondata ($$) {
           $con->{state} = 'ws handshaking';
           $con->{to_be_closed} = 1;
         }
-        $stream->{body_controller}->enqueue
+        $stream->_receive_body
             (DataView->new (ArrayBuffer->new_from_scalarref ($ref)));
         $stream->_receive_bytes_done;
         unless (defined $stream->{ws_key}) {
@@ -2011,7 +1935,7 @@ sub _ondata ($$) {
         if (defined $stream->{ws_key}) {
           $con->{state} = 'ws handshaking';
         }
-        $stream->{body_controller}->enqueue
+        $stream->_receive_body
             (DataView->new (ArrayBuffer->new_from_scalarref ($ref), 0, $con->{unread_length}));
         $stream->_receive_bytes_done;
         unless (defined $stream->{ws_key}) {
@@ -2020,7 +1944,7 @@ sub _ondata ($$) {
         return;
       } else { # unread_length > $in_length
         $con->{unread_length} -= $in_length;
-        $stream->{body_controller}->enqueue
+        $stream->_receive_body
             (DataView->new (ArrayBuffer->new_from_scalarref ($ref)));
         return;
       }
@@ -2418,7 +2342,7 @@ sub _open_sending_stream ($$;%) {
 
         my $dv = UNIVERSAL::isa ($chunk, 'DataView')
             ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $byte_length); # or throw
-        if ($stream->{DEBUG} > 1) {
+        if ($con->{DEBUG} > 1) {
           for (split /\x0A/, $dv->manakai_to_string, -1) {
             warn "$stream->{id}: S: @{[_e4d $_]}\n";
           }
@@ -2440,7 +2364,7 @@ sub _open_sending_stream ($$;%) {
                      (defined $slot_length and $slot_length < $byte_length);
           return unless $byte_length;
 
-          if ($stream->{DEBUG}) {
+          if ($con->{DEBUG}) {
             my $dv = UNIVERSAL::isa ($chunk, 'DataView')
                 ? $chunk : DataView->new ($chunk->buffer, $chunk->byte_offset, $byte_length); # or throw
             if ($con->{DEBUG} > 1 or $byte_length <= 40) {
@@ -2448,7 +2372,7 @@ sub _open_sending_stream ($$;%) {
                 warn "$stream->{id}: S: @{[_e4d $_]}\n";
               }
             } else {
-              warn "$con->{request}->{id}: S: @{[_e4d substr $_, 0, 40]}... (@{[length $_]})\n"
+              warn "$stream->{id}: S: @{[_e4d substr $_, 0, 40]}... (@{[length $_]})\n"
                   for $dv->manakai_to_string;
             }
           } # DEBUG
@@ -2616,7 +2540,54 @@ sub _headers_received ($;%) {
     }
   } # not is_ws
   (delete $stream->{headers_received}->[1])->($return), delete $stream->{headers_received}->[2];
+
+  if ($con->{DEBUG}) {
+    if ($args{is_request}) {
+      my $url = $return->{target_url}->stringify;
+      warn "$stream->{id}: R: $return->{method} $url HTTP/$return->{version}\n";
+    } else { # response
+      if ($return->{version} eq '0.9') {
+        warn "$stream->{id}: R: HTTP/0.9\n";
+      } else {
+        warn "$stream->{id}: R: HTTP/$return->{version} $return->{status} $return->{reason}\n";
+      }
+    }
+    for (@{$return->{headers}}) {
+      warn "$stream->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
+    }
+    warn "$stream->{id}: WS established\n" if $args{is_ws};
+    warn "$stream->{id}: R: \n";
+  } # DEBUG
 } # _headers_received
+
+sub _receive_body ($$;$) {
+  my ($stream, $dv, $dump_only) = @_;
+
+  my $con = $stream->{connection};
+  if ($con->{DEBUG}) {
+    if ($con->{DEBUG} > 1 or $dv->byte_length <= 40) { # or throw
+      for (split /\x0D?\x0A/, $dv->manakai_to_string, -1) {
+        warn "$stream->{id}: R: @{[_e4d $_]}\n";
+      }
+    } else {
+      warn "$stream->{id}: R: @{[_e4d substr $dv->manakai_to_string, 0, 40]}... (@{[$dv->byte_length]})\n";
+    }
+  }
+
+  $stream->{body_controller}->enqueue ($dv) unless $dump_only; # or throw
+} # _receive_body
+
+sub _receive_text ($$) {
+  my ($stream, $tref) = @_;
+  my $con = $stream->{connection};
+  if ($con->{DEBUG} > 1 or length $$tref <= 40) {
+    for (split /\x0D?\x0A/, $$tref, -1) {
+      warn "$stream->{id}: R: @{[_e4d_t $$tref]}\n";
+    }
+  } else {
+    warn "$stream->{id}: R: @{[_e4d_t substr $$tref, 0, 40]}... (@{[length $$tref]})\n";
+  }
+} # _receive_text
 
 sub _receive_bytes_done ($) {
   my $stream = $_[0];
@@ -2680,21 +2651,14 @@ sub _send_request ($$) {
     return Promise->reject (Web::DOM::TypeError->new ("Connection is busy"));
   }
 
-  # XXX  $req->{id} = $con->{id} . '.' . ++$con->{req_id};
-  if ($con->{DEBUG}) { # XXX
+  $stream->{id} = $con->{id} . '.' . $con->{next_stream_id}++;
+  if ($con->{DEBUG}) {
     warn "$con->{id}: ========== @{[ref $con]}\n";
-    warn "$con->{id}: startstream $req->{id} @{[scalar gmtime]}\n";
+    warn "$con->{id}: startstream $stream->{id} @{[scalar gmtime]}\n";
   }
 
   $stream->{headers_received} = _pcap;
   $stream->{closed} = _pcap;
-
-  if ($con->{DEBUG}) { # XXX
-    #promised_cleanup {
-    #  warn "$con->{id}: endstream $req->{id} @{[scalar gmtime]}\n";
-    #  warn "$con->{id}: ========== @{[ref $con]}\n";
-    #} after {closed}
-  }
 
   $con->{stream} = $stream;
   $stream->{request_method} = $method;
@@ -2724,7 +2688,7 @@ sub _send_request ($$) {
       "\x0D\x0A";
   if ($con->{DEBUG}) {
     for (split /\x0A/, $header) {
-      warn "$req->{id}: S: @{[_e4d $_]}\n";
+      warn "$stream->{id}: S: @{[_e4d $_]}\n";
     }
   }
   my $sent = $con->{writer}->write
@@ -2778,7 +2742,7 @@ sub send_ws_message ($$$) {
     $len = pack 'Q>', $length;
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask,
-                    length => $length) if $self->{DEBUG}; # XXX
+                    length => $length) if $self->{DEBUG};
   $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | ($is_binary ? 2 : 1), $masked | $length0) . $len . $mask))));
   $con->{write_mode} = 'raw';
@@ -2868,26 +2832,26 @@ sub send_ws_close ($;$$) {
   $con->{ws_state} = 'CLOSING';
   $con->{ws_timer} = AE::timer 20, 0, sub {
     if ($con->{DEBUG}) {
-      my $id = $con->{is_server} ? $con->{id} : $con->{request}->{id};
-      warn "$id: WS timeout (20)\n";
+      warn "$stream->{id}: WS timeout (20)\n";
     }
     # XXXerror
     # XXX set exit ?
     $con->_receive_done;
   };
   (delete $stream->{closing}->[1])->(undef), delete $stream->{closing}->[2];
+  warn "$stream->{id}: closing @{[scalar gmtime]}\n" if $con->{DEBUG};
   $con->_send_done;
 
   return $stream->{closed}->[0];
 } # send_ws_close
 
 sub _ws_debug ($$$%) {
-  my $self = $_[0];
+  my $stream = $_[0];
   my $side = $_[1];
   my %args = @_[3..$#_];
+  my $con = $stream->{connection};
 
-  my $id = $self->{is_server} ? $self->{id} : $self->{request}->{id};
-  warn sprintf "$id: %s: WS %s L=%d\n",
+  warn sprintf "$stream->{id}: %s: WS %s L=%d\n",
       $side,
       (join ' ',
           $args{opcode},
@@ -2908,81 +2872,15 @@ sub _ws_debug ($$$%) {
                                      unpack 'CCCC', $args{mask} : ())),
       $args{length};
   if ($args{opcode} == 8 and defined $args{status}) {
-    warn "$id: S: status=$args{status} |@{[_e4d (defined $_[2] ? $_[2] : '')]}|\n";
+    warn "$stream->{id}: S: status=$args{status} |@{[_e4d (defined $_[2] ? $_[2] : '')]}|\n";
   } elsif (length $_[2]) {
-    if ($self->{DEBUG} > 1 or length $_[2] <= 40) {
-      warn "$id: S: @{[_e4d $_[2]]}\n";
+    if ($con->{DEBUG} > 1 or length $_[2] <= 40) {
+      warn "$stream->{id}: S: @{[_e4d $_[2]]}\n";
     } else {
-      warn "$id: S: @{[_e4d substr $_[2], 0, 40]}... (@{[length $_[2]]})\n";
+      warn "$stream->{id}: S: @{[_e4d substr $_[2], 0, 40]}... (@{[length $_[2]]})\n";
     }
   }
 } # _ws_debug
-
-#XXX
-sub _ev ($$;$$) {
-  my $self = shift;
-  my $type = shift;
-  my $req = $self->{is_server} ? $self : $self->{request};
-  if ($self->{DEBUG}) {
-    warn "$req->{id}: $type @{[scalar gmtime]}\n";
-    if ($type eq 'data' and $self->{DEBUG}) {
-      if ($self->{DEBUG} > 1 or length $_[0] <= 40) {
-        for (split /\x0D?\x0A/, $_[0], -1) {
-          warn "$req->{id}: R: @{[_e4d $_]}\n";
-        }
-      } else {
-        warn "$req->{id}: R: @{[_e4d substr $_[0], 0, 40]}... (@{[length $_[0]]})\n";
-      }
-    } elsif ($type eq 'text' and $self->{DEBUG}) {
-      if ($self->{DEBUG} > 1 or length $_[0] <= 40) {
-        for (split /\x0D?\x0A/, $_[0], -1) {
-          warn "$req->{id}: R: @{[_e4d_t $_]}\n";
-        }
-      } else {
-        warn "$req->{id}: R: @{[_e4d_t substr $_[0], 0, 40]}... (@{[length $_[0]]})\n";
-      }
-    } elsif ($type eq 'headers') {
-      my $obj = $_[0];
-      if (defined $obj->{status}) { # response
-        if ($obj->{version} eq '0.9') {
-          warn "$req->{id}: R: HTTP/0.9\n";
-        } else {
-          warn "$req->{id}: R: HTTP/$obj->{version} $obj->{status} $obj->{reason}\n";
-        }
-      } else { # request
-        my $url = $obj->{target_url}->stringify;
-        warn "$req->{id}: R: $obj->{method} $url HTTP/$obj->{version}\n";
-      }
-      for (@{$obj->{headers}}) {
-        warn "$req->{id}: R: @{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}\n";
-      }
-      warn "$req->{id}: + WS established\n" if $_[1];
-    } elsif ($type eq 'complete') {
-      my $err = join ' ',
-          $_[0]->{reset} ? 'reset' : (),
-          $self->{response}->{incomplete} ? 'incomplete' : (),
-          $_[0]->{failed} ? 'failed' : (),
-          $_[0]->{cleanly} ? 'cleanly' : (),
-          $_[0]->{can_retry} ? 'retryable' : (),
-          defined $_[0]->{errno} ? 'errno=' . $_[0]->{errno} : (),
-          defined $_[0]->{message} ? 'message=' . $_[0]->{message} : (),
-          defined $_[0]->{status} ? 'status=' . $_[0]->{status} : (),
-          defined $_[0]->{reason} ? 'reason=' . $_[0]->{reason} : ();
-      warn "$req->{id}: + @{[_e4d_t $err]}\n" if length $err;
-    } elsif ($type eq 'ping') {
-      if ($_[1]) {
-        warn "$req->{id}: R: pong data=@{[_e4d $_[0]]}\n";
-      } else {
-        warn "$req->{id}: R: data=@{[_e4d $_[0]]}\n";
-      }
-    }
-  }
-  #$self->{cb}->($self, $type, @_);
-  if ($type eq 'complete') {
-    $self->{is_completed} = 1;
-    delete $self->{cb};
-  }
-} # _ev
 
 ## Send a response.  The argument must be a hash reference with
 ## following key/value pairs:
@@ -3124,7 +3022,6 @@ sub send_response ($$$) {
     }
     $res .= "\x0D\x0A";
     if ($stream->{DEBUG}) {
-      warn "$stream->{id}: Sending response headers... @{[scalar gmtime]}\n";
       for (split /\x0A/, $res) {
         warn "$stream->{id}: S: @{[_e4d $_]}\n";
       }
@@ -3132,8 +3029,8 @@ sub send_response ($$$) {
 
     $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)));
   } else {
-    if ($stream->{DEBUG}) {
-      warn "$stream->{id}: Response headers skipped (HTTP/0.9) @{[scalar gmtime]}\n";
+    if ($con->{DEBUG}) {
+      warn "$stream->{id}: Response headers skipped (HTTP/0.9)\n";
     }
   }
 

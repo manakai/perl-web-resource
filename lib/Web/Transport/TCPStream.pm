@@ -74,9 +74,33 @@ sub create ($$) {
         $args->{port} =~ /\A[0-9]+\z/ and $args->{port} < 2**16;
   }
 
-  # XXX
-  #croak "Bad |id|" if defined $args->{id} and utf8::is_utf8 ($args->{id});
-  #$args->{id} = (defined $args->{id} ? $args->{id} : (defined $args->{parent_id} ? $args->{parent_id} : $$) . '.' . ++$Web::Transport::NextID);
+  my $id = defined $args->{id} ? $args->{id} : (defined $args->{parent_id} ? $args->{parent_id} : $$) . '.' . ++$Web::Transport::NextID;
+  my $info = {
+    type => $args->{type},
+    layered_type => $args->{type},
+    id => $id,
+    server => !!$args->{server},
+  };
+  if ($args->{type} eq 'TCP' and defined $args->{host}) {
+    $info->{remote_host} = $args->{host};
+    $info->{remote_port} = 0+$args->{port};
+  }
+  if ($args->{type} eq 'Unix' and defined $args->{path}) {
+    $info->{path} = $args->{path};
+  }
+
+  if ($args->{debug}) {
+    my $action = defined $info->{fh}
+        ? $info->{server} ? 'attach as server' : 'attach as client'
+        : 'connect';
+    if (defined $info->{path}) {
+      warn "$id: $info->{type}: $action ($info->{path})...\n"; # XXX $info->{path} can contain non-ASCII bytes
+    } elsif (defined $info->{remote_host}) {
+      warn "$id: $info->{type}: $action (remote: @{[$info->{remote_host}->to_ascii]}:$info->{remote_port})...\n";
+    } else {
+      warn "$id: $info->{type}: $action (filehandle)...\n";
+    }
+  }
 
   my $fh;
   my ($r_fh_closed, $s_fh_closed) = promised_cv;
@@ -288,20 +312,12 @@ sub create ($$) {
   })->then (sub {
     $fh = $_[0];
 
-    my $info = {
-      type => $args->{type},
-      layered_type => $args->{type},
-      #XXX id => $args->{id},
-      is_server => !!$args->{server},
-    };
-
     if ($info->{type} eq 'TCP') {
       my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $fh;
       $info->{local_host} = Web::Host->new_from_packed_addr ($h);
       $info->{local_port} = $p;
-      $info->{remote_host} = $args->{host};
-      $info->{remote_port} = 0+$args->{port};
     }
+
     AnyEvent::Util::fh_nonblocking $fh, 1;
 
     ## Applied to TCP only (not applied to Unix domain socket)
@@ -313,6 +329,18 @@ sub create ($$) {
     $info->{read_stream} = $read_stream;
     $info->{write_stream} = $write_stream;
     $info->{closed} = $r_fh_closed;
+
+    if ($args->{debug}) {
+      if (defined $info->{local_host}) {
+        warn "$id: $info->{type}: ready (local: @{[$info->{local_host}->to_ascii]}:$info->{local_port})\n";
+      } else {
+        warn "$id: $info->{type}: ready\n";
+      }
+      $info->{closed}->then (sub {
+        warn "$id: $info->{type}: closed\n";
+      });
+    }
+
     return $info;
   })->catch (sub {
     my $error = Web::DOM::Error->wrap ($_[0]);
@@ -327,6 +355,11 @@ sub create ($$) {
     }
     undef $fh;
     $s_fh_closed->();
+
+    if ($args->{debug}) {
+      warn "$id: $info->{type}: failed ($error)\n";
+    }
+
     die $error;
   });
 } # create

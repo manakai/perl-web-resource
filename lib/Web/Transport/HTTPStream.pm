@@ -229,8 +229,9 @@ sub new ($$) {
       $con->_debug_handshake_done ($error);
     }
 
-    # XXX abort reader and writer
-    $con->{writer}->abort ('XXX 1') if defined $con->{writer}; # XXX and reader?
+    (delete $con->{writer})->abort ($error) if defined $con->{writer};
+    (delete $con->{reader})->cancel ($error)->catch (sub { })
+        if defined $con->{reader};
 
     (delete $con->{ready}->[2])->($error), delete $con->{ready}->[1]
         if defined $con->{ready}->[1];
@@ -845,9 +846,8 @@ sub send_request ($$;%) {
 
 ## Return the |closed| promise of the HTTP connection, which is
 ## fulfilled with |undef| when the HTTP connection has been closed or
-## aborted.  Unlike HTTP stream's |closed| promise, this is fulfilled
-## rather than rejected even when the HTTP connection is abnormally
-## closed.
+## aborted.  This is fulfilled rather than rejected even when the HTTP
+## connection is abnormally closed.
 sub closed ($) {
   return $_[0]->{closed}->[0];
 } # closed
@@ -893,16 +893,13 @@ sub abort ($;$) {
   }
 
   my $error = Web::DOM::Error->wrap ($reason);
-  $con->{exit} = $error; # referenced by _send_done
+  $con->{exit} = $error;
 
-  $con->{writer}->abort ($error) if defined $con->{writer};
-
-  delete $con->{writer};
+  (delete $con->{writer})->abort ($error) if defined $con->{writer};
   $con->_send_done (close => 1);
 
-  $con->{reader}->cancel ($error)->catch (sub { })
+  (delete $con->{reader})->cancel ($error)->catch (sub { })
       if defined $con->{reader};
-  delete $con->{reader};
 
   return $con->{closed}->[0];
 } # abort
@@ -941,9 +938,9 @@ sub _connection_error ($$;$$$) {
           @{$headers or []},
           ['Content-Type' => 'text/html; charset=utf-8'],
         ],
+        close => 1,
+        length => ($with_body ? length $res : undef),
       },
-      close => 1,
-      content_length => ($with_body ? length $res : undef),
     )->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)))
@@ -994,6 +991,8 @@ sub _receive_done ($;%) {
   $con->{disable_timer} = 1; # XXX spec
   delete $con->{ws_timer};
   if (defined $con->{write_mode} and not $con->{write_mode} eq 'sent') {
+    $con->{state} = 'sending';
+  } elsif ($con->{state} eq 'before request header') { # XXX spec
     $con->{state} = 'sending';
   }
   $con->{receive_done} = 1;
@@ -1067,6 +1066,7 @@ sub _both_done ($) {
 
     if ($con->{rbuf} =~ /[^\x0D\x0A]/) {
       $con->{state} = 'before request-line';
+      $con->_ondata (undef);
     } else {
       $con->{state} = 'waiting';
     }
@@ -1115,7 +1115,7 @@ sub _both_done ($) {
 sub DESTROY ($) {
   local $@;
   eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+  warn "$$: Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 } # DESTROY
 
@@ -1854,7 +1854,7 @@ sub _read ($) {
 sub _ondata ($$) {
   my ($con, $in) = @_;
   my $stream = $con->{stream}; # or undef
-  my $inref = \($in->manakai_to_string);
+  my $inref = defined $in ? \($in->manakai_to_string) : \'';
   while (1) {
     #warn "[$con->{state}] |$con->{rbuf}|";
     if ($con->{state} eq 'initial') {
@@ -1984,9 +1984,10 @@ sub _ondata ($$) {
         $con->{rbuf} = '';
       }
 
-      if (not defined $con->{unread_length}) { # CONNECT data
+      if (not defined $con->{unread_length}) {
         $stream->{body_controller}->enqueue
-            (DataView->new (ArrayBuffer->new_from_scalarref ($ref)));
+            (DataView->new (ArrayBuffer->new_from_scalarref ($ref)))
+                if length $$ref;
         return;
       }
 
@@ -2983,14 +2984,38 @@ sub _ev ($$;$$) {
   }
 } # _ev
 
-sub send_response ($$$;%) {
-  my ($stream, $response, %args) = @_;
+## Send a response.  The argument must be a hash reference with
+## following key/value pairs:
+##
+##   status - The status code of the response.  It must be an integer.
+##
+##   status_text - The reason phrase of the response.  It must be a
+##   byte string with no 0x0D or 0x0A byte.  It can be the empty
+##   string.
+##
+##   headers - The headers of the response.  It must be an array
+##   reference of zero or more array references representing a pair of
+##   header name and value, which are byte strings with no 0x0D or
+##   0x0A byte.  The header names cannot be the empty string and
+##   cannot contain some kinds of bytes.
+##
+##   length - The byte length of the response body, if any.
+##
+##   close - Whether the HTTP connection should be closed after
+##   sending this response.
+##
+## This method must be invoked while the HTTP connection is waiting
+## for an HTTP response.  It returns a promise which is to be
+## fulfilled with a hash reference that might contain a writable
+## stream of the response body, as described earlier.
+sub send_response ($$$) {
+  my ($stream, $response) = @_;
   my $con = $stream->{connection};
 
   return Promise->reject (Web::DOM::TypeError->new ("Response is not allowed"))
       if not defined $con or defined $con->{write_mode} or not $con->{is_server};
 
-  my $close = $args{close} ||
+  my $close = $response->{close} ||
               $con->{to_be_closed} ||
               $stream->{request}->{version} eq '0.9';
   my $connect = 0;
@@ -3003,19 +3028,19 @@ sub send_response ($$$;%) {
       $response->{status} == 304) {
     ## No response body by definition
     return Promise->reject
-        (Web::DOM::TypeError->new ("Bad byte length $args{content_length}"))
-            if defined $args{content_length};
+        (Web::DOM::TypeError->new ("Bad byte length $response->{length}"))
+            if defined $response->{length};
     $to_be_sent = 0;
   } elsif ($stream->{request}->{method} eq 'CONNECT' and
            200 <= $response->{status} and $response->{status} < 300) {
     ## No response body by definition but switched to the tunnel mode
-    croak "|content_length| not allowed" if defined $args{content_length};
+    croak "|length| not allowed" if defined $response->{length};
     $write_mode = 'raw';
     $connect = 1;
     $close = 1;
   } elsif (100 <= $response->{status} and $response->{status} < 200) {
     ## No response body by definition
-    croak "|content_length| not allowed" if defined $args{content_length};
+    croak "|length| not allowed" if defined $response->{length};
     if (defined $stream->{ws_key} and $response->{status} == 101) {
       $is_ws = 1;
       $write_mode = 'ws';
@@ -3024,10 +3049,10 @@ sub send_response ($$$;%) {
           (Web::DOM::TypeError->new ("1xx response not supported"));
     }
   } else {
-    if (defined $args{content_length}) {
+    if (defined $response->{length}) {
       ## If body length is specified
       $write_mode = 'raw';
-      $to_be_sent = 0+$args{content_length};
+      $to_be_sent = 0+$response->{length};
       push @header, ['Content-Length', $to_be_sent];
     } elsif ($stream->{request}->{version} == 1.1) {
       ## Otherwise, if chunked encoding can be used
@@ -3040,13 +3065,13 @@ sub send_response ($$$;%) {
     $close = 1 if $stream->{request}->{method} eq 'CONNECT';
   }
 
-  unless ($args{proxying}) {
+  #XXXunless ($args{proxying}) {
     push @header, ['Server', $con->{server_header}];
 
     my $dt = Web::DateTime->new_from_unix_time
         (Web::DateTime::Clock->realtime_clock->()); # XXX
     push @header, ['Date', $dt->to_http_date_string];
-  }
+  #}
 
   if ($is_ws) {
     push @header,
@@ -3124,24 +3149,28 @@ sub send_response ($$$;%) {
   }
 } # send_response
 
+## Return the |closed| promise of the HTTP stream, which is to be
+## fulfilled when both sending and receiving a pair of request
+## response have been completed or aborted.  This is fulfilled rather
+## than rejected even when the HTTP stream is abnormally closed.
+sub closed ($) {
+  return $_[0]->{closed}->[0];
+} # closed
+
 ## Abort the HTTP stream.  It effectively abort the underlying HTTP
 ## connection.  The optional argument is the reason of the abort (see
 ## connection's |abort| method).  It returns the HTTP stream's
-## |closed| promise (which might fulfill or reject).
+## |closed| promise.
 sub abort ($;$) {
   my $stream = shift;
   $stream->{connection}->abort (@_) if defined $stream->{connection};
   return $stream->{closed}->[0];
 } # abort
 
-sub closed ($) {
-  return $_[0]->{closed}->[0];
-} # closed
-
 sub DESTROY ($) {
   local $@;
   eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+  warn "$$: Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 } # DESTROY
 

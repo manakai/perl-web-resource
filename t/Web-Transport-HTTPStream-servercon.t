@@ -564,7 +564,7 @@ test {
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         return $stream->send_response
-            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+            ({status => 201, status_text => 'OK', close => 1, length => 0});
       });
     })->then (sub {
       $r->release_lock;
@@ -612,7 +612,7 @@ test {
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         return $stream->send_response
-            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+            ({status => 201, status_text => 'OK', close => 1, length => 0});
       });
     })->then (sub {
       $r->release_lock;
@@ -660,7 +660,7 @@ test {
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         return $stream->send_response
-            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+            ({status => 201, status_text => 'OK', close => 1, length => 0});
       });
     })->then (sub {
       $r->release_lock;
@@ -708,7 +708,7 @@ test {
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         return $stream->send_response
-            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+            ({status => 201, status_text => 'OK', close => 1, length => 0});
       });
     })->then (sub {
       $r->release_lock;
@@ -756,7 +756,7 @@ test {
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         return $stream->send_response
-            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+            ({status => 201, status_text => 'OK', close => 1, length => 0});
       })->catch (sub {
         my $error = $_[0];
         test {
@@ -810,7 +810,7 @@ test {
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         return $stream->send_response
-            ({status => 201, status_text => 'OK'}, close => 1, content_length => 0);
+            ({status => 201, status_text => 'OK', close => 1, length => 0});
       })->catch (sub {
         my $error = $_[0];
         test {

@@ -5,3 +5,6 @@
 - "../../modules/web-datetime" build tests
 - "../../modules/web-dom" build tests
 - "../../modules/streams" build tests
+
+- "../../t_deps/modules/promised-command" build tests
+- "../../t_deps/modules/promise" build tests

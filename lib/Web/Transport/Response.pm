@@ -3,13 +3,25 @@ use strict;
 use warnings;
 use overload '""' => 'stringify', fallback => 1;
 our $VERSION = '2.0';
-use Web::Transport::ProtocolError;
+
+push our @CARP_NOT, qw(Web::DOM::TypeError);
 
 sub new_from_error ($$) {
-  return bless {
-    failed => 1,
-    error => $_[1],
-  }, $_[0];
+  if (UNIVERSAL::isa ($_[1], 'Web::Transport::ProtocolError::WebSocketClose')) {
+    return bless {
+      ws => 1,
+      failed => ! $_[1]->ws_cleanly,
+      status => $_[1]->ws_status,
+      reason => $_[1]->ws_reason,
+      cleanly => $_[1]->ws_cleanly,
+      error => $_[1],
+    }, $_[0];
+  } else {
+    return bless {
+      failed => 1,
+      error => $_[1],
+    }, $_[0];
+  }
 } # new_from_error
 
 sub is_network_error ($) {
@@ -19,8 +31,10 @@ sub is_network_error ($) {
 sub is_reset_error ($) {
   return $_[0]->is_network_error && (
     defined $_[0]->{error}
-      ? Web::Transport::ProtocolError->is_error ($_[0]->{error})
-      : $_[0]->{reset}
+      ? do {
+        require Web::Transport::ProtocolError;
+        Web::Transport::ProtocolError->is_error ($_[0]->{error});
+      } : $_[0]->{reset}
   );
 } # is_reset_error
 
@@ -56,6 +70,10 @@ sub status_line ($) {
   return $_[0]->status . ' ' . $_[0]->status_text;
 } # status_line
 
+sub ws_messages ($) {
+  return $_[0]->{messages}; # or undef
+} # ws_messages
+
 sub ws_code ($) {
   if ($_[0]->{ws} and $_[0]->{ws} == 1) {
     return $_[0]->{status};
@@ -75,6 +93,29 @@ sub ws_reason ($) {
 sub ws_closed_cleanly ($) {
   return $_[0]->{cleanly};
 } # ws_closed_cleanly
+
+sub ws_send_binary ($;$$) {
+  return Promise->reject (Web::DOM::TypeError->new ("Not allowed"))
+      unless defined $_[0]->{ws_send_binary};
+  return $_[0]->{ws_send_binary}->($_[1], $_[2]);
+} # ws_send_binary
+
+sub ws_send_text ($;$$) {
+  return Promise->reject (Web::DOM::TypeError->new ("Not allowed"))
+      unless defined $_[0]->{ws_send_text};
+  return $_[0]->{ws_send_text}->($_[1], $_[2]);
+} # ws_send_text
+
+sub ws_close ($;$$) {
+  unless (defined $_[0]->{ws_close}) {
+    return $_[0]->{ws_closed}->then (sub {
+      return Web::Transport::Response->new_from_error ($_[0]);
+    }) if defined $_[0]->{ws_closed};
+    return Promise->reject (Web::DOM::TypeError->new ("Not allowed"));
+  }
+  delete $_[0]->{$_} for qw(send_ws_binary send_ws_text);
+  return (delete $_[0]->{ws_close})->($_[1], $_[2]);
+} # ws_close
 
 # XXX need header API
 

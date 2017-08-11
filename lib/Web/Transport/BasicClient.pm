@@ -339,8 +339,8 @@ sub _connect ($$) {
   };
 } # _connect
 
-sub _request ($$$$$$$) {
-  my ($self, $method, $url_record, $headers, $body_ref, $no_cache) = @_;
+sub _request ($$$$$$$$) {
+  my ($self, $method, $url_record, $headers, $body_ref, $no_cache, $is_ws) = @_;
   if ($self->debug) {
     warn "$self->{parent_id}: @{[__PACKAGE__]}: Request <@{[$url_record->stringify]}> @{[scalar gmtime]}\n";
   }
@@ -371,32 +371,40 @@ sub _request ($$$$$$$) {
       } @$headers,
     ];
 
+    my $http = $self->{http};
     my $timeout = $self->last_resort_timeout;
     my $timer;
     if ($timeout > 0) {
       $timer = AE::timer $timeout, 0, sub {
-        $self->{http}->abort (_pe "Last-resort timeout ($timeout)");
+        $http->abort (_pe "Last-resort timeout ($timeout)");
         undef $timer;
       };
     }
 
-    return $self->{http}->send_request ({
+    return promised_cleanup { undef $timer } $http->send_request ({
       method => $method,
       target => encode_web_utf8 ($target),
       headers => $headers,
-      #XXX ws => $is_ws
+      ws => $is_ws,
       length => $length,
     })->then (sub {
       my $stream = $_[0]->{stream};
+
       my $reqbody = $_[0]->{body};
-      if (defined $reqbody and defined $body_ref and length $$body_ref) {
-        my $writer = $reqbody->get_writer;
-        $writer->write
-            (DataView->new (ArrayBuffer->new_from_scalarref ($body_ref)))->catch (sub { });
-        $writer->close->catch (sub { });
+      if (defined $body_ref and length $$body_ref) {
+        if (defined $reqbody) {
+          my $writer = $reqbody->get_writer;
+          $writer->write
+              (DataView->new (ArrayBuffer->new_from_scalarref ($body_ref)))->catch (sub { });
+          $writer->close->catch (sub { });
+        } else {
+          my $error = _te 'Request body is not allowed';
+          $stream->abort ($error);
+          die $error;
+        }
       }
 
-      return promised_cleanup { undef $timer } $stream->headers_received->then (sub {
+      return $stream->headers_received->then (sub {
         my $response = $_[0];
 
         if (not $self->{request_mode_is_http_proxy} and
@@ -414,6 +422,65 @@ sub _request ($$$$$$$) {
         # XXX $response->{ws_connection_established} = $_[3];
 
         bless $response, 'Web::Transport::Response';
+
+        if ($is_ws) {
+          if (defined $response->{messages}) { # established
+            my $queue = Promise->resolve;
+            $response->{ws_send_binary} = sub {
+              my $v = \($_[0]);
+              return $queue = $queue->then (sub {
+                my $dv = DataView->new (ArrayBuffer->new_from_scalarref ($v)); # XXX can throw XXXlocation
+                return $stream->send_ws_message ($dv->byte_length, 1)->then (sub {
+                  my $writer = $_[0]->{body}->get_writer;
+                  $writer->write ($dv);
+                  return $writer->close;
+                });
+              })->catch (sub {
+                $stream->abort ($_[0]);
+                die $_[0];
+              });
+            }; # ws_send_binary
+            $response->{ws_send_text} = sub {
+              my $text = encode_web_utf8 $_[0];
+              return $queue = $queue->then (sub {
+                return $stream->send_ws_message ((length $text), 0);
+              })->then (sub {
+                my $writer = $_[0]->{body}->get_writer;
+                $writer->write
+                    (DataView->new (ArrayBuffer->new_from_scalarref (\$text)));
+                return $writer->close;
+              })->catch (sub {
+                $stream->abort ($_[0]);
+                die $_[0];
+              });
+            }; # ws_send_text
+            $response->{ws_close} = sub {
+              my ($x, $y) = @_;
+              return $queue = $queue->then (sub {
+                return $stream->send_ws_close ($x, $y);
+              })->then (sub {
+                $self->{closed} = 1;
+                undef $stream;
+                undef $self;
+                return Web::Transport::Response->new_from_error ($_[0]);
+              }, sub {
+                $self->{closed} = 1;
+                undef $stream;
+                undef $self;
+                return Web::Transport::Response->new_from_error ($_[0]);
+              });
+            }; # ws_close
+            $response->{ws_closed} = $stream->closed;
+            $stream->closed->then (sub {
+              delete $response->{ws_send_binary};
+              delete $response->{ws_send_text};
+              delete $response->{ws_close};
+            });
+            return [$response, $stream->closed];
+          } else { # non-WS response
+            $response->{ws} = 2;
+          }
+        }
 
         my $readable = delete $response->{body};
         if (defined $readable) {
@@ -440,13 +507,11 @@ sub _request ($$$$$$$) {
             return $stream->closed;
           })->then (sub {
             die $_[0] if Web::Transport::ProtocolError->is_error ($_[0]);
-            return $response;
+            return [$response, undef];
           });
         } # $readable
 
-        return $stream->closed->then (sub {
-          return $response;
-        });
+        return [$response, $stream->closed];
       });
     });
   });
@@ -455,7 +520,11 @@ sub _request ($$$$$$$) {
 sub request ($%) {
   my ($self, %args) = @_;
   return Promise->reject (_te "Client closed") if $self->{closed};
-  my $result = $self->{queue}->then (sub {
+
+  my $ready = $self->{queue};
+  my $s_queue;
+  ($self->{queue}, $s_queue) = promised_cv;
+  return $ready->then (sub {
     $args{base_url} ||= $self->{base_url};
     $args{path_prefix} = $self->{path_prefix} if not defined $args{path_prefix};
     $args{protocol_clock} = $self->protocol_clock;
@@ -472,19 +541,32 @@ sub request ($%) {
     die _te "Bad URL origin |@{[$url_origin->to_ascii]}| (|@{[$self->{origin}->to_ascii]}| expected)"
         unless $url_origin->same_origin_as ($self->{origin});
 
+    my $scheme = $url_record->scheme;
+    my $is_ws = $scheme eq 'wss' || $scheme eq 'ws';
+    if ($is_ws) {
+      my $v = $url_record->originpathquery;
+      $v =~ s/^ws/http/;
+      $url_record = Web::URL->parse_string ($v);
+    }
+
     my $max = $self->max_size;
     my $no_cache = $args{superreload};
-    return $self->_request ($method, $url_record, $header_list, $body_ref, $no_cache)->catch (sub {
-      return $self->_request ($method, $url_record, $header_list, $body_ref, $no_cache)
+    return $self->_request ($method, $url_record, $header_list, $body_ref, $no_cache, $is_ws)->catch (sub {
+      return $self->_request ($method, $url_record, $header_list, $body_ref, $no_cache, $is_ws)
           if Web::Transport::ProtocolError->can_http_retry ($_[0]);
       die $_[0];
+    })->then (sub {
+      my ($return, $wait) = @{$_[0]};
+      $s_queue->($wait);
+      die $return if defined $return->{ws} and $return->{ws} == 2;
+      return $return;
     });
   })->catch (sub {
+    die $_[0] if UNIVERSAL::isa ($_[0], 'Web::Transport::Response');
     my $error = Web::DOM::Error->wrap ($_[0]);
+    $s_queue->(undef);
     die Web::Transport::Response->new_from_error ($error);
-  }); # $result
-  $self->{queue} = $result->catch (sub { });
-  return $result;
+  });
 } # request
 
 sub close ($) {
@@ -528,7 +610,7 @@ sub abort ($;$) {
 } # abort
 
 sub DESTROY ($) {
-  $_[0]->abort ("Aborted by DESTROY of $_[0]");
+  $_[0]->abort ("Aborted by DESTROY of $_[0]") unless $_[0]->{closed};
 
   local $@;
   eval { die };

@@ -223,7 +223,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               return $stream->headers_received->then (sub {
                 my $got = $_[0];
                 $result->{response} = $got;
-                if ($got->{messages}) {
+                if (defined $got->{messages}) {
                   $result->{ws_established} = 1;
                   if ($test->{'ws-send'}) {
                     $stream->send_ws_message (3, not 'binary')->then (sub {

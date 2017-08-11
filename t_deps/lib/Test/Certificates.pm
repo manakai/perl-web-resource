@@ -63,6 +63,11 @@ sub generate_ca_cert ($) {
 sub generate_certs ($$) {
   my ($class, $cert_args) = @_;
 
+  my $lock_path = $cert_args->{intermediate} ? $class->ca_path ('lock') : $class->cert_path ('lock', {host => 'intermediate'});
+  my $lock = $lock_path->openw ({locked => 1});
+
+  warn "$$: @{[scalar gmtime]}: Generating certificate...\n";
+
   $class->generate_ca_cert;
   my $ica_key_path = $cert_args->{intermediate} ? $class->ca_path ('key.pem') : $class->cert_path ('key.pem', {host => 'intermediate'});
   my $ica_cert_path = $cert_args->{intermediate} ? $class->ca_path ('cert.pem') : $class->cert_path ('cert.pem', {host => 'intermediate'});
@@ -116,6 +121,10 @@ sub generate_certs ($$) {
   x "cat \Q$server_cert_path\E \Q$ica_cert_path\E > \Q$chained_cert_path\E";
   my $ca_cert_path = $class->ca_path ('cert.pem');
   x "cat \Q$ca_cert_path\E >> \Q$chained_cert_path\E";
+
+  warn "$$: @{[scalar gmtime]}: Certificate generation done\n";
+
+  undef $lock;
 } # generate_certs
 
 sub wait_create_cert ($$) {

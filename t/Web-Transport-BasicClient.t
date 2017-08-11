@@ -878,7 +878,9 @@ test {
           ## Not sure whether this is the right error...
           is $res->network_error_message, 'Certificate verification error 1 - error number 1';
         } else {
-          is $res->network_error_message, 'error:14090086:SSL routines:SSL3_GET_SERVER_CERTIFICATE:certificate verify failed';
+          #'error:14090086:SSL routines:SSL3_GET_SERVER_CERTIFICATE:certificate verify failed'
+          #'error:14007086:SSL routines:CONNECT_CR_CERT:certificate verify failed'
+          like $res->network_error_message, qr{certificate verify failed};
         }
       } $c;
     })->then (sub{

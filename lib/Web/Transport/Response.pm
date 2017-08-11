@@ -2,18 +2,30 @@ package Web::Transport::Response;
 use strict;
 use warnings;
 use overload '""' => 'stringify', fallback => 1;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
+use Web::Transport::ProtocolError;
+
+sub new_from_error ($$) {
+  return bless {
+    failed => 1,
+    error => $_[1],
+  }, $_[0];
+} # new_from_error
 
 sub is_network_error ($) {
   return $_[0]->{failed} && !$_[0]->{ws};
 } # is_network_error
 
 sub is_reset_error ($) {
-  return $_[0]->is_network_error && $_[0]->{reset};
+  return $_[0]->is_network_error && (
+    defined $_[0]->{error}
+      ? Web::Transport::ProtocolError->is_error ($_[0]->{error})
+      : $_[0]->{reset}
+  );
 } # is_reset_error
 
 sub network_error_message ($) {
-  return $_[0]->{message};
+  return defined $_[0]->{error} ? $_[0]->{error}->message : $_[0]->{message};
 } # network_error_message
 
 sub status ($) {
@@ -36,7 +48,7 @@ sub is_error ($) {
 } # is_error
 
 sub status_text ($) {
-  return defined $_[0]->{reason} ? $_[0]->{reason} : '';
+  return defined $_[0]->{status_text} ? $_[0]->{status_text} : defined $_[0]->{reason} ? $_[0]->{reason} : '';
 } # status_text
 
 ## HTTP::Response compatibility
@@ -115,7 +127,11 @@ sub stringify ($) {
           $self->{failed} ? 1 : 0, $self->{cleanly} ? 1 : 0;
     }
   } elsif ($self->is_network_error) {
-    return "Network error: @{[$self->network_error_message]}";
+    if (defined $self->{error}) {
+      return "Network error: $self->{error}";
+    } else {
+      return "Network error: @{[$self->network_error_message]}";
+    }
   } else {
     return "Response: @{[$self->status_line]}";
   }

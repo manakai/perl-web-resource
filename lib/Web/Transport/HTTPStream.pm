@@ -264,7 +264,7 @@ sub new ($$) {
 ##   $stream->headers_received->then (sub {
 ##     $_[0]->{version}
 ##     $_[0]->{status}
-##     $_[0]->{reason}
+##     $_[0]->{status_text}
 ##     $_[0]->{headers}
 ##     $_[0]->{body}
 ##     $_[0]->{incomplete}
@@ -321,8 +321,8 @@ sub new ($$) {
 ##   status - If the method is the client's |headers_received|, the
 ##   response's status.
 ##
-##   reason - If the method is the client's |headers_received|, the
-##   response's status text.
+##   status_text - If the method is the client's |headers_received|,
+##   the response's status text.
 ##
 ##   headers - If the method is the server's |headers_received|, the
 ##   request's headers.  If the method is the client's
@@ -1240,9 +1240,9 @@ sub _process_rbuf ($$) {
           $res->{status} = 0+$1;
           $res->{status} = 2**31-1 if $res->{status} > 2**31-1;
           if ($start_line =~ s/\A\x20+//) {
-            $res->{reason} = $start_line;
+            $res->{status_text} = $start_line;
           } else {
-            $res->{reason} = '';
+            $res->{status_text} = '';
           }
         }
       } elsif ($start_line =~ s{\A\x20+}{}) {
@@ -1250,9 +1250,9 @@ sub _process_rbuf ($$) {
           $res->{status} = 0+$1;
           $res->{status} = 2**31-1 if $res->{status} > 2**31-1;
           if ($start_line =~ s/\A\x20//) {
-            $res->{reason} = $start_line;
+            $res->{status_text} = $start_line;
           } else {
-            $res->{reason} = '';
+            $res->{status_text} = '';
           }
         }
       }
@@ -1389,12 +1389,12 @@ sub _process_rbuf ($$) {
           #push @{$res->{'1xxes'} ||= []}, {
           #  version => $res->{version},
           #  status => $res->{status},
-          #  reason => $res->{reason},
+          #  status_text => $res->{status_text},
           #  headers => $res->{headers},
           #};
           $res->{version} = '0.9';
           $res->{status} = 200;
-          $res->{reason} = 'OK';
+          $res->{status_text} = 'OK';
           $res->{headers} = [];
           $self->{state} = 'before response';
           $self->{temp_buffer} = '';
@@ -2566,7 +2566,7 @@ sub _headers_received ($;%) {
       if ($return->{version} eq '0.9') {
         warn "$stream->{id}: R: HTTP/0.9\n";
       } else {
-        warn "$stream->{id}: R: HTTP/$return->{version} $return->{status} $return->{reason}\n";
+        warn "$stream->{id}: R: HTTP/$return->{version} $return->{status} $return->{status_text}\n";
       }
     }
     for (@{$return->{headers}}) {
@@ -2680,7 +2680,7 @@ sub _send_request ($$) {
   $con->{stream} = $stream;
   $stream->{request_method} = $method;
   my $res = $stream->{response} = $con->{response} = {
-    status => 200, reason => 'OK', version => '0.9',
+    status => 200, status_text => 'OK', version => '0.9',
     headers => [],
   };
   $con->{state} = 'before response';
@@ -2820,9 +2820,9 @@ sub send_ws_close ($;$$) {
     return Promise->reject ("Bad status"); # XXXerror
   }
   if (defined $reason) {
-    return Promise->reject ("Reason is utf8-flagged") # XXXerror
+    return Promise->reject ("Status text is utf8-flagged") # XXXerror
         if utf8::is_utf8 $reason;
-    return Promise->reject ("Reason is too long") # XXXerror
+    return Promise->reject ("Status text is too long") # XXXerror
         if 0x7D < length $reason;
   }
 

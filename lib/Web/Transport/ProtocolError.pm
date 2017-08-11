@@ -18,6 +18,13 @@ sub is_reset ($$) {
           $_[1]->errno == ECONNRESET);
 } # is_reset
 
+## Returns whether the argument is an error that an HTTP request can
+## be sent again.
+sub can_http_retry ($$) {
+  return (UNIVERSAL::isa ($_[1], __PACKAGE__ . '::HTTPParseError') and
+          $_[1]->http_can_retry);
+} # can_http_retry
+
 ## Returns whether the argument is a fatal protocol error or not.
 ##
 ## Note that this method's definition of "is error" is different from

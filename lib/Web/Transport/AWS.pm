@@ -66,14 +66,14 @@ sub aws4 ($%) {
   @signed_headers = sort { $a->[2] cmp $b->[2] } @signed_headers;
   my $signed_headers = join ';', map { $_->[2] } @signed_headers;
 
-  my $query = encode_web_utf8 $args{url}->query;
+  my $query = $args{url}->query;
   $query = join "&", map {
     reescape ($_->[0]) . '=' . reescape (defined $_->[1] ? $_->[1] : '');
   } sort {
     $a->[0] cmp $b->[0];
   } map {
     [split /=/, $_, 2];
-  } split m{&}, (defined $query ? $query : ''), -1;
+  } split m{&}, (defined $query ? encode_web_utf8 $query : ''), -1;
 
   my $canonical_request = encode_web_utf8 join "\x0A",
       $args{method},

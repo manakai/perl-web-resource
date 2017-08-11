@@ -312,7 +312,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
-        is $got->{reason}, 'ok';
+        is $got->{status_text}, 'ok';
         is $got->{headers}->[0]->[0], 'X-hoge';
         is $got->{headers}->[0]->[1], 'Foo bar';
         ok ! $got->{incomplete};
@@ -376,7 +376,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
-        is $got->{reason}, 'ok';
+        is $got->{status_text}, 'ok';
         is $got->{headers}->[0]->[0], 'X-hoge';
         is $got->{headers}->[0]->[1], 'Foo bar';
         is $got->{headers}->[1]->[0], 'content-length';
@@ -436,7 +436,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '0.9';
         is $got->{status}, 200;
-        is $got->{reason}, 'OK';
+        is $got->{status_text}, 'OK';
         is 0+@{$got->{headers}}, 0;
         ok ! $got->{incomplete};
       } $c;
@@ -546,7 +546,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
-        is $got->{reason}, 'ok';
+        is $got->{status_text}, 'ok';
         is $got->{headers}->[0]->[0], 'X-hoge';
         is $got->{headers}->[0]->[1], 'Foo bar';
         ok ! $got->{incomplete};
@@ -575,7 +575,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 207;
-        is $got->{reason}, 'foo';
+        is $got->{status_text}, 'foo';
         is $got->{headers}->[0]->[0], 'content-length';
         is $got->{headers}->[0]->[1], '7';
         ok ! $got->{incomplete};
@@ -752,7 +752,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
-        is $got->{reason}, 'ok';
+        is $got->{status_text}, 'ok';
         is $got->{headers}->[0]->[0], 'X-hoge';
         is $got->{headers}->[0]->[1], 'Foo bar';
         ok ! $got->{incomplete};
@@ -814,7 +814,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
-        is $got->{reason}, 'ok';
+        is $got->{status_text}, 'ok';
         is $got->{headers}->[0]->[0], 'X-hoge';
         is $got->{headers}->[0]->[1], 'Foo bar';
         ok ! $got->{incomplete};
@@ -877,7 +877,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
-        is $got->{reason}, 'ok';
+        is $got->{status_text}, 'ok';
         is $got->{headers}->[0]->[0], 'X-hoge';
         is $got->{headers}->[0]->[1], 'Foo bar';
         ok ! $got->{incomplete};
@@ -2224,7 +2224,7 @@ close
       })->catch (sub {
         my $err = $_[0];
         test {
-          like $err, qr{^Reason is utf8-flagged};
+          like $err, qr{^Status text is utf8-flagged};
         } $c;
       })->then (sub {
         return $stream->send_ws_close;
@@ -2280,7 +2280,7 @@ close
       })->catch (sub {
         my $err = $_[0];
         test {
-          like $err, qr{^Reason is too long};
+          like $err, qr{^Status text is too long};
         } $c;
       })->then (sub {
         return $stream->send_ws_close;
@@ -3876,7 +3876,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
-        is $got->{reason}, 'ok';
+        is $got->{status_text}, 'ok';
         is $got->{headers}->[0]->[0], 'X-hoge';
         is $got->{headers}->[0]->[1], 'Foo bar';
         ok ! $got->{incomplete};
@@ -3930,7 +3930,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
-        is $got->{reason}, 'ok';
+        is $got->{status_text}, 'ok';
         is $got->{headers}->[0]->[0], 'X-hoge';
         is $got->{headers}->[0]->[1], 'Foo bar';
         ok ! $got->{incomplete};
@@ -4016,7 +4016,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
-        is $got->{reason}, 'ok';
+        is $got->{status_text}, 'ok';
         is $got->{headers}->[0]->[0], 'X-hoge';
         is $got->{headers}->[0]->[1], 'Foo bar';
         ok ! $got->{incomplete};
@@ -4169,7 +4169,7 @@ test {
         is $got->{messages}, undef;
         is $got->{version}, '1.1';
         is $got->{status}, 203;
-        is $got->{reason}, 'ok';
+        is $got->{status_text}, 'ok';
         is $got->{headers}->[0]->[0], 'X-hoge';
         is $got->{headers}->[0]->[1], 'Foo bar';
         ok ! $got->{incomplete};

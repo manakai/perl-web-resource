@@ -415,7 +415,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             } else {
               is $result->{response}->{status}, $test->{status}->[1]->[0],
                  'response status';
-              is $result->{response}->{reason},
+              is $result->{response}->{status_text},
                  defined $test->{reason}->[1]->[0] ? $test->{reason}->[1]->[0] : defined $test->{reason}->[0] ? $test->{reason}->[0] : '',
                  'response status text';
             }

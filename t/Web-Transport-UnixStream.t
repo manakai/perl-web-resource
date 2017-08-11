@@ -77,11 +77,11 @@ test {
     })->then (sub {
       my $info = $_[0];
 
-      my $w = $info->{write_stream}->get_writer;
-      my $r = $info->{read_stream}->get_reader;
+      my $w = $info->{writable}->get_writer;
+      my $r = $info->{readable}->get_reader;
 
-      $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-      $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
       $w->write (dv "abc");
       $w->write (dv "xyz");
@@ -94,12 +94,12 @@ test {
     path => $path,
   })->then (sub {
     my $info = $_[0];
-    my $w = $info->{write_stream}->get_writer;
-    my $r = $info->{read_stream}->get_reader ('byob');
+    my $w = $info->{writable}->get_writer;
+    my $r = $info->{readable}->get_reader ('byob');
     my @result;
 
-    $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-    $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
     my $try; $try = sub {
       return $r->read (dv "x" x 10)->then (sub {
@@ -151,11 +151,11 @@ test {
     })->then (sub {
       my $info = $_[0];
 
-      my $w = $info->{write_stream}->get_writer;
-      my $r = $info->{read_stream}->get_reader;
+      my $w = $info->{writable}->get_writer;
+      my $r = $info->{readable}->get_reader;
 
-      $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-      $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
       $w->write (dv "abc");
       $w->write (dv "xyz");
@@ -168,12 +168,12 @@ test {
     path => $path,
   })->then (sub {
     my $info = $_[0];
-    my $w = $info->{write_stream}->get_writer;
-    my $r = $info->{read_stream}->get_reader ('byob');
+    my $w = $info->{writable}->get_writer;
+    my $r = $info->{readable}->get_reader ('byob');
     my @result;
 
-    $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-    $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
     $r->read (dv "x" x 10)->then (sub {
       my $v = $_[0];
@@ -230,11 +230,11 @@ test {
     })->then (sub {
       my $info = $_[0];
 
-      my $w = $info->{write_stream}->get_writer;
-      my $r = $info->{read_stream}->get_reader;
+      my $w = $info->{writable}->get_writer;
+      my $r = $info->{readable}->get_reader;
 
-      $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-      $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
       $w->write (dv "abc");
       $w->write (dv "xyz");
@@ -247,11 +247,11 @@ test {
     path => $path,
   })->then (sub {
     my $info = $_[0];
-    my $w = $info->{write_stream}->get_writer;
-    my $r = $info->{read_stream}->get_reader;
+    my $w = $info->{writable}->get_writer;
+    my $r = $info->{readable}->get_reader;
 
-    $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-    $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
     my @result;
 
@@ -312,11 +312,11 @@ test {
     })->then (sub {
       my $info = $_[0];
 
-      my $w = $info->{write_stream}->get_writer;
-      my $r = $info->{read_stream}->get_reader ('byob');
+      my $w = $info->{writable}->get_writer;
+      my $r = $info->{readable}->get_reader ('byob');
 
-      $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-      $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
       my $read; $read = sub {
         return $r->read (dv "x" x 10)->then (sub {
@@ -336,11 +336,11 @@ test {
     path => $path,
   })->then (sub {
     my $info = $_[0];
-    my $w = $info->{write_stream}->get_writer;
-    my $r = $info->{read_stream}->get_reader ('byob');
+    my $w = $info->{writable}->get_writer;
+    my $r = $info->{readable}->get_reader ('byob');
 
-    $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-    $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
     $w->write (dv "abcdef");
     $w->write (dv "foo bar 123");
@@ -395,11 +395,11 @@ test {
     })->then (sub {
       my $info = $_[0];
 
-      my $w = $info->{write_stream}->get_writer;
-      my $r = $info->{read_stream}->get_reader ('byob');
+      my $w = $info->{writable}->get_writer;
+      my $r = $info->{readable}->get_reader ('byob');
 
-      $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-      $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
       my $read; $read = sub {
         return $r->read (dv "x" x 10)->then (sub {
@@ -419,11 +419,11 @@ test {
     path => $path,
   })->then (sub {
     my $info = $_[0];
-    my $w = $info->{write_stream}->get_writer;
-    my $r = $info->{read_stream}->get_reader;
+    my $w = $info->{writable}->get_writer;
+    my $r = $info->{readable}->get_reader;
 
-    $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-    $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
     $w->write (dv "abcdef");
     $w->write (dv "foo bar 123");
@@ -481,11 +481,11 @@ test {
     })->then (sub {
       my $info = $_[0];
 
-      my $w = $info->{write_stream}->get_writer;
-      my $r = $info->{read_stream}->get_reader ('byob');
+      my $w = $info->{writable}->get_writer;
+      my $r = $info->{readable}->get_reader ('byob');
 
-      $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-      $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+      $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
       push @done, $r->closed;
 
@@ -514,11 +514,11 @@ test {
     path => $path,
   })->then (sub {
     my $info = $_[0];
-    my $w = $info->{write_stream}->get_writer;
-    my $r = $info->{read_stream}->get_reader ('byob');
+    my $w = $info->{writable}->get_writer;
+    my $r = $info->{readable}->get_reader ('byob');
 
-    $info->{read_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
-    $info->{write_stream}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{readable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
+    $info->{writable}->{_destroy} = bless sub { $destroyed++ }, 'test::DestroyCallback1';
 
     push @done, $r->closed;
 

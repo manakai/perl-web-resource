@@ -16,7 +16,7 @@ matrix:
     os: osx
 before_install: git submodule update --init
 install: "make test-deps"
-script: "make test-main"
+script: make test-main PROVE="./prove -v"
 notifications:
   email:
     - wakaba@suikawiki.org

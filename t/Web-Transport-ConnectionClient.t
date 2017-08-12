@@ -3180,7 +3180,7 @@ test {
     })->then (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error;
+        ok $res->is_network_error, $res;
         is $res->network_error_message, $message;
       } $c;
     })->then (sub{

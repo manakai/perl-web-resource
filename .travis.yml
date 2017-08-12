@@ -15,7 +15,10 @@ matrix:
   - perl: "5.10"
     os: osx
 before_install: git submodule update --init
-install: "make test-deps"
+install:
+  - make local/bin/pmbp.pl
+  - perl local/bin/pmbp.pl --install-openssl
+  - make test-deps
 script:
   - ./perl t/Web-Transport-BasicClient.t
   - ./perl t/Web-Transport-BasicClient-ws.t

@@ -147,9 +147,13 @@ sub _debug_info ($$) {
       warn "$prefix OCSP stapling: OK\n";
     }
     if (defined (my $res = $result->{response})) {
-      warn "$prefix   Status=$res->{response_status} Produced=$res->{produced}\n";
-      for my $r (values %{$res->{responses} or {}}) {
-        warn "$prefix   - Status=$r->{cert_status} Revocation=$r->{revocation_time} ThisUpdate=$r->{this_update} NextUpdate=$r->{next_update}\n";
+      #warn "$prefix   Status=$res->{response_status} Produced=$res->{produced}\n";
+      #for my $r (values %{$res->{responses} or {}}) {
+      #  warn "$prefix   - Status=$r->{cert_status} Revocation=$r->{revocation_time} ThisUpdate=$r->{this_update} NextUpdate=$r->{next_update}\n";
+      #}
+      for (@$res) {
+        my $r = $_->[2];
+        warn "$prefix   - Status=$r->{statusType} Revocation=$r->{revocationTime} ThisUpdate=$r->{thisUpdate} NextUpdate=$r->{nextUpdate}\n";
       }
     }
   } elsif (defined $info->{tls_protocol}) {
@@ -483,7 +487,7 @@ sub create ($$) {
       }
     }
 
-    $info->{parent}->{closed}->then ($s_parent_closed);
+    (delete $info->{parent}->{closed})->then ($s_parent_closed);
     $t_r = (delete $info->{parent}->{readable})->get_reader ('byob');
     $t_w = (delete $info->{parent}->{writable})->get_writer;
     $t_read = sub {
@@ -606,11 +610,9 @@ sub create ($$) {
           $info->{tls_stapling}->{error} = _pe "Can't get certid from certificate: $@";
           return 1;
         }
-        $certid = substr $certid, 2; # remove SEQUENCE header
 
-        my $res = Web::Transport::OCSP->parse_response_byte_string
-            (Net::SSLeay::i2d_OCSP_RESPONSE ($response));
-        my $error = Web::Transport::OCSP->check_cert_id_with_response
+        my $res = [Net::SSLeay::OCSP_response_results ($response)];
+        my $error = Web::Transport::OCSP->check_cert_id_with_response_ssleay
             ($res, $certid, $args->{protocol_clock});
         if (not defined $error) {
           $info->{tls_stapling}->{ok} = 1;

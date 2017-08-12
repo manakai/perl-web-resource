@@ -437,9 +437,13 @@ sub _debug_handshake_done ($$) {
         warn "$id:   + OCSP stapling: OK\n";
       }
       if (defined (my $res = $result->{response})) {
-        warn "$id:   +   Status=$res->{response_status} Produced=$res->{produced}\n";
-        for my $r (values %{$res->{responses} or {}}) {
-          warn "$id:   +   - Status=$r->{cert_status} Revocation=$r->{revocation_time} ThisUpdate=$r->{this_update} NextUpdate=$r->{next_update}\n";
+        #warn "$id:   +   Status=$res->{response_status} Produced=$res->{produced}\n";
+        #for my $r (values %{$res->{responses} or {}}) {
+        #  warn "$id:   +   - Status=$r->{cert_status} Revocation=$r->{revocation_time} ThisUpdate=$r->{this_update} NextUpdate=$r->{next_update}\n";
+        #}
+        for (@$res) {
+          my $r = $_->[2];
+          warn "$id:     - Status=$r->{statusType} Revocation=$r->{revocationTime} ThisUpdate=@{[scalar gmtime $r->{thisUpdate}]} NextUpdate=@{[scalar gmtime $r->{nextUpdate}]}\n";
         }
       }
     } elsif (defined $info->{tls_protocol}) {

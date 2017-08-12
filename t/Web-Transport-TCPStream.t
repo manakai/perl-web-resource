@@ -1043,7 +1043,9 @@ test {
         is $e->name, 'AbortError';
         ok $e->message;
         is $e->file_name, __FILE__;
-        is $e->line_number, __LINE__-15;
+        ok $e->line_number == __LINE__-15 ||
+           $e->line_number == __LINE__-14, # perl version dependent:-<
+           $e->line_number . " == " . (__LINE__-14);
       } $c;
       undef $try;
     });

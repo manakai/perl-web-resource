@@ -1,13 +1,14 @@
 package Web::Transport::ASN1;
 use strict;
 use warnings;
+use warnings FATAL => 'recursion';
 
 ## This is a very simplified implementation of DER decoder.  This
 ## module should only be invoked from Web::Transport::* modules.
 
 sub decode_der ($;%);
 sub decode_der ($;%) {
-  my @s = split //, shift;
+  my @s = ref $_[0] ? @{+shift} : split //, shift;
   my %args = @_;
   my $result = [];
   while (@s) {
@@ -94,7 +95,7 @@ sub decode_der ($;%) {
     } elsif ($class == 0 and $is_constructed) {
       if ($tag == 16) {
         if (defined $args{depth} and $args{depth} > 0) {
-          push @$result, ['SEQUENCE', decode_der join ('', @data), depth => $args{depth} - 1];
+          push @$result, ['SEQUENCE', decode_der \@data, depth => $args{depth} - 1];
           return undef unless defined $result->[-1]->[1];
           next;
         } else {

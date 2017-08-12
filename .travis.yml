@@ -20,6 +20,7 @@ script:
   - ./perl t/Web-Transport-BasicClient.t
   - ./perl t/Web-Transport-BasicClient-ws.t
   - ./perl t/Web-Transport-ConnectionClient.t
+  - ./perl t/Web-Transport-HTTPStream-clientparsing.t
   - make test-main
 notifications:
   email:

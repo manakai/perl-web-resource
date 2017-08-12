@@ -318,7 +318,7 @@ sub start ($$;%) {
     });
 
     # MODE_ENABLE_PARTIAL_WRITE | MODE_ACCEPT_MOVING_WRITE_BUFFER
-    Net::SSLeay::CTX_set_mode ($tls, 1 | 2);
+    Net::SSLeay::set_mode ($tls, 1 | 2);
     $self->{_rbio} = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
     $self->{_wbio} = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
 

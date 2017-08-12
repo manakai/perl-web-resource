@@ -178,6 +178,62 @@ sub check_cert_id_with_response ($$$$) {
   return undef;
 } # check_cert_id_with_response
 
+sub check_cert_id_with_response_ssleay ($$$$) {
+  my (undef, $res, $cert_id, $clock) = @_;
+
+  ## $res: <http://search.cpan.org/dist/Net-SSLeay/lib/Net/SSLeay.pod#Certificate_verification_and_Online_Status_Revocation_Protocol_(OCSP)>
+
+  my $r;
+  for (@$res) {
+    if ($_->[0] eq $cert_id) {
+      $r = $_->[2];
+      last;
+    }
+  }
+  if (not defined $r) {
+    return "The stapled OCSP response is not applicable to the certificate";
+  }
+
+  if ($r->{statusType} == 0) { # V_OCSP_CERTSTATUS_GOOD
+    #
+  } elsif ($r->{statusType} == 1) { # V_OCSP_CERTSTATUS_REVOKED
+    return "The certificate is revoked at $r->{revocationTime} according to the stapled OCSP response";
+  } else {
+    return "Unknown stapled OCSP certificate status |$r->{statusType}|";
+  }
+
+  if ($r->{statusType} == 0) { # V_OCSP_CERTSTATUS_GOOD
+    #
+  } elsif ($r->{statusType} == 1) { # V_OCSP_CERTSTATUS_REVOKED
+    return "The certificate is revoked at $r->{revocationTime} according to the stapled OCSP response";
+  } else {
+    return "Unknown stapled OCSP certificate status |$r->{statusType}|";
+  }
+
+  my $now = $clock->();
+  my $parser = Web::DateTime::Parser->new;
+  $parser->onerror (sub { });
+  if (defined $r->{thisUpdate}) {
+    if ($r->{thisUpdate} <= $now) {
+      #
+    } else {
+      return "Stapled OCSP response not in effect until |$r->{thisUpdate}|";
+    }
+  } else {
+    return "Invalid stapled OCSP response |thisUpdate| value";
+  }
+
+  if (defined $r->{nextUpdate}) {
+    if ($now < $r->{nextUpdate}) {
+      #
+    } else {
+      return "Stale stapled OCSP response |$r->{nextUpdate}|";
+    }
+  }
+
+  return undef;
+} # check_cert_id_with_response_ssleay
+
 my $tlsext_oid = Net::SSLeay::OBJ_txt2obj ('1.3.6.1.5.5.7.1.24', 1);
 
 sub x509_has_must_staple ($$) {

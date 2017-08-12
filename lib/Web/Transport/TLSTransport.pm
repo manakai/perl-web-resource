@@ -278,11 +278,9 @@ sub start ($$;%) {
                  message => "Can't get certid from certificate: $@"};
           return 1;
         }
-        $certid = substr $certid, 2; # remove SEQUENCE header
 
-        my $res = Web::Transport::OCSP->parse_response_byte_string
-            (Net::SSLeay::i2d_OCSP_RESPONSE ($response));
-        my $error = Web::Transport::OCSP->check_cert_id_with_response
+        my $res = [Net::SSLeay::OCSP_response_results ($response)];
+        my $error = Web::Transport::OCSP->check_cert_id_with_response_ssleay
             ($res, $certid, $args->{protocol_clock});
         if (not defined $error) {
           $self->{starttls_data}->{stapling_result} = {response => $res};

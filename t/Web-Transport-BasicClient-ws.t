@@ -856,6 +856,11 @@ test {
         is $res2->ws_reason, '';
         is ''.$res2, 'WS closed (1005 || failed = 0, cleanly = 1)';
       } $c;
+    })->catch (sub {
+      my $error = $_[0];
+      test {
+        ok 0, $error;
+      } $c, name => 'No rejection';
     })->then (sub {
       done $c;
       undef $c;

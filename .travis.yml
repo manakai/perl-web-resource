@@ -16,7 +16,11 @@ matrix:
     os: osx
 before_install: git submodule update --init
 install: "make test-deps"
-script: make test-main PROVE="./prove -v"
+script:
+  - ./perl t/Web-Transport-BasicClient.t
+  - ./perl t/Web-Transport-BasicClient-ws.t
+  - ./perl t/Web-Transport-ConnectionClient.t
+  - make test-main
 notifications:
   email:
     - wakaba@suikawiki.org

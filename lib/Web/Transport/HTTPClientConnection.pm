@@ -767,7 +767,7 @@ sub send_data ($$;%) {
         warn "$self->{request}->{id}: S: @{[_e4d $_]}\n";
       }
     } else {
-      warn "$self->{request}->{id}: S: @{[_e4d substr $_, 0, 40]}... (@{[length $_]})\n";
+      warn "$self->{request}->{id}: S: @{[_e4d substr $$ref, 0, 40]}... (@{[length $$ref]})\n";
     }
   }
 

@@ -3352,6 +3352,263 @@ for my $addr (qw(
   } n => 2, name => ["special ipaddr", $addr];
 }
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    90
+
+    0x00
+    0x00
+
+    0x00
+    0x00
+    0x00
+    0x00
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203, $res;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'socks4 proxy';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    90
+
+    0x00
+    0x00
+
+    0x00
+    0x00
+    0x00
+    0x00
+
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'Connection closed without response';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'socks4 proxy empty';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    90
+
+    0x00
+    0x00
+
+    0x00
+    0x00
+    0x00
+    0x00
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://badhost.test/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]);
+    return $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, "Can't resolve host |badhost.test|";
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'socks4 proxy not resolvable';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    90
+
+    0x00
+    0x00
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]);
+    return promised_cleanup {
+      done $c;
+      undef $c;
+    } $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'SOCKS4 server does not return a valid reply (result code 90)';
+      } $c;
+    }, sub {
+      my $error = $_[0];
+      test {
+        ok 0;
+        is $error, undef;
+      } $c;
+    })->then (sub {
+      return $client->close;
+    });
+  });
+} n => 2, name => 'socks4 proxy incomplete';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    95
+
+    0x00
+    0x00
+    0x00
+    0x00
+    0x00
+    0x00
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]);
+    return promised_cleanup {
+      done $c;
+      undef $c;
+    } $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'SOCKS4 server does not return a valid reply (result code 95)';
+      } $c;
+    }, sub {
+      my $error = $_[0];
+      test {
+        ok 0;
+        is $error, undef;
+      } $c;
+    })->then (sub {
+      return $client->close;
+    });
+  });
+} n => 2, name => 'socks4 proxy error';
+
+{
+  no warnings 'once';
+  $Web::Transport::SOCKS4Stream::HandshakeTimeout = 5;
+}
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    95
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]);
+    return promised_cleanup {
+      done $c;
+      undef $c;
+    } $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'SOCKS4 timeout (5)';
+      } $c;
+    }, sub {
+      my $error = $_[0];
+      test {
+        ok 0;
+        is $error, undef;
+      } $c;
+    })->then (sub {
+      return $client->close;
+    });
+  });
+} n => 2, name => 'socks4 proxy error incomplete';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
+                                 port => $server->{port}}]);
+    return promised_cleanup {
+      done $c;
+      undef $c;
+    } $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error;
+        is $res->network_error_message, 'SOCKS4 server does not return a valid reply (empty)';
+      } $c;
+    }, sub {
+      my $error = $_[0];
+      test {
+        ok 0;
+        is $error, undef;
+      } $c;
+    })->then (sub {
+      return $client->close;
+    });
+  });
+} n => 2, name => 'socks4 proxy empty closed';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

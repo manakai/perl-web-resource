@@ -450,6 +450,12 @@ sub _tls ($) {
 
         unshift @{$self->{wq}}, $w;
         last;
+      } else { # $r > 0
+        $w = [$w->[0], $w->[1] - $r, $w->[2] + $r];
+        if ($w->[1] > 0) { # more to write
+          unshift @{$self->{wq}}, $w;
+          redo;
+        }
       }
     } elsif (@$w == 2) { # promise
       $w->[0]->();

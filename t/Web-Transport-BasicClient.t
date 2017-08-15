@@ -3609,6 +3609,243 @@ test {
   });
 } n => 2, name => 'socks4 proxy empty closed';
 
+
+{
+  no warnings 'once';
+  $Web::Transport::SOCKS5Stream::HandshakeTimeout = 5;
+}
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    5
+    0x00
+
+    5
+    0x00
+    0x00
+
+    0x01
+    0x00
+    0x00
+    0x00
+    0x00
+
+    0x00
+    0x00
+
+    receive "GET /foo"
+    "HTTP/1.1 203 Hoe"CRLF
+    "Content-Length: 6"CRLF
+    CRLF
+    "abcdef"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
+    return $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->network_error_message, undef;
+        is $res->status, 203, $res;
+        is $res->body_bytes, 'abcdef';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'socks5 proxy';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    5
+    0x00
+
+    5
+    0x00
+    0x00
+
+    0x01
+    0x00
+    0x00
+    0x00
+    0x00
+
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
+    return $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        is $res->network_error_message,
+           q{Connection is closed};
+           #q{SOCKS5 server does not return a valid reply: |\x05\x00\x05\x00\x00\x01\x00\x00\x00\x00|}, $res;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'socks5 proxy incomplete close';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    5
+    0x00
+
+    5
+    0x00
+    0x00
+
+    0x01
+    0x00
+    0x00
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
+    return $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        is $res->network_error_message, q{SOCKS5 timeout (5)}, $res;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'socks5 proxy incomplete timeout';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
+    return $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        is $res->network_error_message, q{SOCKS5 server does not return a valid reply: ||};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'socks5 proxy empty close';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    0x00
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
+    return $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        is $res->network_error_message, q{SOCKS5 server does not return a valid reply: |\x00|};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'socks5 proxy bad';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    6
+    0x00
+
+    5
+    0x00
+    0x00
+    0x00
+    0x00
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
+    return $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        like $res->network_error_message,
+            qr{^\QSOCKS5 server does not return a valid reply: |\x06\x00\E.*\|};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'socks5 proxy bad';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    5
+    0x00
+
+    10
+    0x00
+    0x00
+    0x00
+    0x00
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]);
+    return $client->request (url => $url)->catch (sub {
+      my $res = $_[0];
+      test {
+        is $res->network_error_message,
+           q{SOCKS5 server does not return a valid reply: |\x05\x00\x0A\x00\x00\x00|}, $res;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'socks5 proxy bad';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

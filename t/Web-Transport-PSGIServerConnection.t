@@ -13,6 +13,7 @@ use Web::Transport::ConstProxyManager;
 use Web::Transport::ConnectionClient;
 use Web::Transport::WSClient;
 use Web::Transport::PSGIServerConnection;
+use Web::Transport::TCPTransport;
 
 {
   use Socket;
@@ -1003,8 +1004,9 @@ test {
     } $client->request (url => $origin)->then (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error;
-        is $res->network_error_message, 'Connection closed without response';
+        ok ! $res->is_network_error, $res;
+        is $res->status, 500;
+        is $res->body_bytes, '500';
         is $error_invoked, 1;
       } $c;
     });
@@ -1012,10 +1014,10 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{Data is utf8-flagged}, $error;
+      like $error, qr{^TypeError: The argument is a utf8-flaged string at }, $error; # XXXlocation
     } $c;
   });
-} n => 4, name => 'Bad body';
+} n => 5, name => 'Bad body 1';
 
 test {
   my $c = shift;
@@ -1032,8 +1034,9 @@ test {
     } $client->request (url => $origin)->then (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error;
-        is $res->network_error_message, 'Connection closed without response';
+        ok ! $res->is_network_error, $res;
+        is $res->status, 500;
+        is $res->body_bytes, '500';
         is $error_invoked, 1;
       } $c;
     });
@@ -1041,10 +1044,10 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{Data is utf8-flagged}, $error;
+      like $error, qr{^TypeError: The argument is a utf8-flaged string at }, $error; # XXXlocation
     } $c;
   });
-} n => 4, name => 'Bad body';
+} n => 5, name => 'Bad body 2';
 
 test {
   my $c = shift;
@@ -1071,7 +1074,7 @@ test {
       like $error, qr{PSGI application specified bad response body}, $error;
     } $c;
   });
-} n => 4, name => 'Bad body';
+} n => 4, name => 'Bad body 3';
 
 test {
   my $c = shift;
@@ -1100,7 +1103,7 @@ test {
       like $error, qr{PSGI application specified bad response body at \Q@{[__FILE__]}\E line @{[__LINE__-19]}}, $error;
     } $c;
   });
-} n => 4, name => 'Bad body';
+} n => 4, name => 'Bad body 4';
 
 test {
   my $c = shift;
@@ -1119,7 +1122,7 @@ test {
       test {
         is $res->status, 500;
         is $res->body_bytes, "500";
-        is $error_invoked, 2;
+        is $error_invoked, 1;
       } $c;
     });
   }, sub {
@@ -1129,7 +1132,7 @@ test {
       like $error, qr{: Thrown! at \Q@{[__FILE__]}\E line @{[__LINE__-19]}|PSGI application did not invoke the responder}, $error;
     } $c;
   });
-} n => 5, name => 'Response callback throws';
+} n => 4, name => 'Response callback throws';
 
 test {
   my $c = shift;
@@ -1149,7 +1152,7 @@ test {
       test {
         is $res->status, 500;
         is $res->body_bytes, "500";
-        is $error_invoked, 2;
+        is $error_invoked, 1;
       } $c;
     });
   }, sub {
@@ -1157,12 +1160,11 @@ test {
     test {
       $error_invoked++;
       if (ref $error) {
-        ok ref $hoge;
-        is $error, $hoge;
+        like $error, qr{^Error: \Q$hoge\E at };
       }
     } $c;
   });
-} n => 5, name => 'Response callback throws';
+} n => 4, name => 'Response callback throws';
 
 test {
   my $c = shift;
@@ -1351,8 +1353,15 @@ test {
     } $client->request (url => $origin)->then (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error;
-        is $res->network_error_message, 'Connection closed without response';
+        if ($res->is_network_error) {
+          ok $res->is_network_error;
+          is $res->network_error_message, 'Connection closed without response';
+          ok 1;
+        } else {
+          is $res->status, 200;
+          is $res->header ('Foo'), 5;
+          ok $res->incomplete;
+        }
         is $error_invoked, 1;
         is $after_thrown, 0;
       } $c;
@@ -1361,10 +1370,10 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{Data is utf8-flagged at \Q@{[__FILE__]}\E line @{[__LINE__-22]}}, $error;
+      like $error, qr{^TypeError: The argument is a utf8-flaged string at \Q@{[__FILE__]}\E line @{[__LINE__-29]}}, $error;
     } $c;
   });
-} n => 5, name => 'Writer';
+} n => 6, name => 'Writer 9';
 
 test {
   my $c = shift;
@@ -1388,7 +1397,7 @@ test {
       my $res = $_[0];
       test {
         is $res->status, 200;
-        is $res->body_bytes, "a";
+        ok $res->incomplete;
         is $error_invoked, 1;
         is $after_thrown, 0;
       } $c;
@@ -1397,7 +1406,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{Not writable for now.* at \Q@{[__FILE__]}\E line @{[__LINE__-21]}}, $error;
+      like $error, qr{This writer is no longer writable at \Q@{[__FILE__]}\E line @{[__LINE__-21]}}, $error;
     } $c;
   });
 } n => 5, name => 'Writer';
@@ -1484,8 +1493,15 @@ test {
     } $client->request (url => $origin)->then (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error;
-        is $res->network_error_message, 'Connection closed without response';
+        if ($res->is_network_error) {
+          ok $res->is_network_error;
+          is $res->network_error_message, 'Connection closed without response';
+          ok 1;
+        } else {
+          is $res->status, 200;
+          is $res->header ('Foo'), 5;
+          ok $res->incomplete;
+        }
         is $error_invoked, 0;
       } $c;
     });
@@ -1496,7 +1512,7 @@ test {
       ok 0, $error;
     } $c;
   });
-} n => 3, name => 'Writer no close 1';
+} n => 4, name => 'Writer no close 1';
 
 test {
   my $c = shift;
@@ -1516,8 +1532,15 @@ test {
     } $client->request (url => $origin)->then (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error;
-        is $res->network_error_message, 'Connection closed without response';
+        if ($res->is_network_error) {
+          ok $res->is_network_error;
+          is $res->network_error_message, 'Connection closed without response';
+          ok 1;
+        } else {
+          is $res->status, 200;
+          is $res->header ('Foo'), 5;
+          ok $res->incomplete;
+        }
         is $error_invoked, 0;
       } $c;
     });
@@ -1528,7 +1551,7 @@ test {
       ok 0, $error;
     } $c;
   });
-} n => 3, name => 'Writer no close 2';
+} n => 4, name => 'Writer no close 2';
 
 test {
   my $c = shift;
@@ -1686,6 +1709,7 @@ test {
     return sub {
       my $w = $_[0]->([200, []]);
       $w->write ("abcdeF");
+      $w->close;
     };
   }, sub {
     my ($origin, $close) = @_;
@@ -1695,8 +1719,8 @@ test {
     } $client->request (url => $origin)->then (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error;
-        is $res->network_error_message, 'Connection closed without response';
+        is $res->status, 200;
+        is $res->body_bytes, "abcdeF";
       } $c;
     });
   }, undef, max => 0)->then (sub {
@@ -1898,10 +1922,17 @@ test {
     } $client->request (url => $origin)->then (sub {
       my $res = $_[0];
       test {
-        is $res->status, 201;
-        is $res->header ('X'), 'Y';
-        is $res->header ('Z'), undef;
-        is $res->body_bytes, "abc";
+        if ($res->is_network_error) {
+          ok $res->is_network_error;
+          is $res->network_error_message, 'Connection closed without response';
+          ok 1;
+          ok 1;
+        } else {
+          is $res->status, 201;
+          is $res->header ('X'), 'Y';
+          is $res->header ('Z'), undef;
+          ok $res->incomplete;
+        }
         is $error_invoked, 1;
         is $after_thrown, 0;
       } $c;
@@ -1910,7 +1941,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-23]}};
+      like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-30]}};
     } $c;
   });
 } n => 7, name => 'PSGI responder invoked twice';
@@ -1942,7 +1973,7 @@ test {
         is $res->header ('X'), 'Y';
         is $res->header ('Z'), undef;
         is $res->body_bytes, "abc";
-        is $error_invoked, 0;
+        is $error_invoked, 1;
         like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
       } $c;
     });
@@ -1982,16 +2013,18 @@ test {
         is $res->header ('X'), 'Y';
         is $res->header ('Z'), undef;
         is $res->body_bytes, "abc";
-        is $error_invoked, 0;
+        is $error_invoked, 1;
         like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-20]}};
       } $c;
     });
   }, sub {
+    my $error = $_[1];
     test {
+      like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-26]}};
       $error_invoked++;
     } $c;
   });
-} n => 6, name => 'PSGI responder invoked twice';
+} n => 7, name => 'PSGI responder invoked twice';
 
 test {
   my $c = shift;
@@ -2109,7 +2142,7 @@ test {
       return $client->close;
     })->then (sub {
       test {
-        like $$conref->id, qr{\Ahogefuga\.\d+\z};
+        like $$conref->id, qr{\Ahogefuga\.\d+h1\z};
       } $c;
     });
   }, undef, parent_id => 'hogefuga');

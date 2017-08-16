@@ -1,17 +1,32 @@
 package Web::Transport::PSGIServerConnection;
 use strict;
 use warnings;
-our $VERSION = '1.0';
-push our @CARP_NOT, qw(Web::Transport::PSGIServerConnection::Writer);
+our $VERSION = '2.0';
 use Carp qw(croak);
+use ArrayBuffer;
+use DataView;
 use AnyEvent;
 use Promise;
+use Promised::Flow;
 use Web::Encoding;
 use Web::URL::Encoding qw(percent_decode_b);
 use Web::Host;
 use Web::Transport::_Defs;
-use Web::Transport::HTTPServerConnection;
-use Web::Transport::TCPTransport;
+use Web::Transport::TCPStream;
+use Web::Transport::HTTPStream;
+use Web::DOM::TypeError;
+
+push our @CARP_NOT, qw(
+  ArrayBuffer
+  Web::Transport::PSGIServerConnection::Writer
+  Web::Transport::HTTPStream
+  Web::Transport::HTTPStream::Stream
+  Web::DOM::TypeError
+);
+
+sub _te ($) {
+  return Web::DOM::TypeError->new ($_[0]);
+} # _te
 
 sub _metavariables ($$) {
   my ($req, $transport) = @_;
@@ -30,19 +45,18 @@ sub _metavariables ($$) {
     'psgi.url_scheme' => 'http',
   };
 
-  if ($transport->type eq 'TLS') {
+  if ($transport->{type} eq 'TLS') {
     if ($req->{target_url}->scheme eq 'https') {
       $vars->{HTTPS} = 'ON';
       $vars->{'psgi.url_scheme'} = 'https';
     }
-    $transport = $transport->{transport};
+    $transport = $transport->{parent};
   }
 
-  if ($transport->type eq 'TCP') {
-    my $info = $transport->info;
-    $vars->{REMOTE_ADDR} = $info->{remote_host}->to_ascii;
-    $vars->{SERVER_NAME} = $info->{local_host}->to_ascii;
-    $vars->{SERVER_PORT} = ''.$info->{local_port};
+  if ($transport->{type} eq 'TCP') {
+    $vars->{REMOTE_ADDR} = $transport->{remote_host}->to_ascii;
+    $vars->{SERVER_NAME} = $transport->{local_host}->to_ascii;
+    $vars->{SERVER_PORT} = ''.$transport->{local_port};
   } else {
     $vars->{REMOTE_ADDR} = '127.0.0.1';
     $vars->{SERVER_NAME} = '127.0.0.1';
@@ -77,99 +91,91 @@ sub _metavariables ($$) {
   return $vars;
 } # _metavariables
 
-sub _status_and_headers ($) {
-  my ($result) = @_;
+sub _handle_stream ($$$$) {
+  my ($server, $stream, $app, $state) = @_;
+  return $stream->headers_received->then (sub {
+    my $req = $_[0];
+    my $env = _metavariables ($req, $server->{connection}->info->{parent});
 
-  my $status = 0+$result->[0];
-  if (100 <= $status and $status < 200) {
-    die "PSGI application specified a bad status |$status|\n";
-  }
+    $env->{'psgi.version'} = [1, 1];
+    $env->{'psgi.multithread'} = 0;
+    $env->{'psgi.multiprocess'} = 0;
+    $env->{'psgi.run_once'} = 0;
+    $env->{'psgi.nonblocking'} = 1;
+    $env->{'psgi.streaming'} = 1;
+    $env->{'manakai.server.state'} = $state if defined $state;
 
-  my $headers = $result->[1];
-  if (defined $headers and ref $headers eq 'ARRAY' and not (@$headers % 2)) {
-    #
-  } else {
-    die "PSGI application specified bad headers |@{[defined $headers ? $headers : '']}|\n";
-  }
-  $headers = [@$headers];
-  my $h = [];
-  while (@$headers) {
-    my $name = shift @$headers;
-    my $value = shift @$headers;
-    push @$h, [$name, $value]; ## Errors will be thrown later
-  }
+    my $method = $env->{REQUEST_METHOD};
+    if ($method eq 'CONNECT') {
+      return $stream->send_response ({
+        status => 405,
+        status_text => $Web::Transport::_Defs::ReasonPhrases->{405},
+        headers => [['Content-Type', 'text/plain; charset=utf-8']],
+        close => 1,
+      })->then (sub {
+        my $writer = $_[0]->{body}->get_writer;
+        $writer->write
+            (DataView->new (ArrayBuffer->new_from_scalarref (\"405")));
+        return $writer->close;
+      })->then (sub {
+        $req->{body}->cancel (405) if defined $req->{body};
+        return $stream->abort (405);
+      });
+    }
 
-  return ($status, $h);
-} # _status_and_headers
+    my $max = $server->max_request_body_length;
+    if (defined $max and $req->{body_length} > $max) {
+      return $stream->send_response ({
+        status => 413,
+        status_text => $Web::Transport::_Defs::ReasonPhrases->{413},
+        headers => [['Content-Type', 'text/plain; charset=utf-8']],
+        close => 1,
+      })->then (sub {
+        my $writer = $_[0]->{body}->get_writer;
+        $writer->write
+            (DataView->new (ArrayBuffer->new_from_scalarref (\"413")));
+        return $writer->close;
+      })->then (sub {
+        $req->{body}->cancel (413) if defined $req->{body};
+        return $stream->abort (413);
+      });
+    }
 
-my $cb = sub {
-  my $server = shift;
-  my $app = shift;
-  my $state = shift;
-  my $env;
-  my $method;
-  my $status;
-  my $canceled = 0;
-  my $input = '';
-  my $max = $server->max_request_body_length;
-  
-  return sub {
-    my $self = $_[0];
-    my $type = $_[1];
-    if ($type eq 'headers') {
-      my $req = $_[2];
-      $env = _metavariables ($req, $self->{connection}->{transport});
-      $env->{'psgi.version'} = [1, 1];
-      $env->{'psgi.multithread'} = 0;
-      $env->{'psgi.multiprocess'} = 0;
-      $env->{'psgi.run_once'} = 0;
-      $env->{'psgi.nonblocking'} = 1;
-      $env->{'psgi.streaming'} = 1;
-      $env->{'manakai.server.state'} = $state if defined $state;
-      $method = $env->{REQUEST_METHOD};
-      if ($method eq 'CONNECT') {
-        $self->send_response_headers
-            ({status => 405,
-              status_text => $Web::Transport::_Defs::ReasonPhrases->{405},
-              headers => [['Content-Type', 'text/plain; charset=utf-8']]});
-        $self->send_response_data (\q{405});
-        $self->close_response;
-        $canceled = 1;
-      }
-      if (defined $max and $self->{request}->{body_length} > $max) {
-        $self->send_response_headers
-            ({status => 413,
-              status_text => $Web::Transport::_Defs::ReasonPhrases->{413},
-              headers => [['Content-Type', 'text/plain; charset=utf-8']]},
-             close => 1);
-        $self->send_response_data (\q{413});
-        $self->close_response;
-        $canceled = 1;
-      }
-    } elsif ($type eq 'data' and not $canceled) {
-      if (defined $max and (length $input) + (length $_[2]) > $max) {
-        if (defined $self->{write_mode}) {
-          $self->abort (message => "Request body too large ($max)");
-        } else {
-          $self->send_response_headers
-              ({status => 413,
-                status_text => $Web::Transport::_Defs::ReasonPhrases->{413},
-                headers => [['Content-Type', 'text/plain; charset=utf-8']]},
-               close => 1);
-          $self->send_response_data (\q{413});
-          $self->close_response;
+    my $input = '';
+    my $reader = defined $_[0]->{body} ? $_[0]->{body}->get_reader ('byob') : undef;
+    my $read; $read = defined $reader ? sub {
+      my $dv = DataView->new (ArrayBuffer->new (1024*8));
+      return $reader->read ($dv)->then (sub {
+        return if $_[0]->{done};
+
+        if (defined $max and
+            (length $input) + $_[0]->{value}->byte_length > $max) {
+          return $stream->send_response ({
+            status => 413,
+            status_text => $Web::Transport::_Defs::ReasonPhrases->{413},
+            headers => [['Content-Type', 'text/plain; charset=utf-8']],
+            close => 1,
+          })->then (sub {
+            my $writer = $_[0]->{body}->get_writer;
+            $writer->write
+                (DataView->new (ArrayBuffer->new_from_scalarref (\"413")));
+            return $writer->close;
+          })->then (sub {
+            $reader->cancel (413);
+            return $stream->abort (413);
+          });
         }
-        $canceled = 1;
-        return;
-      }
-      $input .= $_[2];
-    } elsif ($type eq 'dataend' and not $canceled) {
+
+        $input .= $_[0]->{value}->manakai_to_string;
+      });
+    } : sub { return Promise->resolve }; # $read
+    return promised_cleanup { undef $read } $read->()->then (sub {
       $env->{CONTENT_LENGTH} = length $input;
       open $env->{'psgi.input'}, '<', \$input;
-      $server->_run ($self, $app, $env, $method, $status);
-    }
-  };
-}; # $cb
+      return $server->_run ($stream, $app, $env, $method);
+    });
+  }); # ready
+} # _handle_stream
 
 sub new_from_app_and_ae_tcp_server_args ($$$;%) {
   my ($class, $app, $aeargs, %args) = @_;
@@ -178,127 +184,198 @@ sub new_from_app_and_ae_tcp_server_args ($$$;%) {
   }, $class;
   my $socket;
   if ($aeargs->[1] eq 'unix/') {
-    require Web::Transport::UNIXDomainSocketTransport;
-    $socket = Web::Transport::UNIXDomainSocketTransport->new
-        (server => 1, fh => $aeargs->[0], parent_id => $args{parent_id});
+    require Web::Transport::UnixStream;
+    $socket = {
+      class => 'Web::Transport::UnixStream',
+      server => 1, fh => $aeargs->[0],
+      parent_id => $args{parent_id},
+    };
   } else {
-    $socket = Web::Transport::TCPTransport->new
-        (server => 1, fh => $aeargs->[0],
-         host => Web::Host->parse_string ($aeargs->[1]), port => $aeargs->[2],
-         parent_id => $args{parent_id});
+    $socket = {
+      class => 'Web::Transport::TCPStream',
+      server => 1, fh => $aeargs->[0],
+      host => Web::Host->parse_string ($aeargs->[1]), port => $aeargs->[2],
+      parent_id => $args{parent_id},
+    };
   }
   my $state = $args{state};
-  $self->{connection} = Web::Transport::HTTPServerConnection->new (cb => sub {
-    my ($sc, $type) = @_;
-    if ($type eq 'startstream') {
-      return $cb->($self, $app, $state);
-    }
-  }, transport => $socket);
+  $self->{connection} = Web::Transport::HTTPStream->new ({
+    parent => $socket,
+    server => 1,
+  });
   $self->{completed_cv} = AE::cv;
   $self->{completed_cv}->begin;
+  my $reader = $self->{connection}->streams->get_reader;
+  my $read; $read = sub {
+    return $reader->read->then (sub {
+      return if $_[0]->{done};
+      _handle_stream $self, $_[0]->{value}, $app, $state;
+      return $read->();
+    });
+  }; # $read
+  promised_cleanup { undef $read } $read->();
   $self->{connection}->closed->then (sub { $self->{completed_cv}->end });
   $self->{completed} = Promise->from_cv ($self->{completed_cv});
   return $self;
 } # new_from_app_and_ae_tcp_server_args
 
 sub id ($) {
-  return $_[0]->{connection}->id;
+  return $_[0]->{connection}->info->{id};
 } # id
 
-sub _run ($$$$$$) {
-  my ($server, $stream, $app, $env, $method, $status) = @_;
-  my $ondestroy;
-  eval {
-    my $xg_cv = $env->{'psgix.exit_guard'} = AE::cv;
-    $server->{completed_cv}->begin;
-    Promise->from_cv ($xg_cv)->then (sub {
-      $server->{completed_cv}->end;
-    });
+sub _run ($$$$$) {
+  my ($server, $stream, $app, $env, $method) = @_;
+  my $xg_cv = $env->{'psgix.exit_guard'} = AE::cv;
+  $server->{completed_cv}->begin;
+  Promise->from_cv ($xg_cv)->then (sub {
+    $server->{completed_cv}->end;
+  });
 
-    $xg_cv->begin;
-    my $ondestroy2 = bless sub {
-      $xg_cv->end;
-    }, 'Web::Transport::PSGIServerConnection::DestroyCallback';
+  $xg_cv->begin;
+  my $ondestroy2 = bless sub {
+    $xg_cv->end;
+  }, 'Web::Transport::PSGIServerConnection::DestroyCallback';
 
-    my $result = $app->($env);
-    if (defined $result and ref $result eq 'ARRAY' and @$result == 3) {
-      my ($status, $headers) = _status_and_headers ($result);
+  my ($res_resolve, $res_reject);
+  my $res_promise = Promise->new (sub { ($res_resolve, $res_reject) = @_ });
+  my $invoked = 0;
+  my $send_response_invoked = 0;
+  my $ondestroy = bless sub {
+    $res_reject->(_te "PSGI application did not invoke the responder")
+        unless $invoked;
+    $invoked = 1;
+  }, 'Web::Transport::PSGIServerConnection::DestroyCallback';
+  my $ondestroy_copy = $ondestroy;
+  my $responder = sub {
+    if ($invoked) {
+      my $error = _te "PSGI application invoked the responder twice";
+      $res_reject->($error);
+      die $error;
+    }
+    $invoked = 1;
+    undef $ondestroy;
+
+    my $result = $_[0];
+    unless (defined $result and ref $result eq 'ARRAY' and
+            (@$result == 2 or @$result == 3)) {
+      my $error = _te "PSGI application did not call the responder with a response";
+      $res_reject->($error);
+      die $error;
+    }
+
+    my $status = 0+$result->[0];
+    if (100 <= $status and $status < 200) {
+      my $error = _te "PSGI application specified a bad status |$status|";
+      $res_reject->($error);
+      die $error;
+    }
+
+    my $headers = $result->[1];
+    if (defined $headers and ref $headers eq 'ARRAY' and not (@$headers % 2)) {
+      $headers = [@$headers];
+      my $h = [];
+      while (@$headers) {
+        my $name = shift @$headers;
+        my $value = shift @$headers;
+        push @$h, [$name, $value]; ## Errors will be thrown later
+      }
+      $headers = $h;
+    } else {
+      my $error = _te "PSGI application specified bad headers |@{[defined $headers ? $headers : '']}|";
+      $res_reject->($error);
+      die $error;
+    }
+
+    if (@$result == 3) {
       my $body = $result->[2];
       if (defined $body and ref $body eq 'ARRAY') {
-        $stream->send_response_headers
-            ({status => $status,
-              status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
-              headers => $headers});
-        my $writer = Web::Transport::PSGIServerConnection::Writer->_new
-            ($stream, $method, $status, sub { undef $ondestroy2 });
-        for (@$body) {
-          $writer->write ($_);
-        }
-        $writer->close;
+        my $body = [map {
+          DataView->new (ArrayBuffer->new_from_scalarref (\$_)); # or throw
+        } @$body];
+        $stream->send_response ({
+          status => $status,
+          status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
+          headers => $headers,
+        })->then (sub {
+          my $w = $_[0]->{body}->get_writer;
+          $w->write ($_) for @$body;
+          undef $ondestroy2;
+          return $w->close;
+        })->then ($res_resolve, $res_reject);
+        $send_response_invoked = 1;
+        return undef;
       } else { ## Filehandles are not supported
-        die "PSGI application specified bad response body\n";
+        my $error = _te "PSGI application specified bad response body";
+        $res_reject->($error);
+        die $error;
       }
-    } elsif (defined $result and ref $result eq 'CODE') {
-      my $invoked = 0;
-      $ondestroy = bless sub {
-        $server->_send_error ($stream, "$stream->{id}: PSGI application did not invoke the responder")
-            unless $invoked;
-      }, 'Web::Transport::PSGIServerConnection::DestroyCallback';
-      my $onready = sub {
-        croak "PSGI application invoked the responder twice" if $invoked;
-        $invoked = 1;
-        undef $ondestroy;
-        my $result = $_[0];
-        unless (defined $result and ref $result eq 'ARRAY' and
-                (@$result == 2 or @$result == 3)) {
-          croak "PSGI application did not call the responder with a response";
-        }
-
-        my ($status, $headers) = _status_and_headers ($result);
-        if (@$result == 3) {
-          my $body = $result->[2];
-          if (defined $body and ref $body eq 'ARRAY') {
-            $stream->send_response_headers
-                ({status => $status,
-                  status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
-                  headers => $headers})
-                    unless $stream->is_completed;
-                ## Strictly speaking, this is not desired as $headers'
-                ## errors are not detected when is_completed is true.
-            my $writer = Web::Transport::PSGIServerConnection::Writer->_new
-                ($stream, $method, $status, sub { undef $ondestroy2 });
-            for (@$body) {
-              $writer->write ($_);
-            }
-            $writer->close;
-            return undef;
-          } else { ## Filehandles are not supported
-            croak "PSGI application specified bad response body";
-          }
-        } else { # @$result == 2
-          my $destroyed = 0;
-          $server->{completed_cv}->begin;
-          my $writer = Web::Transport::PSGIServerConnection::Writer->_new
-              ($stream, $method, $status, sub {
-                 return if $destroyed++;
-                 $server->{completed_cv}->end;
-                 undef $ondestroy2;
-               });
-          $stream->send_response_headers
-              ({status => $status,
-                status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
-                headers => $headers});
-          return $writer;
-        }
-      }; # $onready
-      $result->($onready);
-    } else {
-      die "PSGI application did not return a response\n";
+    } else { # @$result == 2
+      my $destroyed = 0;
+      my ($r_writer, $s_writer) = promised_cv;
+      my $writer = Web::Transport::PSGIServerConnection::Writer->_new
+          ($r_writer, sub {
+             return if $destroyed++;
+             undef $ondestroy2;
+           });
+      $stream->send_response ({
+        status => $status,
+        status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
+        headers => $headers,
+      })->then (sub {
+        my $w = $_[0]->{body}->get_writer;
+        $s_writer->($w);
+      })->then ($res_resolve, $res_reject);
+      $send_response_invoked = 1;
+      return $writer;
     }
-  };
-  if ($@) {
-    $server->_send_error ($stream, ref $@ ? $@ : "$stream->{id}: $@");
-  }
+  }; # $responder
+
+  Promise->resolve->then (sub {
+    my $result = $app->($env); # or throw
+    if (defined $result and ref $result eq 'ARRAY' and @$result == 3) {
+      $responder->($result); # or throw
+    } elsif (defined $result and ref $result eq 'CODE') {
+      $result->($responder); # or throw
+    } else {
+      die _te "PSGI application did not return a response";
+    }
+  })->catch ($res_reject)->then (sub { undef $ondestroy_copy });
+
+  return $res_promise->catch (sub {
+    my $error = Web::DOM::Error->wrap ($_[0]);
+    if ($send_response_invoked) {
+      return Promise->resolve->then (sub {
+        return $server->onexception->($server, $error);
+      })->catch (sub {
+        warn $_[0];
+      })->then (sub {
+        undef $ondestroy2;
+        return $stream->abort ($error, graceful => 1);
+      });
+    } else {
+      return Promise->all ([
+        Promise->resolve->then (sub {
+          return $server->onexception->($server, $error);
+        })->catch (sub {
+          warn $_[0];
+        }),
+        $stream->send_response ({
+          status => 500,
+          status_text => $Web::Transport::_Defs::ReasonPhrases->{500},
+          headers => [['Content-Type', 'text/plain; charset=utf-8']],
+        })->then (sub {
+          my $writer = $_[0]->{body}->get_writer;
+          $writer->write
+              (DataView->new (ArrayBuffer->new_from_scalarref (\"500")));
+          return $writer->close;
+        })->catch (sub {
+          return $stream->abort ($_[0], graceful => 1);
+        }),
+      ])->then (sub {
+        undef $ondestroy2;
+      });
+    }
+  });
 } # _run
 
 sub onexception ($;$) {
@@ -314,29 +391,6 @@ sub max_request_body_length ($;$) {
   }
   return $_[0]->{max_request_body_length}; # or undef
 } # max_request_body_length
-
-sub _send_error ($$$) {
-  my ($self, $stream, $error) = @_;
-  my $p = Promise->all ([
-    Promise->resolve->then (sub {
-      return $self->onexception->($self, $error);
-    })->catch (sub {
-      warn $_[0];
-    }),
-    Promise->resolve->then (sub {
-      $stream->send_response_headers
-          ({status => 500,
-            status_text => $Web::Transport::_Defs::ReasonPhrases->{500},
-            headers => [['Content-Type', 'text/plain; charset=utf-8']]});
-      $stream->send_response_data (\q{500});
-      $stream->close_response;
-    })->catch (sub {
-      $stream->abort (message => "PSGI application throws an exception");
-    }),
-  ]);
-  $self->{completed_cv}->begin;
-  $p->then (sub { $self->{completed_cv}->end });
-} # _send_error
 
 sub closed ($) {
   return $_[0]->{connection}->closed;
@@ -355,7 +409,7 @@ sub close_after_current_response ($;%) {
   if ($timeout > 0) {
     $timer = AE::timer $timeout, 0, sub {
       $self->{connection}->abort
-          (message => "|close_after_current_response| timeout ($timeout)");
+          ("|close_after_current_response| timeout ($timeout)");
       undef $timer;
     };
   }
@@ -367,44 +421,51 @@ sub close_after_current_response ($;%) {
 sub DESTROY ($) {
   local $@;
   eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+  warn "$$: Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 } # DESTROY
 
 package Web::Transport::PSGIServerConnection::Writer;
-push our @CARP_NOT, qw(Web::Transport::HTTPServerConnection::Stream);
+use Carp qw(croak);
+push our @CARP_NOT, qw(ArrayBuffer WritableStreamDefaultWriter);
 
-sub _new ($$$$$) {
-  my ($class, $stream, $method, $status, $ondestroy) = @_;
-  return bless [$stream,
-                ($method eq 'HEAD' or $status == 204 or $status == 304),
-                $ondestroy,
-                undef],
-               $class;
+sub _new ($$$) {
+  my ($class, $r_writer, $ondestroy) = @_;
+  return bless [$r_writer, $ondestroy, undef], $class;
 } # _new
 
 sub write ($$) {
-  $_[0]->[0]->send_response_data (\($_[1]))
-      if not $_[0]->[1] and not $_[0]->[0]->is_completed; # or throw
+  my $dv = DataView->new (ArrayBuffer->new_from_scalarref (\($_[1]))); # or throw
+  croak "This writer is no longer writable" if $_[0]->[2];
+  $_[0]->[0]->then (sub {
+    return $_[0]->write ($dv);
+  });
+  return undef;
 } # write
 
 sub close ($) {
-  return if $_[0]->[3];
-  $_[0]->[3] = 1;
-  $_[0]->[0]->close_response;
+  return if $_[0]->[2];
+  $_[0]->[2] = 1;
+  $_[0]->[0]->then (sub { return $_[0]->close });
+  return undef;
 } # close
 
 sub DESTROY ($) {
-  unless ($_[0]->[3]) {
-    $_[0]->[3] = 1;
-    $_[0]->[0]->abort (message => "PSGI application did not close the body");
+  unless ($_[0]->[2]) {
+    $_[0]->[2] = 1;
+    $_[0]->[0]->then (sub {
+      my $writer = $_[0];
+      $writer->write (DataView->new (ArrayBuffer->new (0)))->then (sub {
+        return $writer->abort ("PSGI application did not close the body");
+      });
+    });
   }
 
-  $_[0]->[2]->();
+  $_[0]->[1]->();
 
   local $@;
   eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+  warn "$$: Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 } # DESTROY
 

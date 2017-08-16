@@ -18,6 +18,7 @@ use Streams;
 use Web::Host;
 
 push our @CARP_NOT, qw(
+  ArrayBuffer
   ReadableStream ReadableStreamBYOBRequest WritableStream
   Web::DOM::Error Web::DOM::TypeError Streams::IOError
   Web::Transport::ProtocolError

@@ -2919,7 +2919,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      ok $res->is_network_error;
+      #ok $res->is_network_error, $res;
       ok ! $res->ws_closed_cleanly;
       is $res->ws_code, 1006;
       is $res->ws_reason, '';
@@ -2927,7 +2927,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 5, name => 'WS data bad length';
+} n => 4, name => 'WS data bad length';
 
 test {
   my $c = shift;

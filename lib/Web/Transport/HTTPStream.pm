@@ -140,8 +140,8 @@ sub new ($$) {
       warn "$con->{id}: H1: DEBUG mode |$con->{DEBUG}|\n" unless $con->{DEBUG} eq '1';
     }
 
-    $con->{reader} = $info->{readable}->get_reader ('byob');
-    $con->{writer} = $info->{writable}->get_writer;
+    $con->{reader} = (delete $info->{readable})->get_reader ('byob');
+    $con->{writer} = (delete $info->{writable})->get_writer;
     $con->{state} = 'initial';
 
     if ($con->{is_server}) {
@@ -232,7 +232,7 @@ sub new ($$) {
     }
 
     (delete $con->{ready}->[1])->(undef), delete $con->{ready}->[2];
-    return Promise->all ([$p1, $p2, $info->{closed}])->then (sub {
+    return Promise->all ([$p1, $p2, delete $info->{closed}])->then (sub {
       $con->{streams_done}->();
       (delete $con->{closed}->[1])->(undef), delete $con->{closed}->[2];
     });
@@ -818,13 +818,17 @@ sub is_active ($) {
 } # is_active
 
 ## Abort the HTTP connection.  It must be invoked after the HTTP
-## connection becomes ready.  An optional argument can be specified to
-## provide the reason of the abort, which might be used to reject
-## various relevant promises and in various debug outputs.  It should
-## be an exception object, though any value is allowed.  It returns
-## the |closed| promise of the HTTP connection.
-sub abort ($;$) {
-  my ($con, $reason) = @_;
+## connection becomes ready.  The first argument, if specified,
+## represents the reason of the abort, which might be used to reject
+## various relevant promises and in various debug outputs.  The second
+## and later arguments are key/value pairs of named arguments.  If the
+## |graceful| argument has a true value, the HTTP connection is
+## aborted after any queued write operation has been completed.
+## Otherwise, the connection is aborted as soon as possible.  It
+## should be an exception object, though any value is allowed.  It
+## returns the |closed| promise of the HTTP connection.
+sub abort ($;$%) {
+  my ($con, $reason, %args) = @_;
   if (not defined $con->{state}) {
     # XXX abort any connection handshake and invalidate $con
     return Promise->reject ("Connection has not been established");
@@ -833,11 +837,13 @@ sub abort ($;$) {
   my $error = Web::DOM::Error->wrap ($reason);
   $con->{exit} = $error;
 
-  (delete $con->{writer})->abort ($error) if defined $con->{writer};
-  $con->_send_done (close => 1);
+  (($args{graceful} && defined $con->{writer}) ? $con->{writer}->write (DataView->new (ArrayBuffer->new (0))) : Promise->resolve)->then (sub {
+    (delete $con->{writer})->abort ($error) if defined $con->{writer};
+    $con->_send_done (close => 1);
 
-  (delete $con->{reader})->cancel ($error)->catch (sub { })
-      if defined $con->{reader};
+    (delete $con->{reader})->cancel ($error)->catch (sub { })
+        if defined $con->{reader};
+  });
 
   return $con->{closed}->[0];
 } # abort
@@ -3038,7 +3044,7 @@ sub send_response ($$$) {
       $res .= "$_->[0]: $_->[1]\x0D\x0A";
     }
     $res .= "\x0D\x0A";
-    if ($stream->{DEBUG}) {
+    if ($con->{DEBUG}) {
       for (split /\x0A/, $res) {
         warn "$stream->{id}: S: @{[_e4d $_]}\n";
       }
@@ -3055,10 +3061,11 @@ sub send_response ($$$) {
   $con->{write_mode} = $write_mode;
   my ($ws) = $stream->_open_sending_stream ($to_be_sent);
 
-  if (defined $stream->{tunnel_readable}) {
+  if ($connect and defined $stream->{tunnel_readable}) {
     return Promise->resolve ({readable => delete $stream->{tunnel_readable},
                               writable => $ws});
   } else {
+    delete $stream->{tunnel_readable};
     return Promise->resolve ({body => $ws});
   }
 } # send_response
@@ -3072,10 +3079,9 @@ sub closed ($) {
 } # closed
 
 ## Abort the HTTP stream.  It effectively abort the underlying HTTP
-## connection.  The optional argument is the reason of the abort (see
-## connection's |abort| method).  It returns the HTTP stream's
-## |closed| promise.
-sub abort ($;$) {
+## connection.  The method accepts arguments; see connection's |abort|
+## method.  It returns the HTTP stream's |closed| promise.
+sub abort ($;$%) {
   my $stream = shift;
   $stream->{connection}->abort (@_) if defined $stream->{connection};
   return $stream->{closed}->[0];

@@ -34,10 +34,6 @@
 	path = modules/streams
 	url = https://github.com/manakai/perl-streams
 	track = master
-[submodule "modules/web-dom"]
-	path = modules/web-dom
-	url = https://github.com/manakai/perl-web-dom
-	track = master
 [submodule "t_deps/modules/promised-command"]
 	path = t_deps/modules/promised-command
 	url = https://github.com/wakaba/perl-promised-command

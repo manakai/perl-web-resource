@@ -3,9 +3,8 @@ use strict;
 use warnings;
 our $VERSION = '1.0';
 use Errno qw(ECONNRESET);
-use Web::DOM::Error;
-use Web::DOM::Exception;
-push our @ISA, qw(Web::DOM::Exception);
+use Web::Transport::Error;
+push our @ISA, qw(Web::Transport::Error);
 
 $Web::DOM::Error::L1ObjectClass->{(__PACKAGE__)} = 1;
 
@@ -28,7 +27,7 @@ sub can_http_retry ($$) {
 ## Returns whether the argument is a fatal protocol error or not.
 ##
 ## Note that this method's definition of "is error" is different from
-## Web::DOM::Error->is_error's.
+## Web::DOM::Error->is_error (or Web::Transport::Error->is_error)'s.
 sub is_error ($$) {
   my $error = $_[1];
 
@@ -43,9 +42,7 @@ sub is_error ($$) {
   return 1;
 } # is_error
 
-sub new ($$) {
-  return $_[0]->SUPER::new ($_[1], 'Protocol error');
-} # new
+sub name ($) { 'Protocol error' }
 
 package Web::Transport::ProtocolError::HTTPParseError;
 push our @ISA, qw(Web::Transport::ProtocolError);
@@ -53,21 +50,23 @@ push our @ISA, qw(Web::Transport::ProtocolError);
 $Web::DOM::Error::L1ObjectClass->{(__PACKAGE__)} = 1;
 
 sub _new_non_fatal ($$) {
-  return $_[0]->Web::DOM::Exception::new ($_[1], 'HTTP parse error');
+  return $_[0]->new ($_[1]);
 } # _new_non_fatal
 
 sub _new_fatal ($$) {
-  my $self = $_[0]->Web::DOM::Exception::new ($_[1], 'HTTP parse error');
+  my $self = $_[0]->new ($_[1]);
   $self->{http_fatal} = 1;
   return $self;
 } # _new_fatal
 
 sub _new_retry ($$$) {
-  my $self = $_[0]->Web::DOM::Exception::new ($_[1], 'HTTP parse error');
+  my $self = $_[0]->new ($_[1]);
   $self->{http_fatal} = 1;
   $self->{http_can_retry} = $_[2];
   return $self;
 } # _new_retry
+
+sub name ($) { 'HTTP parse error' }
 
 sub message ($) {
   my $self = $_[0];
@@ -81,7 +80,7 @@ sub http_fatal ($) { $_[0]->{http_fatal} }
 sub http_can_retry ($) { $_[0]->{http_can_retry} }
 
 package Web::Transport::ProtocolError::WebSocketClose;
-push our @ISA, qw(Web::DOM::Error);
+push our @ISA, qw(Web::Transport::Error);
 
 $Web::DOM::Error::L1ObjectClass->{(__PACKAGE__)} = 1;
 

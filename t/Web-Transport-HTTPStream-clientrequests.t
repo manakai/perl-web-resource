@@ -8,6 +8,7 @@ use Test::X1;
 use Test::HTCT::Parser;
 use Test::Certificates;
 use Web::Host;
+use Web::Transport::Error;
 use Web::Transport::TCPStream;
 use Web::Transport::UnixStream;
 use Web::Transport::TLSStream;
@@ -1191,7 +1192,7 @@ test {
         isa_ok $got->{body}, 'WritableStream';
       } $c;
       $writer->write (d "1234");
-      my $thrown = Web::DOM::TypeError->new;
+      my $thrown = Web::Transport::TypeError->new;
       $writer->abort ($thrown);
       return $stream->closed->then (sub {
         my $error = $_[0];
@@ -2817,7 +2818,7 @@ CRLF
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    my $error = Web::DOM::Error->new ("Custom error");
+    my $error = Web::Transport::Error->new ("Custom error");
     $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
@@ -2865,7 +2866,7 @@ CRLF
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    my $error = Web::DOM::Error->new ("Custom error");
+    my $error = Web::Transport::Error->new ("Custom error");
     $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
@@ -2916,7 +2917,7 @@ ws-send-header opcode=1 length=3
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    my $error = Web::DOM::Error->new ("Custom error");
+    my $error = Web::Transport::Error->new ("Custom error");
     $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
@@ -2972,7 +2973,7 @@ ws-send-header opcode=2 length=3
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    my $error = Web::DOM::Error->new ("Custom error");
+    my $error = Web::Transport::Error->new ("Custom error");
     $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/', ws => 1});
     })->then (sub {
@@ -4331,7 +4332,7 @@ test {
       host => Web::Host->parse_string ($server->{addr}),
       port => $server->{port},
     }});
-    my $reason = Web::DOM::Error->new;
+    my $reason = Web::Transport::Error->new;
     $http->ready->then (sub {
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {

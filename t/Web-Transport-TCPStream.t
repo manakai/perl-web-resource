@@ -58,7 +58,7 @@ test {
   })->catch (sub {
     my $e = $_[0];
     test {
-      isa_ok $e, 'Web::DOM::TypeError', $e;
+      isa_ok $e, 'Web::Transport::TypeError', $e;
       is $e->name, 'TypeError';
       is $e->message, 'Bad |host|';
       is $e->file_name, __FILE__;
@@ -78,7 +78,7 @@ test {
   })->catch (sub {
     my $e = $_[0];
     test {
-      isa_ok $e, 'Web::DOM::TypeError', $e;
+      isa_ok $e, 'Web::Transport::TypeError', $e;
       is $e->name, 'TypeError';
       is $e->message, 'Bad |host|';
       is $e->file_name, __FILE__;
@@ -102,7 +102,7 @@ for my $value (
     })->catch (sub {
       my $e = $_[0];
       test {
-        isa_ok $e, 'Web::DOM::TypeError', $e;
+        isa_ok $e, 'Web::Transport::TypeError', $e;
         is $e->name, 'TypeError';
         is $e->message, 'Bad |port|';
         is $e->file_name, __FILE__;
@@ -1043,9 +1043,7 @@ test {
         is $e->name, 'AbortError';
         ok $e->message;
         is $e->file_name, __FILE__;
-        ok $e->line_number == __LINE__-16 ||
-           $e->line_number == __LINE__-15, # perl version dependent:-<
-           $e->line_number . " == " . (__LINE__-16);
+        like $e->line_number, qr{(?:@{[join '|', __LINE__-16, __LINE__-15, __LINE__-14]})}; # perl version dependent:-<
       } $c;
       undef $try;
     });

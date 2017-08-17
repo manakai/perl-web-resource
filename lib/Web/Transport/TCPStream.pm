@@ -10,8 +10,8 @@ use AnyEvent::Socket qw(tcp_connect);
 use Promise;
 use Promised::Flow;
 use Streams::IOError;
-use Web::DOM::Error;
-use Web::DOM::TypeError;
+use Web::Transport::Error;
+use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
 use DataView;
 use Streams;
@@ -20,7 +20,7 @@ use Web::Host;
 push our @CARP_NOT, qw(
   ArrayBuffer
   ReadableStream ReadableStreamBYOBRequest WritableStream
-  Web::DOM::Error Web::DOM::TypeError Streams::IOError
+  Web::Transport::Error Web::Transport::TypeError Streams::IOError
   Web::Transport::ProtocolError
 );
 
@@ -49,11 +49,11 @@ sub _writing (&$$) {
 } # _writing
 
 sub _te ($) {
-  return Web::DOM::TypeError->new ($_[0]);
+  return Web::Transport::TypeError->new ($_[0]);
 } # _te
 
 sub _tep ($) {
-  return Promise->reject (Web::DOM::TypeError->new ($_[0]));
+  return Promise->reject (Web::Transport::TypeError->new ($_[0]));
 } # _tep
 
 sub create ($$) {
@@ -141,7 +141,7 @@ sub create ($$) {
     })->then (sub {
       my $bytes_read = eval { $req->manakai_respond_by_sysread ($fh) };
       if ($@) {
-        my $error = Web::DOM::Error->wrap ($@); # XXX error location
+        my $error = Web::Transport::Error->wrap ($@); # XXX error location
         my $errno = $error->isa ('Streams::IOError') ? $error->errno : 0;
         if ($errno != EAGAIN && $errno != EINTR &&
             $errno != EWOULDBLOCK && $errno != WSAEWOULDBLOCK) {
@@ -346,7 +346,7 @@ sub create ($$) {
 
     return $info;
   })->catch (sub {
-    my $error = Web::DOM::Error->wrap ($_[0]);
+    my $error = Web::Transport::Error->wrap ($_[0]);
     if ($read_active) {
       $rcancel->($error);
       $read_active = $rcancel = undef;
@@ -369,14 +369,17 @@ sub create ($$) {
 
 ## For tests only
 package Web::Transport::TCPStream::Reset;
-use Web::DOM::Exception;
-push our @ISA, qw(Web::DOM::Exception);
+push our @ISA, qw(Web::Transport::Error);
 
 $Web::DOM::Error::L1ObjectClass->{(__PACKAGE__)} = 1;
 
 sub new ($) {
-  return $_[0]->SUPER::new ('TCP reset requested', 'AbortError');
+  return $_[0]->SUPER::new ('TCP reset requested');
 } # new
+
+sub name ($) {
+  return 'AbortError';
+} # name
 
 1;
 

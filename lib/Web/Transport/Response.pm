@@ -4,7 +4,7 @@ use warnings;
 use overload '""' => 'stringify', fallback => 1;
 our $VERSION = '2.0';
 
-push our @CARP_NOT, qw(Web::DOM::TypeError);
+push our @CARP_NOT, qw(Web::Transport::TypeError);
 
 sub new_from_error ($$) {
   if (UNIVERSAL::isa ($_[1], 'Web::Transport::ProtocolError::WebSocketClose')) {
@@ -95,13 +95,13 @@ sub ws_closed_cleanly ($) {
 } # ws_closed_cleanly
 
 sub ws_send_binary ($;$$) {
-  return Promise->reject (Web::DOM::TypeError->new ("Not allowed"))
+  return Promise->reject (Web::Transport::TypeError->new ("Not allowed"))
       unless defined $_[0]->{ws_send_binary};
   return $_[0]->{ws_send_binary}->($_[1], $_[2]);
 } # ws_send_binary
 
 sub ws_send_text ($;$$) {
-  return Promise->reject (Web::DOM::TypeError->new ("Not allowed"))
+  return Promise->reject (Web::Transport::TypeError->new ("Not allowed"))
       unless defined $_[0]->{ws_send_text};
   return $_[0]->{ws_send_text}->($_[1], $_[2]);
 } # ws_send_text
@@ -111,7 +111,7 @@ sub ws_close ($;$$) {
     return $_[0]->{ws_closed}->then (sub {
       return Web::Transport::Response->new_from_error ($_[0]);
     }) if defined $_[0]->{ws_closed};
-    return Promise->reject (Web::DOM::TypeError->new ("Not allowed"));
+    return Promise->reject (Web::Transport::TypeError->new ("Not allowed"));
   }
   delete $_[0]->{$_} for qw(send_ws_binary send_ws_text);
   return (delete $_[0]->{ws_close})->($_[1], $_[2]);

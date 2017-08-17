@@ -6,21 +6,23 @@ use AnyEvent;
 use Promise;
 use Promised::Flow;
 use Web::Encoding;
-use Web::DOM::TypeError;
+use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
 use ArrayBuffer;
 use DataView;
 
-push our @CARP_NOT, qw(Web::DOM::TypeError Web::Transport::ProtocolError);
+push our @CARP_NOT, qw(
+  Web::Transport::TypeError Web::Transport::ProtocolError
+);
 
 our $HandshakeTimeout ||= 30;
 
 sub _te ($) {
-  return Web::DOM::TypeError->new ($_[0]);
+  return Web::Transport::TypeError->new ($_[0]);
 } # _te
 
 sub _tep ($) {
-  return Promise->reject (Web::DOM::TypeError->new ($_[0]));
+  return Promise->reject (Web::Transport::TypeError->new ($_[0]));
 } # _tep
 
 sub _pe ($) {

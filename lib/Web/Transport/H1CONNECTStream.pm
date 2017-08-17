@@ -5,17 +5,17 @@ our $VERSION = '2.0';
 use AnyEvent;
 use Promise;
 use Promised::Flow;
-use Web::DOM::TypeError;
+use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
 use Web::Transport::HTTPStream;
 
 push our @CARP_NOT, qw(
-  Web::DOM::TypeError Web::Transport::ProtocolError::HTTPParseError
+  Web::Transport::TypeError Web::Transport::ProtocolError::HTTPParseError
   Web::Transport::HTTPStream
 );
 
 sub _tep ($) {
-  return Promise->reject (Web::DOM::TypeError->new ($_[0]));
+  return Promise->reject (Web::Transport::TypeError->new ($_[0]));
 } # _tep
 
 ##   parent - The hash reference used as the argument to the
@@ -94,7 +94,7 @@ sub create ($$) {
       });
     });
   })->catch (sub {
-    my $error = Web::DOM::Error->wrap ($_[0]);
+    my $error = Web::Transport::Error->wrap ($_[0]);
 
     return Promise->resolve->then (sub {
       if (defined $http) {

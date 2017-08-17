@@ -3,8 +3,8 @@ use strict;
 use warnings;
 our $VERSION = '2.0';
 use Streams::IOError;
-use Web::DOM::Error;
-use Web::DOM::TypeError;
+use Web::Transport::Error;
+use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
 use ArrayBuffer;
 use DataView;
@@ -17,7 +17,7 @@ use AnyEvent::TLS;
 use Web::Transport::OCSP;
 
 push our @CARP_NOT, qw(
-  Web::DOM::Error Web::DOM::TypeError Streams::IOError
+  Web::Transport::Error Web::Transport::TypeError Streams::IOError
   Web::Transport::TLSStream::OpenSSLError Web::Transport::ProtocolError
 );
 
@@ -162,7 +162,7 @@ sub _debug_info ($$) {
 } # _debug_info
 
 sub _tep ($) {
-  return Promise->reject (Web::DOM::TypeError->new ($_[0]));
+  return Promise->reject (Web::Transport::TypeError->new ($_[0]));
 } # _tep
 
 sub _pe ($) {
@@ -426,7 +426,7 @@ sub create ($$) {
     write => sub {
       my $view = $_[1];
       return Promise->resolve->then (sub {
-        die Web::DOM::TypeError->new ("The argument is not an ArrayBufferView")
+        die Web::Transport::TypeError->new ("The argument is not an ArrayBufferView")
             unless UNIVERSAL::isa ($view, 'ArrayBufferView'); # XXX location
         return if $view->byte_length == 0; # or throw
 
@@ -697,14 +697,14 @@ sub create ($$) {
     my $error;
     if (defined $info->{tls_stapling} and
         not $info->{tls_stapling}->{ok}) {
-      $error = Web::DOM::Error->wrap ($info->{tls_stapling}->{error});
+      $error = Web::Transport::Error->wrap ($info->{tls_stapling}->{error});
     } else {
       my $n = $tls && Net::SSLeay::get_verify_result ($tls);
       if ($n) {
         my $s = Net::SSLeay::X509_verify_cert_error_string ($n);
         $error = _pe "Certificate verification error $n - $s";
       } else {
-        $error = Web::DOM::Error->wrap ($_[0]);
+        $error = Web::Transport::Error->wrap ($_[0]);
       }
     }
 
@@ -725,11 +725,13 @@ push our @ISA, qw(Web::Transport::ProtocolError);
 $Web::DOM::Error::L1ObjectClass->{(__PACKAGE__)} = 1;
 
 sub new_current ($) {
-  my $self = $_[0]->SUPER::new ('', 'OpenSSL error');
+  my $self = $_[0]->SUPER::new ('');
   $self->{errno} = Net::SSLeay::ERR_get_error ();
   $self->{message} = Net::SSLeay::ERR_error_string ($self->{errno});
   return $self;
 } # new_current
+
+sub name ($) { 'OpenSSL error' }
 
 package Web::Transport::TLSStream::Certificate;
 

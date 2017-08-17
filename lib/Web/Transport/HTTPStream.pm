@@ -11,8 +11,8 @@ use ArrayBuffer;
 use TypedArray;
 use Promised::Flow;
 use Streams;
-use Web::DOM::Error;
-use Web::DOM::TypeError;
+use Web::Transport::Error;
+use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
 
 push our @CARP_NOT, qw(Web::Transport::HTTPStream::Stream);
@@ -112,7 +112,7 @@ sub new ($$) {
       return $con->_read;
     }, # pull
     cancel => sub {
-      my $error = Web::DOM::Error->wrap ($_[1]);
+      my $error = Web::Transport::Error->wrap ($_[1]);
       delete $con->{streams_controller};
       return $con->abort ($error);
     }, # cancel
@@ -176,7 +176,7 @@ sub new ($$) {
       delete $con->{timer};
       return undef;
     }, sub {
-      my $error = Web::DOM::Error->wrap ($_[0]);
+      my $error = Web::Transport::Error->wrap ($_[0]);
       delete $con->{reader};
 
       if ($con->{DEBUG}) {
@@ -197,7 +197,7 @@ sub new ($$) {
       $con->_process_rbuf_eof (undef);
       return undef;
     }, sub {
-      my $error = Web::DOM::Error->wrap ($_[0]);
+      my $error = Web::Transport::Error->wrap ($_[0]);
       delete $con->{reader};
 
       if ($con->{DEBUG}) {
@@ -220,7 +220,7 @@ sub new ($$) {
     }, sub {
       delete $con->{writer};
       if ($con->{DEBUG}) {
-        my $error = Web::DOM::Error->wrap ($_[0]);
+        my $error = Web::Transport::Error->wrap ($_[0]);
         warn "$con->{id}: S: EOF (@{[_e4d $error]})\n";
       }
     }); # writer closed
@@ -237,7 +237,7 @@ sub new ($$) {
       (delete $con->{closed}->[1])->(undef), delete $con->{closed}->[2];
     });
   })->catch (sub {
-    my $error = Web::DOM::Error->wrap ($_[0]);
+    my $error = Web::Transport::Error->wrap ($_[0]);
 
     if ($con->{DEBUG} and defined $con->{id}) {
       warn "$con->{id}: H1: failed @{[scalar gmtime]}\n";
@@ -636,7 +636,7 @@ sub _ws_received ($) {
               }, # pull
               cancel => sub {
                 undef $rc;
-                return $self->abort (Web::DOM::Error->wrap ($_[1]));
+                return $self->abort (Web::Transport::Error->wrap ($_[1]));
               }, # cancel
             });
 
@@ -773,7 +773,7 @@ sub _ws_received ($) {
 sub send_request ($$;%) {
   my $con = shift;
   my $req = shift;
-  return Promise->reject (Web::DOM::TypeError->new ("Request is not allowed"))
+  return Promise->reject (Web::Transport::TypeError->new ("Request is not allowed"))
       if $con->{is_server};
 
   my $stream = bless {
@@ -796,7 +796,7 @@ sub closed ($) {
 ## Otherwise, it returns the |closed| promise.
 sub close_after_current_stream ($) {
   my $con = $_[0];
-  return Promise->reject (Web::DOM::TypeError->new ("Connection is not ready"))
+  return Promise->reject (Web::Transport::TypeError->new ("Connection is not ready"))
       unless defined $con->{state};
 
   $con->{to_be_closed} = 1;
@@ -834,7 +834,7 @@ sub abort ($;$%) {
     return Promise->reject ("Connection has not been established");
   }
 
-  my $error = Web::DOM::Error->wrap ($reason);
+  my $error = Web::Transport::Error->wrap ($reason);
   $con->{exit} = $error;
 
   (($args{graceful} && defined $con->{writer}) ? $con->{writer}->write (DataView->new (ArrayBuffer->new (0))) : Promise->resolve)->then (sub {
@@ -2297,7 +2297,7 @@ sub _timeout ($) {
   my $self = $_[0];
   delete $self->{timer};
   return $self->abort
-      (Web::DOM::TypeError->new ("Read timeout ($ReadTimeout)"));
+      (Web::Transport::TypeError->new ("Read timeout ($ReadTimeout)"));
 } # _timeout
 
 # End of ::ServerConnection
@@ -2316,7 +2316,7 @@ use Web::DateTime;
 use Web::DateTime::Clock;
 
 push our @CARP_NOT, qw(
-  Web::DOM::TypeError
+  Web::Transport::TypeError
   Web::Transport::ProtocolError::HTTPParseError
   Web::Transport::ProtocolError::WebSocketClose
   Web::Transport::HTTPStream::ClientConnection
@@ -2352,13 +2352,13 @@ sub _open_sending_stream ($$;%) {
       my $chunk = $_[1];
       # XXX error location
       return Promise->resolve->then (sub {
-        die Web::DOM::TypeError->new ("The argument is not an ArrayBufferView")
+        die Web::Transport::TypeError->new ("The argument is not an ArrayBufferView")
             unless UNIVERSAL::isa ($chunk, 'ArrayBufferView');
 
       my $wm = $con->{write_mode} || '';
       if ($wm eq 'chunked') {
         my $byte_length = $chunk->byte_length; # can throw
-        die Web::DOM::TypeError->new
+        die Web::Transport::TypeError->new
             (sprintf "Byte length %d is greater than expected length 0",
                  $byte_length) if $canceled;
         return unless $byte_length;
@@ -2380,7 +2380,7 @@ sub _open_sending_stream ($$;%) {
 
         } else { # raw
           my $byte_length = $chunk->byte_length; # can throw
-          die Web::DOM::TypeError->new
+          die Web::Transport::TypeError->new
               (sprintf "Byte length %d is greater than expected length %d",
                    $byte_length, ($canceled ? 0 : $slot_length || 0))
                   if $canceled or
@@ -2440,7 +2440,7 @@ sub _open_sending_stream ($$;%) {
           return $sent;
         }
       })->catch (sub {
-        my $error = Web::DOM::Error->wrap ($_[0]);
+        my $error = Web::Transport::Error->wrap ($_[0]);
         $con->{cancel_current_writable_stream}->($error)
             if defined $con->{cancel_current_writable_stream};
         $con->abort ($error);
@@ -2451,7 +2451,7 @@ sub _open_sending_stream ($$;%) {
       return if $canceled;
       if (defined $slot_length) {
         if ($slot_length > 0) {
-          my $error = Web::DOM::TypeError->new
+          my $error = Web::Transport::TypeError->new
               (sprintf "Closed before bytes (n = %d) are sent", $slot_length);
           $con->{cancel_current_writable_stream}->($error)
               if defined $con->{cancel_current_writable_stream};
@@ -2474,7 +2474,7 @@ sub _open_sending_stream ($$;%) {
       }
     }, # close
     abort => sub {
-      my $error = Web::DOM::Error->wrap ($_[1]);
+      my $error = Web::Transport::Error->wrap ($_[1]);
       $con->{cancel_current_writable_stream}->($error)
           if defined $con->{cancel_current_writable_stream};
       return $con->abort ($error);
@@ -2521,7 +2521,7 @@ sub _headers_received ($;%) {
       },
       cancel => sub {
         delete $stream->{messages_controller};
-        return $con->abort (Web::DOM::Error->wrap ($_[1]));
+        return $con->abort (Web::Transport::Error->wrap ($_[1]));
       }, # cancel
     });
     $return->{messages} = $read_message_stream;
@@ -2540,7 +2540,7 @@ sub _headers_received ($;%) {
       },
       cancel => sub {
         delete $stream->{body_controller};
-        return $con->abort (Web::DOM::Error->wrap ($_[1]));
+        return $con->abort (Web::Transport::Error->wrap ($_[1]));
       },
     });
     if (defined $con->{write_mode} and
@@ -2649,11 +2649,11 @@ sub _send_request ($$) {
   my $cl = $req->{length};
   if ($method eq 'CONNECT') {
     return Promise->reject
-        (Web::DOM::TypeError->new ("Bad byte length $cl")) if defined $cl;
+        (Web::Transport::TypeError->new ("Bad byte length $cl")) if defined $cl;
   } else {
     $cl = 0+($cl || 0);
     return Promise->reject
-        (Web::DOM::TypeError->new ("Bad byte length $cl"))
+        (Web::Transport::TypeError->new ("Bad byte length $cl"))
             unless $cl =~ /\A[0-9]+\z/;
     if ($cl > 0 or $method eq 'POST' or $method eq 'PUT') {
       push @{$req->{headers} ||= []}, ['Content-Length', $cl];
@@ -2667,11 +2667,11 @@ sub _send_request ($$) {
   my $con = $stream->{connection};
   if (not defined $con->{state}) {
     return Promise->reject
-        (Web::DOM::TypeError->new ("Connection is not ready"));
+        (Web::Transport::TypeError->new ("Connection is not ready"));
   } elsif ($con->{to_be_closed}) {
-    return Promise->reject (Web::DOM::TypeError->new ("Connection is closed"));
+    return Promise->reject (Web::Transport::TypeError->new ("Connection is closed"));
   } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
-    return Promise->reject (Web::DOM::TypeError->new ("Connection is busy"));
+    return Promise->reject (Web::Transport::TypeError->new ("Connection is busy"));
   }
 
   $stream->{id} = $con->{id} . '.' . $con->{next_stream_id}++;
@@ -2740,7 +2740,7 @@ sub send_ws_message ($$$) {
   croak "Data too large" if MAX_BYTES < $length; # spec limit 2**63
 
   my $con = $self->{connection};
-  return Promise->reject (Web::DOM::TypeError->new ("Stream is busy"))
+  return Promise->reject (Web::Transport::TypeError->new ("Stream is busy"))
       if not (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') or
          defined $con->{cancel_current_writable_stream};
 
@@ -2782,7 +2782,7 @@ sub send_ping ($;%) {
   croak "Data too large" if 0x7D < length $args{data}; # spec limit 2**63
 
   my $con = $self->{connection};
-  return Promise->reject (Web::DOM::TypeError->new ("Stream is busy"))
+  return Promise->reject (Web::Transport::TypeError->new ("Stream is busy"))
       if not (defined $con->{ws_state} and $con->{ws_state} eq 'OPEN') or
          defined $con->{cancel_current_writable_stream};
 
@@ -2816,7 +2816,7 @@ sub send_ws_close ($;$$) {
   my ($stream, $status, $reason) = @_;
 
   my $con = $stream->{connection};
-  return Promise->reject (Web::DOM::TypeError->new ("Stream is busy"))
+  return Promise->reject (Web::Transport::TypeError->new ("Stream is busy"))
       if not defined $con->{ws_state} or
          not ($con->{ws_state} eq 'OPEN' or $con->{ws_state} eq 'CLOSING') or
          defined $con->{cancel_current_writable_stream};
@@ -2933,7 +2933,7 @@ sub send_response ($$$) {
   my ($stream, $response) = @_;
   my $con = $stream->{connection};
 
-  return Promise->reject (Web::DOM::TypeError->new ("Response is not allowed"))
+  return Promise->reject (Web::Transport::TypeError->new ("Response is not allowed"))
       if not defined $con or defined $con->{write_mode} or not $con->{is_server};
 
   my $close = $response->{close} ||
@@ -2949,7 +2949,7 @@ sub send_response ($$$) {
       $response->{status} == 304) {
     ## No response body by definition
     return Promise->reject
-        (Web::DOM::TypeError->new ("Bad byte length $response->{length}"))
+        (Web::Transport::TypeError->new ("Bad byte length $response->{length}"))
             if defined $response->{length};
     $to_be_sent = 0;
   } elsif ($stream->{request}->{method} eq 'CONNECT' and
@@ -2967,7 +2967,7 @@ sub send_response ($$$) {
       $write_mode = 'ws';
     } else {
       return Promise->reject
-          (Web::DOM::TypeError->new ("1xx response not supported"));
+          (Web::Transport::TypeError->new ("1xx response not supported"));
     }
   } else {
     if (defined $response->{length}) {

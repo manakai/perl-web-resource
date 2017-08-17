@@ -167,6 +167,7 @@ sub _handle_stream ($$$$) {
         }
 
         $input .= $_[0]->{value}->manakai_to_string;
+        return $read->();
       });
     } : sub { return Promise->resolve }; # $read
     return promised_cleanup { undef $read } $read->()->then (sub {

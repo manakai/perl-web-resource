@@ -1732,6 +1732,38 @@ test {
 
 test {
   my $c = shift;
+  my $invoked = 0;
+  my $data = "abcdefghijklmnopqrstu" x 1024 x 10;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    $invoked++;
+    return sub {
+      my $w = $_[0]->([200, []]);
+      read $env->{"psgi.input"}, my $input, $env->{CONTENT_LENGTH};
+      $w->write ($input);
+      $w->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin, body => $data)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 200;
+        is $res->body_bytes, $data;
+      } $c;
+    });
+  }, undef)->then (sub {
+    test {
+      is $invoked, 1;
+    } $c;
+  });
+} n => 3, name => 'semi large request body';
+
+test {
+  my $c = shift;
   promised_cleanup { done $c; undef $c } server (sub ($) {
     my $env = $_[0];
     return sub {

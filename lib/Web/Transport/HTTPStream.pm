@@ -15,7 +15,15 @@ use Web::Transport::Error;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
 
-push our @CARP_NOT, qw(Web::Transport::HTTPStream::Stream);
+push our @CARP_NOT, qw(
+  Web::Transport::HTTPStream::Stream
+  Web::Transport::TCPStream
+  Web::Transport::UnixStream
+  Web::Transport::TLSStream
+  Web::Transport::SOCKS4Stream
+  Web::Transport::SOCKS5Stream
+  Web::Transport::H1CONNECTStream
+);
 
 ## This module is not public.  It should not be used by external
 ## applications and modules.
@@ -123,7 +131,6 @@ sub new ($$) {
     $con->{streams_done} = sub { };
   }; # streams_done
 
-  local $CARP_NOT[@CARP_NOT] = $parent->{class};
   $parent->{class}->create ($parent)->then (sub {
     my $info = $_[0];
 

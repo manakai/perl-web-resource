@@ -13,6 +13,12 @@ use DataView;
 
 push our @CARP_NOT, qw(
   Web::Transport::TypeError Web::Transport::ProtocolError
+  Web::Transport::TCPStream
+  Web::Transport::UnixStream
+  Web::Transport::TLSStream
+  Web::Transport::SOCKS4Stream
+  Web::Transport::SOCKS5Stream
+  Web::Transport::H1CONNECTStream
 );
 
 our $HandshakeTimeout ||= 30;
@@ -56,7 +62,6 @@ sub create ($$) {
   my $parent = $args->{parent};
   $parent = {%$parent, debug => $args->{debug}}
       if $args->{debug} and not defined $parent->{debug};
-  local $CARP_NOT[@CARP_NOT] = $parent->{class};
   return $parent->{class}->create ($parent)->then (sub {
     $info->{parent} = $_[0];
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};

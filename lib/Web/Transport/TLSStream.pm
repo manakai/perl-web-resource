@@ -19,6 +19,12 @@ use Web::Transport::OCSP;
 push our @CARP_NOT, qw(
   Web::Transport::Error Web::Transport::TypeError Streams::IOError
   Web::Transport::TLSStream::OpenSSLError Web::Transport::ProtocolError
+  Web::Transport::TCPStream
+  Web::Transport::UnixStream
+  Web::Transport::TLSStream
+  Web::Transport::SOCKS4Stream
+  Web::Transport::SOCKS5Stream
+  Web::Transport::H1CONNECTStream
 );
 
 # XXX alert stream
@@ -472,7 +478,6 @@ sub create ($$) {
   my $parent = $args->{parent};
   $parent = {%$parent, debug => $args->{debug}}
       if $args->{debug} and not defined $parent->{debug};
-  local $CARP_NOT[@CARP_NOT] = $parent->{class};
   $parent->{class}->create ($parent)->then (sub {
     $info->{parent} = $_[0];
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};

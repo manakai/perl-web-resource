@@ -33,9 +33,9 @@ my $process_stream = sub {
 
     my $r = $req->{body} || $req->{readable};
     if (defined $r) {
-      my $reader = $r->get_reader;
+      my $reader = $r->get_reader ('byob');
       my $read; $read = sub {
-        return $reader->read->then (sub {
+        return $reader->read (DataView->new (ArrayBuffer->new (1000)))->then (sub {
           return if $_[0]->{done};
           my $view = $_[0]->{value};
           my $d = $view->manakai_to_string;

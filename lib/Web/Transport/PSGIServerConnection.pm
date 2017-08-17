@@ -14,18 +14,18 @@ use Web::Host;
 use Web::Transport::_Defs;
 use Web::Transport::TCPStream;
 use Web::Transport::HTTPStream;
-use Web::DOM::TypeError;
+use Web::Transport::TypeError;
 
 push our @CARP_NOT, qw(
   ArrayBuffer
   Web::Transport::PSGIServerConnection::Writer
   Web::Transport::HTTPStream
   Web::Transport::HTTPStream::Stream
-  Web::DOM::TypeError
+  Web::Transport::TypeError
 );
 
 sub _te ($) {
-  return Web::DOM::TypeError->new ($_[0]);
+  return Web::Transport::TypeError->new ($_[0]);
 } # _te
 
 sub _metavariables ($$) {
@@ -342,7 +342,7 @@ sub _run ($$$$$) {
   })->catch ($res_reject)->then (sub { undef $ondestroy_copy });
 
   return $res_promise->catch (sub {
-    my $error = Web::DOM::Error->wrap ($_[0]);
+    my $error = Web::Transport::Error->wrap ($_[0]);
     if ($send_response_invoked) {
       return Promise->resolve->then (sub {
         return $server->onexception->($server, $error);

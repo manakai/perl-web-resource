@@ -9,8 +9,8 @@ use Promised::Flow;
 use Web::DomainName::Canonicalize qw(canonicalize_url_host);
 use Web::Transport::RequestConstructor;
 use Web::Encoding;
-use Web::DOM::Error;
-use Web::DOM::TypeError;
+use Web::Transport::Error;
+use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
 use Web::Transport::Response;
 use Web::URL::Scheme qw(get_default_port);
@@ -18,12 +18,14 @@ use Web::Transport::TCPStream;
 use Web::Transport::TLSStream;
 use Web::Transport::HTTPStream;
 
-push our @CARP_NOT, qw(Web::Transport::ProtocolError Web::DOM::TypeError);
+push our @CARP_NOT, qw(
+  Web::Transport::ProtocolError Web::Transport::TypeError
+);
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
 sub _te ($) {
-  return Web::DOM::TypeError->new ($_[0]);
+  return Web::Transport::TypeError->new ($_[0]);
 } # _te
 
 sub _pe ($) {
@@ -563,7 +565,7 @@ sub request ($%) {
     });
   })->catch (sub {
     die $_[0] if UNIVERSAL::isa ($_[0], 'Web::Transport::Response');
-    my $error = Web::DOM::Error->wrap ($_[0]);
+    my $error = Web::Transport::Error->wrap ($_[0]);
     $s_queue->(undef);
     die Web::Transport::Response->new_from_error ($error);
   });
@@ -597,7 +599,8 @@ sub abort ($;$) {
     return Promise->resolve;
   }
 
-  my $error = Web::DOM::Error->wrap (defined $_[1] ? $_[1] : 'Client aborted');
+  my $error = Web::Transport::Error->wrap
+      (defined $_[1] ? $_[1] : 'Client aborted');
   $self->{closed} = 1;
   $self->{aborted} = $error;
   return $self->{http}->abort ($error)->then (sub {

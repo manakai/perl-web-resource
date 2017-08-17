@@ -7,18 +7,31 @@ use Test::X1;
 use Test::More;
 use Promised::Flow;
 use Web::URL;
-use Web::Transport::ConnectionClient;
+use Web::Transport::BasicClient;
 
-for my $url (
-  q<http://www.example.com>,
-  q<http://www.yahoo.co.jp>,
-  q<http://www.google.com>,
-  q<http://hatenacorp.jp>,
-) {
+for my $host (qw(
+www.google.com
+mail.google.com
+github.com
+gist.github.com
+gist.githubusercontent.com
+httpd.apache.org
+soulsphere.org
+whatwg.org
+dom.spec.whatwg.org
+www.facebook.com
+helloworld.letsencrypt.org
+www.hatena.ne.jp
+hatena.g.hatena.ne.jp
+roomhub.jp
+bower.herokuapp.com
+www.realtokyoestate.co.jp
+)) {
+  my $url = qq<https://$host>;
   test {
     my $c = shift;
     my $url = Web::URL->parse_string ($url);
-    my $client = Web::Transport::ConnectionClient->new_from_url ($url);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
     promised_cleanup {
       done $c;
       undef $c;

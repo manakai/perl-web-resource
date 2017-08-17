@@ -59,7 +59,7 @@ sub psgi_server ($$;$%) {
       $cv->begin;
       $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args
           ($app, [@_], parent_id => $args{parent_id});
-      $con->{connection}->server_header ($args{server_name});
+      $con->{connection}->{server_header} = $args{server_name};
       $con->onexception ($onexception) if defined $onexception;
       if (exists $args{max}) {
         $con->max_request_body_length ($args{max});

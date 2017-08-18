@@ -59,8 +59,7 @@ The module L<Web::Transport::ConnectionClient> is deprecated.
 
 =head1 REQUEST OPTIONS
 
-For the C<request> method of L<Web::Transport::ConnectionClient>
-objects and the C<new> class method of L<Web::Transport::WSClient>,
+For the C<request> method of a L<Web::Transport::BasicClient> object,
 following key/value pairs can be used to specify the parameters of the
 request to send:
 
@@ -71,9 +70,8 @@ request to send:
 Specify the request URL.  If specified, the value must be a
 L<Web::URL> object.
 
-The scheme of the URL must be one of C<http>, C<https>, or C<ftp> for
-L<Web::Transport::ConnectionClient>, or C<ws> or C<wss> for
-L<Web::Transport::WSClient>.
+The scheme of the URL must be one of C<http>, C<https>, C<ftp>, C<ws>,
+or C<wss>.
 
 Any username, password, or fragment of the URL is ignored.
 
@@ -90,14 +88,10 @@ this option is appended to the prefix.
 
 When the C<url> option is specified, this option is ignored.
 
-This option is not available for L<Web::Transport::WSClient>.
-
 =item method => $string
 
 Specify the HTTP request method.  Note that HTTP request methods are
 case-sensitive.  If not specified, C<GET> is used.
-
-This option is not available for L<Web::Transport::WSClient>.
 
 =item headers => {$string => $string, ...}
 
@@ -167,8 +161,6 @@ C<application/octet-stream> and the empty string, respectively.
 
 They are encoded in the C<multipart/form-data> format in UTF-8.
 
-This option is not available for L<Web::Transport::WSClient>.
-
 =item basic_auth => [$userid, $password]
 
 Specifies the credentials of the C<Basic> authentication.  The value
@@ -215,16 +207,12 @@ non-C<undef> value is specified and the C<oauth1> option is also
 specified, this value is taken into account as a request parameter.
 Otherwise this option is ignored.
 
-This option is not available for L<Web::Transport::WSClient>.
-
 =item oauth_callback => $string
 
 The OAuth 1.0 C<oauth_callback> request parameter value.  If a
 non-C<undef> value is specified and the C<oauth1> option is also
 specified, this value is taken into account as a request parameter.
 Otherwise this option is ignored.
-
-This option is not available for L<Web::Transport::WSClient>.
 
 =item aws4 => [$access_key_id, $secret_access_key, $region, $service]
 
@@ -254,12 +242,39 @@ are added.
 The request body.  If a non-C<undef> value is specified, it must be a
 string of zero or more bytes.
 
-This option is not available for L<Web::Transport::WSClient>.
+This option is not allowed when C<body_stream> is specified.
+
+=item body_stream => $readable_stream
+
+The request body.  If a non-C<undef> value is specified, it must be a
+L<ReadableStream> with type C<bytes> (i.e. a readable byte stream)
+which is not locked.
+
+If this option has non-C<undef> value, the C<body_length> option must
+also be specified.  This option is not allowed when C<body> is
+specified.
+
+=item body_length => $byte_length
+
+The byte length of the request body.  If a non-C<undef> value is
+specified, it must be equal to the number of bytes contained by the
+C<body_stream> readable byte stream.
+
+If this option has non-C<undef> value, the C<body_stream> option must
+also be specified.  This option is not allowed when C<body> is
+specified.
+
+=item stream => $boolean
+
+Whether the result of the operation should contain a L<ReadableStream>
+object (true) or a byte string (false) for the response body.  See
+L<Web::Transport::BasicClient> for more information.
 
 =back
 
-There is also the C<stream> option, which is only accepted by the
-C<request> method of the L<Web::Transport::BasicClient> module.
+Different subsets of these options are also supported by relevant
+methods of deprecated modules L<Web::Transport::ConnectionClient> and
+L<Web::Transport::WSClient>.
 
 =head2 Relevant specifications
 

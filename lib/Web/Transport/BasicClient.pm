@@ -341,9 +341,9 @@ sub _connect ($$) {
   };
 } # _connect
 
-sub _request ($$$$$$$$$) {
-  my ($self, $method, $url_record, $headers, $body_ref, $no_cache, $is_ws,
-      $need_readable_stream) = @_;
+sub _request ($$$$$$$$$$) {
+  my ($self, $method, $url_record, $headers,
+      $body_ref, $body_reader, $no_cache, $is_ws, $need_readable_stream) = @_;
   if ($self->debug) {
     warn "$self->{parent_id}: @{[__PACKAGE__]}: Request <@{[$url_record->stringify]}> @{[scalar gmtime]}\n";
   }
@@ -400,6 +400,25 @@ sub _request ($$$$$$$$$) {
           $writer->write
               (DataView->new (ArrayBuffer->new_from_scalarref ($body_ref)))->catch (sub { });
           $writer->close->catch (sub { });
+        } else {
+          my $error = _te 'Request body is not allowed';
+          $stream->abort ($error);
+          die $error;
+        }
+      } elsif (defined $body_reader) {
+        if (defined $reqbody) {
+          my $writer = $reqbody->get_writer;
+          my $read; $read = sub {
+            return $body_reader->read->then (sub {
+              return if $_[0]->{done};
+              return $writer->write ($_[0]->{value})->then ($read);
+            });
+          }; # $read
+          promised_cleanup { undef $read } $read->()->then (sub {
+            return $writer->close;
+          })->catch (sub {
+            $writer->abort ($_[0]);
+          });
         } else {
           my $error = _te 'Request body is not allowed';
           $stream->abort ($error);
@@ -533,7 +552,7 @@ sub request ($%) {
     $args{base_url} ||= $self->{base_url};
     $args{path_prefix} = $self->{path_prefix} if not defined $args{path_prefix};
     $args{protocol_clock} = $self->protocol_clock;
-    my ($method, $url_record, $header_list, $body_ref)
+    my ($method, $url_record, $header_list, $body_ref, $body_reader)
         = Web::Transport::RequestConstructor->create (\%args);
     die _te $method->{message} if ref $method; # error
 
@@ -557,13 +576,14 @@ sub request ($%) {
     my $max = $self->max_size;
     my $no_cache = $args{superreload};
     return $self->_request (
-      $method, $url_record, $header_list, $body_ref, $no_cache, $is_ws,
-      $args{stream},
+      $method, $url_record, $header_list, $body_ref, $body_reader,
+      $no_cache, $is_ws, $args{stream},
     )->catch (sub {
       return $self->_request (
-        $method, $url_record, $header_list, $body_ref, $no_cache, $is_ws,
-        $args{stream},
-      ) if Web::Transport::ProtocolError->can_http_retry ($_[0]);
+        $method, $url_record, $header_list, $body_ref, $body_reader,
+        $no_cache, $is_ws, $args{stream},
+      ) if Web::Transport::ProtocolError->can_http_retry ($_[0]) and
+           not defined $body_reader;
       die $_[0];
     })->then (sub {
       my ($return, $wait) = @{$_[0]};

@@ -80,7 +80,8 @@ The arguments are name/value pairs, as described in
 L<Web::Transport/"REQUEST OPTIONS">.  At minimum, the C<url> argument
 must be specified.  It is a URL record object (L<Web::URL>).  It must
 have same origin as the client's origin (i.e. the origin of the
-argument to the C<new_from_url> method).
+argument to the C<new_from_url> method).  Options C<stream>,
+C<body_stream>, and C<body_length> are not supported.
 
 The promise is resolved with a response (L<Web::Transport::Response>
 object).

@@ -89,7 +89,9 @@ sub create ($$) {
   }
 
   my $boundary;
-  if (defined $args->{files} and not defined $args->{body} and not defined $ct) {
+  if (defined $args->{files} and
+      not defined $args->{body} and not defined $args->{body_stream} and
+      not defined $ct) {
     $boundary = '';
     $boundary .= $BoundaryAlphabet[rand @BoundaryAlphabet] for 1..50;
     push @$header_list, ['Content-Type', $ct = 'multipart/form-data; boundary=' . $boundary, 'content-type'];
@@ -140,7 +142,8 @@ sub create ($$) {
   my $param_container = (
     $method eq 'POST' and
     ((not defined $ct and not defined $args->{body}) or
-     (defined $ct and $ct eq 'application/x-www-form-urlencoded'))
+     (defined $ct and $ct eq 'application/x-www-form-urlencoded')) and
+    not defined $args->{body_stream}
   ) ? 'body' : 'query';
   if (not defined $boundary and defined $args->{params}) {
     if ($param_container eq 'query') {
@@ -232,14 +235,25 @@ sub create ($$) {
     );
   }
 
-  if (defined $args->{body}) {
-    if ($args->{no_body}) {
-      return {failed => 1, message => "Request body not allowed"};
-    }
+  my $body_reader;
+  if (defined $args->{body_stream}) {
+    return {failed => 1, message => "Request body not allowed"}
+        if $args->{no_body};
+
+    return {failed => 1, message => "No |body_length|"}
+        unless defined $args->{body_length};
+    push @$header_list,
+        ['Content-Length', 0+$args->{body_length}, 'content-length'];
+
+    $body_reader = $args->{body_stream}->get_reader ('byob'); # or throw
+    $body_reader->release_lock;
+    $body_reader = $args->{body_stream}->get_reader;
+  } elsif (defined $args->{body}) {
+    return {failed => 1, message => "Request body not allowed"}
+        if $args->{no_body};
 
     push @$header_list, ['Content-Length', length ($args->{body}), 'content-length'];
   }
-  # XXX or, method requires payload
 
   if ($args->{superreload}) {
     push @$header_list,
@@ -262,7 +276,8 @@ sub create ($$) {
     $_->[1] =~ tr/\x0D\x0A/\x20\x20/;
   }
 
-  return ($method, $url_record, $header_list, defined $args->{body} ? \($args->{body}) : undef);
+  return ($method, $url_record, $header_list,
+          defined $args->{body} ? \($args->{body}) : undef, $body_reader);
 } # create
 
 1;

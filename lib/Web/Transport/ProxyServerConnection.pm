@@ -1,17 +1,35 @@
 package Web::Transport::ProxyServerConnection;
 use strict;
 use warnings;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
 use Carp qw(croak);
+use ArrayBuffer;
+use DataView;
 use AnyEvent;
 use Promise;
+use Promised::Flow;
 use Web::Host;
 use Web::Transport::_Defs;
-use Web::Transport::HTTPServerConnection;
-use Web::Transport::TCPTransport;
-use Web::Transport::ConnectionClient;
+use Web::Transport::TCPStream;
+use Web::Transport::HTTPStream;
+use Web::Transport::Error;
+use Web::Transport::TypeError;
+use Web::Transport::BasicClient;
 
-sub headers_without_connection_specific ($) {
+push our @CARP_NOT, qw(
+  ArrayBuffer
+  Web::Transport::HTTPStream
+  Web::Transport::HTTPStream::Stream
+  Web::Transport::TypeError
+  Web::Transport::BasicClient
+);
+
+sub _te ($) {
+  return Web::Transport::TypeError->new ($_[0]);
+} # _te
+
+sub _headers_without_connection_specific ($) {
+  # XXX move to _Defs
   my %remove = map { $_ => 1 } qw(
     host content-length transfer-encoding trailer te connection
     keep-alive proxy-connection upgrade proxy-authenticate proxy-authorization
@@ -34,89 +52,150 @@ sub headers_without_connection_specific ($) {
       $_;
     }
   } @{$_[0]}];
-} # headers_without_connection_specific
+} # _headers_without_connection_specific
 
-my $cb = sub {
-  my $env;
-  my $method;
-  my $status;
-  my $input = '';
-  my $con;
-  
-  return sub {
-    my $self = $_[0];
-    my $type = $_[1];
-    if ($type eq 'headers') {
-      my $req = $_[2];
+sub _handle_stream ($$) {
+  my ($server, $stream) = @_;
+  return $stream->headers_received->then (sub {
+    my $req = $_[0];
 
-      my $header_sent;
-      my $url = $req->{target_url};
-      my $con = Web::Transport::ClientBareConnection->new_from_url ($url);
+    # XXX proxy auth - 407 or 511
 
-      my $x = Web::Transport::ConnectionClient->new_from_url ($url);
-      $con->parent_id ($x->{parent_id});
-      $con->proxy_manager ($x->proxy_manager);
-      $con->resolver ($x->resolver);
-      $con->tls_options ($x->tls_options);
-
-      my $headers = headers_without_connection_specific $req->{headers};
-      $con->request ($req->{method}, $url, $headers, undef, ! 'nocache', ! 'ws', sub {
-        unless ($header_sent) {
-          my $res = $_[1];
-          my $headers = headers_without_connection_specific $res->{headers};
-          $self->send_response_headers
-              ({status => $res->{status},
-                status_text => $res->{reason},
-                headers => $headers},
-               proxying => 1); # XXX or throw
-          $header_sent = 1;
-        }
-        if (defined $_[2]) {
-          $self->send_response_data (\($_[2]));
-        } else {
-          $self->close_response;
-        }
+    # XXX reject TRACE ?
+    if ($req->{method} eq 'CONNECT') {
+      # XXX
+      return $stream->send_response ({
+        status => 405,
+        status_text => $Web::Transport::_Defs::ReasonPhrases->{405},
+        headers => [['Content-Type', 'text/plain; charset=utf-8']],
+        close => 1,
+      })->then (sub {
+        my $writer = $_[0]->{body}->get_writer;
+        $writer->write
+            (DataView->new (ArrayBuffer->new_from_scalarref (\"405")));
+        return $writer->close;
+      })->then (sub {
+        $req->{body}->cancel (405) if defined $req->{body};
+        return $stream->abort (405);
       });
-
-    } elsif ($type eq 'data') {
-      # XXX If too large
-      $input .= $_[2];
-    } elsif ($type eq 'dataend') {
-
     }
-  };
-}; # $cb
+    # XXX WS
 
-sub new_from_ae_tcp_server_args ($$$;%) {
+    my $url = $req->{target_url};
+    # XXX unless $url->scheme eq 'http'
+
+    # XXX url filter
+
+    # XXX connection pool
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    # XXX
+    #$client->parent_id ($x->{parent_id});
+    #XXX$con->proxy_manager ($x->proxy_manager);
+    #$client->resolver ($x->resolver);
+    #$client->tls_options ($x->tls_options);
+    $client->last_resort_timeout ($server->{last_resort_timeout});
+
+    my $headers = _headers_without_connection_specific $req->{headers};
+    return $client->request (
+      method => $req->{method},
+      url => $url,
+      _header_list => $headers,
+      # XXX no additional haders
+      # XXX request body length / request body stream
+      stream => 1,
+    )->then (sub {
+      my $res = $_[0];
+      my $headers = _headers_without_connection_specific $res->{headers};
+      return $stream->send_response ({
+        status => $res->{status},
+        status_text => $res->{status_text},
+        headers => $headers,
+        forwarding => 1,
+      })->then (sub {
+        my $writer = $_[0]->{body}->get_writer;
+        my $reader = $res->body_stream->get_reader;
+        my $read; $read = sub {
+          return $reader->read->then (sub {
+            return if $_[0]->{done};
+            return $writer->write ($_[0]->{value})->then ($read);
+          });
+        }; # $read
+        return promised_cleanup { undef $read } $read->()->then (sub {
+          return $writer->close;
+        });
+      })->then (sub {
+        return $client->close;
+      }, sub {
+        return $client->abort ($_[0]);
+      });
+    }, sub {
+      my $result = $_[0];
+      # XXX log $error
+      my $status = 503;
+      my $error = '' . $result;
+      if ($error =~ /^Network error: HTTP parse error/) {
+        $status = 502;
+      } elsif ($error =~ m{^Network error: (?:Protocol error|Perl I/O error)}) {
+        $status = 504;
+      }
+      return $stream->send_response ({
+        status => $status,
+        status_text => $Web::Transport::_Defs::ReasonPhrases->{$status},
+        headers => [['content-type' => 'text/plain;charset=utf-8']],
+      })->then (sub {
+        my $writer = $_[0]->{body}->get_writer;
+        $writer->write
+            (DataView->new (ArrayBuffer->new_from_scalarref (\$status)));
+        return $writer->close;
+      })->then (sub {
+        return $client->abort ($error);
+      });
+    });
+  }); # ready
+} # _handle_stream
+
+sub new_from_ae_tcp_server_args ($$;%) {
   my ($class, $aeargs, %args) = @_;
-  my $self = bless {
-  }, $class;
+  my $self = bless {}, $class;
   my $socket;
   if ($aeargs->[1] eq 'unix/') {
-    require Web::Transport::UNIXDomainSocketTransport;
-    $socket = Web::Transport::UNIXDomainSocketTransport->new
-        (server => 1, fh => $aeargs->[0], parent_id => $args{parent_id});
+    require Web::Transport::UnixStream;
+    $socket = {
+      class => 'Web::Transport::UnixStream',
+      server => 1, fh => $aeargs->[0],
+      parent_id => $args{parent_id},
+    };
   } else {
-    $socket = Web::Transport::TCPTransport->new
-        (server => 1, fh => $aeargs->[0],
-         host => Web::Host->parse_string ($aeargs->[1]), port => $aeargs->[2],
-         parent_id => $args{parent_id});
+    $socket = {
+      class => 'Web::Transport::TCPStream',
+      server => 1, fh => $aeargs->[0],
+      host => Web::Host->parse_string ($aeargs->[1]), port => $aeargs->[2],
+      parent_id => $args{parent_id},
+    };
   }
-  $self->{connection} = Web::Transport::HTTPServerConnection->new (cb => sub {
-    my ($sc, $type) = @_;
-    if ($type eq 'startstream') {
-      return $cb->($self);
-    }
-  }, transport => $socket);
+  $self->{connection} = Web::Transport::HTTPStream->new ({
+    parent => $socket,
+    server => 1,
+    server_header => $args{server_header},
+  });
   $self->{completed_cv} = AE::cv;
   $self->{completed_cv}->begin;
+  my $reader = $self->{connection}->streams->get_reader;
+  my $read; $read = sub {
+    return $reader->read->then (sub {
+      return if $_[0]->{done};
+      _handle_stream $self, $_[0]->{value};
+      return $read->();
+    });
+  }; # $read
+  promised_cleanup { undef $read } $read->();
   $self->{connection}->closed->then (sub { $self->{completed_cv}->end });
   $self->{completed} = Promise->from_cv ($self->{completed_cv});
   return $self;
 } # new_from_ae_tcp_server_args
 
 sub id ($) {
-  return $_[0]->{connection}->id;
+  return $_[0]->{connection}->info->{id};
 } # id
 
 sub onexception ($;$) {
@@ -125,29 +204,6 @@ sub onexception ($;$) {
   }
   return $_[0]->{onexception} || sub { warn $_[1] };
 } # onexception
-
-sub _send_error ($$$) {
-  my ($self, $stream, $error) = @_;
-  my $p = Promise->all ([
-    Promise->resolve->then (sub {
-      return $self->onexception->($self, $error);
-    })->catch (sub {
-      warn $_[0];
-    }),
-    Promise->resolve->then (sub {
-      $stream->send_response_headers
-          ({status => 500,
-            status_text => $Web::Transport::_Defs::ReasonPhrases->{500},
-            headers => [['Content-Type', 'text/plain; charset=utf-8']]});
-      $stream->send_response_data (\q{500});
-      $stream->close_response;
-    })->catch (sub {
-      $stream->abort (message => "PSGI application throws an exception");
-    }),
-  ]);
-  $self->{completed_cv}->begin;
-  $p->then (sub { $self->{completed_cv}->end });
-} # _send_error
 
 sub closed ($) {
   return $_[0]->{connection}->closed;
@@ -166,7 +222,7 @@ sub close_after_current_response ($;%) {
   if ($timeout > 0) {
     $timer = AE::timer $timeout, 0, sub {
       $self->{connection}->abort
-          (message => "|close_after_current_response| timeout ($timeout)");
+          ("|close_after_current_response| timeout ($timeout)");
       undef $timer;
     };
   }
@@ -178,7 +234,7 @@ sub close_after_current_response ($;%) {
 sub DESTROY ($) {
   local $@;
   eval { die };
-  warn "Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+  warn "$$: Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 } # DESTROY
 

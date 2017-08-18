@@ -2932,6 +2932,10 @@ sub _ws_debug ($$$%) {
 ##   close - Whether the HTTP connection should be closed after
 ##   sending this response.
 ##
+##   forwarding - Whether this response is received from the upstream
+##   and is to be forwarded to the downstream or not.  If this option
+##   is true, this method does not generate some headers.
+##
 ## This method must be invoked while the HTTP connection is waiting
 ## for an HTTP response.  It returns a promise which is to be
 ## fulfilled with a hash reference that might contain a writable
@@ -2993,13 +2997,13 @@ sub send_response ($$$) {
     $close = 1 if $stream->{request}->{method} eq 'CONNECT';
   }
 
-  #XXXunless ($args{proxying}) {
+  unless ($response->{forwarding}) {
     push @header, ['Server', $con->{server_header}];
 
     my $dt = Web::DateTime->new_from_unix_time
         (Web::DateTime::Clock->realtime_clock->()); # XXX
     push @header, ['Date', $dt->to_http_date_string];
-  #}
+  }
 
   if ($is_ws) {
     push @header,

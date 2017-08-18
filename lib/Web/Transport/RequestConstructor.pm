@@ -49,7 +49,7 @@ sub create ($$) {
   }
 
   my $headers = $args->{headers} || {};
-  my $header_list = [];
+  my $header_list = $args->{_header_list} || []; # for proxy module only
   my $has_header = {};
   my $ct;
   my $auth;

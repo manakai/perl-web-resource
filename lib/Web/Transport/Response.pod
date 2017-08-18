@@ -69,7 +69,22 @@ connection close event (e.g. network error).
 
 =item $bytes = $res->body_bytes
 
-The response body, if any.
+The response body, as a string of bytes, if any.
+
+This method throws an exception if the response is created with a body
+stream.
+
+=item $readable = $res->body_stream
+
+The response body, as a L<ReadableStream>.
+
+This method throws an exception B<unless> the response is created with
+a body stream.
+
+If application receives a response created with a body stream, it must
+read the stream until the end of the stream is detected or cancel the
+stream.  Otherwise the HTTP connection cannot be used for any
+subsequent request or be closed gracefully.
 
 =item $boolean = $res->incomplete
 
@@ -92,7 +107,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

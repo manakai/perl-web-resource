@@ -341,8 +341,9 @@ sub _connect ($$) {
   };
 } # _connect
 
-sub _request ($$$$$$$$) {
-  my ($self, $method, $url_record, $headers, $body_ref, $no_cache, $is_ws) = @_;
+sub _request ($$$$$$$$$) {
+  my ($self, $method, $url_record, $headers, $body_ref, $no_cache, $is_ws,
+      $need_readable_stream) = @_;
   if ($self->debug) {
     warn "$self->{parent_id}: @{[__PACKAGE__]}: Request <@{[$url_record->stringify]}> @{[scalar gmtime]}\n";
   }
@@ -485,7 +486,9 @@ sub _request ($$$$$$$$) {
         }
 
         my $readable = delete $response->{body};
-        if (defined $readable) {
+        if ($need_readable_stream) {
+          $response->{body_stream} = $readable;
+        } elsif (defined $readable) {
           my $reader = $readable->get_reader ('byob');
           $response->{body} = [];
           my $body_length = 0;
@@ -553,9 +556,14 @@ sub request ($%) {
 
     my $max = $self->max_size;
     my $no_cache = $args{superreload};
-    return $self->_request ($method, $url_record, $header_list, $body_ref, $no_cache, $is_ws)->catch (sub {
-      return $self->_request ($method, $url_record, $header_list, $body_ref, $no_cache, $is_ws)
-          if Web::Transport::ProtocolError->can_http_retry ($_[0]);
+    return $self->_request (
+      $method, $url_record, $header_list, $body_ref, $no_cache, $is_ws,
+      $args{stream},
+    )->catch (sub {
+      return $self->_request (
+        $method, $url_record, $header_list, $body_ref, $no_cache, $is_ws,
+        $args{stream},
+      ) if Web::Transport::ProtocolError->can_http_retry ($_[0]);
       die $_[0];
     })->then (sub {
       my ($return, $wait) = @{$_[0]};

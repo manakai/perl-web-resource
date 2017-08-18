@@ -259,6 +259,36 @@ test {
 
 test {
   my $c = shift;
+  my $url1 = Web::URL->parse_string ('http://test/');
+  my $client = Web::Transport::BasicClient->new_from_url ($url1);
+  isa_ok $client->origin, 'Web::Origin';
+  is $client->origin->to_ascii, 'http://test';
+  my $url2 = Web::URL->parse_string ('foo:bar');
+  my $p = $client->request (url => $url2);
+  isa_ok $p, 'Promise';
+  $p->then (sub {
+    test { ok 0 } $c;
+  }, sub {
+    my $result = $_[0];
+    test {
+      ok $result->is_network_error;
+      is $result->network_error_message, "Bad URL origin |null| (|http://test| expected)";
+    } $c;
+    $result->body_stream;
+  })->catch (sub {
+    my $error = $_[0];
+    test {
+      is $error->name, 'TypeError';
+      is $error->message, '|body_stream| is not available';
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 7, name => 'request opaque origin 2';
+
+test {
+  my $c = shift;
   server_as_cv (q{
     close
   })->cb (sub {
@@ -471,6 +501,49 @@ test {
     });
   });
 } n => 6, name => 'connection not persisted';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 200 OK"CRLF
+    "Content-Length: 4"CRLF
+    CRLF
+    "hoge"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    return Promise->all ([
+      $client->request (url => $url),
+      $client->request (url => $url),
+    ])->then (sub {
+      my ($res1, $res2) = @{$_[0]};
+      test {
+        ok ! $res1->is_network_error, $res1;
+        is $res1->network_error_message, undef;
+        is $res1->body_bytes, 'hoge';
+
+        ok ! $res2->is_network_error, $res2;
+        is $res2->network_error_message, undef;
+        is $res2->body_bytes, 'hoge';
+      } $c;
+      $res1->body_stream;
+    })->catch (sub {
+      my $error = $_[0];
+      test {
+        is $error->name, 'TypeError';
+        is $error->message, '|body_stream| is not available';
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 8, name => 'connection not persisted 2';
 
 test {
   my $c = shift;

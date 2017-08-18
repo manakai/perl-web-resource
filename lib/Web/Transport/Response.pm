@@ -2,7 +2,8 @@ package Web::Transport::Response;
 use strict;
 use warnings;
 use overload '""' => 'stringify', fallback => 1;
-our $VERSION = '2.0';
+our $VERSION = '3.0';
+use Web::Transport::TypeError;
 
 push our @CARP_NOT, qw(Web::Transport::TypeError);
 
@@ -133,15 +134,29 @@ sub header ($$) {
   return undef;
 } # header
 
+sub body_stream ($) {
+  die Web::Transport::TypeError->new ("|body_stream| is not available")
+      unless defined $_[0]->{body_stream};
+  return $_[0]->{body_stream};
+} # body_stream
+
 sub body_bytes ($) {
-  return undef unless defined $_[0]->{body};
+  unless (defined $_[0]->{body}) {
+    die Web::Transport::TypeError->new ("|body_bytes| is not available")
+        if defined $_[0]->{body_stream};
+    return undef;
+  }
   return join '', map { $$_ } @{$_[0]->{body}};
 } # body_bytes
 
 ## HTTP::Response compatibility
 sub content ($) {
-  return '' if not defined $_[0]->{body};
-  return $_[0]->body_bytes;
+  unless (defined $_[0]->{body}) {
+    die Web::Transport::TypeError->new ("|body_bytes| is not available")
+        if defined $_[0]->{body_stream};
+    return '';
+  }
+  return join '', map { $$_ } @{$_[0]->{body}};
 } # content
 
 sub incomplete ($) {

@@ -21,9 +21,9 @@ There are following modules that expose public APIs:
 
 =over 4
 
-=item L<Web::Transport::ConnectionClient>
+=item L<Web::Transport::BasicClient>
 
-A connection-oriented HTTP client.
+A basic HTTP client.
 
 =item L<Web::Transport::WSClient>
 
@@ -54,6 +54,8 @@ MIME types.
 MIME type sniffing.
 
 =back
+
+The module L<Web::Transport::ConnectionClient> is deprecated.
 
 =head1 REQUEST OPTIONS
 
@@ -255,6 +257,9 @@ string of zero or more bytes.
 This option is not available for L<Web::Transport::WSClient>.
 
 =back
+
+There is also the C<stream> option, which is only accepted by the
+C<request> method of the L<Web::Transport::BasicClient> module.
 
 =head2 Relevant specifications
 

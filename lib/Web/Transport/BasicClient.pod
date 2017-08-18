@@ -1,25 +1,42 @@
 =head1 NAME
 
-Web::Transport::ConnectionClient - A connection-oriented HTTP client
+Web::Transport::BasicClient - A basic HTTP client
+
+=head1 SYNOPSIS
+
+  use Web::Transport::BasicClient;
+  $client = Web::Transport::BasicClient->new_from_host (q<server.test>);
+  
+  ## First request
+  $client->request (
+    url => Web::URL->parse_url (q<https://server.test/p1>), ...
+  )->then (sub {
+    my $res = $_[0];
+    warn $res->body_bytes;
+    
+    ## Second request
+    return $client->request (
+      url => Web::URL->parse_url (q<https://server.test/p2>), ...
+    );
+  })->then (sub {
+    return $client->close;
+  });
 
 =head1 DESCRIPTION
 
-This module is B<DEPRECATED>.  Use L<Web::Transport::BasicClient>
-instead.
-
-The C<Web::Transport::ConnectionClient> module is a
-connection-oriented HTTP client.  It represents an HTTP connection
-between this client and an HTTP server and provides API to send
-requests and receive responses.
+The C<Web::Transport::BasicClient> module is a connection-oriented
+HTTP client.  It represents an HTTP connection between this client and
+an HTTP server and provides API to send requests and receive
+responses.
 
 It establishes an HTTP connection to the server when a request is
 sent.  The connection is persisted until it is requested to close the
 connection by the application (via e.g. the C<close> method) or the
-server has closed the connection such that subsequent requests can
+server has closed the connection, such that subsequent requests can
 reuse the connection.  When a new request is asked to be sent
 nevertheless the connection has been closed by the server, another
 connection is established.  In this way a
-C<Web::Transport::ConnectionClient> object can be used until it is
+C<Web::Transport::BasicClient> object can be used until it is
 explicitly closed by C<close> or C<abort>.
 
 It can only be used to send requests to a specific origin.  It does
@@ -31,7 +48,7 @@ There are following methods:
 
 =over 4
 
-=item $client = Web::Transport::ConnectionClient->new_from_host ($string)
+=item $client = Web::Transport::BasicClient->new_from_host ($string)
 
 Create a new client object, which is associated with a origin
 (C<https>, I<$string>, C<undef>).  That is, a client for the specified
@@ -41,7 +58,7 @@ The argument must be a string, which is either a domain, an IPv4
 address, or an IPv6 address enclosed by C<[> and C<]>.  They don't
 have to be in their canonicalized form.  IDNs are also allowed.
 
-=item $client = Web::Transport::ConnectionClient->new_from_url ($url)
+=item $client = Web::Transport::BasicClient->new_from_url ($url)
 
 Create a new client object, which is associated with a URL's origin
 and path.
@@ -57,7 +74,7 @@ ignored.
 
 Example:
 
-  $client = Web::Transport::ConnectionClient->new_from_url
+  $client = Web::Transport::BasicClient->new_from_url
       (Web::URL->parse_url (q<https://server.test>));
   $client->request (path => []); # https://server.test/
   $client->request (path => ['a', 'b']); # https://server.test/a/b
@@ -65,13 +82,13 @@ Example:
 
 Example:
 
-  $client = Web::Transport::ConnectionClient->new_from_url
+  $client = Web::Transport::BasicClient->new_from_url
       (Web::URL->parse_url (q<https://server.test/z>));
   $client->request (path => []); # https://server.test/z/
   $client->request (path => ['a', 'b']); # https://server.test/z/a/b
   $client->request (url => Web::URL->parse_string (q<https://server.test/x>));
 
-=item $promise = $client->request (url => ..., ...)
+=item $promise = $client->request (url => ..., ..., stream => $boolean)
 
 Send a request and return a promise (L<Promise>), which is to be
 resolved with the result.
@@ -83,7 +100,12 @@ have same origin as the client's origin (i.e. the origin of the
 argument to the C<new_from_url> method).
 
 The promise is resolved with a response (L<Web::Transport::Response>
-object).
+object).  If the request has failed (i.e. a network error; which is
+different from an error response), the promise is B<rejected> with a
+response representing a network error.  Otherwise, if the C<stream>
+option is set to a true value, the promise is fulfilled with a
+response with a body stream.  Otherwise, it is fulfilled with a
+response with a body bytes.
 
 This method creates an HTTP connection, if there is no existing
 connection, or the existing connection has terminated for some reason.
@@ -102,17 +124,16 @@ enqueued request are processed.
 This method returns a promise, which is resolved once any connection
 has been closed.
 
-=item $promise = $client->abort (message => $string)
+=item $promise = $client->abort ($reason)
 
 Close any existing connection, aborting any currently processing or
 queued requests and responses.  The client object is neuted.
 
-An optional name/value pair whose name is C<message> can be a
-character string which should contain the reason of the aborting.
-This message is only used for the aid of the debugging and is never
-sent to the remote server.
+A Perl value can be specified as an optional argument, which
+represents the reason of the aborting.  This is only used for the aid
+of the debugging and is never sent to the remote server.
 
-This method returns a promise, which is resolved once any connection
+This method returns a promise, which is fulfilled once the connection
 has been closed.
 
 =item $client->proxy_manager ($pm)

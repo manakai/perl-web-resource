@@ -838,7 +838,7 @@ sub abort ($;$%) {
   my ($con, $reason, %args) = @_;
   if (not defined $con->{state}) {
     # XXX abort any connection handshake and invalidate $con
-    return Promise->reject ("Connection has not been established");
+    return Promise->reject (Web::Transport::TypeError->new ("Connection has not been established"));
   }
 
   my $error = Web::Transport::Error->wrap ($reason);

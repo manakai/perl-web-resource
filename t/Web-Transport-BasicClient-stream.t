@@ -851,6 +851,74 @@ test {
   });
 } n => 3, name => 'request body (ReadableStream) can_retry';
 
+test {
+  my $c = shift;
+  my $url = Web::URL->parse_string (q<http://bad.test.invalid/abc?d>);
+  my $client = Web::Transport::BasicClient->new_from_url ($url);
+  my $data = 'abcdefgh';
+  my $rs = ReadableStream->new ({
+    type => 'bytes',
+    start => sub {
+      my $rc = $_[1];
+      $rc->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\$data)));
+      $rc->close;
+    },
+  });
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $client->close;
+  } $client->request (
+    url => $url,
+    body_stream => $rs, body_length => length $data,
+  )->catch (sub {
+    my $result = $_[0];
+    test {
+      ok $result->is_network_error;
+      is $result->network_error_message, "Can't resolve host |bad.test.invalid|";
+      ok $rs->locked;
+    } $c;
+  });
+} n => 3, name => 'request body (ReadableStream) but network error at connect';
+
+test {
+  my $c = shift;
+  my $got = '';
+  promised_cleanup {
+    done $c; undef $c;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    read $env->{'psgi.input'}, $got, $env->{CONTENT_LENGTH};
+    return [201, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    my $data = 'abcdefgh';
+    my $rs = ReadableStream->new ({
+      type => 'bytes',
+      start => sub {
+        my $rc = $_[1];
+        $rc->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\$data)));
+      },
+    });
+    my $req = $client->request (
+      url => $url,
+      body_stream => $rs, body_length => length $data,
+    );
+    $client->abort;
+    promised_cleanup {
+      return $client->close->then ($close);
+    } $req->catch (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error, $res;
+        ok $rs->locked;
+      } $c;
+    });
+  });
+} n => 2, name => 'request body (ReadableStream) abort';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

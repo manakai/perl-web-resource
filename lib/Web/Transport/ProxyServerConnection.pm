@@ -14,6 +14,7 @@ use Web::Transport::TCPStream;
 use Web::Transport::HTTPStream;
 use Web::Transport::Error;
 use Web::Transport::TypeError;
+use Web::Transport::ProtocolError;
 use Web::Transport::BasicClient;
 
 push our @CARP_NOT, qw(
@@ -21,6 +22,7 @@ push our @CARP_NOT, qw(
   Web::Transport::HTTPStream
   Web::Transport::HTTPStream::Stream
   Web::Transport::TypeError
+  Web::Transport::ProtocolError
   Web::Transport::BasicClient
 );
 
@@ -29,6 +31,7 @@ sub _te ($) {
 } # _te
 
 sub _headers_without_connection_specific ($) {
+  my $return = {};
   # XXX move to _Defs
   my %remove = map { $_ => 1 } qw(
     host content-length transfer-encoding trailer te connection
@@ -45,13 +48,15 @@ sub _headers_without_connection_specific ($) {
       }
     }
   }
-  return [map {
+  $return->{forwarded} = [map {
     if ($remove{$_->[2]}) {
+      #push @{$return->{$_->[2]} ||= []}, $_->[1];
       ();
     } else {
       $_;
     }
   } @{$_[0]}];
+  return $return;
 } # _headers_without_connection_specific
 
 sub _handle_stream ($$) {
@@ -59,7 +64,7 @@ sub _handle_stream ($$) {
   return $stream->headers_received->then (sub {
     my $req = $_[0];
 
-    # XXX proxy auth - 407 or 511
+    # XXX proxy auth - 407
 
     # XXX reject TRACE ?
     if ($req->{method} eq 'CONNECT') {
@@ -82,37 +87,70 @@ sub _handle_stream ($$) {
     # XXX WS
 
     my $url = $req->{target_url};
-    # XXX unless $url->scheme eq 'http'
+    unless ($url->scheme eq 'http') {
+      return $stream->send_response ({
+        status => 504,
+        status_text => $Web::Transport::_Defs::ReasonPhrases->{504},
+        headers => [['content-type' => 'text/plain;charset=utf-8']],
+      })->then (sub {
+        my $writer = $_[0]->{body}->get_writer;
+        $writer->write
+            (DataView->new (ArrayBuffer->new_from_scalarref (\504)));
+        return $writer->close;
+      });
+    }
 
-    # XXX url filter
+    # XXX url & request filter
 
     # XXX connection pool
     my $client = Web::Transport::BasicClient->new_from_url ($url);
     # XXX
     #$client->parent_id ($x->{parent_id});
-    #XXX$con->proxy_manager ($x->proxy_manager);
+    $client->proxy_manager ($server->{proxy_manager});
     #$client->resolver ($x->resolver);
     #$client->tls_options ($x->tls_options);
     $client->last_resort_timeout ($server->{last_resort_timeout});
 
-    my $headers = _headers_without_connection_specific $req->{headers};
+    my $req_headers = _headers_without_connection_specific $req->{headers};
     return $client->request (
       method => $req->{method},
       url => $url,
-      _header_list => $headers,
-      # XXX no additional haders
-      # XXX request body length / request body stream
+      _header_list => $req_headers->{forwarded},
+      _forwarding => 1,
+      body_length => $req->{body_length}, # or undef
+      body_stream => (defined $req->{body_length} ? $req->{body} : undef),
       stream => 1,
     )->then (sub {
       my $res = $_[0];
-      my $headers = _headers_without_connection_specific $res->{headers};
+
+      if ($res->status == 407) {
+        return $stream->send_response ({
+          status => 500,
+          status_text => $Web::Transport::_Defs::ReasonPhrases->{500},
+          headers => [['content-type' => 'text/plain;charset=utf-8']],
+        })->then (sub {
+          my $writer = $_[0]->{body}->get_writer;
+          # XXX error log
+          $writer->write
+              (DataView->new (ArrayBuffer->new_from_scalarref (\500)));
+          return $writer->close;
+        })->then (sub {
+          my $error = Web::Transport::ProtocolError->new
+              ("Upstream server returns a 407 response");
+          $res->body_stream->cancel ($error);
+          return $client->abort ($error);
+        });
+      }
+
+      my $res_headers = _headers_without_connection_specific $res->{headers};
       return $stream->send_response ({
         status => $res->{status},
         status_text => $res->{status_text},
-        headers => $headers,
+        headers => $res_headers->{forwarded},
         forwarding => 1,
       })->then (sub {
         my $writer = $_[0]->{body}->get_writer;
+        # XXX response filter hook
         my $reader = $res->body_stream->get_reader;
         my $read; $read = sub {
           return $reader->read->then (sub {
@@ -121,7 +159,13 @@ sub _handle_stream ($$) {
           });
         }; # $read
         return promised_cleanup { undef $read } $read->()->then (sub {
-          return $writer->close;
+          if ($res->incomplete) {
+            return $writer->write (DataView->new (ArrayBuffer->new (0)))->then (sub {
+              return $writer->abort (Web::Transport::ProtocolError->new ("Upstram connection truncated")); # XXX propagate upstream connection's exception
+            });
+          } else {
+            return $writer->close;
+          }
         });
       })->then (sub {
         return $client->close;
@@ -130,7 +174,8 @@ sub _handle_stream ($$) {
       });
     }, sub {
       my $result = $_[0];
-      # XXX log $error
+      # XXX hook for logging $result
+      warn $result;
       my $status = 503;
       my $error = '' . $result;
       if ($error =~ /^Network error: HTTP parse error/) {

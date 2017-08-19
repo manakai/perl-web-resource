@@ -432,7 +432,7 @@ sub _request ($$$$$$$$$$) {
         if (not $self->{request_mode_is_http_proxy} and
             $_[0]->{status} == 407) {
           my $error = _pe "HTTP |407| response from non-proxy";
-          $_[0]->{body}->abort ($error);
+          $_[0]->{body}->cancel ($error);
           die $error;
         }
 

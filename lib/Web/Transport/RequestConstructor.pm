@@ -50,7 +50,7 @@ sub create ($$) {
 
   my $headers = $args->{headers} || {};
   my $header_list = $args->{_header_list} || []; # for proxy module only
-  my $has_header = {};
+  my $has_header = {map { $_->[2] => 1 } @$header_list};
   my $ct;
   my $auth;
   for my $name (keys %$headers) {
@@ -158,12 +158,14 @@ sub create ($$) {
     }
   }
 
-  push @$header_list, ['Accept', '*/*', 'accept']
-      unless $has_header->{'accept'};
-  push @$header_list, ['Accept-Language', 'en', 'accept-language']
-      unless $has_header->{'accept-language'};
-  push @$header_list, ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36', 'user-agent']
-      unless $has_header->{'user-agent'};
+  unless ($args->{_forwarding}) {
+    push @$header_list, ['Accept', '*/*', 'accept']
+        unless $has_header->{'accept'};
+    push @$header_list, ['Accept-Language', 'en', 'accept-language']
+        unless $has_header->{'accept-language'};
+    push @$header_list, ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36', 'user-agent']
+        unless $has_header->{'user-agent'};
+  }
 
   if (defined $args->{bearer}) {
     push @$header_list, ['Authorization' => $auth = 'Bearer ' . encode_web_utf8 $args->{bearer}, 'authorization'];

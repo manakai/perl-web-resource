@@ -2997,12 +2997,33 @@ sub send_response ($$$) {
     $close = 1 if $stream->{request}->{method} eq 'CONNECT';
   }
 
-  unless ($response->{forwarding}) {
-    push @header, ['Server', $con->{server_header}];
+  push @header, @{$response->{headers} or []};
 
+  croak "Bad status text |@{[_e4d $response->{status_text}]}|"
+      if $response->{status_text} =~ /[\x0D\x0A]/;
+  croak "Status text is utf8-flagged"
+      if utf8::is_utf8 $response->{status_text};
+
+  my $has_header = {};
+  for (@header) {
+    croak "Bad header name |@{[_e4d $_->[0]]}|"
+        unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
+    croak "Bad header value |$_->[0]: @{[_e4d $_->[1]]}|"
+        unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
+    croak "Header name |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[0];
+    croak "Header value of |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[1];
+    my $name = $_->[0];
+    $name =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+    $has_header->{$name} = 1;
+  }
+
+  unshift @header, ['Server', $con->{server_header}]
+      unless $response->{forwarding};
+
+  unless ($has_header->{date}) {
     my $dt = Web::DateTime->new_from_unix_time
         (Web::DateTime::Clock->realtime_clock->()); # XXX
-    push @header, ['Date', $dt->to_http_date_string];
+    unshift @header, ['Date', $dt->to_http_date_string];
   }
 
   if ($is_ws) {
@@ -3021,22 +3042,6 @@ sub send_response ($$$) {
     if ($write_mode eq 'chunked') {
       push @header, ['Transfer-Encoding', 'chunked'];
     }
-  }
-
-  push @header, @{$response->{headers} or []};
-
-  croak "Bad status text |@{[_e4d $response->{status_text}]}|"
-      if $response->{status_text} =~ /[\x0D\x0A]/;
-  croak "Status text is utf8-flagged"
-      if utf8::is_utf8 $response->{status_text};
-
-  for (@header) {
-    croak "Bad header name |@{[_e4d $_->[0]]}|"
-        unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
-    croak "Bad header value |$_->[0]: @{[_e4d $_->[1]]}|"
-        unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
-    croak "Header name |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[0];
-    croak "Header value of |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[1];
   }
 
   if ($is_ws) {
@@ -3061,7 +3066,8 @@ sub send_response ($$$) {
       }
     }
 
-    $con->{writer}->write (DataView->new (ArrayBuffer->new_from_scalarref (\$res)));
+    $con->{writer}->write
+        (DataView->new (ArrayBuffer->new_from_scalarref (\$res)));
   } else {
     if ($con->{DEBUG}) {
       warn "$stream->{id}: Response headers skipped (HTTP/0.9)\n";

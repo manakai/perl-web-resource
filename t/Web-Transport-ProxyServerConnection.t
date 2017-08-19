@@ -14,6 +14,7 @@ use Web::Transport::BasicClient;
 use Web::Transport::ConstProxyManager;
 use Web::Transport::ProxyServerConnection;
 use Web::Transport::PSGIServerConnection;
+use Web::Transport::TCPTransport;
 
 {
   use Socket;
@@ -107,64 +108,104 @@ sub rawserver ($) {
   return Promise->from_cv (_server_as_cv ('localhost', '127.0.0.1', find_listenable_port, $_[0]));
 } # rawserver
 
-test {
-  my $c = shift;
-
-  my $host = '127.0.0.1';
-  my $port = find_listenable_port;
-  my $close_server;
-  my $server_name = rand;
-  my $server_p = Promise->new (sub {
-    my ($ok) = @_;
-    my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
-      promised_cleanup { $ok->() } $con->completed;
-    };
-    $close_server = sub { undef $server };
-  });
-
-  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
-      ([{protocol => 'http', host => $host, port => $port}]);
-
-  promised_cleanup {
-    done $c; undef $c;
-    return $server_p;
-  } psgi_server (sub ($) {
-    my $env = $_[0];
-    return [412, ['Hoge', 'foo', 'Fuga', $env->{HTTP_FUGA},
-                  'Request-URL', $env->{REQUEST_URI},
-                  'Request-Via', $env->{HTTP_VIA},
-                  'Request-Method', $env->{REQUEST_METHOD},
-                  'Request-Connection', $env->{HTTP_CONNECTION}], ['200!']];
-  }, sub {
-    my ($origin, $close) = @_;
-    my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
-    promised_cleanup {
-      $close_server->();
-      return $client->close->then ($close);
-    } $client->request (url => $url, headers => {'Fuga' => 'a b'})->then (sub {
-      my $res = $_[0];
-      test {
-        is $res->status, 412;
-        is $res->status_text, 'Precondition Failed';
-        is $res->header ('Hoge'), 'foo';
-        is $res->header ('Fuga'), 'a b';
-        is $res->header ('Request-URL'), '/abc?d';
-        is $res->header ('Via'), undef;
-        is $res->header ('Request-Via'), '';
-        is $res->header ('Request-Method'), 'GET';
-        is $res->header ('Server'), $server_name;
-        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
-        is $res->header ('Connection'), undef;
-        is $res->header ('Request-Connection'), 'keep-alive';
-        is $res->header ('Transfer-Encoding'), 'chunked';
-        is $res->body_bytes, '200!';
-      } $c;
+sub rawclient ($$$) {
+  my ($host, $port, $input) = @_;
+  my $tcp = Web::Transport::TCPTransport->new (host => $host, port => $port);
+  my $data = '';
+  my $p = Promise->new (sub {
+    my $ok = $_[0];
+    $tcp->start (sub {
+      my ($self, $type) = @_;
+      if ($type eq 'readdata') {
+        $data .= ${$_[2]};
+      } elsif ($type eq 'readeof') {
+        $tcp->push_shutdown;
+      } elsif ($type eq 'close') {
+        $ok->($data);
+      }
+    })->then (sub {
+      return $tcp->push_write (\$input);
     });
-  }, server_name => $server_name);
-} n => 14, name => 'Basic request and response forwarding';
+  });
+  return $p;
+} # rawclient
+
+for my $status (
+  200, 201, 204, 205, 207,
+  300, 301, 302, 303, 304,
+  400, 401, 402, 403, 404, 412,
+  500, 501, 502, 503, 504, 505, 507, 507, 508,
+  600, 601, 700,
+) {
+  test {
+    my $c = shift;
+
+    my $host = '127.0.0.1';
+    my $port = find_listenable_port;
+    my $close_server;
+    my $server_name = rand;
+    my $server_p = Promise->new (sub {
+      my ($ok) = @_;
+      my $server = tcp_server $host, $port, sub {
+        my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+        promised_cleanup { $ok->() } $con->completed;
+      };
+      $close_server = sub { undef $server };
+    });
+
+    my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+        ([{protocol => 'http', host => $host, port => $port}]);
+
+    promised_cleanup {
+      done $c; undef $c;
+      return $server_p;
+    } psgi_server (sub ($) {
+      my $env = $_[0];
+      return [$status, ['Hoge', 'foo', 'Fuga', $env->{HTTP_FUGA} || '',
+                        'Request-URL', $env->{REQUEST_URI},
+                        'Request-Via', $env->{HTTP_VIA} || '',
+                        'Request-Method', $env->{REQUEST_METHOD},
+                        'Request-Connection', $env->{HTTP_CONNECTION} || ''],
+              ['200!']];
+    }, sub {
+      my ($origin, $close) = @_;
+      my $url = Web::URL->parse_string (q</abc?d>, $origin);
+      my $client = Web::Transport::BasicClient->new_from_url ($url);
+      $client->proxy_manager ($pm);
+      promised_cleanup {
+        $close_server->();
+        return $client->close->then ($close);
+      } $client->request (url => $url, headers => {'Fuga' => 'a b'})->then (sub {
+        my $res = $_[0];
+        test {
+          is $res->status, $status;
+          ok defined $res->status_text;
+          is $res->header ('Hoge'), 'foo';
+          is $res->header ('Fuga'), 'a b';
+          is $res->header ('Request-URL'), '/abc?d';
+          is $res->header ('Via'), undef;
+          is $res->header ('Request-Via'), '';
+          is $res->header ('Request-Method'), 'GET';
+          is $res->header ('Server'), $server_name;
+          like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+          is $res->header ('Connection'), undef;
+          is $res->header ('Request-Connection'), 'keep-alive';
+          if ($status == 204 or $status == 304) {
+            is $res->header ('Transfer-Encoding'), undef;
+            is $res->body_bytes, '';
+          } elsif ($status == 205) {
+            is $res->header ('Transfer-Encoding'), 'chunked';
+            is $res->body_bytes, '';
+          } else {
+            is $res->header ('Transfer-Encoding'), 'chunked';
+            is $res->body_bytes, '200!';
+          }
+          ok ! $res->incomplete;
+        } $c;
+      });
+    }, server_name => $server_name);
+  } n => 15, name => ['Basic request and response forwarding', $status];
+} # $status
 
 test {
   my $c = shift;
@@ -284,6 +325,123 @@ test {
 
   promised_cleanup {
     done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } Promise->resolve->then (sub {
+    my $rhost = rand . 'foo.bar.test';
+    my $rport = 1024 + int rand 10000;
+    promised_cleanup {
+      $close_server->();
+    } rawclient (Web::Host->parse_string ($host), $port,
+                 "GET http://$rhost:$rport/a HTTP/1.0\x0D\x0AHost: $rhost:$rport\x0D\x0A\x0D\x0A")->then (sub {
+      my $got = $_[0];
+      test {
+        like $got, qr{^HTTP/1.1 504 Gateway Timeout\x0D\x0A};
+      } $c;
+    });
+  });
+} n => 1, name => 'unresolvable host (504)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_name = rand;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      $con->{connection}->{server_header} = $server_name;
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } Promise->resolve->then (sub {
+    my $rhost = rand . 'foo.bar.test';
+    my $rport = 1024 + int rand 10000;
+    promised_cleanup {
+      $close_server->();
+    } rawclient (Web::Host->parse_string ($host), $port,
+                 "GET ftp://$rhost:$rport/a HTTP/1.0\x0D\x0AHost: $rhost:$rport\x0D\x0A\x0D\x0A")->then (sub {
+      my $got = $_[0];
+      test {
+        like $got, qr{^HTTP/1.1 504 Gateway Timeout\x0D\x0A};
+      } $c;
+    });
+  });
+} n => 1, name => 'bad URL scheme (504)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_name = rand;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      $con->{connection}->{server_header} = $server_name;
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } Promise->resolve->then (sub {
+    my $rhost = rand . 'foo.bar.test';
+    my $rport = 1024 + int rand 10000;
+    promised_cleanup {
+      $close_server->();
+    } rawclient (Web::Host->parse_string ($host), $port,
+                 "GET https://$rhost:$rport/a HTTP/1.0\x0D\x0AHost: $rhost:$rport\x0D\x0A\x0D\x0A")->then (sub {
+      my $got = $_[0];
+      test {
+        like $got, qr{^HTTP/1.1 504 Gateway Timeout\x0D\x0A};
+      } $c;
+    });
+  });
+} n => 1, name => 'bad URL scheme (504)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_name = rand;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      $con->{connection}->{server_header} = $server_name;
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
     return $server_p;
   } Promise->resolve->then (sub {
     my $host = rand . 'foo.bar.test';
@@ -297,18 +455,18 @@ test {
     } $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
-        is $res->status, 503;
-        is $res->status_text, 'Service Unavailable';
+        is $res->status, 504;
+        is $res->status_text, 'Gateway Timeout';
         is $res->header ('Via'), undef;
         is $res->header ('Server'), $server_name;
         like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
         is $res->header ('Connection'), undef;
         is $res->header ('Transfer-Encoding'), 'chunked';
-        is $res->body_bytes, '503';
+        is $res->body_bytes, '504';
       } $c;
     });
   });
-} n => 8, name => 'bad remote host';
+} n => 8, name => 'bad remote host (504)';
 
 test {
   my $c = shift;
@@ -360,7 +518,7 @@ test {
       } $c;
     });
   });
-} n => 8, name => 'remote host timeout';
+} n => 8, name => 'remote host timeout (504)';
 
 test {
   my $c = shift;
@@ -408,23 +566,743 @@ test {
       } $c;
     });
   });
-} n => 7, name => 'remote bad response';
+} n => 7, name => 'remote bad response (502)';
 
-# XXX remote 5xx
-# XXX request body forwarding
-# XXX client aborting
-# XXX remote server aborting
-# XXX server-level preprocessing hook
-# XXX proxy authentication
-# XXX request-target URL scheme restrictions
-# XXX CONNECT support
-# XXX WS proxying
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_name = rand;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_], server_header => $server_name);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } rawserver (q{
+    receive "GET"
+    "HTTP/1.1 200 ok"CRLF
+    "content-length: 100"CRLF
+    "server: abcde"CRLF
+    "date: xyzab"CRLF
+    reset
+  })->then (sub {
+    my $server = $_[0];
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close;
+    } $client->request (url => $url, headers => {'Fuga' => 'a b'})->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 504;
+        is $res->status_text, 'Gateway Timeout';
+        is $res->header ('Server'), $server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $res->header ('Connection'), undef;
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->body_bytes, '504';
+        ok ! $res->incomplete;
+      } $c;
+    });
+  });
+} n => 8, name => 'remote truncated response (reset)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } rawserver (q{
+    receive "GET"
+    "HTTP/1.1 200 ok"CRLF
+    "content-length: 100"CRLF
+    "server: abcde"CRLF
+    "date: xyzab"CRLF
+    CRLF
+    "abcdefg"
+    close
+  })->then (sub {
+    my $server = $_[0];
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close;
+    } $client->request (url => $url, headers => {'Fuga' => 'a b'})->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 200;
+        is $res->status_text, 'ok';
+        is $res->header ('Server'), "abcde";
+        is $res->header ('Date'), "xyzab";
+        is $res->header ('Connection'), undef;
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->body_bytes, 'abcdefg';
+        ok $res->incomplete;
+      } $c;
+    });
+  });
+} n => 8, name => 'remote truncated response';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $got = '';
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    read $env->{'psgi.input'}, $got, $env->{CONTENT_LENGTH};
+    return [201, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    my $data = 'abcdefgh';
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url, body => $data)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->status_text, 'Created';
+        is $got, $data, 'server-received request body';
+      } $c;
+    });
+  });
+} n => 3, name => 'request body forwarding';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $got = '';
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    read $env->{'psgi.input'}, $got, $env->{CONTENT_LENGTH};
+    return [201, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    my $data = 'abcdefgh' x 1000 x 10;
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url, body => $data)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->status_text, 'Created';
+        is $got, $data, 'server-received request body';
+      } $c;
+    });
+  });
+} n => 3, name => 'request body forwarding (large body)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $responder;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return sub { $responder = $_[0] };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    my $req = $client->request (url => $url);
+    (promised_wait_until { defined $responder })->then (sub {
+      return $client->abort;
+    });
+    promised_cleanup {
+      $close_server->();
+      undef $responder;
+      return $client->close->then ($close);
+    } $req->catch (sub {
+      my $result = $_[0];
+      test {
+        ok $result->is_network_error, $result;
+        is $result->network_error_message, 'Client aborted';
+      } $c;
+    });
+  });
+} n => 2, name => 'client abort before response received';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $origin;
+  my $value = rand;
+  my $value2 = rand;
+  my $value3 = rand;
+  my $value4 = rand;
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    test {
+      is $env->{HTTP_HOST}, $origin->hostport;
+      is $env->{HTTP_FOO}, $value;
+      is $env->{HTTP_ACCEPT}, $value2;
+      is $env->{HTTP_ACCEPT_LANGUAGE}, $value3;
+      is $env->{HTTP_USER_AGENT}, $value4;
+      is $env->{HTTP_VIA}, undef;
+      is $env->{HTTP_WARNING}, undef;
+    } $c;
+    return [201, [], ['200!']];
+  }, sub {
+    my $close;
+    ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url, headers => {
+      Foo => $value, Accept => $value2, 'Accept-Language' => $value3,
+      'User-Agent' => $value4,
+    });
+  });
+} n => 7, name => 'request headers forwarding';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $origin;
+  my $value = rand;
+  my $value2 = rand;
+  my $value3 = rand;
+  my $value4 = rand;
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    test {
+      is $env->{HTTP_HOST}, $origin->hostport;
+      is $env->{HTTP_FOO}, undef;
+      is $env->{HTTP_ACCEPT}, undef;
+      is $env->{HTTP_ACCEPT_LANGUAGE}, undef;
+      is $env->{HTTP_USER_AGENT}, undef;
+      is $env->{HTTP_VIA}, undef;
+      is $env->{HTTP_WARNING}, undef;
+      is $env->{HTTP_CONNECTION}, 'keep-alive';
+    } $c;
+    return [201, [], ['200!']];
+  }, sub {
+    my $close;
+    ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url, headers => {
+      Foo => $value, Accept => $value2, 'Accept-Language' => $value3,
+      'User-Agent' => $value4,
+      Connection => ['foo, Bar,Connection,Host', 'User-Agent', 'Accept , Accept-Language'],
+    });
+  });
+} n => 8, name => 'request headers forwarding, Connection:';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return [201, ['Hoge', rand, 'Connection', 'Hoge'], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->header ('Connection'), undef;
+        is $result->header ('Hoge'), undef;
+      } $c;
+    });
+  });
+} n => 2, name => 'response headers forwarding, Connection:';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return [201, ['Hoge', rand, 'Connection', 'Server,date'], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->header ('Connection'), undef;
+        is $result->header ('Server'), undef;
+        like $result->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+      } $c;
+    });
+  });
+} n => 3, name => 'response headers forwarding, Connection: Server,Date';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } rawserver (q{
+    receive "GET"
+    "abcdefg"
+    close
+  })->then (sub {
+    my $server = $_[0];
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close;
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 200;
+        is $res->status_text, 'OK';
+        is $res->header ('Server'), undef;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $res->header ('Connection'), undef;
+        is $res->header ('Content-Type'), undef;
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->body_bytes, 'abcdefg';
+        ok ! $res->incomplete;
+      } $c;
+    });
+  });
+} n => 9, name => 'remote HTTP/0.9 response';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return [201, ['Hoge', rand], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string ("/abc", $origin);
+    promised_cleanup {
+      $close_server->();
+      return $close->();
+    } rawclient (Web::Host->parse_string ($host), $port, "GET @{[$url->stringify]}\x0D\x0A")->then (sub {
+      my $got = $_[0];
+      test {
+        is $got, "200!";
+      } $c;
+    });
+  });
+} n => 1, name => 'HTTP/0.9 client request';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return [201, ['Hoge', rand], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string ("/abc", $origin);
+    promised_cleanup {
+      $close_server->();
+      return $close->();
+    } rawclient (Web::Host->parse_string ($host), $port, "GET @{[$url->stringify]} HTTP/1.0\x0D\x0A\x0D\x0A")->then (sub {
+      my $got = $_[0];
+      test {
+        like $got, qr{^HTTP/1.1 201 Created\x0D\x0A};
+        like $got, qr{\x0D\x0A200!\z};
+      } $c;
+    });
+  });
+} n => 2, name => 'HTTP/1.0 client request';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return [407, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->status, 504;
+      } $c;
+    });
+  });
+} n => 1, name => 'server 407 response (proxy does not have an upstream proxy)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $host2 = '127.0.0.1';
+  my $port2 = find_listenable_port;
+  my $close_server2;
+  my $server_p2 = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host2, $port2, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      $con->{proxy_manager} = $pm;
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server2 = sub { undef $server };
+  });
+
+  my $pm2 = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host2, port => $port2}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p2;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return [207, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm2);
+    promised_cleanup {
+      $close_server->();
+      $close_server2->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->status, 207;
+        is $result->body_bytes, '200!';
+      } $c;
+    });
+  });
+} n => 2, name => 'proxy has an upstream proxy';
+
+test {
+  my $c = shift;
+
+  rawserver (q{
+    receive "GET"
+    "HTTP/1.1 407 ok"CRLF
+    "content-length: 100"CRLF
+    "server: abcde"CRLF
+    "date: xyzab"CRLF
+    CRLF
+    "abcdefg"
+  })->then (sub {
+    my $server = $_[0];
+    my $pm2 = Web::Transport::ConstProxyManager->new_from_arrayref
+        ([{protocol => 'http',
+           host => $server->{host}, port => $server->{port}}]);
+
+    my $host = '127.0.0.1';
+    my $port = find_listenable_port;
+    my $close_server;
+    my $server_name = rand;
+    my $server_p = Promise->new (sub {
+      my ($ok) = @_;
+      my $server = tcp_server $host, $port, sub {
+        my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_], server_header => $server_name);
+        $con->{proxy_manager} = $pm2;
+        promised_cleanup { $ok->() } $con->completed;
+      };
+      $close_server = sub { undef $server };
+    });
+    my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+        ([{protocol => 'http', host => $host, port => $port}]);
+
+    my $url = Web::URL->parse_string (qq{http://hoge.test/});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      done $c; undef $c;
+    } promised_cleanup {
+      return $server_p;
+    } promised_cleanup {
+      $close_server->();
+      return $client->close;
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 500;
+        is $res->status_text, 'Internal Server Error';
+        is $res->header ('Server'), $server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $res->header ('Connection'), undef;
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->body_bytes, '500';
+        ok ! $res->incomplete;
+      } $c;
+    });
+  });
+} n => 8, name => 'remote 407 response';
+
 # XXX option accessors
-# XXX 407 from upstream
-# XXX Connection: handling
+# XXX close_after_
 # XXX https listening
 # XXX unix listening
-# XXX close_after_
 
 run_tests;
 

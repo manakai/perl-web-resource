@@ -1,0 +1,27 @@
+XXX
+
+
+->new_from_ae_tcp_server_args
+
+It can be either TCP or Unix domain socket server.
+
+There can be following key/value pairs of options as additional arguments:
+
+=over 4
+
+=item tls => {$name => $value, ...}
+
+Specifies that TLS is used (i.e. it is an HTTPS proxy).  If specified,
+the value must be a hash reference with key/value pairs XXX.
+
+=item parent_id => $string
+
+XXX
+
+=item server_header => $header_value
+
+XXX
+
+=back
+
+XXX

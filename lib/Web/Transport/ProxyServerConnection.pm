@@ -11,11 +11,14 @@ use Promised::Flow;
 use Web::Host;
 use Web::Transport::_Defs;
 use Web::Transport::TCPStream;
+use Web::Transport::TLSStream;
 use Web::Transport::HTTPStream;
 use Web::Transport::Error;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
 use Web::Transport::BasicClient;
+
+# XXX integrate with PSGIServerConnection
 
 push our @CARP_NOT, qw(
   ArrayBuffer
@@ -216,6 +219,14 @@ sub new_from_ae_tcp_server_args ($$;%) {
       server => 1, fh => $aeargs->[0],
       host => Web::Host->parse_string ($aeargs->[1]), port => $aeargs->[2],
       parent_id => $args{parent_id},
+    };
+  }
+  if ($args{tls}) {
+    $socket = {
+      %{$args{tls}},
+      class => 'Web::Transport::TLSStream',
+      server => 1,
+      parent => $socket,
     };
   }
   $self->{connection} = Web::Transport::HTTPStream->new ({

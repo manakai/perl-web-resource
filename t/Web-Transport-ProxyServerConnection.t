@@ -15,6 +15,7 @@ use Web::Transport::ConstProxyManager;
 use Web::Transport::ProxyServerConnection;
 use Web::Transport::PSGIServerConnection;
 use Web::Transport::TCPTransport;
+use Test::Certificates;
 
 {
   use Socket;
@@ -45,7 +46,17 @@ use Web::Transport::TCPTransport;
   } # find_listenable_port
 }
 
-sub psgi_server ($$;$%) {
+{
+  package TLSTestResolver;
+  sub new {
+    return bless {host => $_[1]}, $_[0];
+  }
+  sub resolve ($$) {
+    return Promise->resolve (Web::Host->parse_string ($_[0]->{host}));
+  }
+}
+
+sub psgi_server ($$;%) {
   my $app = shift;
   my $cb = shift;
   my %args = @_;
@@ -1299,11 +1310,104 @@ test {
   });
 } n => 8, name => 'remote 407 response';
 
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $cert_args = {host => 'tlstestproxy.test'};
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_], tls => {
+        ca_file => Test::Certificates->ca_path ('cert.pem'),
+        cert_file => Test::Certificates->cert_path ('cert-chained.pem', $cert_args),
+        key_file => Test::Certificates->cert_path ('key.pem', $cert_args),
+      });
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'https', host => $cert_args->{host}, port => $port,
+         tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return [201, [Foo => 'bar'], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    $client->resolver (TLSTestResolver->new ($host));
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->status, 201;
+        is $result->header ('Foo'), 'bar';
+        is $result->body_bytes, '200!';
+      } $c;
+    });
+  });
+} n => 3, name => 'TLS proxy server';
+
+test {
+  my $c = shift;
+
+  my $path = path (__FILE__)->parent->parent->child ('local/' . rand . '.sock')->absolute;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server 'unix/', $path, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'unix', path => $path}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return [201, [Foo => 'bar'], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $result = $_[0];
+      test {
+        is $result->status, 201;
+        is $result->header ('Foo'), 'bar';
+        is $result->body_bytes, '200!';
+      } $c;
+    });
+  });
+} n => 3, name => 'Unix proxy server';
+
 # XXX option accessors
 # XXX close_after_
-# XXX https listening
-# XXX unix listening
 
+Test::Certificates->wait_create_cert ({host => 'tlstestproxy.test'});
 run_tests;
 
 =head1 LICENSE

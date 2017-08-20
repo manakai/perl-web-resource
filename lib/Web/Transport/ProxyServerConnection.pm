@@ -55,6 +55,35 @@ sub _handle_stream ($$$) {
   return $stream->headers_received->then (sub {
     my $req = $_[0];
 
+    my $url = $req->{target_url};
+    my $req_headers = _headers_without_connection_specific $req->{headers};
+    my $request = {
+      method => $req->{method},
+      url => $url,
+      _header_list => $req_headers->{forwarded},
+      body_length => $req->{body_length}, # or undef
+      body_stream => (defined $req->{body_length} ? $req->{body} : undef),
+    };
+
+    # XXX request handler
+    # XXX XXX->({info => $info, request => $request});
+    { # XXX default:
+      my $info = $stream->{connection}->info;
+      if ($info->{parent}->{type} eq 'TCP' and
+          $info->{parent}->{local_host}->equals ($url->host) and
+          $info->{parent}->{local_port} == $url->port) {
+        return {
+          status => 504,
+          status_text => $Web::Transport::_Defs::ReasonPhrases->{504},
+          headers => [['content-type' => 'text/plain;charset=utf-8']],
+          body => \"504",
+        };
+      }
+    }
+    # XXX return response if requeset handler returns a response
+    # XXX otherwise, continue with modified $request
+    # XXX if failed, return 500
+
     # XXX proxy auth - 407
 
     # XXX reject TRACE ?
@@ -71,7 +100,6 @@ sub _handle_stream ($$$) {
     }
     # XXX WS
 
-    my $url = $req->{target_url};
     unless ($url->scheme eq 'http') {
       return {
         status => 504,
@@ -79,21 +107,6 @@ sub _handle_stream ($$$) {
         headers => [['content-type' => 'text/plain;charset=utf-8']],
         body => \"504",
       };
-    }
-
-    # XXX url & request filter
-    {
-      my $info = $stream->{connection}->info;
-      if ($info->{parent}->{type} eq 'TCP' and
-          $info->{parent}->{local_host}->equals ($url->host) and
-          $info->{parent}->{local_port} == $url->port) {
-        return {
-          status => 504,
-          status_text => $Web::Transport::_Defs::ReasonPhrases->{504},
-          headers => [['content-type' => 'text/plain;charset=utf-8']],
-          body => \"504",
-        };
-      }
     }
 
     # XXX connection pool
@@ -104,14 +117,9 @@ sub _handle_stream ($$$) {
     $client->tls_options ($opts->{client}->{tls_options});
     $client->last_resort_timeout ($opts->{client}->{last_resort_timeout});
 
-    my $req_headers = _headers_without_connection_specific $req->{headers};
     return $client->request (
-      method => $req->{method},
-      url => $url,
-      _header_list => $req_headers->{forwarded},
+      %$request,
       _forwarding => 1,
-      body_length => $req->{body_length}, # or undef
-      body_stream => (defined $req->{body_length} ? $req->{body} : undef),
       stream => 1,
     )->then (sub {
       my $res = $_[0];
@@ -132,14 +140,21 @@ sub _handle_stream ($$$) {
       } # 407
 
       my $res_headers = _headers_without_connection_specific $res->{headers};
-      # XXX response filter hook
-      return {
+      my $response = {
         status => $res->{status},
         status_text => $res->{status_text},
         headers => $res_headers->{forwarded},
-        forwarding => 1,
         body => $res->body_stream,
         body_is_incomplete => sub { return $res->incomplete },
+      };
+
+      # XXX response handler
+      # XXX XXX->({response => $response})
+      # XXX if failed, return 500 instead
+
+      return {
+        %$response,
+        forwarding => 1,
       };
     }, sub { # $client->request failed
       my $result = $_[0];

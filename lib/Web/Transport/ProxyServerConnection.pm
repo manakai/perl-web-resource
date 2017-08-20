@@ -169,11 +169,19 @@ sub _handle_stream ($$) {
           } else {
             return $writer->close;
           }
+        })->catch (sub {
+          my $error = Web::Transport::Error->wrap ($_[0]);
+          $reader->cancel ($error);
+          die $error;
         });
       })->then (sub {
         return $client->close;
       }, sub {
-        return $client->abort ($_[0]);
+        my $error = Web::Transport::Error->wrap ($_[0]);
+        unless ($res->body_stream->locked) {
+          $res->body_stream->cancel ($error);
+        }
+        return $client->abort ($error);
       });
     }, sub {
       my $result = $_[0];
@@ -240,7 +248,10 @@ sub new_from_ae_tcp_server_args ($$;%) {
   my $read; $read = sub {
     return $reader->read->then (sub {
       return if $_[0]->{done};
-      _handle_stream $self, $_[0]->{value};
+      $self->{completed_cv}->begin;
+      promised_cleanup {
+        $self->{completed_cv}->end;
+      } _handle_stream $self, $_[0]->{value};
       return $read->();
     });
   }; # $read

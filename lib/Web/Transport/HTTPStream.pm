@@ -1999,7 +1999,7 @@ sub _ondata ($$) {
     } elsif ($con->{state} eq 'waiting') {
       $con->{rbuf} .= $$inref;
       $con->{rbuf} =~ s/^[\x0D\x0A]+//;
-      if ($con->{rbuf} =~ /^[^\x0D\x0A]/) {
+      if (defined $con->{writer} and $con->{rbuf} =~ /^[^\x0D\x0A]/) {
         $con->{state} = 'before request-line';
       } else {
         return;

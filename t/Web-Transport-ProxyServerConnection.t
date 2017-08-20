@@ -1404,8 +1404,125 @@ test {
   });
 } n => 3, name => 'Unix proxy server';
 
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my @con;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+      push @con, $con;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  my @end;
+  promised_cleanup {
+    @end = ();
+    done $c; undef $c;
+  } promised_cleanup {
+    @con = ();
+    return Promise->all (\@end);
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return [201, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->status_text, 'Created';
+      } $c;
+      push @end, $con[0]->close_after_current_response;
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->status_text, 'Created';
+        is $server_invoked, 2;
+      } $c;
+    });
+  });
+} n => 5, name => 'close_after_current_response 1';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my @con;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      promised_cleanup { $ok->() } $con->completed;
+      push @con, $con;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  my @end;
+  promised_cleanup {
+    @end = ();
+    done $c; undef $c;
+  } promised_cleanup {
+    @con = ();
+    return Promise->all (\@end);
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return [201, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    my $req = $client->request (url => $url);
+    (promised_wait_until { $server_invoked } interval => 0.1)->then (sub {
+      push @end, $con[0]->close_after_current_response;
+    });
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $req->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->status_text, 'Created';
+        is $server_invoked, 1;
+      } $c;
+    });
+  });
+} n => 3, name => 'close_after_current_response 2';
+
 # XXX option accessors
-# XXX close_after_
 
 Test::Certificates->wait_create_cert ({host => 'tlstestproxy.test'});
 run_tests;

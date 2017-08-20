@@ -51,6 +51,7 @@ sub _headers_without_connection_specific ($) {
 
 sub _handle_stream ($$$) {
   my ($server, $stream, $opts) = @_;
+  my $client;
   return $stream->headers_received->then (sub {
     my $req = $_[0];
 
@@ -59,41 +60,44 @@ sub _handle_stream ($$$) {
     # XXX reject TRACE ?
     if ($req->{method} eq 'CONNECT') {
       # XXX
-      return $stream->send_response ({
+      $req->{body}->cancel (405) if defined $req->{body};
+      return {
         status => 405,
         status_text => $Web::Transport::_Defs::ReasonPhrases->{405},
         headers => [['Content-Type', 'text/plain; charset=utf-8']],
+        body => \"405",
         close => 1,
-      })->then (sub {
-        my $writer = $_[0]->{body}->get_writer;
-        $writer->write
-            (DataView->new (ArrayBuffer->new_from_scalarref (\"405")));
-        return $writer->close;
-      })->then (sub {
-        $req->{body}->cancel (405) if defined $req->{body};
-        return $stream->abort (405);
-      });
+      };
     }
     # XXX WS
 
     my $url = $req->{target_url};
     unless ($url->scheme eq 'http') {
-      return $stream->send_response ({
+      return {
         status => 504,
         status_text => $Web::Transport::_Defs::ReasonPhrases->{504},
         headers => [['content-type' => 'text/plain;charset=utf-8']],
-      })->then (sub {
-        my $writer = $_[0]->{body}->get_writer;
-        $writer->write
-            (DataView->new (ArrayBuffer->new_from_scalarref (\504)));
-        return $writer->close;
-      });
+        body => \"504",
+      };
     }
 
     # XXX url & request filter
+    {
+      my $info = $stream->{connection}->info;
+      if ($info->{parent}->{type} eq 'TCP' and
+          $info->{parent}->{local_host}->equals ($url->host) and
+          $info->{parent}->{local_port} == $url->port) {
+        return {
+          status => 504,
+          status_text => $Web::Transport::_Defs::ReasonPhrases->{504},
+          headers => [['content-type' => 'text/plain;charset=utf-8']],
+          body => \"504",
+        };
+      }
+    }
 
     # XXX connection pool
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client = Web::Transport::BasicClient->new_from_url ($url);
     $client->{parent_id} = $stream->{id} . '.c';
     $client->proxy_manager ($opts->{client}->{proxy_manager});
     $client->resolver ($opts->{client}->{resolver});
@@ -113,34 +117,60 @@ sub _handle_stream ($$$) {
       my $res = $_[0];
 
       if ($res->status == 407) {
-        return $stream->send_response ({
+        my $error = Web::Transport::ProtocolError->new
+            ("Upstream server returns a 407 response");
+        # XXX error log
+        $res->body_stream->cancel ($error);
+
+        return {
           status => 500,
           status_text => $Web::Transport::_Defs::ReasonPhrases->{500},
           headers => [['content-type' => 'text/plain;charset=utf-8']],
-        })->then (sub {
-          my $writer = $_[0]->{body}->get_writer;
-          # XXX error log
-          $writer->write
-              (DataView->new (ArrayBuffer->new_from_scalarref (\500)));
-          return $writer->close;
-        })->then (sub {
-          my $error = Web::Transport::ProtocolError->new
-              ("Upstream server returns a 407 response");
-          $res->body_stream->cancel ($error);
-          return $client->abort ($error);
-        });
-      }
+          body => \"500",
+          body_is_incomplete => sub { 0 },
+        };
+      } # 407
 
       my $res_headers = _headers_without_connection_specific $res->{headers};
-      return $stream->send_response ({
+      # XXX response filter hook
+      return {
         status => $res->{status},
         status_text => $res->{status_text},
         headers => $res_headers->{forwarded},
         forwarding => 1,
-      })->then (sub {
-        my $writer = $_[0]->{body}->get_writer;
-        # XXX response filter hook
-        my $reader = $res->body_stream->get_reader;
+        body => $res->body_stream,
+        body_is_incomplete => sub { return $res->incomplete },
+      };
+    }, sub { # $client->request failed
+      my $result = $_[0];
+      # XXX hook for logging $result
+      warn $result;
+      $client->abort ($result); # XXX cast to error object
+      my $status = 503;
+      my $error = '' . $result;
+      if ($error =~ /^Network error: HTTP parse error/) {
+        $status = 502;
+      } elsif ($error =~ m{^Network error: (?:Protocol error|Perl I/O error)}) {
+        $status = 504;
+      }
+      return {
+        status => $status,
+        status_text => $Web::Transport::_Defs::ReasonPhrases->{$status},
+        headers => [['content-type' => 'text/plain;charset=utf-8']],
+        body => \$status,
+        body_is_incomplete => sub { 0 },
+      };
+    });
+  })->then (sub {
+    my $response = $_[0];
+    return $stream->send_response ($response)->then (sub {
+      my $writer = $_[0]->{body}->get_writer;
+      if (ref $response->{body} eq 'SCALAR') {
+        $writer->write
+            (DataView->new (ArrayBuffer->new_from_scalarref ($response->{body})));
+        return $writer->close;
+      } else {
+        my $reader = $response->{body}->get_reader;
         my $read; $read = sub {
           return $reader->read->then (sub {
             return if $_[0]->{done};
@@ -148,7 +178,7 @@ sub _handle_stream ($$$) {
           });
         }; # $read
         return promised_cleanup { undef $read } $read->()->then (sub {
-          if ($res->incomplete) {
+          if ($response->{body_is_incomplete}->()) {
             return $writer->write (DataView->new (ArrayBuffer->new (0)))->then (sub {
               return $writer->abort (Web::Transport::ProtocolError->new ("Upstram connection truncated")); # XXX propagate upstream connection's exception
             });
@@ -160,40 +190,18 @@ sub _handle_stream ($$$) {
           $reader->cancel ($error);
           die $error;
         });
-      })->then (sub {
-        return $client->close;
-      }, sub {
-        my $error = Web::Transport::Error->wrap ($_[0]);
-        unless ($res->body_stream->locked) {
-          $res->body_stream->cancel ($error);
-        }
-        return $client->abort ($error);
-      });
-    }, sub {
-      my $result = $_[0];
-      # XXX hook for logging $result
-      warn $result;
-      my $status = 503;
-      my $error = '' . $result;
-      if ($error =~ /^Network error: HTTP parse error/) {
-        $status = 502;
-      } elsif ($error =~ m{^Network error: (?:Protocol error|Perl I/O error)}) {
-        $status = 504;
       }
-      return $stream->send_response ({
-        status => $status,
-        status_text => $Web::Transport::_Defs::ReasonPhrases->{$status},
-        headers => [['content-type' => 'text/plain;charset=utf-8']],
-      })->then (sub {
-        my $writer = $_[0]->{body}->get_writer;
-        $writer->write
-            (DataView->new (ArrayBuffer->new_from_scalarref (\$status)));
-        return $writer->close;
-      })->then (sub {
-        return $client->abort ($error);
-      });
+    })->catch (sub { # $stream->send_response failed
+      my $error = Web::Transport::Error->wrap ($_[0]);
+      if (not (ref $response->{body} eq 'SCALAR') and
+          not $response->{body}->locked) {
+        $response->{body}->cancel ($error);
+      }
+      return $client->abort ($error) if defined $client;
     });
-  }); # ready
+  })->then (sub {
+    return $client->close if defined $client;
+  });
 } # _handle_stream
 
 1;

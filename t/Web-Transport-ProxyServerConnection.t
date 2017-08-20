@@ -1514,9 +1514,79 @@ test {
   });
 } n => 3, name => 'close_after_current_response 2';
 
-# XXX option accessors
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $url = Web::URL->parse_string (qq<http://$host:$port/abc?d>);
+  my $client = Web::Transport::BasicClient->new_from_url ($url);
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } $client->request (url => $url)->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->status, 504;
+      is $result->status_text, 'Gateway Timeout';
+      is $result->body_bytes, 504;
+    } $c;
+  });
+} n => 3, name => 'default pre-handler - loop detection (http)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $cert_args = {host => 'tlstestserver.test'};
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {tls => {
+        ca_file => Test::Certificates->ca_path ('cert.pem'),
+        cert_file => Test::Certificates->cert_path ('cert-chained.pem', $cert_args),
+        key_file => Test::Certificates->cert_path ('key.pem', $cert_args),
+      }});
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $url = Web::URL->parse_string (qq<https://tlstestserver.test:$port/abc?d>);
+  my $client = Web::Transport::BasicClient->new_from_url ($url);
+  $client->resolver (TLSTestResolver->new ($host));
+  $client->tls_options ({
+    ca_file => Test::Certificates->ca_path ('cert.pem'),
+  });
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } $client->request (url => $url)->then (sub {
+    my $result = $_[0];
+    test {
+      is $result->status, 504;
+      is $result->status_text, 'Gateway Timeout';
+      is $result->body_bytes, 504;
+    } $c;
+  });
+} n => 3, name => 'default pre-handler - loop detection (https)';
 
 Test::Certificates->wait_create_cert ({host => 'tlstestproxy.test'});
+Test::Certificates->wait_create_cert ({host => 'tlstestserver.test'});
 run_tests;
 
 =head1 LICENSE

@@ -1,27 +1,40 @@
-XXX
+=head1 NAME
 
+Web::Transport::ProxyServerConnection - HTTP proxy server connection
 
-->new_from_ae_tcp_server_args
+=head1 SYNOPSIS
 
-It can be either TCP or Unix domain socket server.
+  tcp_server $host, $port, sub {
+    my $con = Web::Transport::ProxyServerConnection
+        ->new_from_aeargs_and_opts ([@_], {...});
+    $con->completed->then (sub {
+      warn "Client disconnected and proxy done";
+    });
+  };
 
-There can be following key/value pairs of options as additional arguments:
+=head1 DESCRIPTION
 
-=over 4
+The C<Web::Transport::ProxyServerConnection> module is an
+implementation of HTTP proxy server.  It wraps an HTTP server's TCP
+connection socket and forward any incoming request to upstream.
 
-=item tls => {$name => $value, ...}
+=head1 METHODS
 
-Specifies that TLS is used (i.e. it is an HTTPS proxy).  If specified,
-the value must be a hash reference with key/value pairs XXX.
+See L<Web::Transport::GenericServerConnection/METHODS>.
 
-=item parent_id => $string
+=head1 SEE ALSO
 
-XXX
+L<AnyEvent::Socket>.
 
-=item server_header => $header_value
+=head1 AUTHOR
 
-XXX
+Wakaba <wakaba@suikawiki.org>.
 
-=back
+=head1 LICENSE
 
-XXX
+Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

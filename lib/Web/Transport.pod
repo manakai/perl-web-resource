@@ -33,6 +33,10 @@ A WebSocket client.
 
 A PSGI interface of HTTP server.
 
+=item L<Web::Transport::ProxyServerConnection>
+
+A HTTP proxy server.
+
 =item L<Web::Transport::PlatformResolver>
 
 A name resolver using system's resolver.
@@ -377,7 +381,8 @@ Additionally, modules L<Web::Transport::TCPStream>,
 L<Web::Transport::UnixStream>, L<Web::Transport::TLSStream>,
 L<Web::Transport::SOCKS4Stream>, L<Web::Transport::SOCKS5Stream>,
 L<Web::Transport::H1CONNECTStream>, L<Web::Transport::BasicClient>,
-and L<Web::Transport::PSGIServerConnection> require following modules
+L<Web::Transport::ProxyServerConnection>, and
+L<Web::Transport::PSGIServerConnection> require following modules
 (which are also part of submodule of this Git repository):
 
 =over 4

@@ -7,7 +7,7 @@ Web::Transport::PSGIServerConnection - PSGI interface for HTTP server connection
   $psgi_app = sub { ... };
   tcp_server $host, $port, sub {
     my $con = Web::Transport::PSGIServerConnection
-        ->new_from_app_and_ae_tcp_server_args ($psgi_app, [@_]);
+        ->new_from_aeargs_and_opts ([@_], {psgi_app => $psgi_app});
     $con->completed->then (sub {
       warn "Client disconnected and PSGI application done";
     });
@@ -22,103 +22,10 @@ application.
 
 =head1 METHODS
 
-There are following methods:
+See L<Web::Transport::GenericServerConnection/METHODS>.
 
-=over 4
-
-=item $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args ($app, [...], NAME => VALUE, ...)
-
-Create an object.
-
-The first argument must be a PSGI application, i.e. a code reference.
-See the PSGI specification for the requirements on the code reference.
-
-The second argument must be an array reference of the arguments
-received by the C<AnyEvent::Socket::tcp_server>'s callback.  That is,
-the filehandle of the socket, the remote host, and the remote port (if
-TCP).  The socket can be of a TCP or UNIX socket domain.
-
-Additionally, options can be specified as key/value pairs.
-
-The C<parent_id> option, if any, specifies the short string that
-identifies the "parent" context in which the connection appears, which
-will be used in debug outputs.
-
-The C<max_request_body_length> option specifies the maximum length of
-the request body to be accepted by the server, in bytes.  If C<undef>
-is explicitly specified, no limit is set.  If this option is not
-given, a default finite value is set.  Note that the PSGI server loads
-the whole request body on memory, even when the PSGI application does
-not want to read the request body, as the server has to notify the
-request body's length of the application upon its invocation.
-
-The C<state> option, if any, specifies the "server state" object which
-is shared among the PSGI application invocations on a same server
-session.  (The definition of the "server session" is server
-application dependent.)  The object is accessible as the
-C<manakai.server.state> field value of the PSGI environment hash
-reference given to the PSGI applications.  This object can be used to
-store objects whose lifetimes are longer than a request-response
-processing, such as connections to the database server.  See the
-manakai PSGI extensions specification for more information.
-
-=item $con->onexception ($code)
-
-=item $code = $con->onexception
-
-Get or set the callback code reference that is invoked when an error
-is detected while interacting with the PSGI application such that the
-server returns an error response to the client.
-
-The callback has to be set as soon as the object has been created and
-it should not be changed later.
-
-The callback can return a promise, to delay the resolution of the
-C<complated> promise until the promise is resolved or rejected.
-
-=item $promise = $con->completed
-
-Return a promise (L<Promise>) which will be resolved once the
-connection between the server and the client has been closed and the
-PSGI application has been completed.
-
-An invocation of PSGI application is considered as completed when
-either a complete response is returned by the PSGI application or the
-PSGI application invoked the C<< $writer->close >> method, and the
-C<psgix.exit_guard> condvar's callback is invoked.
-
-=item $con->close_after_current_response (timeout => $seconds)
-
-Schedule to close the connection as soon as possible.
-
-If the connection is not used at the moment, it is immediately closed.
-Otherwise, the connection is closed after the response to the
-currently processed request is sent.
-
-The C<timeout> option can be specified as a key/value pair.  The
-option specifies the seconds of the timeout, whose default is C<10>
-(seconds).  If this option is set to an number greater than zero and
-the current response is not closed before that seconds have elapsed
-since the invocation of this method, the connection is aborted.  The
-PSGI application is expected to return the whole response before this
-timeout.
-
-Please note that even when the connection is aborted because of the
-timeout, the C<completed> promise is not resolved or rejected until
-the C<psgix.exit_guard> condvar is fullfilled and any reference to the
-PSGI writer is destroyed.  As the PSGI does not provide any way to
-abort the PSGI application, invocation of this method does not
-terminate any running PSGI application.
-
-This method can be used to gracefully terminate the server.
-
-=item $string = $con->id
-
-A short string assigned to the server connection, which can be used
-for debugging purposes.  It is composed from the C<parent_id> option
-to the constructor, if any.
-
-=back
+Use of the method C<new_from_app_and_ae_tcp_server_args> is
+deprecated.  Use C<new_from_aeargs_and_opts> instead.
 
 =head1 SEE ALSO
 

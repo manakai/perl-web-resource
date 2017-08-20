@@ -74,9 +74,6 @@ sub psgi_server ($$;%) {
           ($app, [@_], parent_id => $args{parent_id});
       $con->{connection}->{server_header} = $args{server_name};
       $con->onexception ($onexception) if defined $onexception;
-      if (exists $args{max}) {
-        $con->max_request_body_length ($args{max});
-      }
       promised_cleanup { $cv->end } $con->completed;
     };
     $cv->cb ($ok);
@@ -158,7 +155,7 @@ for my $status (
     my $server_p = Promise->new (sub {
       my ($ok) = @_;
       my $server = tcp_server $host, $port, sub {
-        my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+        my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
         promised_cleanup { $ok->() } $con->completed;
       };
       $close_server = sub { undef $server };
@@ -227,7 +224,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -274,7 +271,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -324,8 +321,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
-      $con->{connection}->{server_header} = $server_name;
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {server_header => $server_name});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -363,8 +359,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
-      $con->{connection}->{server_header} = $server_name;
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {server_header => $server_name});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -402,8 +397,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
-      $con->{connection}->{server_header} = $server_name;
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {server_header => $server_name});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -441,8 +435,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
-      $con->{connection}->{server_header} = $server_name;
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {server_header => $server_name});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -489,8 +482,9 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_], server_header => $server_name);
-      $con->{last_resort_timeout} = 3;
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {server_header => $server_name, client => {
+        last_resort_timeout => 3,
+      }});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -541,7 +535,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_], server_header => $server_name);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {server_header => $server_name});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -589,7 +583,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_], server_header => $server_name);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {server_header => $server_name});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -641,7 +635,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -695,7 +689,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -741,7 +735,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -787,7 +781,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -836,7 +830,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -890,7 +884,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -946,7 +940,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -988,7 +982,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -1031,7 +1025,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -1081,7 +1075,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -1118,7 +1112,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -1156,7 +1150,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -1198,7 +1192,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -1213,8 +1207,7 @@ test {
   my $server_p2 = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host2, $port2, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
-      $con->{proxy_manager} = $pm;
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {client => {proxy_manager => $pm}});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server2 = sub { undef $server };
@@ -1275,8 +1268,7 @@ test {
     my $server_p = Promise->new (sub {
       my ($ok) = @_;
       my $server = tcp_server $host, $port, sub {
-        my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_], server_header => $server_name);
-        $con->{proxy_manager} = $pm2;
+        my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {client => {proxy_manager => $pm2}, server_header => $server_name});
         promised_cleanup { $ok->() } $con->completed;
       };
       $close_server = sub { undef $server };
@@ -1320,11 +1312,11 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_], tls => {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {tls => {
         ca_file => Test::Certificates->ca_path ('cert.pem'),
         cert_file => Test::Certificates->cert_path ('cert-chained.pem', $cert_args),
         key_file => Test::Certificates->cert_path ('key.pem', $cert_args),
-      });
+      }});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -1369,7 +1361,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server 'unix/', $path, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
@@ -1414,7 +1406,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
       push @con, $con;
     };
@@ -1475,7 +1467,7 @@ test {
   my $server_p = Promise->new (sub {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
-      my $con = Web::Transport::ProxyServerConnection->new_from_ae_tcp_server_args ([@_]);
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
       promised_cleanup { $ok->() } $con->completed;
       push @con, $con;
     };

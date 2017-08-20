@@ -134,9 +134,6 @@ sub psgi_server ($$;$%) {
           ($app, [@_], parent_id => $args{parent_id});
       $con->{connection}->{server_header} = $args{server_name};
       $con->onexception ($onexception) if defined $onexception;
-      if (exists $args{max}) {
-        $con->max_request_body_length ($args{max});
-      }
       promised_cleanup { $cv->end } $con->completed;
     };
     $cv->cb ($ok);

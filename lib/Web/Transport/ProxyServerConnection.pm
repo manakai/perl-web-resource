@@ -62,8 +62,8 @@ sub _headers_without_connection_specific ($) {
   return $return;
 } # _headers_without_connection_specific
 
-sub _handle_stream ($$) {
-  my ($server, $stream) = @_;
+sub _handle_stream ($$$) {
+  my ($server, $stream, $opts) = @_;
   return $stream->headers_received->then (sub {
     my $req = $_[0];
 
@@ -107,12 +107,11 @@ sub _handle_stream ($$) {
 
     # XXX connection pool
     my $client = Web::Transport::BasicClient->new_from_url ($url);
-    # XXX
-    #$client->parent_id ($x->{parent_id});
-    $client->proxy_manager ($server->{proxy_manager});
-    #$client->resolver ($x->resolver);
-    #$client->tls_options ($x->tls_options);
-    $client->last_resort_timeout ($server->{last_resort_timeout});
+    $client->{parent_id} = $stream->{id} . '.c';
+    $client->proxy_manager ($opts->{client}->{proxy_manager});
+    $client->resolver ($opts->{client}->{resolver});
+    $client->tls_options ($opts->{client}->{tls_options});
+    $client->last_resort_timeout ($opts->{client}->{last_resort_timeout});
 
     my $req_headers = _headers_without_connection_specific $req->{headers};
     return $client->request (
@@ -210,8 +209,8 @@ sub _handle_stream ($$) {
   }); # ready
 } # _handle_stream
 
-sub new_from_ae_tcp_server_args ($$;%) {
-  my ($class, $aeargs, %args) = @_;
+sub new_from_aeargs_and_opts ($$$) {
+  my ($class, $aeargs, $opts) = @_;
   my $self = bless {}, $class;
   my $socket;
   if ($aeargs->[1] eq 'unix/') {
@@ -219,19 +218,19 @@ sub new_from_ae_tcp_server_args ($$;%) {
     $socket = {
       class => 'Web::Transport::UnixStream',
       server => 1, fh => $aeargs->[0],
-      parent_id => $args{parent_id},
+      parent_id => $opts->{parent_id},
     };
   } else {
     $socket = {
       class => 'Web::Transport::TCPStream',
       server => 1, fh => $aeargs->[0],
       host => Web::Host->parse_string ($aeargs->[1]), port => $aeargs->[2],
-      parent_id => $args{parent_id},
+      parent_id => $opts->{parent_id},
     };
   }
-  if ($args{tls}) {
+  if ($opts->{tls}) {
     $socket = {
-      %{$args{tls}},
+      %{$opts->{tls}},
       class => 'Web::Transport::TLSStream',
       server => 1,
       parent => $socket,
@@ -240,7 +239,7 @@ sub new_from_ae_tcp_server_args ($$;%) {
   $self->{connection} = Web::Transport::HTTPStream->new ({
     parent => $socket,
     server => 1,
-    server_header => $args{server_header},
+    server_header => $opts->{server_header},
   });
   $self->{completed_cv} = AE::cv;
   $self->{completed_cv}->begin;
@@ -251,7 +250,7 @@ sub new_from_ae_tcp_server_args ($$;%) {
       $self->{completed_cv}->begin;
       promised_cleanup {
         $self->{completed_cv}->end;
-      } _handle_stream $self, $_[0]->{value};
+      } $self->_handle_stream ($_[0]->{value}, $opts);
       return $read->();
     });
   }; # $read
@@ -259,7 +258,7 @@ sub new_from_ae_tcp_server_args ($$;%) {
   $self->{connection}->closed->then (sub { $self->{completed_cv}->end });
   $self->{completed} = Promise->from_cv ($self->{completed_cv});
   return $self;
-} # new_from_ae_tcp_server_args
+} # new_from_aeargs_and_opts
 
 sub id ($) {
   return $_[0]->{connection}->info->{id};

@@ -13,6 +13,7 @@ use Web::URL::Encoding qw(percent_decode_b);
 use Web::Host;
 use Web::Transport::_Defs;
 use Web::Transport::TCPStream;
+use Web::Transport::TLSStream;
 use Web::Transport::HTTPStream;
 use Web::Transport::TypeError;
 
@@ -91,8 +92,8 @@ sub _metavariables ($$) {
   return $vars;
 } # _metavariables
 
-sub _handle_stream ($$$$) {
-  my ($server, $stream, $app, $state) = @_;
+sub _handle_stream ($$$) {
+  my ($server, $stream, $opts) = @_;
   return $stream->headers_received->then (sub {
     my $req = $_[0];
     my $env = _metavariables ($req, $server->{connection}->info->{parent});
@@ -103,7 +104,7 @@ sub _handle_stream ($$$$) {
     $env->{'psgi.run_once'} = 0;
     $env->{'psgi.nonblocking'} = 1;
     $env->{'psgi.streaming'} = 1;
-    $env->{'manakai.server.state'} = $state if defined $state;
+    $env->{'manakai.server.state'} = $opts->{state} if defined $opts->{state};
 
     my $method = $env->{REQUEST_METHOD};
     if ($method eq 'CONNECT') {
@@ -123,7 +124,9 @@ sub _handle_stream ($$$$) {
       });
     }
 
-    my $max = $server->max_request_body_length;
+    my $max = exists $opts->{max_request_body_length}
+        ? $opts->{max_request_body_length}
+        : 8_000_000;
     if (defined $max and $req->{body_length} > $max) {
       return $stream->send_response ({
         status => 413,
@@ -173,36 +176,50 @@ sub _handle_stream ($$$$) {
     return promised_cleanup { undef $read } $read->()->then (sub {
       $env->{CONTENT_LENGTH} = length $input;
       open $env->{'psgi.input'}, '<', \$input;
-      return $server->_run ($stream, $app, $env, $method);
+      return $server->_run ($stream, $opts->{psgi_app}, $env, $method);
     });
   }); # ready
 } # _handle_stream
 
 sub new_from_app_and_ae_tcp_server_args ($$$;%) {
   my ($class, $app, $aeargs, %args) = @_;
-  my $self = bless {
-    max_request_body_length => 8_000_000,
-  }, $class;
+  return $class->new_from_aeargs_and_opts ($aeargs, {
+    %args,
+    psgi_app => $app,
+  });
+} # new_from_app_and_ae_tcp_server_args
+
+sub new_from_aeargs_and_opts ($$$) {
+  my ($class, $aeargs, $opts) = @_;
+  my $self = bless {}, $class;
   my $socket;
   if ($aeargs->[1] eq 'unix/') {
     require Web::Transport::UnixStream;
     $socket = {
       class => 'Web::Transport::UnixStream',
       server => 1, fh => $aeargs->[0],
-      parent_id => $args{parent_id},
+      parent_id => $opts->{parent_id},
     };
   } else {
     $socket = {
       class => 'Web::Transport::TCPStream',
       server => 1, fh => $aeargs->[0],
       host => Web::Host->parse_string ($aeargs->[1]), port => $aeargs->[2],
-      parent_id => $args{parent_id},
+      parent_id => $opts->{parent_id},
     };
   }
-  my $state = $args{state};
+  if ($opts->{tls}) {
+    $socket = {
+      %{$opts->{tls}},
+      class => 'Web::Transport::TLSStream',
+      server => 1,
+      parent => $socket,
+    };
+  }
   $self->{connection} = Web::Transport::HTTPStream->new ({
     parent => $socket,
     server => 1,
+    server_header => $opts->{server_header},
   });
   $self->{completed_cv} = AE::cv;
   $self->{completed_cv}->begin;
@@ -210,7 +227,10 @@ sub new_from_app_and_ae_tcp_server_args ($$$;%) {
   my $read; $read = sub {
     return $reader->read->then (sub {
       return if $_[0]->{done};
-      _handle_stream $self, $_[0]->{value}, $app, $state;
+      $self->{completed_cv}->begin;
+      promised_cleanup {
+        $self->{completed_cv}->end;
+      } $self->_handle_stream ($_[0]->{value}, $opts);
       return $read->();
     });
   }; # $read
@@ -218,7 +238,7 @@ sub new_from_app_and_ae_tcp_server_args ($$$;%) {
   $self->{connection}->closed->then (sub { $self->{completed_cv}->end });
   $self->{completed} = Promise->from_cv ($self->{completed_cv});
   return $self;
-} # new_from_app_and_ae_tcp_server_args
+} # new_from_aeargs_and_opts
 
 sub id ($) {
   return $_[0]->{connection}->info->{id};
@@ -385,13 +405,6 @@ sub onexception ($;$) {
   }
   return $_[0]->{onexception} || sub { warn $_[1] };
 } # onexception
-
-sub max_request_body_length ($;$) {
-  if (@_ > 1) {
-    $_[0]->{max_request_body_length} = $_[1];
-  }
-  return $_[0]->{max_request_body_length}; # or undef
-} # max_request_body_length
 
 sub closed ($) {
   return $_[0]->{connection}->closed;

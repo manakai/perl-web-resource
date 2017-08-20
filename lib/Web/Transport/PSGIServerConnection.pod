@@ -44,6 +44,14 @@ The C<parent_id> option, if any, specifies the short string that
 identifies the "parent" context in which the connection appears, which
 will be used in debug outputs.
 
+The C<max_request_body_length> option specifies the maximum length of
+the request body to be accepted by the server, in bytes.  If C<undef>
+is explicitly specified, no limit is set.  If this option is not
+given, a default finite value is set.  Note that the PSGI server loads
+the whole request body on memory, even when the PSGI application does
+not want to read the request body, as the server has to notify the
+request body's length of the application upon its invocation.
+
 The C<state> option, if any, specifies the "server state" object which
 is shared among the PSGI application invocations on a same server
 session.  (The definition of the "server session" is server
@@ -67,17 +75,6 @@ it should not be changed later.
 
 The callback can return a promise, to delay the resolution of the
 C<complated> promise until the promise is resolved or rejected.
-
-=item $con->max_request_body_length ($integer)
-
-=item $integer = $con->max_request_body_length
-
-Get or set the maximum length of the request body to be accepted by
-the server, in bytes.  If C<undef>, no limit is set.
-
-Note that the server loads the whole request body on memory, as the
-server has to notify the request body's length of the PSGI application
-at the time of invocation.
 
 =item $promise = $con->completed
 

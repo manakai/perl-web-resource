@@ -59,11 +59,9 @@ sub server ($$;$%) {
     my $server = tcp_server $host, $port, sub {
       $cv->begin;
       $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args
-          ($app, [@_], parent_id => $args{parent_id}, state => $args{state});
+          ($app, [@_], parent_id => $args{parent_id}, state => $args{state},
+           max_request_body_length => $args{max});
       $con->onexception ($onexception) if defined $onexception;
-      if (exists $args{max}) {
-        $con->max_request_body_length ($args{max});
-      }
       promised_cleanup { $cv->end } $con->completed;
     };
     $cv->cb ($ok);

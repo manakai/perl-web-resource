@@ -49,29 +49,48 @@ sub create ($$) {
   }
 
   my $headers = $args->{headers} || {};
-  my $header_list = $args->{_header_list} || []; # for proxy module only
-  my $has_header = {map { $_->[2] => 1 } @$header_list};
+  my $header_list = [];
+  my $has_header = {};
   my $ct;
   my $auth;
-  for my $name (keys %$headers) {
-    my $name_lc = $name;
-    $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-    if (defined $headers->{$name}) {
-      if (ref $headers->{$name} eq 'ARRAY') {
-        push @$header_list, map {
-          [(encode_web_utf8 $name), (encode_web_utf8 $_), $name_lc]
-        } @{$headers->{$name}};
-      } else {
-        push @$header_list,
-            [(encode_web_utf8 $name), (encode_web_utf8 $headers->{$name}),
-             $name_lc];
+  if (ref $headers eq 'ARRAY') {
+    for (@$headers) {
+      return {failed => 1, message => 'Bad |headers|'}
+          unless defined $_ and ref $_ eq 'ARRAY';
+      push @$header_list,
+          [(encode_web_utf8 $_->[0]), (encode_web_utf8 $_->[1])];
+      my $name_lc = $header_list->[-1]->[0];
+      $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+      $header_list->[-1]->[2] = $name_lc;
+      
+      $has_header->{$name_lc} = 1;
+      if ($name_lc eq 'content-type') {
+        $ct = $header_list->[-1]->[-1];
+      } elsif ($name_lc eq 'authorization') {
+        $auth = $header_list->[-1]->[-1];
       }
     }
-    $has_header->{$name_lc} = 1;
-    if ($name_lc eq 'content-type') {
-      $ct = $header_list->[-1]->[-1];
-    } elsif ($name_lc eq 'authorization') {
-      $auth = $header_list->[-1]->[-1];
+  } else {
+    for my $name (keys %$headers) {
+      my $name_lc = $name;
+      $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+      if (defined $headers->{$name}) {
+        if (ref $headers->{$name} eq 'ARRAY') {
+          push @$header_list, map {
+            [(encode_web_utf8 $name), (encode_web_utf8 $_), $name_lc]
+          } @{$headers->{$name}};
+        } else {
+          push @$header_list,
+              [(encode_web_utf8 $name), (encode_web_utf8 $headers->{$name}),
+               $name_lc];
+        }
+      }
+      $has_header->{$name_lc} = 1;
+      if ($name_lc eq 'content-type') {
+        $ct = $header_list->[-1]->[-1];
+      } elsif ($name_lc eq 'authorization') {
+        $auth = $header_list->[-1]->[-1];
+      }
     }
   }
 

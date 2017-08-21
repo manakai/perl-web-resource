@@ -90,6 +90,21 @@ forwarded request to the proxy server (i.e. indirect loop); and so on.
 It's request handler's responsibility to reject any abuse or wrong
 usage of the proxy server.
 
+=head1 FEATURES NOT SUPPORTED BY THIS MODULE
+
+The module does not support HTTP proxy authentication.  It can be
+implemented within a request handler.
+
+The module does not support HTTP caches.  It can be implemented by
+consulting with the cache for any cached response within a request
+handler and caching the received response within a response handler.
+
+The module intentionally does not add HTTP C<Via:> headers to
+forwarded requests and responses.  It can be added within request and
+response handlers.
+
+This module does not support HTTP C<TRACE> method.
+
 =head1 SEE ALSO
 
 L<AnyEvent::Socket>.

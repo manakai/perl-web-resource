@@ -1585,6 +1585,70 @@ test {
   });
 } n => 3, name => 'default pre-handler - loop detection (https)';
 
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_name = rand;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {server_header => $server_name});
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'Protocol error', $x;
+          is $x->message, 'HTTP |TRACE| method';
+          #is $x->file_name, __FILE__; XXXlocation
+          #is $x->line_number, __LINE__;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return [201, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url, method => 'TRACE')->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 405;
+        is $res->status_text, 'Method Not Allowed';
+        is $res->header ('Server'), $server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $res->body_bytes, "405";
+        ok ! $res->incomplete;
+        is $server_invoked, 0;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 11, name => 'TRACE';
+
 Test::Certificates->wait_create_cert ({host => 'tlstestproxy.test'});
 Test::Certificates->wait_create_cert ({host => 'tlstestserver.test'});
 run_tests;

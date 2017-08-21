@@ -66,7 +66,7 @@ sub _handle_stream ($$$) {
     my $request = {
       method => $req->{method},
       url => $req->{target_url},
-      _header_list => $req_headers->{forwarded},
+      headers => $req_headers->{forwarded},
       body_length => $req->{body_length}, # or undef
       body_stream => (defined $req->{body_length} ? $req->{body} : undef),
     };
@@ -110,7 +110,19 @@ sub _handle_stream ($$$) {
     return $_[0] if defined $_[0]->{response} or defined $_[0]->{error};
     my $request = $_[0]->{request};
 
-    # XXX reject TRACE ?
+    if ($request->{method} eq 'TRACE') {
+      return {
+        unused_request_body_stream => $request->{body_stream}, # or undef
+        error => _pe "HTTP |TRACE| method",
+        response => {
+          status => 405,
+          status_text => $Web::Transport::_Defs::ReasonPhrases->{405},
+          headers => [['Content-Type', 'text/plain; charset=utf-8']],
+          body => "405",
+        },
+      };
+    }
+
     # XXX $req->{method} eq 'CONNECT'
     if ($request->{method} eq 'CONNECT') { # XXX
       return {
@@ -126,7 +138,14 @@ sub _handle_stream ($$$) {
     }
     # XXX WS
 
-    unless ($request->{url}->scheme eq 'http') {
+    my $url = $request->{url} || $request->{base_url};
+    unless (UNIVERSAL::isa ($url, 'Web::URL')) {
+      return {
+        unused_request_body_stream => $request->{body_stream}, # or undef
+        error => _te "No |url| argument",
+      };
+    }
+    unless ($url->scheme eq 'http') {
       return {
         unused_request_body_stream => $request->{body_stream}, # or undef
         error => _pe "Target URL scheme is not |http|",
@@ -134,7 +153,7 @@ sub _handle_stream ($$$) {
     }
 
     # XXX connection pool
-    $client = Web::Transport::BasicClient->new_from_url ($request->{url});
+    $client = Web::Transport::BasicClient->new_from_url ($url);
     $client->{parent_id} = $stream->{id} . '.c';
     $client->proxy_manager ($opts->{client}->{proxy_manager});
     $client->resolver ($opts->{client}->{resolver});
@@ -221,6 +240,15 @@ sub _handle_stream ($$$) {
         body => $status,
       };
     } else {
+      if (defined $result->{error}) {
+        my $error = Web::Transport::ProtocolError->wrap ($result->{error});
+        push @wait, Promise->resolve->then (sub {
+          return $server->onexception->($server, $error);
+        })->catch (sub {
+          warn $_[0];
+        });
+      }
+
       if (defined $reqbody and not $reqbody->locked) {
         my $reader = $reqbody->get_reader;
         my $read; $read = sub {
@@ -311,6 +339,10 @@ sub _handle_stream ($$$) {
     return Promise->all (\@wait);
   });
 } # _handle_stream
+
+# XXX test:
+#  CONNECT
+#  WS
 
 1;
 

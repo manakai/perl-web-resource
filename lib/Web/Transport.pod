@@ -97,13 +97,24 @@ When the C<url> option is specified, this option is ignored.
 Specify the HTTP request method.  Note that HTTP request methods are
 case-sensitive.  If not specified, C<GET> is used.
 
-=item headers => {$string => $string, ...}
+=item headers => {$name => $value, ...}
 
-Specify HTTP headers.  The value must be a hash reference, whose keys
-are header names and values are corresponding header values.  If a
-value is an array reference, the array's items are used as the header
-values (i.e. multiple headers with same name are generated).  Header
-names are case-insensitive.
+=item headers => [[$name => $value], ...]
+
+Specify HTTP headers.  The value must be either a hash reference or an
+array reference.
+
+If the value is a hash reference, its keys are header names and its
+values are corresponding header values.  If a value is an array
+reference, the array's items are used as the header values
+(i.e. multiple headers with same name are generated).
+
+If the value is an array reference, it must contain zero or more array
+references whose zeroth items are header names and first items are
+corresponding header values.
+
+Header names are case-insensitive.  Header names and values must be
+byte strings.
 
 =item cookies => {$string => $string, ...}
 

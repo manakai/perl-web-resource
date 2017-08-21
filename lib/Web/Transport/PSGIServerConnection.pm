@@ -9,7 +9,6 @@ use Promise;
 use Promised::Flow;
 use Web::Encoding;
 use Web::URL::Encoding qw(percent_decode_b);
-use Web::Transport::_Defs;
 
 push our @ISA, qw(Web::Transport::GenericServerConnection);
 push our @CARP_NOT, qw(
@@ -102,7 +101,6 @@ sub _handle_stream ($$$) {
     if ($method eq 'CONNECT') {
       return $stream->send_response ({
         status => 405,
-        status_text => $Web::Transport::_Defs::ReasonPhrases->{405},
         headers => [['Content-Type', 'text/plain; charset=utf-8']],
         close => 1,
       })->then (sub {
@@ -119,10 +117,9 @@ sub _handle_stream ($$$) {
     my $max = exists $opts->{max_request_body_length}
         ? $opts->{max_request_body_length}
         : 8_000_000;
-    if (defined $max and $req->{body_length} > $max) {
+    if (defined $max and $req->{length} > $max) {
       return $stream->send_response ({
         status => 413,
-        status_text => $Web::Transport::_Defs::ReasonPhrases->{413},
         headers => [['Content-Type', 'text/plain; charset=utf-8']],
         close => 1,
       })->then (sub {
@@ -147,7 +144,6 @@ sub _handle_stream ($$$) {
             (length $input) + $_[0]->{value}->byte_length > $max) {
           return $stream->send_response ({
             status => 413,
-            status_text => $Web::Transport::_Defs::ReasonPhrases->{413},
             headers => [['Content-Type', 'text/plain; charset=utf-8']],
             close => 1,
           })->then (sub {
@@ -252,7 +248,6 @@ sub _run ($$$$$) {
         } @$body];
         $stream->send_response ({
           status => $status,
-          status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
           headers => $headers,
         })->then (sub {
           my $w = $_[0]->{body}->get_writer;
@@ -277,7 +272,6 @@ sub _run ($$$$$) {
            });
       $stream->send_response ({
         status => $status,
-        status_text => $Web::Transport::_Defs::ReasonPhrases->{$status} || '',
         headers => $headers,
       })->then (sub {
         my $w = $_[0]->{body}->get_writer;
@@ -319,7 +313,6 @@ sub _run ($$$$$) {
         }),
         $stream->send_response ({
           status => 500,
-          status_text => $Web::Transport::_Defs::ReasonPhrases->{500},
           headers => [['Content-Type', 'text/plain; charset=utf-8']],
         })->then (sub {
           my $writer = $_[0]->{body}->get_writer;

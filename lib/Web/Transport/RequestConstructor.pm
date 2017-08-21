@@ -261,10 +261,10 @@ sub create ($$) {
     return {failed => 1, message => "Request body not allowed"}
         if $args->{no_body};
 
-    return {failed => 1, message => "No |body_length|"}
-        unless defined $args->{body_length};
+    return {failed => 1, message => "No |length|"}
+        unless defined $args->{length};
     push @$header_list,
-        ['Content-Length', 0+$args->{body_length}, 'content-length'];
+        ['Content-Length', 0+$args->{length}, 'content-length'];
 
     $body_reader = $args->{body_stream}->get_reader ('byob'); # or throw
     $body_reader->release_lock;

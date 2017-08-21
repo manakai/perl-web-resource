@@ -1389,7 +1389,7 @@ test {
             },
           });
           $args->{request}->{body_stream} = $rs;
-          $args->{request}->{body_length} = length $new_data;
+          $args->{request}->{length} = length $new_data;
           return $args;
         },
       });
@@ -1464,7 +1464,7 @@ test {
             },
           });
           $args->{request}->{body_stream} = $rs;
-          $args->{request}->{body_length} = length $new_data;
+          $args->{request}->{length} = length $new_data;
           return $args;
         },
       });

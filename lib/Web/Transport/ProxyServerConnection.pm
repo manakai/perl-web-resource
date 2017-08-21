@@ -67,8 +67,8 @@ sub _handle_stream ($$$) {
       method => $req->{method},
       url => $req->{target_url},
       headers => $req_headers->{forwarded},
-      body_length => $req->{body_length}, # or undef
-      body_stream => (defined $req->{body_length} ? $req->{body} : undef),
+      length => $req->{length}, # or undef
+      body_stream => (defined $req->{length} ? $req->{body} : undef),
     };
 
     return Promise->resolve ({
@@ -116,7 +116,6 @@ sub _handle_stream ($$$) {
         error => _pe "HTTP |TRACE| method",
         response => {
           status => 405,
-          status_text => $Web::Transport::_Defs::ReasonPhrases->{405},
           headers => [['Content-Type', 'text/plain; charset=utf-8']],
           body => "405",
         },
@@ -129,7 +128,6 @@ sub _handle_stream ($$$) {
         unused_request_body_stream => $request->{body_stream}, # or undef
         response => {
           status => 405,
-          status_text => $Web::Transport::_Defs::ReasonPhrases->{405},
           headers => [['Content-Type', 'text/plain; charset=utf-8']],
           body => "405",
           close => 1,
@@ -235,7 +233,6 @@ sub _handle_stream ($$$) {
 
       $response = {
         status => $status,
-        status_text => $Web::Transport::_Defs::ReasonPhrases->{$status},
         headers => [['content-type' => 'text/plain;charset=utf-8']],
         body => $status,
       };
@@ -281,7 +278,6 @@ sub _handle_stream ($$$) {
     my $status = 500;
     return [{
       status => $status,
-      status_text => $Web::Transport::_Defs::ReasonPhrases->{$status},
       headers => [['content-type' => 'text/plain;charset=utf-8']],
       body => $status,
     }, undef];

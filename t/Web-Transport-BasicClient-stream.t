@@ -601,7 +601,7 @@ test {
       return $client->close->then ($close);
     } $client->request (
       url => $url,
-      body_stream => $rs, body_length => length $data,
+      body_stream => $rs, length => length $data,
     )->then (sub {
       my $res = $_[0];
       test {
@@ -639,7 +639,7 @@ test {
       return $client->close->then ($close);
     } $client->request (
       url => $url,
-      body_stream => $rs, body_length => 100*length $data,
+      body_stream => $rs, length => 100*length $data,
     )->then (sub {
       my $res = $_[0];
       test {
@@ -674,7 +674,7 @@ test {
       return $client->close->then ($close);
     } $client->request (
       url => $url,
-      body_stream => $rs, body_length => length $data,
+      body_stream => $rs, length => length $data,
     )->catch (sub {
       my $result = $_[0];
       test {
@@ -714,7 +714,7 @@ test {
       return $client->close->then ($close);
     } $client->request (
       url => $url,
-      body_stream => $rs, body_length => length $data,
+      body_stream => $rs, length => length $data,
     )->catch (sub {
       my $result = $_[0];
       test {
@@ -753,7 +753,7 @@ test {
       return $client->close->then ($close);
     } $client->request (
       url => $url,
-      body_stream => $rs, body_length => -1 + length $data,
+      body_stream => $rs, length => -1 + length $data,
     )->catch (sub {
       my $result = $_[0];
       test {
@@ -764,7 +764,7 @@ test {
       } $c;
     });
   });
-} n => 4, name => 'request body (ReadableStream) body_length less than actual';
+} n => 4, name => 'request body (ReadableStream) length less than actual';
 
 test {
   my $c = shift;
@@ -792,7 +792,7 @@ test {
       return $client->close->then ($close);
     } $client->request (
       url => $url,
-      body_stream => $rs, body_length => +1 + length $data,
+      body_stream => $rs, length => +1 + length $data,
     )->catch (sub {
       my $result = $_[0];
       test {
@@ -803,7 +803,7 @@ test {
       } $c;
     });
   });
-} n => 4, name => 'request body (ReadableStream) body_length greater than actual';
+} n => 4, name => 'request body (ReadableStream) length greater than actual';
 
 test {
   my $c = shift;
@@ -835,7 +835,7 @@ test {
     } $client->request (url => $url)->then (sub {
       return $client->request (
         url => $url,
-        body_stream => $rs, body_length => length $data,
+        body_stream => $rs, length => length $data,
       );
     })->catch (sub {
       my $res = $_[0];
@@ -867,7 +867,7 @@ test {
     return $client->close;
   } $client->request (
     url => $url,
-    body_stream => $rs, body_length => length $data,
+    body_stream => $rs, length => length $data,
   )->catch (sub {
     my $result = $_[0];
     test {
@@ -901,7 +901,7 @@ test {
     });
     my $req = $client->request (
       url => $url,
-      body_stream => $rs, body_length => length $data,
+      body_stream => $rs, length => length $data,
     );
     $client->abort;
     promised_cleanup {

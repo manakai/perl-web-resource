@@ -585,7 +585,7 @@ sub _request_headers ($) {
     $stream->_fatal;
     return 0;
   }
-  $stream->{request}->{body_length} = $l;
+  $stream->{request}->{length} = $l;
   if ($l == 0) {
     if (defined $stream->{ws_key}) {
       $self->{state} = 'ws handshaking';

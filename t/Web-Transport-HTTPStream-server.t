@@ -1205,8 +1205,8 @@ test {
     test {
       like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
 Content-Length: 10\x0D[\s\S]*
-Connection: close\x0D
 Hoge: Fuga22\x0D
+Connection: close\x0D
 \x0D
 abc22\z};
     } $c;
@@ -1601,8 +1601,8 @@ test {
     my $data = $_[0];
     test {
       like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
-Connection: close\x0D
 Hoge: Fuga27\x0D
+Connection: close\x0D
 \x0D
 abcxyz\z};
     } $c;
@@ -1640,8 +1640,8 @@ test {
     my $data = $_[0];
     test {
       like $data, qr{\AHTTP/1.1 201 OK[\s\S]*
-Connection: keep-alive\x0D
 Hoge: Fuga28\x0D
+Connection: keep-alive\x0D
 \x0D
 abcxyz\z};
     } $c;
@@ -1741,8 +1741,8 @@ test {
     test {
       like $data, qr{\AHTTP/1.1 400 Bad Request[\s\S]*
 Content-Length: 102\x0D[\s\S]*
-Connection: close\x0D
 Content-Type: text/html; charset=utf-8\x0D
+Connection: close\x0D
 \x0D
 <!DOCTYPE html><html>
 <head><title>400 Bad Request</title></head>

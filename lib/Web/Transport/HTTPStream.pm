@@ -11,6 +11,7 @@ use ArrayBuffer;
 use TypedArray;
 use Promised::Flow;
 use Streams;
+use Web::Transport::_Defs;
 use Web::Transport::Error;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
@@ -2269,7 +2270,7 @@ sub _request_headers ($) {
     $con->_connection_error (_pe 'Bad |Content-Length:|');
     return 0;
   }
-  $stream->{request}->{body_length} = $l;
+  $stream->{request}->{length} = $l;
 
   if (defined $stream->{ws_key}) {
     unless ($l == 0) {
@@ -2916,11 +2917,12 @@ sub _ws_debug ($$$%) {
 ## following key/value pairs:
 ##
 ##   status - The status code of the response.  It must be an integer
-##   in the range [100, 999].
+##   in the range [0, 999].
 ##
 ##   status_text - The reason phrase of the response.  It must be a
 ##   byte string with no 0x0D or 0x0A byte.  It can be the empty
-##   string.
+##   string.  If not defined, default text as defined by the relevant
+##   specification, if any, or the empty string is used.
 ##
 ##   headers - The headers of the response.  It must be an array
 ##   reference of zero or more array references representing a pair of
@@ -2950,7 +2952,7 @@ sub send_response ($$$) {
 
   return Promise->reject (Web::Transport::TypeError->new ("Bad |status|"))
       unless defined $response->{status} and
-             99 < $response->{status} and
+             0 <= $response->{status} and
              $response->{status} < 1000;
 
   my $close = $response->{close} ||
@@ -3003,12 +3005,22 @@ sub send_response ($$$) {
     $close = 1 if $stream->{request}->{method} eq 'CONNECT';
   }
 
+  # XXX allow hashref
   push @header, @{$response->{headers} or []};
 
-  croak "Bad status text |@{[_e4d $response->{status_text}]}|"
-      if $response->{status_text} =~ /[\x0D\x0A]/;
+  my $status_text = $response->{status_text};
+  if (not defined $status_text) {
+    $status_text = $Web::Transport::_Defs::ReasonPhrases->{$response->{status}};
+    $status_text = '' unless defined $status_text;
+  }
+
+  croak "Bad status text |@{[_e4d $status_text]}|"
+      if $status_text =~ /[\x0D\x0A]/;
   croak "Status text is utf8-flagged"
-      if utf8::is_utf8 $response->{status_text};
+      if utf8::is_utf8 $status_text;
+
+  unshift @header, ['Server', $con->{server_header}]
+      unless $response->{forwarding};
 
   my $has_header = {};
   for (@header) {
@@ -3022,9 +3034,6 @@ sub send_response ($$$) {
     $name =~ tr/A-Z/a-z/; ## ASCII case-insensitive
     $has_header->{$name} = 1;
   }
-
-  unshift @header, ['Server', $con->{server_header}]
-      unless $response->{forwarding};
 
   unless ($has_header->{date}) {
     my $dt = Web::DateTime->new_from_unix_time
@@ -3060,8 +3069,7 @@ sub send_response ($$$) {
 
   if ($stream->{request}->{version} ne '0.9') {
     my $res = sprintf qq{HTTP/1.1 %d %s\x0D\x0A},
-        $response->{status},
-        $response->{status_text};
+        $response->{status}, $status_text;
     for (@header) {
       $res .= "$_->[0]: $_->[1]\x0D\x0A";
     }

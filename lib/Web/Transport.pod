@@ -265,11 +265,10 @@ The request body.  If a non-C<undef> value is specified, it must be a
 L<ReadableStream> with type C<bytes> (i.e. a readable byte stream)
 which is not locked.
 
-If this option has non-C<undef> value, the C<body_length> option must
-also be specified.  This option is not allowed when C<body> is
-specified.
+If this option has non-C<undef> value, the C<length> option must also
+be specified.  This option is not allowed when C<body> is specified.
 
-=item body_length => $byte_length
+=item length => $byte_length
 
 The byte length of the request body.  If a non-C<undef> value is
 specified, it must be equal to the number of bytes contained by the

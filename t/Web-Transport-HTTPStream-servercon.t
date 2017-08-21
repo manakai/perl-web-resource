@@ -786,7 +786,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => '$con->server_header';
+} n => 2, name => '$con->server_header bad value';
 
 test {
   my $c = shift;

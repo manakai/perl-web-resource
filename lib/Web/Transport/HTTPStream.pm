@@ -2915,7 +2915,8 @@ sub _ws_debug ($$$%) {
 ## Send a response.  The argument must be a hash reference with
 ## following key/value pairs:
 ##
-##   status - The status code of the response.  It must be an integer.
+##   status - The status code of the response.  It must be an integer
+##   in the range [100, 999].
 ##
 ##   status_text - The reason phrase of the response.  It must be a
 ##   byte string with no 0x0D or 0x0A byte.  It can be the empty
@@ -2946,6 +2947,11 @@ sub send_response ($$$) {
 
   return Promise->reject (Web::Transport::TypeError->new ("Response is not allowed"))
       if not defined $con or defined $con->{write_mode} or not $con->{is_server};
+
+  return Promise->reject (Web::Transport::TypeError->new ("Bad |status|"))
+      unless defined $response->{status} and
+             99 < $response->{status} and
+             $response->{status} < 1000;
 
   my $close = $response->{close} ||
               $con->{to_be_closed} ||

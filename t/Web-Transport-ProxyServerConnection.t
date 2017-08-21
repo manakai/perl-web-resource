@@ -1289,13 +1289,13 @@ test {
     } $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
-        is $res->status, 500;
-        is $res->status_text, 'Internal Server Error';
+        is $res->status, 504;
+        is $res->status_text, 'Gateway Timeout';
         is $res->header ('Server'), $server_name;
         like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
         is $res->header ('Connection'), undef;
         is $res->header ('Transfer-Encoding'), 'chunked';
-        is $res->body_bytes, '500';
+        is $res->body_bytes, '504';
         ok ! $res->incomplete;
       } $c;
     });

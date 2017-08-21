@@ -58,6 +58,11 @@ not used (i.e. it is a plain HTTP server).
 A PSGI application, i.e. a code reference.  See the PSGI specification
 for the requirements on the code reference.
 
+=item handle_request => $code (proxy server only)
+
+A request handler code reference.  See
+L<Web::Transport::ProxyServerConnection/"REQUEST HANDLER">.
+
 =item max_request_body_length => $integer (PSGI server only)
 
 The maximum length of the request body to be accepted by the server,
@@ -103,9 +108,9 @@ connection appears, which will be used in debug outputs.
 =item $code = $con->onexception
 
 Get or set the callback code reference that is invoked when an error
-is detected while interacting with the PSGI application such that the
-server returns an error response to the client, in case it is a PSGI
-server.
+is detected while interacting with the PSGI application or the proxy
+handlers such that the server returns an error response to the client
+(or abnormally close the HTTP connection).
 
 The callback has to be set as soon as the object has been created and
 it should not be changed later.

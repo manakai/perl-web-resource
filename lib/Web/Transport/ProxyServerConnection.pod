@@ -22,6 +22,74 @@ connection socket and forward any incoming request to upstream.
 
 See L<Web::Transport::GenericServerConnection/METHODS>.
 
+=head1 REQUEST HANDLER
+
+A request handler can be specified to the C<handle_request> option of
+the hash reference specified to the constructor of the proxy server.
+
+A request handler is a code reference.  The code is expected to return
+a hash reference, or a promise (e.g. L<Promise>) that is to be
+fulfilled with a hash reference.
+
+The code is invoked with an argument, that is a hash reference.  The
+hash reference can be returned by the code if the proxy should forward
+the request as is.
+
+These hash references have following key/value pairs:
+
+=over 4
+
+=item info => $info (argument only)
+
+The metadata of the underlying HTTP connection.  XXX
+
+=item request => $request (argument / return value)
+
+A request hash reference.  XXX
+
+The argument contains the request that can be forwarded to the
+upstream (i.e. after any removal of connection-specific headers).
+
+If the returned hash reference does not contain C<response> or
+C<error>, the C<request> is used to send a request to the upstream
+server.
+
+=item response => $response (return value)
+
+A response hash reference.  XXX
+
+If the returned hash reference contains C<response>, it is used to
+send a response to the downstream client.  No request is made to the
+upstream server.
+
+=item error => $error (return value)
+
+An exception object.  It can be any Perl C<defined> value, though
+L<Web::DOM::Error> or its subclass's instance is desired.
+
+When the proxy server has to abort something associated with the
+handling of the request in question, the exception is used as the
+error reason.
+
+If the returned hash reference has C<error> and does not have
+C<response>, an error response is generated from the exception.  If
+exception's C<name> is C<Protocol error> or C<Perl I/O error>, a
+C<504> response is generated.  Otherwise, if exception's C<name> is
+C<HTTP parse error>, a C<502> response is generated.  Otherwise, a
+C<500> response is generated.  No request is made to the upstream
+server.
+
+=back
+
+It is important that the proxy server does not allow the upstream
+server being the proxy server itself.  However, this is in fact a
+difficult problem: a domain might be resolved into the proxy server's
+IP address; a proxy server of the proxy server might be misconfigured
+as the proxy server itself; an upstream server might be forward the
+forwarded request to the proxy server (i.e. indirect loop); and so on.
+It's request handler's responsibility to reject any abuse or wrong
+usage of the proxy server.
+
 =head1 SEE ALSO
 
 L<AnyEvent::Socket>.

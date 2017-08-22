@@ -243,12 +243,17 @@ sub _run ($$$$$) {
     if (@$result == 3) {
       my $body = $result->[2];
       if (defined $body and ref $body eq 'ARRAY') {
+        my $length = 0;
         my $body = [map {
+          $length += length $_;
           DataView->new (ArrayBuffer->new_from_scalarref (\$_)); # or throw
         } @$body];
+        undef $length if $status == 204 or $status == 205 or $status == 304 or
+            $method eq 'HEAD';
         $stream->send_response ({
           status => $status,
           headers => $headers,
+          length => $length,
         })->then (sub {
           my $w = $_[0]->{body}->get_writer;
           $w->write ($_) for @$body;

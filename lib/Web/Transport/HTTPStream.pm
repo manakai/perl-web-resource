@@ -341,18 +341,18 @@ sub new ($$) {
 ##   body - If the method is |send_request|, the writable stream for
 ##   the request body.  If the method is |send_response|, the writable
 ##   stream for the response body.  These writable streams accept
-##   |ArrayBufferView|s.  If the |content_length| option was specified
-##   to the |send_request| or |send_response| method, the total byte
-##   length must be equal to the |content_length| option value.  If
-##   the method is client's |headers_received|, the readable byte
-##   stream for the response body.  If the method is server's
-##   |headers_received|, the readable byte stream for the request
-##   body.  If the HTTP connection is in the WS mode, in the tunnel
-##   mode, the method is |send_request| and the request's method is
-##   |CONNECT|, or the method is server's |headers_received| and the
-##   request's method is |CONNECT|, however, not defined.  If these
-##   readable streams are canceled, or these writable streams are
-##   aborted, the relevant HTTP stream is aborted.
+##   |ArrayBufferView|s.  If the |length| option was specified to the
+##   |send_request| or |send_response| method, the total byte length
+##   must be equal to the |length| option value.  If the method is
+##   client's |headers_received|, the readable byte stream for the
+##   response body.  If the method is server's |headers_received|, the
+##   readable byte stream for the request body.  If the HTTP
+##   connection is in the WS mode, in the tunnel mode, the method is
+##   |send_request| and the request's method is |CONNECT|, or the
+##   method is server's |headers_received| and the request's method is
+##   |CONNECT|, however, not defined.  If these readable streams are
+##   canceled, or these writable streams are aborted, the relevant
+##   HTTP stream is aborted.
 ##
 ##   messages - If the method is |headers_received| and the HTTP
 ##   connection is in the WS mode, a readable stream of zero or more
@@ -1322,7 +1322,7 @@ sub _process_rbuf ($$) {
         $length =~ s/\A0+//;
         $length ||= 0;
         if ($length eq 0+$length) { # overflow check
-          $self->{unread_length} = $res->{content_length} = 0+$length;
+          $self->{unread_length} = $res->{length} = 0+$length;
         } else {
           return $self->_connection_error
               (_pe "Inconsistent content-length values");
@@ -3014,9 +3014,9 @@ sub send_response ($$$) {
     $status_text = '' unless defined $status_text;
   }
 
-  croak "Bad status text |@{[_e4d $status_text]}|"
+  return Promise->reject (Web::Transport::TypeError->new ("Bad |status_text|"))
       if $status_text =~ /[\x0D\x0A]/;
-  croak "Status text is utf8-flagged"
+  return Promise->reject (Web::Transport::TypeError->new ("Bad |status_text| (utf8-flagged)"))
       if utf8::is_utf8 $status_text;
 
   unshift @header, ['Server', $con->{server_header}]

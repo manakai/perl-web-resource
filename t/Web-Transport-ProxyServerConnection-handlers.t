@@ -59,9 +59,11 @@ sub psgi_server ($$;%) {
     my $con;
     my $server = tcp_server $host, $port, sub {
       $cv->begin;
-      $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args
-          ($app, [@_], parent_id => $args{parent_id});
-      $con->{connection}->{server_header} = $args{server_name};
+      $con = Web::Transport::PSGIServerConnection->new_from_aeargs_and_opts ([@_], {
+        psgi_app => $app,
+        parent_id => $args{parent_id},
+        server_header => $args{server_header},
+      });
       $con->onexception ($onexception) if defined $onexception;
       promised_cleanup { $cv->end } $con->completed;
     };
@@ -1727,7 +1729,1645 @@ test {
   });
 } n => 4, name => 'handle_request custom request URL';
 
-# XXX handle_response
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          test {
+            is $args->{info}->{parent}->{type}, 'TCP';
+            is $args->{response}->{status}, 201;
+            is $args->{response}->{status_text}, 'Created';
+            isa_ok $args->{response}->{body_stream}, 'ReadableStream';
+            is $args->{response}->{length}, undef;
+            is ref $args->{response}->{body_is_incomplete}, 'CODE';
+            ok ! $args->{response}->{body_is_incomplete}->();
+          } $c;
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->body_bytes, '200!';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  });
+} n => 13, name => 'handle_response (no response Content-Length)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          test {
+            is $args->{info}->{parent}->{type}, 'TCP';
+            is $args->{response}->{status}, 201;
+            is $args->{response}->{status_text}, 'Created';
+            isa_ok $args->{response}->{body_stream}, 'ReadableStream';
+            is $args->{response}->{length}, 4;
+            is ref $args->{response}->{body_is_incomplete}, 'CODE';
+            ok ! $args->{response}->{body_is_incomplete}->();
+          } $c;
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return [201, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->header ('Transfer-Encoding'), undef;
+        is $res->header ('Content-Length'), '4';
+        is $res->body_bytes, '200!';
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  });
+} n => 13, name => 'handle_response (with response Content-Length)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          delete $args->{response}->{body_stream};
+          $args->{response}->{body} = "abcde";
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->body_bytes, 'abcde';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  });
+} n => 6, name => 'handle_response response body string (body_stream unused)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          my $rs = ReadableStream->new ({
+            type => 'bytes',
+            start => sub {
+              my $rc = $_[1];
+              $rc->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\"abcd1355")));
+              $rc->close;
+            },
+          });
+          $args->{response}->{body_stream} = $rs;
+          $args->{response}->{length} = 8;
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->body_bytes, 'abcd1355';
+        is $res->header ('Transfer-Encoding'), undef;
+        is $res->header ('Content-Length'), '8';
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  });
+} n => 6, name => 'handle_response response body stream (original body_stream unused)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $reader;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          $reader = $args->{response}->{body_stream}->get_reader; # lock
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'TypeError', $x;
+          is $x->message, 'ReadableStream is locked';
+          #is $x->file_name, __FILE__; XXXlocation
+          #is $x->line_number, __LINE__;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    $reader->cancel;
+    undef $reader;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 500;
+        is $res->status_text, 'Internal Server Error';
+        is $res->body_bytes, '500';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 10, name => 'handle_response response body stream locked';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          my $rs = ReadableStream->new ({
+            start => sub {
+              my $rc = $_[1];
+              $rc->enqueue (DataView->new (ArrayBuffer->new_from_scalarref (\"abcd1355")));
+              $rc->close;
+            },
+          });
+          $args->{response}->{body_stream} = $rs;
+          $args->{response}->{length} = 8;
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'TypeError', $x;
+          is $x->message, 'ReadableStream is not a byte stream';
+          #is $x->file_name, __FILE__; XXXlocation
+          #is $x->line_number, __LINE__;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 500;
+        is $res->body_bytes, '500';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 9, name => 'handle_response response body stream not bytes';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          my $rs = ReadableStream->new ({
+            type => 'bytes',
+            start => sub {
+              my $rc = $_[1];
+              $rc->error (Web::Transport::Error->new ("abc"));
+            },
+          });
+          $args->{response}->{body_stream} = $rs;
+          $args->{response}->{length} = 8;
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'Error', $x;
+          is $x->message, "abc";
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-16;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->catch (sub {
+      my $result = $_[0];
+      test {
+        ok $result->is_network_error, $result;
+        is $result->network_error_message, 'Connection truncated';
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 9, name => 'handle_response response body stream aborted';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          $args->{response}->{status_text} = "21\x{4020}";
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'TypeError', $x;
+          is $x->message, 'Bad |status_text| (utf8-flagged)';
+          #is $x->file_name, __FILE__; XXXlocation
+          #is $x->line_number, __LINE__;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->catch (sub {
+      my $result = $_[0];
+      test {
+        ok $result->is_network_error;
+        is $result->network_error_message, 'Connection closed without response';
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 7, name => 'handle_response response broken';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          return {};
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'TypeError', $x;
+          is $x->message, '|handle_response| does not return |response|';
+          #is $x->file_name, __FILE__; XXXlocation
+          #is $x->line_number, __LINE__;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 500;
+        is $res->body_bytes, '500';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 9, name => 'handle_response no response';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          return undef;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'TypeError', $x;
+          is $x->message, '|handle_response| does not return |response|';
+          #is $x->file_name, __FILE__; XXXlocation
+          #is $x->line_number, __LINE__;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 500;
+        is $res->body_bytes, '500';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 9, name => 'handle_response bad return';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          die "#abcd";
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'Error', $x;
+          like $x->message, qr{^#abcd at \Q@{[__FILE__]}\E line @{[__LINE__-9]}};
+          #is $x->file_name, __FILE__; XXXlocation
+          #is $x->line_number, __LINE__;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 500;
+        is $res->body_bytes, '500';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 9, name => 'handle_response throws';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          return Promise->resolve->then (sub { die "#abcd" });
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'Error', $x;
+          like $x->message, qr{^#abcd at \Q@{[__FILE__]}\E line @{[__LINE__-9]}};
+          #is $x->file_name, __FILE__; XXXlocation
+          #is $x->line_number, __LINE__;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 500;
+        is $res->body_bytes, '500';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 9, name => 'handle_response rejects';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_name = rand;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          return Promise->resolve->then (sub { $args });
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->body_bytes, '200!';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $res->header ('Server'), $server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  }, server_header => $server_name);
+} n => 8, name => 'handle_response fulfilled';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_name = rand;
+  my $proxy_server_name = rand;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          delete $args->{response}->{forwarding};
+          return Promise->resolve->then (sub { $args });
+        },
+        server_header => $proxy_server_name,
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->body_bytes, '200!';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $res->header ('Server'), $proxy_server_name . ', ' . $server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  }, server_header => $server_name);
+} n => 8, name => 'handle_response no forwarding flag';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $proxy_server_name = rand;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        server_header => $proxy_server_name,
+        handle_response => sub {
+          return {response => {
+            status => 205,
+            status_text => "AABc",
+          }};
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 205;
+        is $res->status_text, "AABc";
+        is $res->body_bytes, '';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $res->header ('Server'), $proxy_server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  });
+} n => 9, name => 'handle_response custom response';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $proxy_server_name = rand;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        server_header => $proxy_server_name,
+        handle_response => sub {
+          my $args = $_[0];
+          test {
+            is $args->{data}, undef;
+          } $c;
+          return {response => {
+            status => 205,
+            status_text => "AABc",
+            forwarding => 1,
+          }};
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 205;
+        is $res->status_text, "AABc";
+        is $res->body_bytes, '';
+        is $res->header ('Transfer-Encoding'), 'chunked';
+        is $res->header ('Content-Length'), undef;
+        is $res->header ('Server'), undef;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  });
+} n => 10, name => 'handle_response custom response forwarding flagged';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $proxy_server_name = rand;
+  my $exception_invoked = 0;
+  my $data = {};
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        server_header => $proxy_server_name,
+        handle_request => sub {
+          my $args = $_[0];
+          test {
+            is $args->{data}, undef;
+          } $c;
+          $args->{data} = $data;
+          return $args;
+        },
+        handle_response => sub {
+          my $args = $_[0];
+          test {
+            is $args->{data}, $data;
+          } $c;
+          return {response => {
+            status => 205,
+            status_text => "AABc",
+            forwarding => 1,
+          }};
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 205;
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  });
+} n => 5, name => 'handle_response data';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $proxy_server_name = rand;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        server_header => $proxy_server_name,
+        handle_response => sub {
+          die Web::Transport::ProtocolError->new ("ABC");
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'Protocol error', $x;
+          is $x->message, "ABC";
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-11;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 504;
+        is $res->status_text, "Gateway Timeout";
+        is $res->body_bytes, '504';
+        is $res->header ('Server'), $proxy_server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 12, name => 'handle_response throws Protocol error';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $proxy_server_name = rand;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        server_header => $proxy_server_name,
+        handle_response => sub {
+          return {error => Web::Transport::ProtocolError->new ("ABC")};
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'Protocol error', $x;
+          is $x->message, "ABC";
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-11;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 504;
+        is $res->status_text, "Gateway Timeout";
+        is $res->body_bytes, '504';
+        is $res->header ('Server'), $proxy_server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 12, name => 'handle_response error Protocol error';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $proxy_server_name = rand;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        server_header => $proxy_server_name,
+        handle_response => sub {
+          return {error => "abcd"};
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'Error', $x;
+          is $x->message, "abcd";
+          #is $x->file_name, __FILE__; XXXlocation
+          #is $x->line_number, __LINE__-11;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 500;
+        is $res->status_text, "Internal Server Error";
+        is $res->body_bytes, '500';
+        is $res->header ('Server'), $proxy_server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 10, name => 'handle_response error non error';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_name = rand;
+  my $proxy_server_name = rand;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        server_header => $proxy_server_name,
+        handle_response => sub {
+          my $args = $_[0];
+          $args->{response}->{body_is_incomplete} = sub { 1 };
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->body_bytes, '200!';
+        ok $res->incomplete;
+        is $res->header ('Server'), $server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  }, server_header => $server_name);
+} n => 7, name => 'handle_response body_is_incomplete 1';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_name = rand;
+  my $proxy_server_name = rand;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        server_header => $proxy_server_name,
+        handle_response => sub {
+          my $args = $_[0];
+          $args->{response}->{body_is_incomplete} = sub { Promise->resolve (0) };
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->body_bytes, '200!';
+        ok ! $res->incomplete;
+        is $res->header ('Server'), $server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  }, server_header => $server_name);
+} n => 7, name => 'handle_response body_is_incomplete fulfilled 0';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_name = rand;
+  my $proxy_server_name = rand;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        server_header => $proxy_server_name,
+        handle_response => sub {
+          my $args = $_[0];
+          $args->{response}->{body_is_incomplete} = sub { die "abc" };
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'Error', $x;
+          like $x->message, qr{^abc at \Q@{[__FILE__]}\E line @{[__LINE__-10]}};
+          #is $x->file_name, __FILE__; XXXlocation
+          #is $x->line_number, __LINE__-11;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->body_bytes, '200!';
+        ok $res->incomplete;
+        is $res->header ('Server'), $server_name;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  }, server_header => $server_name);
+} n => 10, name => 'handle_response body_is_incomplete throws';
 
 run_tests;
 

@@ -200,19 +200,22 @@ for my $status (
           is $res->header ('Request-Connection'), 'keep-alive';
           if ($status == 204 or $status == 304) {
             is $res->header ('Transfer-Encoding'), undef;
+            is $res->header ('Content-Length'), undef;
             is $res->body_bytes, '';
           } elsif ($status == 205) {
             is $res->header ('Transfer-Encoding'), 'chunked';
+            is $res->header ('Content-Length'), undef;
             is $res->body_bytes, '';
           } else {
-            is $res->header ('Transfer-Encoding'), 'chunked';
+            is $res->header ('Transfer-Encoding'), undef;
+            is $res->header ('Content-Length'), 4;
             is $res->body_bytes, '200!';
           }
           ok ! $res->incomplete;
         } $c;
       });
     }, server_name => $server_name);
-  } n => 15, name => ['Basic request and response forwarding', $status];
+  } n => 16, name => ['Basic request and response forwarding', $status];
 } # $status
 
 test {
@@ -679,6 +682,50 @@ test {
     });
   });
 } n => 8, name => 'remote truncated response';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return [201, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url, method => 'HEAD')->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->status_text, 'Created';
+        is $res->body_bytes, '';
+        ok ! $res->incomplete;
+      } $c;
+    });
+  });
+} n => 4, name => 'HEAD request';
 
 test {
   my $c = shift;

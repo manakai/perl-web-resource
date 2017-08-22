@@ -63,6 +63,11 @@ for the requirements on the code reference.
 A request handler code reference.  See
 L<Web::Transport::ProxyServerConnection/"REQUEST HANDLER">.
 
+=item handle_response => $code (proxy server only)
+
+A response handler code reference.  See
+L<Web::Transport::ProxyServerConnection/"RESPONSE HANDLER">.
+
 =item max_request_body_length => $integer (PSGI server only)
 
 The maximum length of the request body to be accepted by the server,

@@ -57,6 +57,7 @@ sub _handle_stream ($$$) {
   my ($server, $stream, $opts) = @_;
   my $client;
   my $reqbody;
+  my $resbody;
   my @wait;
   return $stream->headers_received->then (sub {
     my $req = $_[0];
@@ -103,12 +104,13 @@ sub _handle_stream ($$$) {
         die _te "|handle_request| does not return |request| or |response|";
       }
       return $result;
-    })->catch (sub {
-      return {error => Web::Transport::Error->wrap ($_[0])};
+    })->catch (sub { # request handler failed
+      return {error => $_[0]};
     });
   })->then (sub {
-    return $_[0] if defined $_[0]->{response} or defined $_[0]->{error};
-    my $request = $_[0]->{request};
+    my $result = $_[0];
+    return $result if defined $result->{response} or defined $result->{error};
+    my $request = $result->{request};
 
     if ($request->{method} eq 'TRACE') {
       return {
@@ -162,7 +164,7 @@ sub _handle_stream ($$$) {
 
     return $client->request (
       %$request,
-      _forwarding => 1,
+      _forwarding => 1, # XXX set before request handler
       stream => 1,
     )->then (sub {
       my $res = $_[0];
@@ -179,18 +181,30 @@ sub _handle_stream ($$$) {
         status => $res->{status},
         status_text => $res->{status_text},
         headers => $res_headers->{forwarded},
-        body_stream => $res->body_stream,
+        body_stream => $resbody = $res->body_stream,
+        length => $res->{length}, # or undef
         body_is_incomplete => sub { return $res->incomplete },
+        forwarding => 1,
       };
 
-      # XXX response handler
-      # XXX XXX->({response => $response})
-      # XXX if failed, return 500 instead
-
-      return {response => {
-        %$response,
-        forwarding => 1,
-      }};
+      return Promise->resolve ({
+        info => $stream->{connection}->info, response => $response,
+        data => $result->{data},
+      })->then ($opts->{handle_response} || sub { return $_[0] })->then (sub {
+        my $result = $_[0];
+        if (defined $result and ref $result eq 'HASH' and
+            (defined $result->{response} or
+             defined $result->{error})) {
+          die _te "Bad |response|"
+              if defined $result->{response} and
+                 not ref $result->{response} eq 'HASH';
+        } else {
+          die _te "|handle_response| does not return |response|";
+        }
+        return $result;
+      })->catch (sub { # response handler failed
+        return {error => $_[0]};
+      });
     }, sub { # $client->request failed
       my $result = $_[0];
       my $error = defined $result->{error}
@@ -206,10 +220,13 @@ sub _handle_stream ($$$) {
     my $response = $result->{response};
 
     if (defined $result->{error} and not defined $response) {
-      my $error = Web::Transport::ProtocolError->wrap ($result->{error});
+      my $error = Web::Transport::Error->wrap ($result->{error});
 
       if (defined $reqbody and not $reqbody->locked) {
         $reqbody->cancel ($error);
+      }
+      if (defined $resbody and not $resbody->locked) {
+        $resbody->cancel ($error);
       }
       if (defined $result->{unused_request_body_stream} and
           not (defined $reqbody and $reqbody eq $result->{unused_request_body_stream}) and
@@ -238,7 +255,7 @@ sub _handle_stream ($$$) {
       };
     } else {
       if (defined $result->{error}) {
-        my $error = Web::Transport::ProtocolError->wrap ($result->{error});
+        my $error = Web::Transport::Error->wrap ($result->{error});
         push @wait, Promise->resolve->then (sub {
           return $server->onexception->($server, $error);
         })->catch (sub {
@@ -267,7 +284,7 @@ sub _handle_stream ($$$) {
 
     return [$response, $reader];
   })->catch (sub {
-    my $error = Web::Transport::ProtocolError->wrap ($_[0]);
+    my $error = Web::Transport::Error->wrap ($_[0]);
 
     push @wait, Promise->resolve->then (sub {
       return $server->onexception->($server, $error);
@@ -319,10 +336,7 @@ sub _handle_stream ($$$) {
       return $writer->close;
     })->catch (sub { # $stream->send_response failed
       my $error = Web::Transport::Error->wrap ($_[0]);
-      if (defined $response->{body_stream} and
-          not $response->{body_stream}->locked) {
-        $response->{body_stream}->cancel ($error);
-      }
+      $reader->cancel ($error) if defined $reader;
       $client->abort ($error) if defined $client;
       $stream->abort ($error);
       return $server->onexception->($server, $error);
@@ -330,6 +344,16 @@ sub _handle_stream ($$$) {
       warn $_[0]; # onexception failure
     });
   })->then (sub {
+    if (defined $resbody and not $resbody->locked) {
+      my $reader = $resbody->get_reader;
+      my $read; $read = sub {
+        return $reader->read->then (sub {
+          return if $_[0]->{done};
+          return $read->();
+        });
+      }; # $read
+      push @wait, promised_cleanup { undef $read } $read->();
+    }
     return $client->close if defined $client;
   })->then (sub {
     return Promise->all (\@wait);

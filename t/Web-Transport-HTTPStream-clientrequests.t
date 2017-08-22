@@ -4108,7 +4108,7 @@ close
       my $error;
       return $stream->headers_received->then (sub {
         my $got = $_[0];
-        $stream->send_response ({}, content_length => 0)->catch (sub {
+        $stream->send_response ({}, length => 0)->catch (sub {
           $error = $_[0];
           $writer->write (d 'abc');
           $writer->close;

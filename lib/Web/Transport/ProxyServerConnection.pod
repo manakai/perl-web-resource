@@ -27,6 +27,10 @@ See L<Web::Transport::GenericServerConnection/METHODS>.
 A request handler can be specified to the C<handle_request> option of
 the hash reference specified to the constructor of the proxy server.
 
+A request handler, if specified, is invoked whenever the proxy server
+has received a request from a client and just before the request is
+forwarded to the upstream server.
+
 A request handler is a code reference.  The code is expected to return
 a hash reference, or a promise (e.g. L<Promise>) that is to be
 fulfilled with a hash reference.
@@ -41,7 +45,7 @@ These hash references have following key/value pairs:
 
 =item info => $info (argument only)
 
-The metadata of the underlying HTTP connection.  XXX
+The metadata of the underlying (downstream) HTTP connection.  XXX
 
 =item request => $request (argument / return value)
 
@@ -54,7 +58,7 @@ If the returned hash reference does not contain C<response> or
 C<error>, the C<request> is used to send a request to the upstream
 server.
 
-=item response => $response (return value)
+=item response => $response (return value only)
 
 A response hash reference.  XXX
 
@@ -62,7 +66,7 @@ If the returned hash reference contains C<response>, it is used to
 send a response to the downstream client.  No request is made to the
 upstream server.
 
-=item error => $error (return value)
+=item error => $error (return value only)
 
 An exception object.  It can be any Perl C<defined> value, though
 L<Web::DOM::Error> or its subclass's instance is desired.
@@ -79,6 +83,11 @@ C<HTTP parse error>, a C<502> response is generated.  Otherwise, a
 C<500> response is generated.  No request is made to the upstream
 server.
 
+=item data => $value (return value only)
+
+Any application-specific data.  This field can be used to associate
+request and response handler.  Any Perl scalar value can be specified.
+
 =back
 
 It is important that the proxy server does not allow the upstream
@@ -90,6 +99,68 @@ forwarded request to the proxy server (i.e. indirect loop); and so on.
 It's request handler's responsibility to reject any abuse or wrong
 usage of the proxy server.
 
+=head1 RESPONSE HANDLER
+
+A response handler can be specified to the C<handle_response> option
+of the hash reference specified to the constructor of the proxy
+server.
+
+A response handler, if specified, is invoked whenever the proxy server
+has received a response from an upstream server and just before the
+response is forwarded to the downstream client.  It is not invoked
+when the request handler returns a response (or an error).
+
+A response handler is a code reference.  The code is expected to
+return a hash reference, or a promise (e.g. L<Promise>) that is to be
+fulfilled with a hash reference.
+
+The code is invoked with an argument, that is a hash reference.  The
+hash reference can be returned by the code if the proxy should forward
+the response as is.
+
+These hash references have following key/value pairs:
+
+=over 4
+
+=item info => $info (argument only)
+
+The metadata of the underlying (downstream) HTTP connection.  XXX
+
+=item response => $response (argument / return value)
+
+A response hash reference.  XXX
+
+If the returned hash reference contains C<response>, it is used to
+send a response to the downstream client.
+
+=item error => $error (return value only)
+
+An exception object.  It can be any Perl C<defined> value, though
+L<Web::DOM::Error> or its subclass's instance is desired.
+
+When the proxy server has to abort something associated with the
+handling of the response in question, the exception is used as the
+error reason.
+
+If the returned hash reference has C<error> and does not have
+C<response>, an error response is generated from the exception.  If
+exception's C<name> is C<Protocol error> or C<Perl I/O error>, a
+C<504> response is generated.  Otherwise, if exception's C<name> is
+C<HTTP parse error>, a C<502> response is generated.  Otherwise, a
+C<500> response is generated.
+
+=item data => $value (argument only)
+
+The application-specific data specified by the request handler, if
+any.  The value is not defined if no data were specified.
+
+This can be used to associate request and response handlers.  For
+example, to save the response data using the file name extracted from
+request target URL, the request handler should store the URL as data
+and the response handler should extract it from data.
+
+=back
+
 =head1 FEATURES NOT SUPPORTED BY THIS MODULE
 
 The module does not support HTTP proxy authentication.  It can be
@@ -99,9 +170,9 @@ The module does not support HTTP caches.  It can be implemented by
 consulting with the cache for any cached response within a request
 handler and caching the received response within a response handler.
 
-The module intentionally does not add HTTP C<Via:> headers to
-forwarded requests and responses.  It can be added within request and
-response handlers.
+The module intentionally does not add HTTP C<Via:>, C<Forwarded:>, and
+C<X-Forwarded-*:> headers to forwarded requests and responses.  It can
+be added within request and response handlers.
 
 This module does not support HTTP C<TRACE> method.
 

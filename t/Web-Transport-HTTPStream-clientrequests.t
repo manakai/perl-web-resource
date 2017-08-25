@@ -492,7 +492,8 @@ test {
         isa_ok $got, 'Web::Transport::ProtocolError::HTTPParseError';
         is $got->name, 'HTTP parse error';
         is $got->message, 'Inconsistent content-length values';
-        # XXXlocation
+        is $got->file_name, __FILE__;
+        is $got->line_number, __LINE__-18;
         ok $got->http_fatal;
         ok ! $got->http_can_retry;
       } $c;
@@ -503,7 +504,7 @@ test {
       undef $c;
     });
   });
-} n => 7, name => 'send_request response error';
+} n => 9, name => 'send_request response error';
 
 test {
   my $c = shift;
@@ -935,8 +936,8 @@ test {
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Closed before bytes (n = 1) are sent';
-          #is $error->file_name, __FILE__; # XXX location
-          #is $error->line_number, __LINE__;
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-8;
         } $c;
         return $stream->headers_received;
       })->catch (sub {
@@ -944,8 +945,8 @@ test {
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Closed before bytes (n = 1) are sent';
-          #is $error->file_name, __FILE__; # XXX
-          #is $error->line_number, __LINE__;
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-17;
         } $c;
       });
     })->then (sub {
@@ -953,7 +954,7 @@ test {
       undef $c;
     });
   });
-} n => 5, name => 'send_request with body closed early';
+} n => 9, name => 'send_request with body closed early';
 
 test {
   my $c = shift;
@@ -985,8 +986,8 @@ test {
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Byte length 6 is greater than expected length 5';
-          #is $error->file_name, __FILE__; # XXX location
-          #is $error->line_number, __LINE__;
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__+11;
         } $c;
         return $stream->headers_received;
       })->catch (sub {
@@ -994,8 +995,8 @@ test {
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Byte length 6 is greater than expected length 5';
-          #is $error->file_name, __FILE__; # XXX
-          #is $error->line_number, __LINE__;
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__+2;
         } $c;
       });
     })->then (sub {
@@ -1003,7 +1004,7 @@ test {
       undef $c;
     });
   });
-} n => 5, name => 'send_request with body written too much 1';
+} n => 9, name => 'send_request with body written too much 1';
 
 test {
   my $c = shift;
@@ -1036,8 +1037,8 @@ test {
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Byte length 1 is greater than expected length 0';
-          #is $error->file_name, __FILE__; # XXX location
-          #is $error->line_number, __LINE__;
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-7;
         } $c;
         return $stream->headers_received;
       })->catch (sub {
@@ -1045,8 +1046,8 @@ test {
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Byte length 1 is greater than expected length 0';
-          #is $error->file_name, __FILE__; # XXX
-          #is $error->line_number, __LINE__;
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-16;
         } $c;
       });
     })->then (sub {
@@ -1054,7 +1055,7 @@ test {
       undef $c;
     });
   });
-} n => 5, name => 'send_request with body written too much 2';
+} n => 9, name => 'send_request with body written too much 2';
 
 test {
   my $c = shift;
@@ -1086,8 +1087,8 @@ test {
         test {
           is $error->name, 'TypeError';
           is $error->message, 'The argument is not an ArrayBufferView';
-          #is $error->file_name, __FILE__; # XXX location
-          #is $error->line_number, __LINE__;
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__+11;
         } $c;
         return $stream->headers_received;
       })->catch (sub {
@@ -1095,8 +1096,8 @@ test {
         test {
           is $error->name, 'TypeError';
           is $error->message, 'The argument is not an ArrayBufferView';
-          #is $error->file_name, __FILE__; # XXX
-          #is $error->line_number, __LINE__;
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__+2;
         } $c;
       });
     })->then (sub {
@@ -1104,7 +1105,7 @@ test {
       undef $c;
     });
   });
-} n => 5, name => 'send_request with body bad written data';
+} n => 9, name => 'send_request with body bad written data';
 
 test {
   my $c = shift;
@@ -1146,8 +1147,8 @@ test {
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Byte length 1 is greater than expected length 0';
-          #is $error->file_name, __FILE__; # XXX location
-          #is $error->line_number, __LINE__;
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-16;
         } $c;
         return $stream->headers_received;
       })->catch (sub {
@@ -1155,8 +1156,8 @@ test {
         test {
           is $error->name, 'TypeError';
           is $error->message, 'Byte length 1 is greater than expected length 0';
-          #is $error->file_name, __FILE__; # XXX
-          #is $error->line_number, __LINE__;
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-25;
         } $c;
       });
     })->then (sub {
@@ -1164,7 +1165,7 @@ test {
       undef $c;
     });
   });
-} n => 9, name => 'send_request with body written too much 3';
+} n => 13, name => 'send_request with body written too much 3';
 
 test {
   my $c = shift;
@@ -1360,19 +1361,18 @@ test {
       my $error = $_[0];
       test {
         ok $response->{incomplete}, 'response aborted';
-        # XXX
-        ok $error;
-        #is $error->name, 'Error';
-        #is $error->message, "Something's wrong";
-        #is $error->file_name, __FILE__;
-        #is $error->line_number, __LINE__-17;
+        is $error->name, 'HTTP parse error';
+        is $error->message, "Connection truncated (non-fatal)";
+        is $error->file_name, __FILE__;
+        is $error->line_number, __LINE__-44;
+        # XXX $error's associated original error object ($reader->cancel)
       } $c;
     })->then (sub {
       done $c;
       undef $c;
     });
   });
-} n => 6, name => 'send_request response body aborted';
+} n => 9, name => 'send_request response body aborted';
 
 test {
   my $c = shift;
@@ -1409,9 +1409,10 @@ test {
         return $writer->write (d 'xyz')->catch (sub {
           my $error = $_[0];
           test {
-            is $error->name, 'TypeError';
+            is $error->name, 'TypeError', $error;
             is $error->message, 'Byte length 3 is greater than expected length 0';
-            # XXX location
+            is $error->file_name, __FILE__;
+            is $error->line_number, __LINE__+2;
           } $c;
         });
       });
@@ -1425,7 +1426,7 @@ test {
       undef $c;
     });
   });
-} n => 4, name => 'send_request request body write (should fail) after response closed';
+} n => 6, name => 'send_request request body write (should fail) after response closed';
 
 test {
   my $c = shift;
@@ -1778,7 +1779,8 @@ close
           test {
             is $error->name, 'TypeError', $error;
             is $error->message, 'Byte length 3 is greater than expected length 2';
-            # XXX location
+            is $error->file_name, __FILE__;
+            is $error->line_number, __LINE__-7;
           } $c;
         });
       })->then (sub{
@@ -1788,7 +1790,7 @@ close
         undef $c;
       });
     });
-  } n => 2, name => ['send_ws_message data too large', $is_binary];
+  } n => 4, name => ['send_ws_message data too large', $is_binary];
 
   test {
     my $c = shift;
@@ -2015,7 +2017,8 @@ close
           isa_ok $error, 'Web::Transport::ProtocolError::WebSocketClose', $error;
           is $error->name, 'WebSocket Close';
           is $error->message, '(1006 ) Connection truncated';
-          #XXXlocation
+          is $error->file_name, __FILE__;
+          is $error->line_number, __LINE__-26;
           is $error->ws_status, 1006;
           is $error->ws_reason, '';
           ok ! $error->ws_cleanly;
@@ -2029,7 +2032,7 @@ close
       undef $c;
     });
   });
-} n => 7, name => 'ws close ok no args (no close response)';
+} n => 9, name => 'ws close ok no args (no close response)';
 
 test {
   my $c = shift;
@@ -3644,7 +3647,8 @@ CRLF
       test {
         is $error->name, 'HTTP parse error', $error;
         is $error->message, 'HTTP |300| response';
-        # XXXlocation
+        is $error->file_name, __FILE__;
+        is $error->line_number, __LINE__-17;
       } $c;
       return $http->closed->then (sub {
         my $e = $_[0];
@@ -3657,7 +3661,7 @@ CRLF
       undef $c;
     });
   });
-} n => 3, name => 'H1CONNECT http non-200 response to CONNECT';
+} n => 5, name => 'H1CONNECT http non-200 response to CONNECT';
 
 test {
   my $c = shift;
@@ -3693,7 +3697,8 @@ CRLF
       test {
         is $error->name, 'HTTP parse error', $error;
         is $error->message, 'HTTP |300| response';
-        # XXXlocation
+        is $error->file_name, __FILE__;
+        is $error->line_number, __LINE__-23;
       } $c;
       return $http->closed->then (sub {
         my $e = $_[0];
@@ -3706,7 +3711,7 @@ CRLF
       undef $c;
     });
   });
-} n => 3, name => 'H1CONNECT over H1CONNECT http non-200';
+} n => 5, name => 'H1CONNECT over H1CONNECT http non-200';
 
 test {
   my $c = shift;
@@ -3798,8 +3803,8 @@ test {
     test {
       is $error->name, 'Perl I/O error', $error;
       ok $error->message;
-      #is $error->file_name, __FILE__; # XXXlocation
-      #is $error->line_number, __LINE__-17;
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__-17;
     } $c;
     return $http->closed->then (sub {
       my $e = $_[0];
@@ -3811,7 +3816,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 3, name => 'H1CONNECT http bad TCP host';
+} n => 5, name => 'H1CONNECT http bad TCP host';
 
 test {
   my $c = shift;

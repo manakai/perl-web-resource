@@ -5,6 +5,11 @@ our $VERSION = '1.0';
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Encoding qw(serialize_form_urlencoded percent_encode_c);
 
+push our @CARP_NOT, qw(
+  ReadableStreamDefaultReader
+  ReadableStreamBYOBReader
+);
+
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
 my @BoundaryAlphabet = ('a'..'z', '0'..'9');

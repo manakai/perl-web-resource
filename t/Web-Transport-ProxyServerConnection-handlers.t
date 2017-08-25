@@ -415,8 +415,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, 'ReadableStream is not a byte stream';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -459,7 +459,7 @@ test {
       } $c;
     });
   });
-} n => 11, name => 'handle_request returns a response with readablestream not bytes';
+} n => 13, name => 'handle_request returns a response with readablestream not bytes';
 
 test {
   my $c = shift;
@@ -498,8 +498,8 @@ test {
           is $s, $con;
           is $x->name, 'Error', $x;
           is $x->message, "Something's wrong";
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -542,7 +542,7 @@ test {
       } $c;
     });
   });
-} n => 11, name => 'handle_request returns a response with readablestream aborted soon';
+} n => 13, name => 'handle_request returns a response with readablestream aborted soon';
 
 test {
   my $c = shift;
@@ -581,8 +581,8 @@ test {
           is $s, $con;
           is $x->name, 'Error', $x;
           is $x->message, "Something's wrong";
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -625,7 +625,7 @@ test {
       } $c;
     });
   });
-} n => 11, name => 'handle_request returns a response with readablestream aborted later';
+} n => 13, name => 'handle_request returns a response with readablestream aborted later';
 
 test {
   my $c = shift;
@@ -651,8 +651,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, "|handle_request| does not return |request| or |response|";
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -696,7 +696,7 @@ test {
       } $c;
     });
   });
-} n => 12, name => 'handle_request returns a bad hashref';
+} n => 14, name => 'handle_request returns a bad hashref';
 
 test {
   my $c = shift;
@@ -722,8 +722,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, "Bad |request|";
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -767,7 +767,7 @@ test {
       } $c;
     });
   });
-} n => 12, name => 'handle_request returns a bad request';
+} n => 14, name => 'handle_request returns a bad request';
 
 test {
   my $c = shift;
@@ -793,8 +793,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, "Bad |response|";
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -838,7 +838,7 @@ test {
       } $c;
     });
   });
-} n => 12, name => 'handle_request returns a bad response';
+} n => 14, name => 'handle_request returns a bad response';
 
 test {
   my $c = shift;
@@ -864,8 +864,8 @@ test {
           is $s, $con;
           is $x->name, 'Error', $x;
           like $x->message, qr{^abcde at \Q@{[__FILE__]}\E line \Q@{[__LINE__-9]}\E};
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -909,7 +909,7 @@ test {
       } $c;
     });
   });
-} n => 12, name => 'handle_request throws';
+} n => 14, name => 'handle_request throws';
 
 test {
   my $c = shift;
@@ -935,8 +935,8 @@ test {
           is $s, $con;
           is $x->name, 'Error', $x;
           like $x->message, qr{^abcde at \Q@{[__FILE__]}\E line \Q@{[__LINE__-9]}\E};
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -980,7 +980,7 @@ test {
       } $c;
     });
   });
-} n => 12, name => 'handle_request rejects';
+} n => 14, name => 'handle_request rejects';
 
 test {
   my $c = shift;
@@ -1006,8 +1006,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, 'Bad |status|';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -1046,7 +1046,7 @@ test {
       } $c;
     });
   });
-} n => 7, name => 'handle_request returned response is broken';
+} n => 9, name => 'handle_request returned response is broken';
 
 test {
   my $c = shift;
@@ -1135,8 +1135,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, 'The argument is a utf8-flaged string';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -1178,7 +1178,7 @@ test {
       } $c;
     });
   });
-} n => 9, name => 'handle_request returns a response body with utf8 flag';
+} n => 11, name => 'handle_request returns a response body with utf8 flag';
 
 test {
   my $c = shift;
@@ -1477,8 +1477,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, 'ReadableStream is not a byte stream';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -1525,7 +1525,7 @@ test {
       } $c;
     });
   });
-} n => 9, name => 'handle_request returns a request, request body bad stream';
+} n => 11, name => 'handle_request returns a request, request body bad stream';
 
 test {
   my $c = shift;
@@ -1552,8 +1552,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, 'No |url| argument';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -1595,7 +1595,7 @@ test {
       } $c;
     });
   });
-} n => 10, name => 'handle_request returns a bad request';
+} n => 12, name => 'handle_request returns a bad request';
 
 test {
   my $c = shift;
@@ -1624,8 +1624,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, 'Bad |headers|';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -1667,7 +1667,7 @@ test {
       } $c;
     });
   });
-} n => 10, name => 'handle_request returns a bad request headers';
+} n => 12, name => 'handle_request returns a bad request headers';
 
 test {
   my $c = shift;
@@ -2028,8 +2028,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, 'ReadableStream is locked';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -2077,7 +2077,7 @@ test {
       } $c;
     });
   });
-} n => 10, name => 'handle_response response body stream locked';
+} n => 12, name => 'handle_response response body stream locked';
 
 test {
   my $c = shift;
@@ -2111,8 +2111,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, 'ReadableStream is not a byte stream';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -2157,7 +2157,7 @@ test {
       } $c;
     });
   });
-} n => 9, name => 'handle_response response body stream not bytes';
+} n => 11, name => 'handle_response response body stream not bytes';
 
 test {
   my $c = shift;
@@ -2261,8 +2261,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, 'Bad |status_text| (utf8-flagged)';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -2305,7 +2305,7 @@ test {
       } $c;
     });
   });
-} n => 7, name => 'handle_response response broken';
+} n => 9, name => 'handle_response response broken';
 
 test {
   my $c = shift;
@@ -2329,8 +2329,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, '|handle_response| does not return |response|';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -2375,7 +2375,7 @@ test {
       } $c;
     });
   });
-} n => 9, name => 'handle_response no response';
+} n => 11, name => 'handle_response no response';
 
 test {
   my $c = shift;
@@ -2399,8 +2399,8 @@ test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
           is $x->message, '|handle_response| does not return |response|';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -2445,7 +2445,7 @@ test {
       } $c;
     });
   });
-} n => 9, name => 'handle_response bad return';
+} n => 11, name => 'handle_response bad return';
 
 test {
   my $c = shift;
@@ -2469,8 +2469,8 @@ test {
           is $s, $con;
           is $x->name, 'Error', $x;
           like $x->message, qr{^#abcd at \Q@{[__FILE__]}\E line @{[__LINE__-9]}};
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -2515,7 +2515,7 @@ test {
       } $c;
     });
   });
-} n => 9, name => 'handle_response throws';
+} n => 11, name => 'handle_response throws';
 
 test {
   my $c = shift;
@@ -2539,8 +2539,8 @@ test {
           is $s, $con;
           is $x->name, 'Error', $x;
           like $x->message, qr{^#abcd at \Q@{[__FILE__]}\E line @{[__LINE__-9]}};
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -2585,7 +2585,7 @@ test {
       } $c;
     });
   });
-} n => 9, name => 'handle_response rejects';
+} n => 11, name => 'handle_response rejects';
 
 test {
   my $c = shift;
@@ -3110,8 +3110,8 @@ test {
           is $s, $con;
           is $x->name, 'Error', $x;
           is $x->message, "abcd";
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__-11;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -3157,7 +3157,7 @@ test {
       } $c;
     });
   });
-} n => 10, name => 'handle_response error non error';
+} n => 12, name => 'handle_response error non error';
 
 test {
   my $c = shift;
@@ -3320,8 +3320,8 @@ test {
           is $s, $con;
           is $x->name, 'Error', $x;
           like $x->message, qr{^abc at \Q@{[__FILE__]}\E line @{[__LINE__-10]}};
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__-11;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -3367,7 +3367,7 @@ test {
       } $c;
     });
   }, server_header => $server_name);
-} n => 10, name => 'handle_response body_is_incomplete throws';
+} n => 12, name => 'handle_response body_is_incomplete throws';
 
 run_tests;
 

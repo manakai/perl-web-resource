@@ -1012,7 +1012,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{^TypeError: The argument is a utf8-flaged string at }, $error; # XXXlocation
+      like $error, qr{^TypeError: The argument is a utf8-flaged string at \Q@{[__FILE__]}\E line 61}, $error;
     } $c;
   });
 } n => 5, name => 'Bad body 1';
@@ -1042,7 +1042,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{^TypeError: The argument is a utf8-flaged string at }, $error; # XXXlocation
+      like $error, qr{^TypeError: The argument is a utf8-flaged string at \Q@{[__FILE__]}\E line @{[__LINE__-20]}}, $error;
     } $c;
   });
 } n => 5, name => 'Bad body 2';
@@ -1130,7 +1130,7 @@ test {
       like $error, qr{: Thrown! at \Q@{[__FILE__]}\E line @{[__LINE__-19]}|PSGI application did not invoke the responder}, $error;
     } $c;
   });
-} n => 4, name => 'Response callback throws';
+} n => 4, name => 'Response callback throws 1';
 
 test {
   my $c = shift;
@@ -1158,11 +1158,11 @@ test {
     test {
       $error_invoked++;
       if (ref $error) {
-        like $error, qr{^Error: \Q$hoge\E at };
+        like $error, qr{^Error: \Q$hoge\E at \Q@{[__FILE__]}\E line 61}, $error;
       }
     } $c;
   });
-} n => 4, name => 'Response callback throws';
+} n => 4, name => 'Response callback throws 2';
 
 test {
   my $c = shift;
@@ -1954,11 +1954,12 @@ test {
       test {
         if ($res->is_network_error) {
           ok $res->is_network_error;
-          is $res->network_error_message, 'Connection closed without response';
+          like $res->network_error_message,
+              qr{^(?:Connection closed without response|Connection truncated)};
           ok 1;
           ok 1;
         } else {
-          is $res->status, 201;
+          is $res->status, 201, $res;
           is $res->header ('X'), 'Y';
           is $res->header ('Z'), undef;
           ok $res->incomplete;
@@ -1971,7 +1972,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-30]}};
+      like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-31]}};
     } $c;
   });
 } n => 7, name => 'PSGI responder invoked twice';
@@ -1999,12 +2000,20 @@ test {
     } $client->request (url => $origin)->then (sub {
       my $res = $_[0];
       test {
-        is $res->status, 201;
-        is $res->header ('X'), 'Y';
-        is $res->header ('Z'), undef;
-        is $res->body_bytes, "abc";
+        if ($res->is_network_error) {
+          ok $res->is_network_error;
+          like $res->network_error_message,
+              qr{^(?:Connection closed without response|Connection truncated)};
+          ok 1;
+          ok 1;
+        } else {
+          is $res->status, 201;
+          is $res->header ('X'), 'Y';
+          is $res->header ('Z'), undef;
+          ok $res->incomplete;
+        }
         is $error_invoked, 1;
-        like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
+        like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-26]}};
       } $c;
     });
   }, sub {
@@ -2039,18 +2048,26 @@ test {
     } $client->request (url => $origin)->then (sub {
       my $res = $_[0];
       test {
-        is $res->status, 201;
-        is $res->header ('X'), 'Y';
-        is $res->header ('Z'), undef;
-        is $res->body_bytes, "abc";
+        if ($res->is_network_error) {
+          ok $res->is_network_error;
+          like $res->network_error_message,
+              qr{^(?:Connection closed without response|Connection truncated)};
+          ok 1;
+          ok 1;
+        } else {
+          is $res->status, 201;
+          is $res->header ('X'), 'Y';
+          is $res->header ('Z'), undef;
+          ok $res->incomplete;
+        }
         is $error_invoked, 1;
-        like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-20]}};
+        like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-28]}};
       } $c;
     });
   }, sub {
     my $error = $_[1];
     test {
-      like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-26]}};
+      like $error, qr{PSGI application invoked the responder twice at \Q@{[__FILE__]}\E line @{[__LINE__-34]}};
       $error_invoked++;
     } $c;
   });
@@ -2103,7 +2120,7 @@ test {
       is $after, 1;
     } $c;
   });
-} n => 2, name => 'reset after headers';
+} n => 2, name => 'reset after headers 1';
 
 test {
   my $c = shift;

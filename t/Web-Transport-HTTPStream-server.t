@@ -412,7 +412,7 @@ test {
       is $res->header ('Hoge'), 'Fuga4';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Byte length 6 is greater than expected length 0 at }; # XXX location
+      like $x, qr{^TypeError: Byte length 6 is greater than expected length 0 at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
@@ -457,7 +457,7 @@ test {
       is $res->header ('Hoge'), 'Fuga4';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Byte length 6 is greater than expected length 0 at }; # XXX location
+      like $x, qr{^TypeError: Byte length 6 is greater than expected length 0 at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
@@ -556,7 +556,7 @@ test {
       is $res->header ('Hoge'), 'Fuga7';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Byte length 6 is greater than expected length 0 at }; # XXX location
+      like $x, qr{^TypeError: Byte length 6 is greater than expected length 0 at \Q@{[__FILE__]}\E line @{[__LINE__-13]}};
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-17]}};
     } $c;
   }, sub {
@@ -599,7 +599,7 @@ test {
       is $res->header ('Hoge'), 'Fuga8';
       is $res->header ('Connection'), undef;
       is $res->body_bytes, 'abcde8abcde9';
-      like $x, qr{^TypeError: Byte length 7 is greater than expected length 0 at }; # XXX location
+      like $x, qr{^TypeError: Byte length 7 is greater than expected length 0 at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
     } $c;
   }, sub {
     test {
@@ -644,8 +644,8 @@ test {
     return $p;
   })->then (sub {
     test {
-      like $x, qr{^TypeError: Byte length 7 is greater than expected length 6 at}; # XXX location
-      like $y, qr{^TypeError: Byte length 7 is greater than expected length 6 at}; # XXX location
+      like $x, qr{^TypeError: Byte length 7 is greater than expected length 6 at \Q@{[__FILE__]}\E line @{[__LINE__-19]}};
+      like $y, qr{^TypeError: Byte length 7 is greater than expected length 6 at \Q@{[__FILE__]}\E line @{[__LINE__-20]}};
     } $c;
   }, sub {
     test {
@@ -813,8 +813,8 @@ test {
       ok $res1->is_network_error;
       is $error->name, 'TypeError';
       is $error->message, 'Byte length 9 is greater than expected length 8';
-      #is $error->file_name, __FILE__; XXX location
-      #is $error->line_number, __LINE__-10;
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__-12;
     } $c;
   })->then (sub {
     return $http->close;
@@ -822,7 +822,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 3, name => 'write too long (write_mode raw)';
+} n => 5, name => 'write too long (write_mode raw)';
 
 test {
   my $c = shift;
@@ -849,8 +849,8 @@ test {
       is $res1->body_bytes, "abcdef14";
       is $error->name, 'TypeError';
       is $error->message, 'Byte length 1 is greater than expected length 0';
-      #is $error->file_name, __FILE__; XXX location
-      #is $error->line_number, __LINE__-10;
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__-15;
     } $c;
   })->then (sub {
     return $http->close;
@@ -858,7 +858,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 3, name => 'write too long (write_mode raw)';
+} n => 5, name => 'write too long (write_mode raw)';
 
 test {
   my $c = shift;
@@ -890,8 +890,8 @@ test {
     test {
       is $error->name, 'TypeError', $error;
       is $error->message, 'Closed before bytes (n = 3) are sent';
-      #is $error->file_name, __FILE__; XXX
-      #is $error->line_number, __LINE__-18;
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__-19;
     } $c;
   })->then (sub {
     return $http->close;
@@ -899,7 +899,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 4, name => 'write closed before filled (write_mode raw)';
+} n => 6, name => 'write closed before filled (write_mode raw)';
 
 test {
   my $c = shift;
@@ -966,8 +966,8 @@ test {
       ok $res1->is_network_error;
       is $error->name, 'TypeError';
       is $error->message, 'The argument is not an ArrayBufferView';
-      #is $error->file_name, __FILE__; XXX location
-      #is $error->line_number, __LINE__-10;
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__-12;
     } $c;
   })->then (sub {
     return $http->close;
@@ -975,7 +975,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 3, name => 'write not an ArrayBufferView';
+} n => 5, name => 'write not an ArrayBufferView';
 
 test {
   my $c = shift;
@@ -1008,7 +1008,7 @@ test {
     return $p;
   })->then (sub {
     test {
-      like $x, qr{^TypeError: Byte length 7 is greater than expected length 0 at }; # XXX location
+      like $x, qr{^TypeError: Byte length 7 is greater than expected length 0 at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
     } $c;
   }, sub {
     test {
@@ -1323,7 +1323,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '5';
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at }; # XXX location
+      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
     } $c;
   }, sub {
@@ -1404,7 +1404,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '0';
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at }; # XXX location
+      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
     } $c;
   }, sub {
@@ -1485,7 +1485,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '5';
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at }; # XXX location
+      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
     } $c;
   }, sub {
@@ -1566,7 +1566,7 @@ test {
       is $res->header ('Connection'), undef;
       is $res->header ('Content-Length'), '0';
       is $res->body_bytes, '';
-      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at }; # XXX location
+      like $x, qr{^TypeError: Byte length 5 is greater than expected length 0 at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
       like $y, qr{^TypeError: WritableStream is closed at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
     } $c;
   }, sub {
@@ -2603,12 +2603,13 @@ test {
     test {
       is $error->name, 'TypeError', $error;
       is $error->message, 'The argument is not an ArrayBufferView';
-      # XXXlocation
+      is $error->file_name, __FILE__;
+      is $error->line_number, __LINE__-27;
     } $c;
     done $c;
     undef $c;
   });
-} n => 2, name => 'WS message write error';
+} n => 4, name => 'WS message write error';
 
 test {
   my $c = shift;
@@ -2738,7 +2739,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: Byte length 6 is greater than expected length 5 at }; # XXX location
+      like $error, qr{^TypeError: Byte length 6 is greater than expected length 5 at \Q@{[__FILE__]}\E line @{[__LINE__-15]}};
       is $received, '(end)';
       ok ! $res->is_network_error;
       ok ! $res->ws_closed_cleanly;
@@ -2787,7 +2788,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: Byte length 6 is greater than expected length 5 at }; # XXX location
+      like $error, qr{^TypeError: Byte length 6 is greater than expected length 5 at \Q@{[__FILE__]}\E line @{[__LINE__-15]}};
       is $received, '(end)';
       ok ! $res->is_network_error;
       ok ! $res->ws_closed_cleanly;
@@ -2837,7 +2838,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: Byte length 6 is greater than expected length 2 at }; # XXX location
+      like $error, qr{^TypeError: Byte length 6 is greater than expected length 2 at \Q@{[__FILE__]}\E line @{[__LINE__-24]}};
       is $received, '(end)';
       ok ! $res->is_network_error;
       ok ! $res->ws_closed_cleanly;
@@ -2882,7 +2883,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^TypeError: Byte length 6 is greater than expected length 0 at }; # XXX location
+      like $error, qr{^TypeError: Byte length 6 is greater than expected length 0 at \Q@{[__FILE__]}\E line @{[__LINE__-15]}};
       is $received, '(end)';
       ok ! $res->is_network_error;
       ok ! $res->ws_closed_cleanly;
@@ -3046,7 +3047,7 @@ test {
   )->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^\QTypeError: Closed before bytes (n = 2) are sent\E at }; # XXX location
+      like $error, qr{^\QTypeError: Closed before bytes (n = 2) are sent\E at \Q@{[__FILE__]}\E line @{[__LINE__-18]}};
       is $received, '(end)';
       ok ! $res->is_network_error;
       ok ! $res->ws_closed_cleanly;
@@ -3248,8 +3249,8 @@ test {
       isa_ok $closed, 'Web::Transport::ProtocolError::WebSocketClose';
       is $closed->name, 'WebSocket Close';
       is $closed->message, '(5678 abc) WebSocket closed cleanly';
-      #is $closed->file_name, __FILE__; # XXXlocation
-      #is $closed->line_number, __LINE__;
+      is $closed->file_name, __FILE__;
+      is $closed->line_number, 171; # constructor
       is $closed->ws_status, 5678;
       is $closed->ws_reason, 'abc';
       ok $closed->ws_cleanly;
@@ -3257,7 +3258,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 9, name => 'WS closing (by send_ws_close)';
+} n => 11, name => 'WS closing (by send_ws_close)';
 
 test {
   my $c = shift;
@@ -3318,8 +3319,8 @@ test {
       isa_ok $closed, 'Web::Transport::ProtocolError::WebSocketClose';
       is $closed->name, 'WebSocket Close';
       is $closed->message, '(1005 ) WebSocket closed cleanly';
-      #is $closed->file_name, __FILE__; # XXXlocation
-      #is $closed->line_number, __LINE__;
+      is $closed->file_name, __FILE__;
+      is $closed->line_number, 171; # constructor
       is $closed->ws_status, 1005;
       is $closed->ws_reason, '';
       ok $closed->ws_cleanly;
@@ -3327,7 +3328,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 9, name => 'WS closing (by receiving Close)';
+} n => 11, name => 'WS closing (by receiving Close)';
 
 test {
   my $c = shift;
@@ -3386,8 +3387,8 @@ test {
       isa_ok $closed, 'Web::Transport::ProtocolError::WebSocketClose';
       is $closed->name, 'WebSocket Close';
       is $closed->message, '(1006 ) Connection truncated';
-      #is $closed->file_name, __FILE__; # XXXlocation
-      #is $closed->line_number, __LINE__;
+      is $closed->file_name, __FILE__;
+      is $closed->line_number, 171; # constructor
       is $closed->ws_status, 1006;
       is $closed->ws_reason, '';
       ok ! $closed->ws_cleanly;
@@ -3395,7 +3396,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 7, name => 'WS closing (by parse error)';
+} n => 9, name => 'WS closing (by parse error)';
 
 {
   package TestURLForCONNECT;
@@ -3476,8 +3477,8 @@ test {
     test {
       is $closed->name, 'HTTP parse error';
       is $closed->message, 'HTTP stream closed (non-fatal)';
-      #is $closed->file_name, __FILE__; # XXXlocation
-      #is $closed->line_number, __LINE__;
+      is $closed->file_name, __FILE__;
+      is $closed->line_number, 171; # constructor
       ok ! $closed->http_fatal;
       ok ! $closed->http_can_retry;
     } $c;
@@ -3492,7 +3493,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 13, name => 'CONNECT data';
+} n => 15, name => 'CONNECT data';
 
 test {
   my $c = shift;
@@ -5975,19 +5976,18 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    eval {
-      $self->send_response
-          ({status => 201, status_text => "a\x0Db", close => 1});
-    };
-    $error = $@;
-    $self->abort;
+    $self->send_response
+        ({status => 201, status_text => "a\x0Db", close => 1})->catch (sub {
+      $error = $_[0];
+      $self->abort;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Bad status text \|a\\x0Db\| at @{[__FILE__]} line @{[__LINE__-11]}};
+      like $error, qr{^TypeError: Bad \|status_text\| at @{[__FILE__]} line @{[__LINE__-7]}};
       ok $res->is_network_error;
     } $c;
   }, sub {
@@ -6008,19 +6008,18 @@ test {
   my $error;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    eval {
-      $self->send_response
-          ({status => 201, status_text => "a\x{5000}b", close => 1});
-    };
-    $error = $@;
-    $self->abort;
+    $self->send_response
+        ({status => 201, status_text => "a\x{5000}b", close => 1})->catch (sub {
+      $error = $_[0];
+      $self->abort;
+    });
   };
 
   my $http = Web::Transport::ConnectionClient->new_from_url ($Origin);
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Status text is utf8-flagged at @{[__FILE__]} line @{[__LINE__-11]}};
+      like $error, qr{^TypeError: Bad \|status_text\| \(utf8-flagged\) at @{[__FILE__]} line @{[__LINE__-7]}};
       ok $res->is_network_error;
     } $c;
   }, sub {

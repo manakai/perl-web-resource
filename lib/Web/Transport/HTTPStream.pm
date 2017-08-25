@@ -17,6 +17,7 @@ use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
 
 push our @CARP_NOT, qw(
+  ReadableStreamDefaultController
   Web::Transport::HTTPStream::Stream
   Web::Transport::TCPStream
   Web::Transport::UnixStream
@@ -867,7 +868,8 @@ sub _connection_error ($$;$$$) {
   }
 
   if ($con->{is_server}) {
-    if (not defined $con or defined $con->{write_mode}) {
+    my $stream = $con->{stream};
+    if (defined $con->{write_mode} or not defined $stream) {
       ## A response is being sent or has been sent.
       $con->_send_done (close => 1);
       $con->_receive_done;
@@ -878,7 +880,6 @@ sub _connection_error ($$;$$$) {
     my $reason = $_[3] || 'Bad Request';
     my $headers = $_[4] || [];
 
-    my $stream = $con->{stream};
     my $with_body = not ($stream->{request}->{method} eq 'HEAD');
     my $res = qq{<!DOCTYPE html><html>
 <head><title>$status $reason</title></head>
@@ -2358,7 +2359,6 @@ sub _open_sending_stream ($$;%) {
     }, # start
     write => sub {
       my $chunk = $_[1];
-      # XXX error location
       return Promise->resolve->then (sub {
         die Web::Transport::TypeError->new ("The argument is not an ArrayBufferView")
             unless UNIVERSAL::isa ($chunk, 'ArrayBufferView');

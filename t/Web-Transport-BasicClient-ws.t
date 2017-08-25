@@ -645,7 +645,7 @@ test {
         is $res2->ws_code, 1006;
         is $res2->ws_reason, '';
         ok ! $res2->ws_closed_cleanly;
-        like ''.$res2, qr{^Network error: TypeError: The argument is a utf8-flaged string at};
+        like ''.$res2, qr{^Network error: TypeError: The argument is a utf8-flaged string at \Q@{[__FILE__]}\E line @{[__LINE__-14]}};
       } $c;
     })->then (sub {
       done $c;

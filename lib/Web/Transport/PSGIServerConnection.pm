@@ -301,13 +301,13 @@ sub _run ($$$$$) {
   return $res_promise->catch (sub {
     my $error = Web::Transport::Error->wrap ($_[0]);
     if ($send_response_invoked) {
+      $stream->abort ($error, graceful => 1);
       return Promise->resolve->then (sub {
         return $server->onexception->($server, $error);
       })->catch (sub {
         warn $_[0];
       })->then (sub {
         undef $ondestroy2;
-        return $stream->abort ($error, graceful => 1);
       });
     } else {
       return Promise->all ([

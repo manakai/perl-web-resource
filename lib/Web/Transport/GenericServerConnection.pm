@@ -19,6 +19,8 @@ push our @CARP_NOT, qw(
   ArrayBuffer
   Web::Transport::HTTPStream
   Web::Transport::HTTPStream::Stream
+  Web::Transport::PSGIServerConnection
+  Web::Transport::ProxyServerConnection
 );
 
 sub new_from_aeargs_and_opts ($$$) {

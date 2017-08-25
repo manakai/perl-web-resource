@@ -806,8 +806,8 @@ test {
       test {
         is $e->name, 'TypeError', $e;
         is $e->message, 'The argument is not an ArrayBufferView';
-        #is $e->file_name, __FILE__;
-        #is $e->line_number, __LINE__-15;
+        is $e->file_name, __FILE__;
+        is $e->line_number, __LINE__-20;
       } $c;
       return $q->catch (sub {
         my $f = $_[0];
@@ -832,7 +832,7 @@ test {
     undef $c;
     undef $server;
   });
-} n => 4, name => 'bad write';
+} n => 6, name => 'bad write';
 
 test {
   my $c = shift;
@@ -894,8 +894,8 @@ test {
       test {
         is $e->name, 'TypeError', $e;
         is $e->message, 'ArrayBuffer is detached';
-        #is $e->file_name, __FILE__;
-        #is $e->line_number, __LINE__-15;
+        is $e->file_name, __FILE__;
+        is $e->line_number, __LINE__-22;
       } $c;
       return $q->catch (sub {
         my $f = $_[0];
@@ -920,7 +920,7 @@ test {
     undef $c;
     undef $server;
   });
-} n => 4, name => 'bad write';
+} n => 6, name => 'bad write';
 
 test {
   my $c = shift;

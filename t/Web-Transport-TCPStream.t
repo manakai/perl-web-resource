@@ -143,13 +143,34 @@ test {
   })->catch (sub {
     my $e = $_[0];
     test {
-      ok $e->name;
-      ok $e->message;
+      is $e->name, 'TypeError', $e;
+      is $e->message, 'Bad |port|';
+      is $e->file_name, __FILE__;
+      is $e->line_number, __LINE__+4;
     } $c;
     done $c;
     undef $c;
   });
-} n => 2, name => 'new connect error';
+} n => 4, name => 'new connect error';
+
+test {
+  my $c = shift;
+  my $host = Web::Host->parse_string ('127.0.0.44');
+  Web::Transport::TCPStream->create ({
+    host => $host,
+    port => 3223,
+  })->catch (sub {
+    my $e = $_[0];
+    test {
+      is $e->name, 'Perl I/O error', $e;
+      ok $e->message;
+      is $e->file_name, __FILE__;
+      is $e->line_number, __LINE__+4;
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'new connect error';
 
 test {
   my $c = shift;
@@ -1131,8 +1152,8 @@ test {
         like $got, qr{^abcdeff};
         is $e->name, 'Perl I/O error';
         ok $e->message;
-        #is $e->file_name, __FILE__;
-        #is $e->line_number, __LINE__-15;
+        is $e->file_name, __FILE__;
+        is $e->line_number, __LINE__-10;
       } $c;
       undef $try;
     });
@@ -1151,7 +1172,7 @@ test {
     undef $c;
     undef $server;
   });
-} n => 4, name => 'reset 2';
+} n => 6, name => 'reset 2';
 
 test {
   my $c = shift;
@@ -1229,8 +1250,8 @@ test {
         like $result, qr{^abcdeff};
         is $e->name, 'TypeError', $e;
         is $e->message, 'The argument is not an ArrayBufferView';
-        #is $e->file_name, __FILE__;
-        #is $e->line_number, __LINE__-15;
+        is $e->file_name, __FILE__;
+        is $e->line_number, __LINE__-14;
       } $c;
       return $q->catch (sub {
         my $f = $_[0];
@@ -1255,7 +1276,7 @@ test {
     undef $c;
     undef $server;
   });
-} n => 5, name => 'bad write';
+} n => 7, name => 'bad write';
 
 test {
   my $c = shift;

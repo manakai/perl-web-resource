@@ -5,7 +5,10 @@ use overload '""' => 'stringify', fallback => 1;
 our $VERSION = '3.0';
 use Web::Transport::TypeError;
 
-push our @CARP_NOT, qw(Web::Transport::TypeError);
+push our @CARP_NOT, qw(
+  Web::Transport::TypeError
+  Web::Transport::BasicClient
+);
 
 sub new_from_error ($$) {
   if (UNIVERSAL::isa ($_[1], 'Web::Transport::ProtocolError::WebSocketClose')) {

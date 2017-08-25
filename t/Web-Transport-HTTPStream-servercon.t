@@ -929,8 +929,8 @@ test {
       isa_ok $closed, 'Web::Transport::ProtocolError::HTTPParseError';
       is $closed->name, 'HTTP parse error';
       is $closed->message, 'Bad request-target';
-      #is $closed->file_name, __FILE__; # XXXlocation
-      #is $closed->line_number, __LINE__;
+      is $closed->file_name, __FILE__;
+      is $closed->line_number, __LINE__-21;
       ok $closed->http_fatal;
       ok ! $closed->http_can_retry;
     } $c;
@@ -939,7 +939,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 5, name => 'HTTP parse error';
+} n => 7, name => 'HTTP parse error';
 
 run_tests;
 

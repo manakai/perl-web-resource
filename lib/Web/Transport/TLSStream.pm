@@ -230,7 +230,7 @@ sub create ($$) {
   my $t_read_pause;
   my $t_read_pausing;
 
-  my $close = sub {
+  my $close; $close = sub {
     if (defined $tls) {
       Net::SSLeay::set_info_callback ($tls, undef);
       Net::SSLeay::set_verify ($tls, 0, undef);
@@ -242,6 +242,7 @@ sub create ($$) {
     undef $wbio;
     undef $tls_ctx;
     $s_closed->();
+    $close = sub { };
   }; # $close
 
   my $abort = sub {
@@ -433,7 +434,7 @@ sub create ($$) {
       my $view = $_[1];
       return Promise->resolve->then (sub {
         die Web::Transport::TypeError->new ("The argument is not an ArrayBufferView")
-            unless UNIVERSAL::isa ($view, 'ArrayBufferView'); # XXX location
+            unless UNIVERSAL::isa ($view, 'ArrayBufferView');
         return if $view->byte_length == 0; # or throw
 
         $wview = DataView->new

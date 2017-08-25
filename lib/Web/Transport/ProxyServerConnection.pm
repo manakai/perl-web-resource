@@ -11,8 +11,11 @@ use Web::Transport::BasicClient;
 
 push our @ISA, qw(Web::Transport::GenericServerConnection);
 push our @CARP_NOT, qw(
+  ReadableStreamDefaultReader
+  ReadableStreamBYOBReader
   Web::Transport::TypeError
   Web::Transport::ProtocolError
+  Web::Transport::HTTPStream
   Web::Transport::BasicClient
 );
 
@@ -360,9 +363,33 @@ sub _handle_stream ($$$) {
   });
 } # _handle_stream
 
-# XXX test:
-#  CONNECT
-#  WS
+# XXX CONNECT request forwarded as is (CONNECT response)
+# XXX CONNECT request forwarded as is (non-CONNECT response)
+# XXX CONNECT request forwarded with modification (CONNECT response)
+# XXX CONNECT request forwarded with modification (non-CONNECT response)
+# XXX CONNECT request forwarded as non-CONNECT (non-2xx)
+# XXX CONNECT request forwarded as non-CONNECT (2xx)
+# XXX CONNECT request connects to specified TCP server
+# XXX CONNECT request connects to another TCP server
+# XXX CONNECT request responded with |response|, connected to application
+# XXX CONNECT request responded with |response| (2xx with body)
+# XXX CONNECT request responded with |response| (non-2xx)
+# XXX CONNECT request responded with |error|
+# XXX CONNECT request rejected
+# XXX non-CONNECT request forwarded as CONNECT
+
+# XXX WS request forwarded as is (WS response)
+# XXX WS request forwarded as is (non-WS response)
+# XXX WS request forwarded with modification (WS response)
+# XXX WS request forwarded with modification (non-WS response)
+# XXX WS request forwarded as non-WS
+# XXX WS request responded with |response| (WS response)
+# XXX WS request responded with |response| (non-WS response)
+# XXX WS request responded with |error|
+# XXX WS request rejected
+# XXX WS message proxying
+# XXX non-WS request forwarded as WS (WS response)
+# XXX non-WS request forwarded as WS (non-WS response)
 
 1;
 

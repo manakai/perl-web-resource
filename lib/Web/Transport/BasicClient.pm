@@ -19,7 +19,9 @@ use Web::Transport::TLSStream;
 use Web::Transport::HTTPStream;
 
 push our @CARP_NOT, qw(
+  ArrayBuffer
   Web::Transport::ProtocolError Web::Transport::TypeError
+  Web::Transport::RequestConstructor
 );
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
@@ -451,7 +453,7 @@ sub _request ($$$$$$$$$$) {
             $response->{ws_send_binary} = sub {
               my $v = \($_[0]);
               return $queue = $queue->then (sub {
-                my $dv = DataView->new (ArrayBuffer->new_from_scalarref ($v)); # XXX can throw XXXlocation
+                my $dv = DataView->new (ArrayBuffer->new_from_scalarref ($v)); # or throw
                 return $stream->send_ws_message ($dv->byte_length, 1)->then (sub {
                   my $writer = $_[0]->{body}->get_writer;
                   $writer->write ($dv);

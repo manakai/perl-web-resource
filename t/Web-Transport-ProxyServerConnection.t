@@ -652,6 +652,75 @@ test {
     return $server_p;
   } rawserver (q{
     receive "GET"
+    "HTTP/1.0 200 ok"CRLF
+    "content-length: 100"CRLF
+    "server: abcde"CRLF
+    "date: xyzab"CRLF
+    CRLF
+    "abcdefg"
+    close
+  })->then (sub {
+    my $server = $_[0];
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+$client->debug(2);
+    promised_cleanup {
+      $close_server->();
+      return $client->close;
+    } $client->request (url => $url, headers => {'Fuga' => 'a b'}, stream => 1)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 200;
+        is $res->status_text, 'ok';
+        is $res->header ('Server'), "abcde";
+        is $res->header ('Date'), "xyzab";
+        is $res->header ('Connection'), undef;
+        is $res->header ('Transfer-Encoding'), undef;
+        is $res->header ('Content-Length'), 100;
+      } $c;
+      my $reader = $res->body_stream->get_reader ('byob');
+      my $value = '';
+      my $read; $read = sub {
+        return $reader->read (DataView->new (ArrayBuffer->new (3)))->then (sub {
+          return if $_[0]->{done};
+          $value .= $_[0]->{value}->manakai_to_string;
+          return $read->();
+        });
+      };
+      return ((promised_cleanup { undef $read } $read->())->then (sub {
+        test {
+          is $value, 'abcdefg';
+          ok $res->incomplete;
+        } $c;
+      }));
+    });
+  });
+} n => 9, name => 'remote truncated response 2';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } rawserver (q{
+    receive "GET"
     "HTTP/1.1 200 ok"CRLF
     "content-length: 100"CRLF
     "server: abcde"CRLF
@@ -667,7 +736,7 @@ test {
     promised_cleanup {
       $close_server->();
       return $client->close;
-    } $client->request (url => $url, headers => {'Fuga' => 'a b'})->then (sub {
+    } $client->request (url => $url, headers => {'Fuga' => 'a b'}, stream => 1)->then (sub {
       my $res = $_[0];
       test {
         is $res->status, 200;
@@ -675,13 +744,27 @@ test {
         is $res->header ('Server'), "abcde";
         is $res->header ('Date'), "xyzab";
         is $res->header ('Connection'), undef;
-        is $res->header ('Transfer-Encoding'), 'chunked';
-        is $res->body_bytes, 'abcdefg';
-        ok $res->incomplete;
+        is $res->header ('Transfer-Encoding'), undef;
+        is $res->header ('Content-Length'), 100;
       } $c;
+      my $reader = $res->body_stream->get_reader ('byob');
+      my $value = '';
+      my $read; $read = sub {
+        return $reader->read (DataView->new (ArrayBuffer->new (3)))->then (sub {
+          return if $_[0]->{done};
+          $value .= $_[0]->{value}->manakai_to_string;
+          return $read->();
+        });
+      };
+      return ((promised_cleanup { undef $read } $read->())->then (sub {
+        test {
+          is $value, 'abcdefg';
+          ok $res->incomplete;
+        } $c;
+      }));
     });
   });
-} n => 8, name => 'remote truncated response';
+} n => 9, name => 'remote truncated response 1';
 
 test {
   my $c = shift;
@@ -1579,6 +1662,7 @@ test {
   my $url = Web::URL->parse_string (qq<http://$host:$port/abc?d>);
   my $client = Web::Transport::BasicClient->new_from_url ($url);
   promised_cleanup {
+    $close_server->();
     done $c; undef $c;
   } promised_cleanup {
     return $server_p;
@@ -1610,7 +1694,7 @@ test {
       promised_cleanup { $ok->() } $con->completed;
     };
     $close_server = sub { undef $server };
-  });
+  }); # $server_p
 
   my $url = Web::URL->parse_string (qq<https://tlstestserver.test:$port/abc?d>);
   my $client = Web::Transport::BasicClient->new_from_url ($url);
@@ -1619,6 +1703,7 @@ test {
     ca_file => Test::Certificates->ca_path ('cert.pem'),
   });
   promised_cleanup {
+    $close_server->();
     done $c; undef $c;
   } promised_cleanup {
     return $server_p;
@@ -1651,8 +1736,8 @@ test {
           is $s, $con;
           is $x->name, 'Protocol error', $x;
           is $x->message, 'HTTP |TRACE| method';
-          #is $x->file_name, __FILE__; XXXlocation
-          #is $x->line_number, __LINE__;
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
         } $c;
         $exception_invoked++;
         undef $con;
@@ -1694,7 +1779,7 @@ test {
       } $c;
     });
   });
-} n => 11, name => 'TRACE';
+} n => 13, name => 'TRACE';
 
 Test::Certificates->wait_create_cert ({host => 'tlstestproxy.test'});
 Test::Certificates->wait_create_cert ({host => 'tlstestserver.test'});

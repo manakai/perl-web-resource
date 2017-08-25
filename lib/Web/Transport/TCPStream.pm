@@ -2,6 +2,7 @@ package Web::Transport::TCPStream;
 use strict;
 use warnings;
 our $VERSION = '2.0';
+use Carp;
 use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE SO_LINGER);
 use AnyEvent;
@@ -141,11 +142,11 @@ sub create ($$) {
     })->then (sub {
       my $bytes_read = eval { $req->manakai_respond_by_sysread ($fh) };
       if ($@) {
-        my $error = Web::Transport::Error->wrap ($@); # XXX error location
+        my $error = Web::Transport::Error->wrap ($@);
         my $errno = $error->isa ('Streams::IOError') ? $error->errno : 0;
         if ($errno != EAGAIN && $errno != EINTR &&
             $errno != EWOULDBLOCK && $errno != WSAEWOULDBLOCK) {
-          $rcancel->($error);
+          $rcancel->($error) if defined $rcancel;
           $read_active = $rcancel = undef;
           if (defined $wc) {
             $wc->error ($error);
@@ -222,7 +223,7 @@ sub create ($$) {
       my $view = $_[1];
       return Promise->resolve->then (sub {
         die _te "The argument is not an ArrayBufferView"
-            unless UNIVERSAL::isa ($view, 'ArrayBufferView'); # XXX location
+            unless UNIVERSAL::isa ($view, 'ArrayBufferView');
         return if $view->byte_length == 0;
         return _writing {
           return 1 unless defined $fh; # end
@@ -306,9 +307,18 @@ sub create ($$) {
       if ($args->{addr} eq '127.0.53.53') {
         return $ng->(Web::Transport::ProtocolError->new ('ICANN_NAME_COLLISION'));
       }
+      my $caller = [caller ((sub { Carp::short_error_loc })->() - 1)];
       tcp_connect $args->{addr}, $args->{port}, sub {
-        # XXX exception's location becomes within AnyEvent::Socket...
-        return $ng->(Streams::IOError->new ($!)) unless $_[0];
+        unless ($_[0]) {
+          package TCPStream::_Dummy;
+          my $file = $caller->[1];
+          $file =~ s/[\x0D\x0A\x22]/_/g;
+          my $error = eval sprintf q{
+#line %d "%s"
+            Streams::IOError->new ($!);
+          }, $caller->[2], $file;
+          return $ng->($error);
+        }
         $ok->($_[0]);
       };
     }

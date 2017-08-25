@@ -18,6 +18,7 @@ use Promise;
 use AnyEvent::Util qw(run_cmd);
 use Test::Certificates;
 use Promised::Flow;
+use Promised::Command;
 
 sub _a ($) {
   return encode 'utf-8', $_[0];
@@ -52,63 +53,63 @@ sub _a ($) {
   } # find_listenable_port
 }
 
+my @End;
 my $server_pids = {};
 END { kill 'KILL', $_ for keys %$server_pids }
 sub server ($) {
   my $code = $_[0];
-  my $cv = AE::cv;
-  my $started = 0;
-  my $pid;
-  my $data = '';
+
   my $port = find_listenable_port;
   my $host = (int rand 10000) . '.our.parsing.test';
-  my $resultdata = [];
-  my $after_server_close_cv = AE::cv;
-  my $close_server = 0;
-  my ($r_server_done, $s_server_done) = promised_cv;
-  local $ENV{SERVER_HOST_NAME} = $host;
-  my $run_cv = run_cmd
-      ['perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'), '127.0.0.1', $port],
-      '<' => \$code,
-      '>' => sub {
-        $data .= $_[0] if defined $_[0];
-        if ($ENV{DUMP} and defined $_[0]) {
-          warn "--- .parsing.t received. ---\n";
-          warn "$_[0]\n";
-          warn "--- ^parsing.t received^ ---\n";
-        }
-        while ($data =~ s/^\[data (.+)\]$//m) {
-          push @$resultdata, json_bytes2perl $1;
-        }
-        if ($data =~ s/^\[server done\]$//m) {
-          $s_server_done->();
-        }
-        return if $started;
-        if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
-          $cv->send ({pid => $pid, addr => $1, port => $2, host => $host,
-                      resultdata => $resultdata,
-                      done => $r_server_done, #Promise->from_cv ($after_server_close_cv),
-                      stop => sub {
-                        kill 'TERM', $pid;
-                        delete $server_pids->{$pid};
-                      }});
-          $started = 1;
-        }
-      },
-      '$$' => \$pid;
-  $server_pids->{$pid} = 1;
-  $run_cv->cb (sub {
-    my $result = $_[0]->recv;
-    warn "Server stopped ($result)" if $ENV{DUMP};
-    $s_server_done->();
-    if ($result) {
-      $after_server_close_cv->croak ("Server error: $result");
-      $cv->croak ("Server error: $result") unless $started;
-    } else {
-      $after_server_close_cv->send;
+
+  my $pid;
+  my $server = {
+    resultdata => [],
+    stop => sub {
+      kill 'TERM', $pid;
+      delete $server_pids->{$pid};
+    },
+  };
+  my $data = '';
+
+  my ($r_ready, $s_ready) = promised_cv;
+
+  my $cmd = Promised::Command->new ([
+    'perl', path (__FILE__)->parent->parent->child ('t_deps/server.pl'),
+    '127.0.0.1', $port,
+  ]);
+  $cmd->envs->{SERVER_HOST_NAME} = $host;
+  $cmd->stdin (\$code);
+  $cmd->stdout (sub {
+    $data .= $_[0] if defined $_[0];
+    if ($ENV{DUMP} and defined $_[0]) {
+      warn "--- .parsing.t received. ---\n";
+      warn "$_[0]\n";
+      warn "--- ^parsing.t received^ ---\n";
     }
+    while ($data =~ s/^\[data (.+)\]$//m) {
+      push @{$server->{resultdata}}, json_bytes2perl $1;
+    }
+    if ($data =~ s/^\[server done\]$//m) {
+      #
+    }
+    if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
+      $server->{addr} = $1;
+      $server->{port} = $2;
+      $server->{host} = $host;
+      $s_ready->($server);
+    }
+  }); # stdout
+  push @End, $server->{closed} = $cmd->run->then (sub {
+    $pid = $server->{pid} = $cmd->pid;
+    $server_pids->{$pid} = 1;
+    return $cmd->wait;
+  })->then (sub {
+    my $result = $_[0];
+    warn "Server stopped ($result)" if $ENV{DUMP} or $result->is_error;
+    $s_ready->(Promise->reject ($result)) if $result->is_error;
   });
-  return Promise->from_cv ($cv);
+  return $r_ready;
 } # server
 
 sub rsread ($$) {
@@ -246,7 +247,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                 return $stream->closed;
               })->then (sub {
                 $result->{exit} = $_[0];
-                return $server->{done};
+                $server->{stop}->();
+                return $server->{closed};
               })->then (sub {
                 $result->{resultdata} = perl2json_bytes_for_record $server->{resultdata};
                 return $result;
@@ -473,6 +475,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           return $http->close_after_current_stream;
         })->then (sub {
           $server->{stop}->();
+        }, sub {
+          $server->{stop}->();
         })->catch (sub {
           warn "Error: $_[0]";
         })->then (sub {
@@ -487,6 +491,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
 
 Test::Certificates->wait_create_cert;
 run_tests;
+Promise->all (\@End)->to_cv->recv;
+@End = ();
 
 =head1 LICENSE
 

@@ -1012,7 +1012,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{^TypeError: The argument is a utf8-flaged string at \Q@{[__FILE__]}\E line 61}, $error;
+      like $error, qr{^TypeError: The argument is a utf8-flaged string at \Q@{[__FILE__]}\E line 6[13]}, $error;
     } $c;
   });
 } n => 5, name => 'Bad body 1';
@@ -1158,7 +1158,7 @@ test {
     test {
       $error_invoked++;
       if (ref $error) {
-        like $error, qr{^Error: \Q$hoge\E at \Q@{[__FILE__]}\E line 61}, $error;
+        like $error, qr{^Error: \Q$hoge\E at \Q@{[__FILE__]}\E line 6[13]}, $error;
       }
     } $c;
   });

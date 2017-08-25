@@ -1251,7 +1251,7 @@ test {
         is $e->name, 'TypeError', $e;
         is $e->message, 'The argument is not an ArrayBufferView';
         is $e->file_name, __FILE__;
-        is $e->line_number, __LINE__-14;
+        like $e->line_number, qr{(?:@{[join '|', __LINE__-14, __LINE__-13]})};
       } $c;
       return $q->catch (sub {
         my $f = $_[0];

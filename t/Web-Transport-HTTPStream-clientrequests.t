@@ -1364,7 +1364,7 @@ test {
         is $error->name, 'HTTP parse error';
         is $error->message, "Connection truncated (non-fatal)";
         is $error->file_name, __FILE__;
-        is $error->line_number, __LINE__-44;
+        like $error->line_number, qr{(?:@{[join '|', __LINE__-44, __LINE__-40]})};
         # XXX $error's associated original error object ($reader->cancel)
       } $c;
     })->then (sub {
@@ -2018,7 +2018,7 @@ close
           is $error->name, 'WebSocket Close';
           is $error->message, '(1006 ) Connection truncated';
           is $error->file_name, __FILE__;
-          is $error->line_number, __LINE__-26;
+          like $error->line_number, qr{^(?:@{[join '|', __LINE__-26, __LINE__-22]})$};
           is $error->ws_status, 1006;
           is $error->ws_reason, '';
           ok ! $error->ws_cleanly;
@@ -3648,7 +3648,7 @@ CRLF
         is $error->name, 'HTTP parse error', $error;
         is $error->message, 'HTTP |300| response';
         is $error->file_name, __FILE__;
-        is $error->line_number, __LINE__-17;
+        like $error->line_number, qr{^(?:@{[join '|', __LINE__-17, __LINE__-7]})$};
       } $c;
       return $http->closed->then (sub {
         my $e = $_[0];
@@ -3698,7 +3698,7 @@ CRLF
         is $error->name, 'HTTP parse error', $error;
         is $error->message, 'HTTP |300| response';
         is $error->file_name, __FILE__;
-        is $error->line_number, __LINE__-23;
+        like $error->line_number, qr{^(?:@{[join '|', __LINE__-23, __LINE__-7]})$};
       } $c;
       return $http->closed->then (sub {
         my $e = $_[0];

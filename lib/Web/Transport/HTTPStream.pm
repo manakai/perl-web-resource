@@ -1421,6 +1421,7 @@ sub _process_rbuf ($$) {
                $stream->{request_method} eq 'HEAD') {
         $stream->_headers_received;
         $self->{unread_length} = 0;
+        delete $res->{length};
         $self->{state} = 'response body';
       } else {
         $stream->_headers_received;

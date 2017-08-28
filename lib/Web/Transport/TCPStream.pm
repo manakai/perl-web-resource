@@ -198,7 +198,7 @@ sub create ($$) {
       $wc = $_[1];
     },
     write => sub {
-      return Streams::Filehandle::write_to_fh ($fh, $_[1], cancel_ref => \$wcancel)->catch (sub {
+      return Streams::Filehandle::write_to_fhref (\$fh, $_[1], cancel_ref => \$wcancel)->catch (sub {
         my $e = $_[0];
         if (defined $wc) {
           $wc->error ($e);

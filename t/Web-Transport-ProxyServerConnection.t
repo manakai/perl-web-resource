@@ -930,7 +930,7 @@ test {
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
     my $client = Web::Transport::BasicClient->new_from_url ($url);
     $client->proxy_manager ($pm);
-    my $data = 'abcdefgh' x 1000 x 10;
+    my $data = 'abcdefgh' x 1000 x 100;
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -944,6 +944,94 @@ test {
     });
   });
 } n => 3, name => 'request body forwarding (large body)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $data = 'abcdefgh' x 1000;
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return [201, [], [$data]];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->status_text, 'Created';
+        is $res->body_bytes, $data, 'client-received response body';
+      } $c;
+    });
+  });
+} n => 3, name => 'response body forwarding';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $data = 'abcdefgh' x 1000 x 1000;
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return [201, [], [$data]];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->status_text, 'Created';
+        is $res->body_bytes, $data, 'client-received response body';
+      } $c;
+    });
+  });
+} n => 3, name => 'response body forwarding (large data)';
 
 test {
   my $c = shift;

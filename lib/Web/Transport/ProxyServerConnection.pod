@@ -159,6 +159,11 @@ example, to save the response data using the file name extracted from
 request target URL, the request handler should store the URL as data
 and the response handler should extract it from data.
 
+=item closed => $promise (argument only)
+
+A promise (L<Promise> object) which is fulfilled once the response in
+question has been sent.
+
 =back
 
 =head1 FEATURES NOT SUPPORTED BY THIS MODULE

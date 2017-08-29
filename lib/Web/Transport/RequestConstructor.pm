@@ -272,8 +272,6 @@ sub create ($$) {
         ['Content-Length', 0+$args->{length}, 'content-length'];
 
     $body_reader = $args->{body_stream}->get_reader ('byob'); # or throw
-    $body_reader->release_lock;
-    $body_reader = $args->{body_stream}->get_reader;
   } elsif (defined $args->{body}) {
     return {failed => 1, message => "Request body not allowed"}
         if $args->{no_body};

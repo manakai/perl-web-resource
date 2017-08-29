@@ -3369,6 +3369,61 @@ test {
   }, server_header => $server_name);
 } n => 12, name => 'handle_response body_is_incomplete throws';
 
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $closed;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          $args->{closed}->then (sub {
+            $closed = 1;
+          });
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        ok $closed;
+      } $c;
+    });
+  });
+} n => 1, name => 'handle_response closed promise';
+
 run_tests;
 
 =head1 LICENSE

@@ -193,6 +193,7 @@ sub _handle_stream ($$$) {
       return Promise->resolve ({
         info => $stream->{connection}->info, response => $response,
         data => $result->{data},
+        closed => $stream->closed,
       })->then ($opts->{handle_response} || sub { return $_[0] })->then (sub {
         my $result = $_[0];
         if (defined $result and ref $result eq 'HASH' and
@@ -281,8 +282,6 @@ sub _handle_stream ($$$) {
     my $reader;
     if (defined $response->{body_stream}) {
       $reader = $response->{body_stream}->get_reader ('byob'); # or throw
-      $reader->release_lock;
-      $reader = $response->{body_stream}->get_reader;
     }
 
     return [$response, $reader];
@@ -308,7 +307,7 @@ sub _handle_stream ($$$) {
 
       if (defined $reader) {
         my $read; $read = sub {
-          return $reader->read->then (sub {
+          return $reader->read (DataView->new (ArrayBuffer->new (1024*1024)))->then (sub {
             return if $_[0]->{done};
             return $writer->write ($_[0]->{value})->then ($read);
           });

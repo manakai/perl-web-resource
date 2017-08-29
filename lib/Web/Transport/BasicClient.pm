@@ -22,6 +22,7 @@ push our @CARP_NOT, qw(
   ArrayBuffer
   Web::Transport::ProtocolError Web::Transport::TypeError
   Web::Transport::RequestConstructor
+  Web::Transport::HTTPStream
 );
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
@@ -411,7 +412,7 @@ sub _request ($$$$$$$$$$) {
         if (defined $reqbody) {
           my $writer = $reqbody->get_writer;
           my $read; $read = sub {
-            return $body_reader->read->then (sub {
+            return $body_reader->read (DataView->new (ArrayBuffer->new (1024*1024)))->then (sub {
               return if $_[0]->{done};
               return $writer->write ($_[0]->{value})->then ($read);
             });

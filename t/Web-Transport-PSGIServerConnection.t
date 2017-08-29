@@ -60,7 +60,8 @@ sub server ($$;$%) {
       $cv->begin;
       $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args
           ($app, [@_], parent_id => $args{parent_id}, state => $args{state},
-           max_request_body_length => $args{max});
+           max_request_body_length => $args{max},
+           server_header => $args{server_header});
       $con->onexception ($onexception) if defined $onexception;
       promised_cleanup { $cv->end } $con->completed;
     };
@@ -770,7 +771,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{Bad header name \|\\x504\|};
+      like $error, qr{Bad header name \|\x{504}\|};
     } $c;
   });
 } n => 4, name => 'Bad header name';
@@ -799,7 +800,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{Bad header name \|\\x504\|};
+      like $error, qr{Bad header name \|\x{504}\|};
     } $c;
   });
 } n => 4, name => 'Bad header name';
@@ -828,7 +829,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{Bad header value \|a: \\x504\|};
+      like $error, qr{Bad header value \|a: \x{504}\|};
     } $c;
   });
 } n => 4, name => 'Bad header value';
@@ -1407,7 +1408,7 @@ test {
       like $error, qr{This writer is no longer writable at \Q@{[__FILE__]}\E line @{[__LINE__-21]}}, $error;
     } $c;
   });
-} n => 5, name => 'Writer';
+} n => 5, name => 'Writer 10';
 
 test {
   my $c = shift;
@@ -2245,6 +2246,85 @@ test {
     });
   }, undef, state => $obj);
 } n => 4, name => 'state object';
+
+test {
+  my $c = shift;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    return [200, [], ['', '']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->header ('Server'), 'Server';
+      } $c;
+    });
+  }, undef);
+} n => 1, name => 'server_header default';
+
+for my $value ('', '0', 'abc/1.2', 'hoge fuga') {
+  test {
+    my $c = shift;
+    promised_cleanup { done $c; undef $c } server (sub ($) {
+      my $env = $_[0];
+      return [200, [], ['']];
+    }, sub {
+      my ($origin, $close) = @_;
+      my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+      promised_cleanup {
+        $client->close->then ($close);
+      } $client->request (url => $origin)->then (sub {
+        my $res = $_[0];
+        test {
+          is $res->header ('Server'), $value;
+        } $c;
+      });
+    }, undef, server_header => $value);
+  } n => 1, name => ['server_header value', $value];
+} # $value
+
+test {
+  my $c = shift;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    return [200, [], ['', '']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->header ('Server'), "a\xE5\x80\x80";
+      } $c;
+    });
+  }, undef, server_header => "a\x{5000}");
+} n => 1, name => 'server_header utf-8';
+
+test {
+  my $c = shift;
+  promised_cleanup { done $c; undef $c } server (sub ($) {
+    my $env = $_[0];
+    return [200, [], ['', '']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $client = Web::Transport::ConnectionClient->new_from_url ($origin);
+    promised_cleanup {
+      $client->close->then ($close);
+    } $client->request (url => $origin)->then (sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error, $res;
+        is $res->network_error_message, 'Connection closed without response';
+      } $c;
+    });
+  }, undef, server_header => "a\x0Db");
+} n => 2, name => 'server_header bad';
 
 run_tests;
 

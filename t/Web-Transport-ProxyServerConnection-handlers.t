@@ -1623,7 +1623,7 @@ test {
         test {
           is $s, $con;
           is $x->name, 'TypeError', $x;
-          is $x->message, 'Bad |headers|';
+          is $x->message, 'Bad headers';
           is $x->file_name, __FILE__;
           is $x->line_number, __LINE__-9;
         } $c;
@@ -2250,6 +2250,76 @@ test {
       my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
         handle_response => sub {
           my $args = $_[0];
+          $args->{response}->{status_text} = "21\x0D";
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        test {
+          is $s, $con;
+          is $x->name, 'TypeError', $x;
+          is $x->message, 'Bad |status_text|';
+          is $x->file_name, __FILE__;
+          is $x->line_number, __LINE__-9;
+        } $c;
+        $exception_invoked++;
+        undef $con;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->catch (sub {
+      my $result = $_[0];
+      test {
+        ok $result->is_network_error;
+        is $result->network_error_message, 'Connection closed without response';
+        is $server_invoked, 1;
+        is $exception_invoked, 1;
+      } $c;
+    });
+  });
+} n => 9, name => 'handle_response response broken (bad status_text)';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
           $args->{response}->{status_text} = "21\x{4020}";
           return $args;
         },
@@ -2305,7 +2375,7 @@ test {
       } $c;
     });
   });
-} n => 9, name => 'handle_response response broken';
+} n => 9, name => 'handle_response response broken (bad |status_text| - utf8)';
 
 test {
   my $c = shift;
@@ -2711,7 +2781,7 @@ test {
         is $res->body_bytes, '200!';
         is $res->header ('Transfer-Encoding'), 'chunked';
         is $res->header ('Content-Length'), undef;
-        is $res->header ('Server'), $proxy_server_name . ', ' . $server_name;
+        is $res->header ('Server'), $server_name . ', ' . $proxy_server_name;
         like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
         is $server_invoked, 1;
         is $exception_invoked, 0;

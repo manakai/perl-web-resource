@@ -102,7 +102,7 @@ test {
         my $path = $stream->{request}->{target_url}->path;
 
         return $stream->send_response
-            ({status => 210, status_text => $stream->{id}})->then (sub {
+            ({status => 210, status_text => $stream->{id}, headers => []})->then (sub {
           return $_[0]->{body}->get_writer->close;
         });
       })->then (sub { return 1 });
@@ -213,7 +213,7 @@ test {
         my $path = $stream->{request}->{target_url}->path;
 
         return $stream->send_response
-            ({status => 210, status_text => $stream->{id}})->then (sub {
+            ({status => 210, status_text => $stream->{id}, headers => []})->then (sub {
           return $_[0]->{body}->get_writer->close;
         });
       })->then (sub { return 1 });
@@ -290,12 +290,12 @@ test {
         my $path = $stream->{request}->{target_url}->path;
         if ($path eq '/404') {
           $stream->send_response
-              ({status => 404, status_text => $stream->{id}})->then (sub {
+              ({status => 404, status_text => $stream->{id}, headers => []})->then (sub {
             return $_[0]->{body}->get_writer->close;
           });
         } else {
           $stream->send_response
-              ({status => 210, status_text => $stream->{id}})->then (sub {
+              ({status => 210, status_text => $stream->{id}, headers => []})->then (sub {
             $response_header_sent->($_[0]);
           });
         }
@@ -374,7 +374,7 @@ test {
         my $path = $stream->{request}->{target_url}->path;
         if ($path eq '/404') {
           $stream->send_response
-              ({status => 404, status_text => $stream->{id}})->then (sub {
+              ({status => 404, status_text => $stream->{id}, headers => []})->then (sub {
             return $_[0]->{body}->get_writer->close;
           });
         } else {
@@ -395,7 +395,7 @@ test {
     my $stream = $_[0];
     promised_sleep (1)->then (sub {
       return $stream->send_response
-          ({status => 210, status_text => $stream->{id}})->then (sub {
+          ({status => 210, status_text => $stream->{id}, headers => []})->then (sub {
         my $w = $_[0]->{body}->get_writer;
         $w->write (d "abcde");
         return $w->close;
@@ -564,7 +564,7 @@ test {
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         return $stream->send_response
-            ({status => 201, status_text => 'OK', close => 1, length => 0});
+            ({status => 201, status_text => 'OK', close => 1, length => 0, headers => []});
       });
     })->then (sub {
       $r->release_lock;
@@ -577,7 +577,7 @@ test {
   $http->request (path => [])->then (sub {
     my $res = $_[0];
     test {
-      is $res->header ('Server'), 'Hoge/1.4.6';
+      is $res->header ('Server'), undef;
     } $c;
   })->then (sub {
     return $http->close;
@@ -612,7 +612,7 @@ test {
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         return $stream->send_response
-            ({status => 201, status_text => 'OK', close => 1, length => 0});
+            ({status => 201, status_text => 'OK', close => 1, length => 0, headers => []});
       });
     })->then (sub {
       $r->release_lock;
@@ -625,7 +625,7 @@ test {
   $http->request (path => [])->then (sub {
     my $res = $_[0];
     test {
-      is $res->header ('Server'), "\xE3\x80\x80a\x00";
+      is $res->header ('Server'), undef;
     } $c;
   })->then (sub {
     return $http->close;
@@ -660,7 +660,7 @@ test {
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         return $stream->send_response
-            ({status => 201, status_text => 'OK', close => 1, length => 0});
+            ({status => 201, status_text => 'OK', close => 1, length => 0, headers => []});
       });
     })->then (sub {
       $r->release_lock;
@@ -673,7 +673,7 @@ test {
   $http->request (path => [])->then (sub {
     my $res = $_[0];
     test {
-      is $res->header ('Server'), "";
+      is $res->header ('Server'), undef;
     } $c;
   })->then (sub {
     return $http->close;
@@ -708,7 +708,7 @@ test {
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         return $stream->send_response
-            ({status => 201, status_text => 'OK', close => 1, length => 0});
+            ({status => 201, status_text => 'OK', close => 1, length => 0, headers => []});
       });
     })->then (sub {
       $r->release_lock;
@@ -721,7 +721,7 @@ test {
   $http->request (path => [])->then (sub {
     my $res = $_[0];
     test {
-      is $res->header ('Server'), "0";
+      is $res->header ('Server'), undef;
     } $c;
   })->then (sub {
     return $http->close;
@@ -733,114 +733,6 @@ test {
     undef $c;
   });
 } n => 1, name => '$con->server_header';
-
-test {
-  my $c = shift;
-
-  my $host = '127.0.0.1';
-  my $port = find_listenable_port;
-  my $origin = Web::URL->parse_string ("http://$host:$port");
-
-  my $con;
-  my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new
-        ({server => 1, parent => {
-           class => 'Web::Transport::TCPStream',
-           server => 1,
-           fh => $_[0],
-           host => Web::Host->parse_string ($_[1]), port => $_[2],
-         }, server_header => "ab\x0Dvd"});
-    my $r = $x->streams->get_reader;
-    $r->read->then (sub {
-      return if $_[0]->{done};
-      my $stream = $_[0]->{value};
-      return $stream->headers_received->then (sub {
-        return $stream->send_response
-            ({status => 201, status_text => 'OK', close => 1, length => 0});
-      })->catch (sub {
-        my $error = $_[0];
-        test {
-          like $error, qr{^Bad header value \|Server: ab\\x0Dvd\| at @{[__FILE__]} line @{[__LINE__-5]}};
-        } $c;
-        return $stream->abort;
-      });
-    })->then (sub {
-      $r->release_lock;
-      return rsread $x->streams;
-    });
-    $con ||= $x;
-  }; # $server
-
-  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
-  $http->request (path => [])->then (sub {
-    my $res = $_[0];
-    test {
-      ok $res->is_network_error;
-    } $c;
-  })->then (sub {
-    return $http->close;
-  })->then (sub {
-    return $con->closed;
-  })->then (sub {
-    undef $server;
-    done $c;
-    undef $c;
-  });
-} n => 2, name => '$con->server_header bad value';
-
-test {
-  my $c = shift;
-
-  my $host = '127.0.0.1';
-  my $port = find_listenable_port;
-  my $origin = Web::URL->parse_string ("http://$host:$port");
-
-  my $con;
-  my $server = tcp_server $host, $port, sub {
-    my $x = Web::Transport::HTTPStream->new
-        ({server => 1, parent => {
-           class => 'Web::Transport::TCPStream',
-           server => 1,
-           fh => $_[0],
-           host => Web::Host->parse_string ($_[1]), port => $_[2],
-         }, server_header => "ab\x0Avd"});
-    my $r = $x->streams->get_reader;
-    $r->read->then (sub {
-      return if $_[0]->{done};
-      my $stream = $_[0]->{value};
-      return $stream->headers_received->then (sub {
-        return $stream->send_response
-            ({status => 201, status_text => 'OK', close => 1, length => 0});
-      })->catch (sub {
-        my $error = $_[0];
-        test {
-          like $error, qr{^Bad header value \|Server: ab\\x0Avd\| at @{[__FILE__]} line @{[__LINE__-5]}};
-        } $c;
-        return $stream->abort;
-      });
-    })->then (sub {
-      $r->release_lock;
-      return rsread $x->streams;
-    });
-    $con ||= $x;
-  }; # $server
-
-  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
-  $http->request (path => [])->then (sub {
-    my $res = $_[0];
-    test {
-      ok $res->is_network_error;
-    } $c;
-  })->then (sub {
-    return $http->close;
-  })->then (sub {
-    return $con->closed;
-  })->then (sub {
-    undef $server;
-    done $c;
-    undef $c;
-  });
-} n => 2, name => '$con->server_header';
 
 test {
   my $c = shift;

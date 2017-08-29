@@ -2,6 +2,7 @@ package Web::Transport::PSGIServerConnection;
 use strict;
 use warnings;
 our $VERSION = '3.0';
+use Web::Transport::RequestConstructor;
 use Web::Transport::GenericServerConnection;
 use Web::Transport::TypeError;
 use AnyEvent;
@@ -99,11 +100,14 @@ sub _handle_stream ($$$) {
 
     my $method = $env->{REQUEST_METHOD};
     if ($method eq 'CONNECT') {
-      return $stream->send_response ({
+      return $stream->send_response (Web::Transport::RequestConstructor->create_response ({
         status => 405,
-        headers => [['Content-Type', 'text/plain; charset=utf-8']],
+        headers => {
+          Server => $server->{server_header},
+          'Content-Type' => 'text/plain; charset=utf-8',
+        },
         close => 1,
-      })->then (sub {
+      }))->then (sub {
         my $writer = $_[0]->{body}->get_writer;
         $writer->write
             (DataView->new (ArrayBuffer->new_from_scalarref (\"405")));
@@ -118,11 +122,14 @@ sub _handle_stream ($$$) {
         ? $opts->{max_request_body_length}
         : 8_000_000;
     if (defined $max and $req->{length} > $max) {
-      return $stream->send_response ({
+      return $stream->send_response (Web::Transport::RequestConstructor->create_response ({
         status => 413,
-        headers => [['Content-Type', 'text/plain; charset=utf-8']],
+        headers => {
+          Server => $server->{server_header},
+          'Content-Type' => 'text/plain; charset=utf-8',
+        },
         close => 1,
-      })->then (sub {
+      }))->then (sub {
         my $writer = $_[0]->{body}->get_writer;
         $writer->write
             (DataView->new (ArrayBuffer->new_from_scalarref (\"413")));
@@ -142,11 +149,14 @@ sub _handle_stream ($$$) {
 
         if (defined $max and
             (length $input) + $_[0]->{value}->byte_length > $max) {
-          return $stream->send_response ({
+          return $stream->send_response (Web::Transport::RequestConstructor->create_response ({
             status => 413,
-            headers => [['Content-Type', 'text/plain; charset=utf-8']],
+            headers => {
+              Server => $server->{server_header},
+              'Content-Type' => 'text/plain; charset=utf-8',
+            },
             close => 1,
-          })->then (sub {
+          }))->then (sub {
             my $writer = $_[0]->{body}->get_writer;
             $writer->write
                 (DataView->new (ArrayBuffer->new_from_scalarref (\"413")));
@@ -228,10 +238,21 @@ sub _run ($$$$$) {
     if (defined $headers and ref $headers eq 'ARRAY' and not (@$headers % 2)) {
       $headers = [@$headers];
       my $h = [];
+      push @$h, [Server => $server->{server_header}];
       while (@$headers) {
         my $name = shift @$headers;
         my $value = shift @$headers;
-        push @$h, [$name, $value]; ## Errors will be thrown later
+        if (utf8::is_utf8 $name) {
+          my $error = _te "Bad header name |$name|";
+          $res_reject->($error);
+          die $error;
+        }
+        if (utf8::is_utf8 $value) {
+          my $error = _te "Bad header value |$name: $value|";
+          $res_reject->($error);
+          die $error;
+        }
+        push @$h, [$name, $value]; ## More errors will be thrown later
       }
       $headers = $h;
     } else {
@@ -245,15 +266,22 @@ sub _run ($$$$$) {
       if (defined $body and ref $body eq 'ARRAY') {
         my $length = 0;
         my $body = [map {
-          $length += length $_;
-          DataView->new (ArrayBuffer->new_from_scalarref (\$_)); # or throw
+          my $l = length $_;
+          if ($l) {
+            $length += $l;
+            DataView->new (ArrayBuffer->new_from_scalarref (\$_)); # or throw
+          } else {
+            ();
+          }
         } @$body];
         undef $length if $status == 204 or $status == 205 or $status == 304 or
             $method eq 'HEAD';
-        $stream->send_response ({
-          status => $status,
-          headers => $headers,
-          length => $length,
+        Promise->resolve->then (sub {
+          return $stream->send_response (Web::Transport::RequestConstructor->create_response ({
+            status => $status,
+            headers => $headers,
+            length => $length,
+          }));
         })->then (sub {
           my $w = $_[0]->{body}->get_writer;
           $w->write ($_) for @$body;
@@ -275,9 +303,11 @@ sub _run ($$$$$) {
              return if $destroyed++;
              undef $ondestroy2;
            });
-      $stream->send_response ({
-        status => $status,
-        headers => $headers,
+      Promise->resolve->then (sub {
+        return $stream->send_response (Web::Transport::RequestConstructor->create_response ({
+          status => $status,
+          headers => $headers,
+        }));
       })->then (sub {
         my $w = $_[0]->{body}->get_writer;
         $s_writer->($w);
@@ -316,10 +346,13 @@ sub _run ($$$$$) {
         })->catch (sub {
           warn $_[0];
         }),
-        $stream->send_response ({
+        $stream->send_response (Web::Transport::RequestConstructor->create_response ({
           status => 500,
-          headers => [['Content-Type', 'text/plain; charset=utf-8']],
-        })->then (sub {
+          headers => {
+            Server => $server->{server_header},
+            'Content-Type' => 'text/plain; charset=utf-8',
+          },
+        }))->then (sub {
           my $writer = $_[0]->{body}->get_writer;
           $writer->write
               (DataView->new (ArrayBuffer->new_from_scalarref (\"500")));

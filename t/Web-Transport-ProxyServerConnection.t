@@ -71,8 +71,7 @@ sub psgi_server ($$;%) {
     my $server = tcp_server $host, $port, sub {
       $cv->begin;
       $con = Web::Transport::PSGIServerConnection->new_from_app_and_ae_tcp_server_args
-          ($app, [@_], parent_id => $args{parent_id});
-      $con->{connection}->{server_header} = $args{server_name};
+          ($app, [@_], parent_id => $args{parent_id}, server_header => $args{server_name});
       $con->onexception ($onexception) if defined $onexception;
       promised_cleanup { $cv->end } $con->completed;
     };
@@ -1911,6 +1910,168 @@ test {
     });
   });
 } n => 13, name => 'TRACE';
+
+test {
+  my $c = shift;
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_name = undef;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {client => {}, server_header => $server_name});
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $url = Web::URL->parse_string (qq{http://hoge.test/});
+  my $client = Web::Transport::BasicClient->new_from_url ($url);
+  $client->proxy_manager ($pm);
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } promised_cleanup {
+    $close_server->();
+    return $client->close;
+  } $client->request (url => $url)->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 504;
+      is $res->header ('Server'), 'Server';
+      like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+    } $c;
+  });
+} n => 3, name => 'server_header default';
+
+for my $value ('', '0', 'abc/1.2', 'hoge fuga') {
+  test {
+    my $c = shift;
+    my $host = '127.0.0.1';
+    my $port = find_listenable_port;
+    my $close_server;
+    my $server_p = Promise->new (sub {
+      my ($ok) = @_;
+      my $server = tcp_server $host, $port, sub {
+        my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {client => {}, server_header => $value});
+        promised_cleanup { $ok->() } $con->completed;
+      };
+      $close_server = sub { undef $server };
+    });
+    my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+        ([{protocol => 'http', host => $host, port => $port}]);
+
+    my $url = Web::URL->parse_string (qq{http://hoge.test/});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->proxy_manager ($pm);
+    promised_cleanup {
+      done $c; undef $c;
+    } promised_cleanup {
+      return $server_p;
+    } promised_cleanup {
+      $close_server->();
+      return $client->close;
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 504;
+        is $res->header ('Server'), $value;
+        like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+      } $c;
+    });
+  } n => 3, name => ['server_header', $value];
+} # $value
+
+test {
+  my $c = shift;
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {client => {}, server_header => "a\x{5000}"});
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $url = Web::URL->parse_string (qq{http://hoge.test/});
+  my $client = Web::Transport::BasicClient->new_from_url ($url);
+  $client->proxy_manager ($pm);
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } promised_cleanup {
+    $close_server->();
+    return $client->close;
+  } $client->request (url => $url)->then (sub {
+    my $res = $_[0];
+    test {
+      is $res->status, 504;
+      is $res->header ('Server'), "a\xE5\x80\x80";
+      like $res->header ('Date'), qr/^\w+, \d\d \w+ \d+ \d\d:\d\d:\d\d GMT$/;
+    } $c;
+  });
+} n => 3, name => 'server_header utf-8';
+
+test {
+  my $c = shift;
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {client => {}, server_header => "a\x0Db"});
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        my ($s, $x) = @_;
+        $exception_invoked++;
+        if ($exception_invoked == 2) {
+          test {
+            is $s, $con;
+            is $x->name, 'TypeError', $x;
+            is $x->message, 'Bad header value |Server: a\x0Db|';
+            is $x->file_name, __FILE__;
+            is $x->line_number, __LINE__-11;
+          } $c;
+          undef $con;
+        }
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $url = Web::URL->parse_string (qq{http://hoge.test/});
+  my $client = Web::Transport::BasicClient->new_from_url ($url);
+  $client->proxy_manager ($pm);
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } promised_cleanup {
+    $close_server->();
+    return $client->close;
+  } $client->request (url => $url)->catch (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error, $res;
+      is $res->network_error_message, 'Connection closed without response';
+      is $exception_invoked, 2; # can't resolve host.test; bad header value
+    } $c;
+  });
+} n => 8, name => 'server_header bad value';
 
 Test::Certificates->wait_create_cert ({host => 'tlstestproxy.test'});
 Test::Certificates->wait_create_cert ({host => 'tlstestserver.test'});

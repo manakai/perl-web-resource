@@ -1,10 +1,13 @@
 package Web::Transport::RequestConstructor;
 use strict;
 use warnings;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Encoding qw(serialize_form_urlencoded percent_encode_c);
+use Web::DateTime;
+use Web::DateTime::Clock;
 use Web::Transport::TypeError;
+use Web::Transport::_Defs;
 
 push our @CARP_NOT, qw(
   ReadableStreamDefaultReader
@@ -276,6 +279,54 @@ sub create ($$) {
           defined $args->{body} ? \($args->{body}) : undef, $body_reader);
 } # create
 
+##   status - The status code of the response.  It must be an integer
+##   in the range [0, 999].
+##
+##   status_text - The reason phrase of the response.  It must be a
+##   byte string with no 0x0D or 0x0A byte.  It can be the empty
+##   string.  If not defined, default text as defined by the relevant
+##   specification, if any, or the empty string is used.
+##
+##   headers - The headers of the response.  It must be an array
+##   reference or a hash reference (see Web::Transport).  If not
+##   defined, no header is specified.
+##
+##   protocol_clock - The clock of the real-world time, used to
+##   generate protocol elements specifying the current time, such as
+##   HTTP |Date:| header.  If not defined, a |realtime_clock| from
+##   Web::DateTime::Clock is used.
+##
+##   forwarding - Whether this response is received from the upstream
+##   and is to be forwarded to the downstream or not.  If this option
+##   is true, this method does not generate some headers.  (This
+##   option is not used by this method, but is used by
+##   Web::Transport::ProxyServerConnection, which invokes this
+##   method.)
+##
+## Returns a response hash reference, or throws an exception.
+sub create_response ($$) {
+  my $response = {%{$_[1]}};
+
+  unless (defined $response->{status_text}) {
+    $response->{status_text} = $Web::Transport::_Defs::ReasonPhrases->{$response->{status} || 0};
+    $response->{status_text} = '' unless defined $response->{status_text};
+  }
+  die Web::Transport::TypeError->new ("Bad |status_text| (utf8-flagged)")
+      if utf8::is_utf8 $response->{status_text};
+
+  my $has_header;
+  ($response->{headers}, $has_header) = $_[0]->create_header_list
+      ($response->{headers});
+
+  unless ($has_header->{date}) {
+    my $dt = Web::DateTime->new_from_unix_time
+        ($response->{protocol_clock} || Web::DateTime::Clock->realtime_clock->());
+    unshift @{$response->{headers}}, ['Date', $dt->to_http_date_string, 'date'];
+  }
+
+  return $response;
+} # create_response
+
 ## Interpret a |headers| value.  See Web::Transport for acceptable
 ## values.  It either returns an internal headers value (an array
 ## reference of array references of original header name, header
@@ -295,8 +346,8 @@ sub create_header_list ($$) {
     for (@$headers) {
       die Web::Transport::TypeError->new ("Bad headers")
           unless defined $_ and ref $_ eq 'ARRAY';
-      push @$header_list,
-          [(encode_web_utf8 $_->[0]), (encode_web_utf8 $_->[1])];
+      ## Header names and values must be byte strings.
+      push @$header_list, [$_->[0], $_->[1]];
       my $name_lc = $header_list->[-1]->[0];
       $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
       $header_list->[-1]->[2] = $name_lc;
@@ -307,6 +358,8 @@ sub create_header_list ($$) {
       my $name_lc = $name;
       $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
       if (defined $headers->{$name}) {
+        ## Header names and values must be character strings.  (They
+        ## usually does not contain any non-ASCII bytes.)
         if (ref $headers->{$name} eq 'ARRAY') {
           push @$header_list, map {
             [(encode_web_utf8 $name), (encode_web_utf8 $_), $name_lc]

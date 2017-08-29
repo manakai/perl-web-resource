@@ -11,7 +11,6 @@ use ArrayBuffer;
 use TypedArray;
 use Promised::Flow;
 use Streams;
-use Web::Transport::_Defs;
 use Web::Transport::Error;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
@@ -77,15 +76,17 @@ sub _pw ($) {
 ##
 ##   server: Whether it is a server or not.
 ##
-##   server_header: The value of the |Server:| header for the
-##   responses.  If it is not defined, the value |Server| is used.  It
-##   must be a character string.  It is encoded in UTF-8.
-##
 ##   debug: The debug level for the connection.  The value can be |2|
 ##   (very verbose), |1| (verbose), or |0| (normal; default).  If the
 ##   value is not defined but there is the |WEBUA_DEBUG| (for client)
 ##   or |WEBSERVER_DEBUG| (for server) environment variable set when
 ##   the constructor is invoked, that value is used.
+##
+## There is also |server_header| argument, but it is interpreted by
+## Web::Transport::GenericServerConnection (which invokes this
+## method).  It is the value of the |Server:| header for the
+## responses.  If it is not defined, the value |Server| is used.  It
+## must be a character string.  It is encoded in UTF-8.
 sub new ($$) {
   my $args = $_[1];
   my $con = bless {
@@ -95,9 +96,6 @@ sub new ($$) {
   if ($args->{server}) {
     $con->{is_server} = 1;
     $con->{rbuf} = '';
-
-    $con->{server_header} = encode_web_utf8
-        (defined $args->{server_header} ? $args->{server_header} : 'Server');
   }
   if (defined $args->{debug}) {
     $con->{DEBUG} = $args->{debug};
@@ -335,9 +333,8 @@ sub new ($$) {
 ##
 ##   headers - If the method is the server's |headers_received|, the
 ##   request's headers.  If the method is the client's
-##   |headers_received|, the response's headers.  It is an array
-##   reference of zero or more array references of (header name,
-##   header value, lowercased header name).
+##   |headers_received|, the response's headers.  The value is a
+##   canonical headers array reference.
 ##
 ##   body - If the method is |send_request|, the writable stream for
 ##   the request body.  If the method is |send_response|, the writable
@@ -2322,8 +2319,6 @@ use DataView;
 use AnyEvent;
 use Promise;
 use Promised::Flow;
-use Web::DateTime;
-use Web::DateTime::Clock;
 
 push our @CARP_NOT, qw(
   Web::Transport::TypeError
@@ -2922,23 +2917,15 @@ sub _ws_debug ($$$%) {
 ##
 ##   status_text - The reason phrase of the response.  It must be a
 ##   byte string with no 0x0D or 0x0A byte.  It can be the empty
-##   string.  If not defined, default text as defined by the relevant
-##   specification, if any, or the empty string is used.
+##   string.
 ##
-##   headers - The headers of the response.  It must be an array
-##   reference of zero or more array references representing a pair of
-##   header name and value, which are byte strings with no 0x0D or
-##   0x0A byte.  The header names cannot be the empty string and
-##   cannot contain some kinds of bytes.
+##   headers - The headers of the response.  It must be a canonical
+##   headers array reference.
 ##
 ##   length - The byte length of the response body, if any.
 ##
 ##   close - Whether the HTTP connection should be closed after
 ##   sending this response.
-##
-##   forwarding - Whether this response is received from the upstream
-##   and is to be forwarded to the downstream or not.  If this option
-##   is true, this method does not generate some headers.
 ##
 ## This method must be invoked while the HTTP connection is waiting
 ## for an HTTP response.  It returns a promise which is to be
@@ -3006,40 +2993,22 @@ sub send_response ($$$) {
     $close = 1 if $stream->{request}->{method} eq 'CONNECT';
   }
 
-  # XXX allow hashref
-  push @header, @{$response->{headers} or []};
-
-  my $status_text = $response->{status_text};
-  if (not defined $status_text) {
-    $status_text = $Web::Transport::_Defs::ReasonPhrases->{$response->{status}};
-    $status_text = '' unless defined $status_text;
-  }
+  push @header, @{$response->{headers}};
 
   return Promise->reject (Web::Transport::TypeError->new ("Bad |status_text|"))
-      if $status_text =~ /[\x0D\x0A]/;
+      if $response->{status_text} =~ /[\x0D\x0A]/;
   return Promise->reject (Web::Transport::TypeError->new ("Bad |status_text| (utf8-flagged)"))
-      if utf8::is_utf8 $status_text;
+      if utf8::is_utf8 $response->{status_text};
 
-  unshift @header, ['Server', $con->{server_header}]
-      unless $response->{forwarding};
-
-  my $has_header = {};
   for (@header) {
-    croak "Bad header name |@{[_e4d $_->[0]]}|"
+    die Web::Transport::TypeError->new ("Bad header name |@{[_e4d $_->[0]]}|")
         unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
-    croak "Bad header value |$_->[0]: @{[_e4d $_->[1]]}|"
+    die Web::Transport::TypeError->new ("Bad header value |$_->[0]: @{[_e4d $_->[1]]}|")
         unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
-    croak "Header name |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[0];
-    croak "Header value of |$_->[0]| is utf8-flagged" if utf8::is_utf8 $_->[1];
-    my $name = $_->[0];
-    $name =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-    $has_header->{$name} = 1;
-  }
-
-  unless ($has_header->{date}) {
-    my $dt = Web::DateTime->new_from_unix_time
-        (Web::DateTime::Clock->realtime_clock->()); # XXX
-    unshift @header, ['Date', $dt->to_http_date_string];
+    die Web::Transport::TypeError->new ("Header name |$_->[0]| is utf8-flagged")
+        if utf8::is_utf8 $_->[0];
+    die Web::Transport::TypeError->new ("Header value of |$_->[0]| is utf8-flagged")
+        if utf8::is_utf8 $_->[1];
   }
 
   if ($is_ws) {
@@ -3070,7 +3039,7 @@ sub send_response ($$$) {
 
   if ($stream->{request}->{version} ne '0.9') {
     my $res = sprintf qq{HTTP/1.1 %d %s\x0D\x0A},
-        $response->{status}, $status_text;
+        $response->{status}, $response->{status_text};
     for (@header) {
       $res .= "$_->[0]: $_->[1]\x0D\x0A";
     }

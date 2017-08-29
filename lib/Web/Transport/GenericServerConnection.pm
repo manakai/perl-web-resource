@@ -7,6 +7,7 @@ use DataView;
 use AnyEvent;
 use Promise;
 use Promised::Flow;
+use Web::Encoding;
 use Web::Host;
 use Web::Transport::TCPStream;
 use Web::Transport::TLSStream;
@@ -50,10 +51,13 @@ sub new_from_aeargs_and_opts ($$$) {
       parent => $socket,
     };
   }
+
+  $self->{server_header} = encode_web_utf8
+      (defined $opts->{server_header} ? $opts->{server_header} : 'Server');
+
   $self->{connection} = Web::Transport::HTTPStream->new ({
     parent => $socket,
     server => 1,
-    server_header => $opts->{server_header},
   });
   $self->{completed_cv} = AE::cv;
   $self->{completed_cv}->begin;

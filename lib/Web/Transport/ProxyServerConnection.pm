@@ -15,6 +15,7 @@ push our @CARP_NOT, qw(
   ReadableStreamBYOBReader
   Web::Transport::TypeError
   Web::Transport::ProtocolError
+  Web::Transport::RequestConstructor
   Web::Transport::HTTPStream
   Web::Transport::BasicClient
 );
@@ -302,7 +303,13 @@ sub _handle_stream ($$$) {
     }, undef];
   })->then (sub {
     my ($response, $reader) = @{$_[0]};
-    return $stream->send_response ($response)->then (sub {
+    return Promise->resolve->then (sub {
+      $response = Web::Transport::RequestConstructor->create_response ($response); # or throws
+      push @{$response->{headers}},
+          ['Server', $server->{server_header}, 'server']
+              unless $response->{forwarding};
+      return $stream->send_response ($response);
+    })->then (sub {
       my $writer = $_[0]->{body}->get_writer;
 
       if (defined $reader) {

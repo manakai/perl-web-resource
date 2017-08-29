@@ -152,7 +152,7 @@ my $HandleRequestHeaders = {};
             $handler->($stream, $req, $got);
           } elsif ($req->{target_url}->path eq '/') {
             return $stream->send_response
-                ({status => 404, status_text => 'Not Found (/)', close => 1})->then (sub {
+                ({status => 404, status_text => 'Not Found (/)', close => 1, headers => []})->then (sub {
               return $_[0]->{body}->get_writer->close;
             });
           } else {
@@ -1268,7 +1268,7 @@ test {
           ['Hoge', 'Fuga25'],
         ], length => 5})->catch (sub {
       $error = $_[0];
-      return $self->send_response ({status => 412, length => 0});
+      return $self->send_response ({status => 412, length => 0, headers => []});
     });
   };
 
@@ -1349,7 +1349,7 @@ test {
           ['Hoge', 'Fuga25'],
         ], length => 0})->catch (sub {
       $error = $_[0];
-      return $self->send_response ({status => 412, length => 0});
+      return $self->send_response ({status => 412, length => 0, headers => []});
     });
   };
 
@@ -1430,7 +1430,7 @@ test {
           ['Hoge', 'Fuga25'],
         ], length => 5})->catch (sub {
       $error = $_[0];
-      return $self->send_response ({status => 412, length => 0});
+      return $self->send_response ({status => 412, length => 0, headers => []});
     });
   };
 
@@ -1511,7 +1511,7 @@ test {
           ['Hoge', 'Fuga25'],
         ], length => 0})->catch (sub {
       $error = $_[0];
-      return $self->send_response ({status => 412, length => 0});
+      return $self->send_response ({status => 412, length => 0, headers => []});
     });
   };
 
@@ -1847,7 +1847,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, headers => []})->then (sub {
       $invoked = 1;
       return $_[0]->{body}->get_writer->close;
     });
@@ -1911,7 +1911,7 @@ test {
       push @ev, 'closed';
     });
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, headers => []})->then (sub {
       $invoked++;
       return $_[0]->{body}->get_writer->close;
     });
@@ -1961,7 +1961,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req, $got) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, headers => []})->then (sub {
       $invoked = 1;
       return $_[0]->{body}->get_writer->close;
     });
@@ -2003,7 +2003,7 @@ test {
     my ($self, $req) = @_;
     $invoked++;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0, close => 1})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, close => 1, headers => []})->then (sub {
       $invoked++;
       return $_[0]->{body}->get_writer->close;
     });
@@ -2045,7 +2045,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0, close => 1})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, close => 1, headers => []})->then (sub {
       $serverreq = $self;
       $invoked = 1;
       return $_[0]->{body}->get_writer->close;
@@ -2106,7 +2106,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, headers => []})->then (sub {
       $invoked = 1;
       return $_[0]->{body}->get_writer->close;
     });
@@ -2154,7 +2154,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, headers => []})->then (sub {
       $invoked = 1;
       return $_[0]->{body}->get_writer->close;
     });
@@ -2200,7 +2200,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, headers => []})->then (sub {
       $invoked = 1;
       return $_[0]->{body}->get_writer->close;
     });
@@ -2244,7 +2244,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, headers => []})->then (sub {
       $invoked = 1;
       return $_[0]->{body}->get_writer->close;
     });
@@ -2288,7 +2288,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, headers => []})->then (sub {
       $invoked = 1;
       return $_[0]->{body}->get_writer->close;
     });
@@ -2331,7 +2331,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, headers => []})->then (sub {
       $invoked = 1;
       return $_[0]->{body}->get_writer->close;
     });
@@ -2375,7 +2375,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, headers => []})->then (sub {
       $invoked = 1;
       return $_[0]->{body}->get_writer->close;
     });
@@ -2418,7 +2418,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req, $got) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', length => 0})->then (sub {
+        ({status => 201, status_text => 'OK', length => 0, headers => []})->then (sub {
       $invoked = 1;
       return $_[0]->{body}->get_writer->close;
     });
@@ -2463,7 +2463,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       $serverreq = $self;
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /stuvw/) {
@@ -2518,7 +2518,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       $serverreq = $self;
       $self->{wstext} = sub {
         if ($_[0]->{text} =~ /stuvw/) {
@@ -2574,7 +2574,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       return $self->send_ws_message (5, not 'binary')->then (sub {
         my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "abc");
@@ -2618,7 +2618,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       $serverreq = $self;
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /ABCDE/) {
@@ -2667,7 +2667,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       $serverreq = $self;
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /abc/) {
@@ -2713,7 +2713,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       return $self->send_ws_message (5, 'binary')->then (sub {
         my $writer = $_[0]->{body}->get_writer;
         return $writer->write (d "abcdef")->catch (sub {
@@ -2762,7 +2762,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       return $self->send_ws_message (5, not 'binary')->then (sub {
         my $writer = $_[0]->{body}->get_writer;
         return $writer->write (d "abcdef")->catch (sub {
@@ -2811,7 +2811,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       return $self->send_ws_message (5, not 'binary')->then (sub {
         my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "123");
@@ -2860,7 +2860,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       return $self->send_ws_message (0, not 'binary')->then (sub {
         my $writer = $_[0]->{body}->get_writer;
         return $writer->write (d "abcdef")->catch (sub {
@@ -2902,7 +2902,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       test {
         is $self->{response}->{body}, undef;
       } $c;
@@ -2937,7 +2937,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       test {
         is $self->{response}->{body}, undef;
       } $c;
@@ -2983,7 +2983,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       return $self->send_ws_message (5, 'binary')->then (sub {
         my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "123");
@@ -3026,7 +3026,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       return $self->send_ws_message (5, not 'binary')->then (sub {
         my $writer = $_[0]->{body}->get_writer;
         $writer->write (d "123");
@@ -3067,7 +3067,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $p = $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       return $self->send_ws_close (4056);
     })->then (sub {
       return $self->send_ws_message (5, 'binary');
@@ -3108,7 +3108,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       return $self->send_ws_close (4056);
     });
   };
@@ -3141,7 +3141,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       $serverreq = $self;
       $self->{wstext} = sub {
         if ($_[0]->{text} =~ /stuvw/) {
@@ -3203,7 +3203,7 @@ test {
     $got->{closing}->then (sub { push @ev, 'closing' });
     $self->closed->then (sub { push @ev, 'closed'; $closed = $_[0] });
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       push @ev, 'headerssent';
       $serverreq = $self;
       $self->{wstext} = sub {
@@ -3271,7 +3271,7 @@ test {
     $got->{closing}->then (sub { push @ev, 'closing' });
     $self->closed->then (sub { push @ev, 'closed'; $closed = $_[0] });
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       push @ev, 'headerssent';
       $serverreq = $self;
       $self->{wsmsg} = sub {
@@ -3342,7 +3342,7 @@ test {
     $got->{closing}->catch (sub { push @ev, 'closing' });
     $closed_promise = $self->closed->then (sub { push @ev, 'closed'; $closed = $_[0] });
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       push @ev, 'headerssent';
       $serverreq = $self;
       $self->{wstext} = sub {
@@ -3420,7 +3420,7 @@ test {
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 200, status_text => 'Switched!'})->then (sub {
+        ({status => 200, status_text => 'Switched!', headers => []})->then (sub {
       my $got = $_[0];
       test {
         isa_ok $got->{readable}, 'ReadableStream';
@@ -3502,7 +3502,7 @@ test {
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 200, status_text => 'Switched!'})->then (sub {
+        ({status => 200, status_text => 'Switched!', headers => []})->then (sub {
       my $got = $_[0];
       my $w = $got->{writable}->get_writer;
       $w->write (d "abcde");
@@ -3563,7 +3563,7 @@ test {
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 200, status_text => 'Switched!'})->then (sub {
+        ({status => 200, status_text => 'Switched!', headers => []})->then (sub {
       my $got = $_[0];
       my $w = $got->{writable}->get_writer;
       $w->write (d "abcde");
@@ -3630,7 +3630,7 @@ test {
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 200, status_text => 'Switched!'})->then (sub {
+        ({status => 200, status_text => 'Switched!', headers => []})->then (sub {
       my $got = $_[0];
       my $w = $got->{writable}->get_writer;
       $w->write (d "abcde");
@@ -3701,7 +3701,7 @@ test {
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 200, status_text => 'Switched!'})->then (sub {
+        ({status => 200, status_text => 'Switched!', headers => []})->then (sub {
       my $got = $_[0];
       my $w = $got->{writable}->get_writer;
       $w->write (d "abcde");
@@ -3823,10 +3823,10 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->catch (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->catch (sub {
       $error = $_[0];
       return $self->send_response
-          ({status => 200, status_text => 'O.K.'});
+          ({status => 200, status_text => 'O.K.', headers => []});
     })->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d "abcde");
@@ -3877,7 +3877,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $self->send_response
-        ({status => 201, status_text => 'o', close => 1, length => 0});
+        ({status => 201, status_text => 'o', close => 1, length => 0, headers => []});
   };
 
   rawtcp (qq{GET /$path HTTP/1.1\x0D\x0AHost: @{[$Origin->hostport]}\x0D\x0A\x0D\x0A})->then (sub {
@@ -3897,7 +3897,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $self->send_response
-        ({status => 201, status_text => 'o', close => 1, length => 0})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, length => 0, headers => []})->then (sub {
       return $_[0]->{body}->get_writer->close;
     });
   };
@@ -3919,7 +3919,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'ok!');
       return $w->close;
@@ -3943,7 +3943,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       return $w->close;
@@ -3967,7 +3967,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'ok!');
       return $w->close;
@@ -3992,7 +3992,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4019,7 +4019,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4046,7 +4046,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4073,7 +4073,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4100,7 +4100,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4127,7 +4127,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4154,7 +4154,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4181,7 +4181,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4208,7 +4208,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4235,7 +4235,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4262,7 +4262,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4289,7 +4289,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4316,7 +4316,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4343,7 +4343,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4370,7 +4370,7 @@ test {
   $HandleRequestHeaders->{"//$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4397,7 +4397,7 @@ test {
   $HandleRequestHeaders->{"/$path%80%FE%AC%FE"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4424,7 +4424,7 @@ test {
   $HandleRequestHeaders->{"/$path%80%FE%AC%FE"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4451,7 +4451,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4478,7 +4478,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4505,7 +4505,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4532,7 +4532,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4585,7 +4585,7 @@ test {
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{writable}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4612,7 +4612,7 @@ test {
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{writable}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4639,7 +4639,7 @@ test {
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4666,7 +4666,7 @@ test {
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{writable}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4693,7 +4693,7 @@ test {
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       my $w = $_[0]->{writable}->get_writer;
       $w->write (d ($req->{target_url}->stringify));
       $invoked++;
@@ -4720,7 +4720,7 @@ test {
   $HandleRequestHeaders->{"$path.xn--4gq.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       $invoked++;
       return $_[0]->{writable}->get_writer->close;
     });
@@ -4745,7 +4745,7 @@ test {
   $HandleRequestHeaders->{"$path.xn--4gq.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       $invoked++;
       return $_[0]->{writable}->get_writer->close;
     });
@@ -4770,7 +4770,7 @@ test {
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       $invoked++;
       return $_[0]->{writable}->get_writer->close;
     });
@@ -4795,7 +4795,7 @@ test {
   $HandleRequestHeaders->{"$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       $invoked++;
       return $_[0]->{writable}->get_writer->close;
     });
@@ -4820,7 +4820,7 @@ test {
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       $invoked++;
       return $_[0]->{body}->get_writer->close;
     });
@@ -4845,7 +4845,7 @@ test {
   $HandleRequestHeaders->{"/$path.test"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'o', close => 1})->then (sub {
+        ({status => 201, status_text => 'o', close => 1, headers => []})->then (sub {
       $invoked++;
       return $_[0]->{body}->get_writer->close;
     });
@@ -4897,7 +4897,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 101, status_text => 'Switched!'})->then (sub {
+        ({status => 101, status_text => 'Switched!', headers => []})->then (sub {
       $serverreq = $self;
       $self->{wsbinary} = sub {
         if ($_[0]->{body} =~ /stuvw/) {
@@ -4963,7 +4963,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => 'OK', headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       return $w->write (d 'abcde')->then (sub {
         return promised_sleep (1);
@@ -5001,7 +5001,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK',
-                                  length => 10})->then (sub {
+                                  length => 10, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       promised_sleep (1)->then (sub { $self->abort });
@@ -5090,7 +5090,7 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
+    return $self->send_response ({status => 201, status_text => 'OK', headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       return $w->close;
@@ -5166,7 +5166,7 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
+    return $self->send_response ({status => 201, status_text => 'OK', headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       return $w->close;
@@ -5208,7 +5208,7 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
+    return $self->send_response ({status => 201, status_text => 'OK', headers => []})->then (sub {
       #my $w = $_[0]->{body}->get_writer;
       #$w->write (d 'abcde');
       #return $w->close;
@@ -5288,7 +5288,7 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
+    return $self->send_response ({status => 201, status_text => 'OK', headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       return $w->close;
@@ -5330,7 +5330,7 @@ test {
   my $path = rand;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    return $self->send_response ({status => 201, status_text => 'OK'})->then (sub {
+    return $self->send_response ({status => 201, status_text => 'OK', headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
     });
@@ -5373,7 +5373,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK',
-                                  close => 1})->then (sub {
+                                  close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
@@ -5417,7 +5417,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK',
-                                  close => 1})->then (sub {
+                                  close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
@@ -5462,7 +5462,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK',
-                                  close => 1})->then (sub {
+                                  close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
@@ -5508,7 +5508,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK',
-                                  close => 1})->then (sub {
+                                  close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
@@ -5669,7 +5669,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK',
-                                  close => 1})->then (sub {
+                                  close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
@@ -5719,7 +5719,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response ({status => 201, status_text => 'OK',
-                                  close => 1})->then (sub {
+                                  close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       $w->write (d 'abcde');
       $url = $req->{target_url};
@@ -5771,7 +5771,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => 'OK', close => 1})->then (sub {
+        ({status => 201, status_text => 'OK', close => 1, headers => []})->then (sub {
       return $_[0]->{body}->get_writer->close;
     });
   };
@@ -5780,8 +5780,8 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      is $res->header ('Server'), "Server";
-      like $res->header ('Date'), qr{^\w+, \d\d \w+ \d{4} \d\d:\d\d:\d\d GMT$};
+      is $res->header ('Server'), undef;
+      is $res->header ('Date'), undef;
     } $c;
   }, sub {
     test {
@@ -5977,7 +5977,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $self->send_response
-        ({status => 201, status_text => "a\x0Db", close => 1})->catch (sub {
+        ({status => 201, status_text => "a\x0Db", close => 1, headers => []})->catch (sub {
       $error = $_[0];
       $self->abort;
     });
@@ -6009,7 +6009,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     $self->send_response
-        ({status => 201, status_text => "a\x{5000}b", close => 1})->catch (sub {
+        ({status => 201, status_text => "a\x{5000}b", close => 1, headers => []})->catch (sub {
       $error = $_[0];
       $self->abort;
     });
@@ -6041,10 +6041,10 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => "OK", close => 1})->then (sub {
+        ({status => 201, status_text => "OK", close => 1, headers => []})->then (sub {
       my $writer = $_[0]->{body}->get_writer;
       return $self->send_response
-            ({status => 202, status_text => "Not OK", close => 1})->catch (sub {
+            ({status => 202, status_text => "Not OK", close => 1, headers => []})->catch (sub {
         $error = $_[0];
         return $writer->close;
       });
@@ -6077,7 +6077,7 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => "OK", close => 1})->then (sub {
+        ({status => 201, status_text => "OK", close => 1, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       return $w->close->then (sub {
         return $w->write (d "abc");
@@ -6113,11 +6113,11 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     return $self->send_response
-        ({status => 201, status_text => "OK", close => 1})->then (sub {
+        ({status => 201, status_text => "OK", close => 1, headers => []})->then (sub {
       return $_[0]->{body}->get_writer->close;
     })->then (sub {
       return $self->send_response
-          ({status => 202, status_text => "Not OK", close => 1});
+          ({status => 202, status_text => "Not OK", close => 1, headers => []});
     })->catch (sub {
       $error = $_[0];
     });
@@ -6149,9 +6149,9 @@ test {
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
     my $p = $self->send_response
-        ({status => 201, status_text => "OK"});
+        ({status => 201, status_text => "OK", headers => []});
     $self->send_response
-        ({status => 202, status_text => "Not OK", close => 1})->catch (sub {
+        ({status => 202, status_text => "Not OK", close => 1, headers => []})->catch (sub {
       $error = $_[0];
     });
     return $p->then (sub {
@@ -6184,7 +6184,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       return $w->close;
     });
@@ -6228,7 +6228,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}, length => 0})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}, length => 0, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       return $w->close;
     });
@@ -6272,7 +6272,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       test {
         is $req->{version}, '1.1';
@@ -6308,7 +6308,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       test {
         is $req->{version}, '1.0';
@@ -6336,7 +6336,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"/$path"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}, headers => []})->then (sub {
       my $w = $_[0]->{body}->get_writer;
       test {
         is $req->{version}, '0.9';
@@ -6362,7 +6362,7 @@ test {
   my $p;
   $HandleRequestHeaders->{"$path.test:123"} = sub {
     my ($self, $req) = @_;
-    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}})->then (sub {
+    $p = $self->send_response ({status => 201, status_text => $self->{connection}->info->{id}, headers => []})->then (sub {
       test {
         is $req->{version}, '1.0';
         isa_ok $req->{target_url}, 'Web::URL';

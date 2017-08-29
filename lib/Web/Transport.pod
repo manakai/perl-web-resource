@@ -101,20 +101,8 @@ case-sensitive.  If not specified, C<GET> is used.
 
 =item headers => [[$name => $value], ...]
 
-Specify HTTP headers.  The value must be either a hash reference or an
-array reference.
-
-If the value is a hash reference, its keys are header names and its
-values are corresponding header values.  If a value is an array
-reference, the array's items are used as the header values
-(i.e. multiple headers with same name are generated).
-
-If the value is an array reference, it must contain zero or more array
-references whose zeroth items are header names and first items are
-corresponding header values.
-
-Header names are case-insensitive.  Header names and values must be
-byte strings.
+Specify HTTP headers.  The value must be a headers value (see
+L</HEADERS>).
 
 =item cookies => {$string => $string, ...}
 
@@ -313,6 +301,27 @@ Signature Calculations for the Authorization Header: Transferring
 Payload in a Single Chunk (AWS Signature Version 4) - Amazon Simple
 Storage Service
 <https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html>.
+
+=head1 HEADERS
+
+A B<headers value> is either a headers hash reference or a headers
+array reference.
+
+A B<headers hash reference> is a reference to a hash whose keys are
+header names and its values are corresponding header values.  If a
+value is an array reference, that array's items are used as the header
+values (i.e. multiple headers with same name are generated).
+
+A B<headers array reference> is a reference to an array which contain
+zero or more array references which contains header name (index 0) and
+header value (index 1).  A B<canonical headers array reference> is a
+headers array reference whose items contain third item (index 2),
+which is the ASCII lowercased variant of the header name.
+
+Header names and values must be byte strings.  Header names and values
+cannot contain 0x0D or 0x0A bytes.  Header names are case-insensitive.
+Header names cannot be empty and cannot contain certain bytes
+(e.g. 0x3A).
 
 =head1 PROXY MANAGERS
 

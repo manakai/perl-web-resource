@@ -4,10 +4,12 @@ use warnings;
 our $VERSION = '1.0';
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Encoding qw(serialize_form_urlencoded percent_encode_c);
+use Web::Transport::TypeError;
 
 push our @CARP_NOT, qw(
   ReadableStreamDefaultReader
   ReadableStreamBYOBReader
+  Web::Transport::TypeError
 );
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
@@ -20,8 +22,12 @@ sub _fde ($) {
   return $s;
 } # _fde
 
+## Interpret a set of request arguments.  See Web::Transport for
+## arguements' semantics and syntax.  It returns either a set of
+## inputs to request operation or a hash reference representing an
+## error, or throws an exception.
 sub create ($$) {
-  my (undef, $args) = @_;
+  my ($class, $args) = @_;
 
   my $url_record;
   if (defined $args->{url}) {
@@ -53,49 +59,15 @@ sub create ($$) {
     return {failed => 1, message => "Bad |method| argument |$args->{method}|"};
   }
 
-  my $headers = $args->{headers} || {};
-  my $header_list = [];
-  my $has_header = {};
+  my ($header_list, $has_header) = $class->create_header_list
+      ($args->{headers}); # or throw
   my $ct;
   my $auth;
-  if (ref $headers eq 'ARRAY') {
-    for (@$headers) {
-      return {failed => 1, message => 'Bad |headers|'}
-          unless defined $_ and ref $_ eq 'ARRAY';
-      push @$header_list,
-          [(encode_web_utf8 $_->[0]), (encode_web_utf8 $_->[1])];
-      my $name_lc = $header_list->[-1]->[0];
-      $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-      $header_list->[-1]->[2] = $name_lc;
-      
-      $has_header->{$name_lc} = 1;
-      if ($name_lc eq 'content-type') {
-        $ct = $header_list->[-1]->[-1];
-      } elsif ($name_lc eq 'authorization') {
-        $auth = $header_list->[-1]->[-1];
-      }
-    }
-  } else {
-    for my $name (keys %$headers) {
-      my $name_lc = $name;
-      $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
-      if (defined $headers->{$name}) {
-        if (ref $headers->{$name} eq 'ARRAY') {
-          push @$header_list, map {
-            [(encode_web_utf8 $name), (encode_web_utf8 $_), $name_lc]
-          } @{$headers->{$name}};
-        } else {
-          push @$header_list,
-              [(encode_web_utf8 $name), (encode_web_utf8 $headers->{$name}),
-               $name_lc];
-        }
-      }
-      $has_header->{$name_lc} = 1;
-      if ($name_lc eq 'content-type') {
-        $ct = $header_list->[-1]->[-1];
-      } elsif ($name_lc eq 'authorization') {
-        $auth = $header_list->[-1]->[-1];
-      }
+  for (@$header_list) {
+    if ($_->[2] eq 'content-type') {
+      $ct = $_->[1];
+    } elsif ($_->[2] eq 'authorization') {
+      $auth = $_->[1];
     }
   }
 
@@ -303,6 +275,56 @@ sub create ($$) {
   return ($method, $url_record, $header_list,
           defined $args->{body} ? \($args->{body}) : undef, $body_reader);
 } # create
+
+## Interpret a |headers| value.  See Web::Transport for acceptable
+## values.  It either returns an internal headers value (an array
+## reference of array references of original header name, header
+## value, canonical header name tuples, or throws an exception.
+##
+## This method is applicable for request headers, as well as response
+## headers and trailer headers.
+##
+## This method does not validate header names and values.
+sub create_header_list ($$) {
+  my $headers = $_[1];
+  my $header_list = [];
+  my $has_header = {};
+  if (not defined $headers) {
+    #
+  } elsif (ref $headers eq 'ARRAY') {
+    for (@$headers) {
+      die Web::Transport::TypeError->new ("Bad headers")
+          unless defined $_ and ref $_ eq 'ARRAY';
+      push @$header_list,
+          [(encode_web_utf8 $_->[0]), (encode_web_utf8 $_->[1])];
+      my $name_lc = $header_list->[-1]->[0];
+      $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+      $header_list->[-1]->[2] = $name_lc;
+      $has_header->{$name_lc} = 1;
+    }
+  } elsif (ref $headers eq 'HASH') {
+    for my $name (keys %$headers) {
+      my $name_lc = $name;
+      $name_lc =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+      if (defined $headers->{$name}) {
+        if (ref $headers->{$name} eq 'ARRAY') {
+          push @$header_list, map {
+            [(encode_web_utf8 $name), (encode_web_utf8 $_), $name_lc]
+          } @{$headers->{$name}};
+          $has_header->{$name_lc} = 1 if @{$headers->{$name}};
+        } else {
+          push @$header_list,
+              [(encode_web_utf8 $name), (encode_web_utf8 $headers->{$name}),
+               $name_lc];
+          $has_header->{$name_lc} = 1;
+        }
+      }
+    }
+  } else {
+    die Web::Transport::TypeError->new ("Bad headers");
+  }
+  return ($header_list, $has_header);
+} # create_header_list
 
 1;
 

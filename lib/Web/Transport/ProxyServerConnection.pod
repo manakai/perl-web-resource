@@ -83,6 +83,11 @@ C<HTTP parse error>, a C<502> response is generated.  Otherwise, a
 C<500> response is generated.  No request is made to the upstream
 server.
 
+=item api => $api (argument only)
+
+The handler API object (L</"HANDLER API OBJECT">) for this invocation
+of the request handler.
+
 =item data => $value (return value only)
 
 Any application-specific data.  This field can be used to associate
@@ -149,6 +154,11 @@ C<504> response is generated.  Otherwise, if exception's C<name> is
 C<HTTP parse error>, a C<502> response is generated.  Otherwise, a
 C<500> response is generated.
 
+=item api => $api (argument only)
+
+The handler API object (L</"HANDLER API OBJECT">) for this invocation
+of the response handler.
+
 =item data => $value (argument only)
 
 The application-specific data specified by the request handler, if
@@ -163,6 +173,60 @@ and the response handler should extract it from data.
 
 A promise (L<Promise> object) which is fulfilled once the response in
 question has been sent.
+
+=back
+
+=head1 HANDLER API OBJECT
+
+The C<api> value of the argument to request or response handlers are a
+B<handler API object>, which provides convinient methods for use
+within handlers:
+
+=over 4
+
+=item $client = $api->client ($url)
+
+Return a client (L<Web::Transport::BasicClient>) that is ready to send
+a request.  The argument must be a URL (L<Web::URL> object) of the
+target of the request.
+
+This is effectively equivalent to invoking the C<new_from_url> method
+of the L<Web::Transport::BasicClient> module but this method first
+looks into the connection pool of the proxy server and sets client
+options (see L<Web::Transport::BasicClient/"CLIENT OPTIONS">) of the
+proxy server appropriately (as specified by the C<client> option of
+the proxy server's constructor argument).  Therefore, if a request or
+response handler wants to fetch a resource as part of response
+construction, this method should be used exclusively rather than other
+HTTP client APIs.
+
+=item $out_headers = $api->filter_headers ($in_headers, $name => $value, ...)
+
+Remove specified kinds of headers.  The first argument must be a
+canonical headers array reference.  The remaining arguments must be
+zero or more key/value pairs of kinds:
+
+=over 4
+
+=item conditional => $boolean
+
+Headers in the "conditional" category, such as C<If-Modified-Since>.
+
+=item proxy_removed => $boolean
+
+Headers removed by proxies upon forwarding, such as
+C<Transfer-Encoding>, including headers specified in any |Connection:|
+header.
+
+=item names => {$name => $boolean, ...}
+
+Headers with specified names.  The value must be a hash reference,
+whose keys are header names in lowercase and values are boolean true
+values.
+
+=back
+
+It returns a new canonical headers array reference.
 
 =back
 

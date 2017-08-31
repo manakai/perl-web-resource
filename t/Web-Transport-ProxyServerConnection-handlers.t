@@ -1763,6 +1763,145 @@ test {
     my ($ok) = @_;
     my $server = tcp_server $host, $port, sub {
       my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_request => sub {
+          my $args = $_[0];
+          delete $args->{request}->{forwarding};
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return [201, ['User-agent', $env->{HTTP_USER_AGENT},
+                  'accept-language', $env->{HTTP_ACCEPT_LANGUAGE},
+                  'Accept', $env->{HTTP_ACCEPT}], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        ok $res->header ('User-Agent');
+        is $res->header ('accept'), '*/*';
+        is $res->header ('accept-language'), 'en';
+      } $c;
+    });
+  });
+} n => 4, name => 'handle_request not forwarding';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $server_url;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $new_data = 't3watahwa' x 10000;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_request => sub {
+          my $args = $_[0];
+
+          my $api = $args->{api};
+          test {
+            isa_ok $api, 'Web::Transport::ProxyServerConnection::API';
+          } $c;
+
+          my $client = $api->client ($server_url);
+          test {
+            isa_ok $client, 'Web::Transport::BasicClient';
+          } $c;
+
+          return $client->request (%{$args->{request}}, url => $server_url)->then (sub {
+            my $res = $_[0];
+            $args->{response} = {
+              status => $res->status + 1,
+              body => "[[" . $res->body_bytes . "]]",
+            };
+            return $args;
+          });
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+        warn $_[1];
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return [201, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    $server_url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $url = Web::URL->parse_string (q<http://hoge.fuga.test/agaeweeee>);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 202;
+        is $res->body_bytes, '[[200!]]';
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  });
+} n => 6, name => 'handle_request custom client fetch';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
         handle_response => sub {
           my $args = $_[0];
           test {

@@ -157,7 +157,7 @@ sub create ($$) {
     }
   }
 
-  unless ($args->{_forwarding}) {
+  unless ($args->{forwarding}) {
     push @$header_list, ['Accept', '*/*', 'accept']
         unless $has_header->{'accept'};
     push @$header_list, ['Accept-Language', 'en', 'accept-language']
@@ -379,16 +379,8 @@ sub create_header_list ($$) {
   return ($header_list, $has_header);
 } # create_header_list
 
-## Remove specified kinds of headers.  The first argument must be a
-## canonical headers array reference.  The remaining arguments must be
-## zero or more key/value pairs of kinds:
-##
-##   conditional - Headers in the "conditional" category.
-##
-##   proxy_removed - Headers removed by proxies upon forwarding,
-##   including headers specified in any |Connection:| header.
-##
-## It returns a new canonical headers array reference.
+## See Web::Transport::ProxyServerConnection's documentation (HANDLER
+## API OBJECT's |filter_headers| method).
 sub filter_headers ($$%) {
   my (undef, $input, %args) = @_;
 
@@ -407,8 +399,10 @@ sub filter_headers ($$%) {
     }
   } # proxy_removed
 
+  my $names = $args{names} || {};
+
   return [map {
-    if ($remove{$_->[2]}) {
+    if ($remove{$_->[2]} or $names->{$_->[2]}) {
       ();
     } elsif ($args{proxy_removed} and
              $Web::Transport::_Defs::Headers->{proxy_removed}->{$_->[2]}) {

@@ -7,7 +7,6 @@ use Promised::Flow;
 use Web::Transport::Error;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
-use Web::Transport::BasicClient;
 
 push our @ISA, qw(Web::Transport::GenericServerConnection);
 push our @CARP_NOT, qw(
@@ -17,7 +16,7 @@ push our @CARP_NOT, qw(
   Web::Transport::ProtocolError
   Web::Transport::RequestConstructor
   Web::Transport::HTTPStream
-  Web::Transport::BasicClient
+  Web::Transport::ProxyServerConnection::API
 );
 
 sub _te ($) {
@@ -34,6 +33,20 @@ sub _handle_stream ($$$) {
   my $reqbody;
   my $resbody;
   my @wait;
+
+  my $client_opts = {%{$opts->{client} or {}},
+                     parent_id => $stream->{id} . '.c'};
+  $client_opts->{last_resort_timeout} = -1
+      unless defined $client_opts->{last_resort_timeout};
+  $client_opts->{debug} = $server->{debug}
+      unless defined $server->{debug};
+  # XXX disallow connect to the proxy server itself (even as a
+  # $client's proxy)
+  my $api = bless {
+    client_opts => $client_opts,
+    clients => {},
+  }, __PACKAGE__ . '::API';
+
   return $stream->headers_received->then (sub {
     my $req = $_[0];
     $reqbody = $req->{body}; # or undef
@@ -46,10 +59,12 @@ sub _handle_stream ($$$) {
       headers => $req_headers,
       length => $req->{length}, # or undef
       body_stream => (defined $req->{length} ? $req->{body} : undef),
+      forwarding => 1,
     };
 
     return Promise->resolve ({
       info => $stream->{connection}->info, request => $request,
+      api => $api,
     })->then ($opts->{handle_request} || sub {
       ## Default request handler - Return an error response if target
       ## hostport is same as the proxy server's hostport.  This is
@@ -128,20 +143,9 @@ sub _handle_stream ($$$) {
       };
     }
 
-    # XXX connection pool
-    my $client_opts = {%{$opts->{client} or {}},
-                       parent_id => $stream->{id} . '.c'};
-    $client_opts->{last_resort_timeout} = -1
-        unless defined $client_opts->{last_resort_timeout};
-    $client_opts->{debug} = $server->{debug}
-        unless defined $server->{debug};
-    $client = Web::Transport::BasicClient->new_from_url ($url, $client_opts);
-    # XXX disallow connect to the proxy server itself (even as a
-    # $client's proxy)
-
+    $client = $api->client ($url);
     return $client->request (
       %$request,
-      _forwarding => 1, # XXX set before request handler
       stream => 1,
     )->then (sub {
       my $res = $_[0];
@@ -337,11 +341,46 @@ sub _handle_stream ($$$) {
       }; # $read
       push @wait, promised_cleanup { undef $read } $read->();
     }
-    return $client->close if defined $client;
+    push @wait, $api->_close; # XXX persist client
   })->then (sub {
     return Promise->all (\@wait);
   });
 } # _handle_stream
+
+package Web::Transport::ProxyServerConnection::API;
+use Promise;
+use Web::Transport::BasicClient;
+
+push our @CARP_NOT, qw(
+  Web::Transport::BasicClient
+  Web::Transport::RequestConstructor
+);
+
+sub client ($$) {
+  my ($self, $url) = @_;
+  # XXX connection pool
+  my $cons = $self->{clients}->{$url->get_origin->to_ascii} ||= [];
+  for (@$cons) {
+    unless ($_->is_active) {
+      return $_;
+    }
+  }
+  push @$cons, Web::Transport::BasicClient->new_from_url
+      ($url, $self->{client_opts});
+  return $cons->[-1];
+} # client
+
+sub _close ($) {
+  my $self = $_[0];
+  return Promise->all ([map {
+    $_->close;
+  } map { @$_ } values %{$self->{clients}}]);
+} # _close
+
+sub filter_headers ($$;%) {
+  shift;
+  return Web::Transport::RequestConstructor->filter_headers (@_);
+} # filter_headers
 
 # XXX CONNECT request forwarded as is (CONNECT response)
 # XXX CONNECT request forwarded as is (non-CONNECT response)
@@ -370,6 +409,7 @@ sub _handle_stream ($$$) {
 # XXX WS message proxying
 # XXX non-WS request forwarded as WS (WS response)
 # XXX non-WS request forwarded as WS (non-WS response)
+
 
 1;
 

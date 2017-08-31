@@ -272,6 +272,13 @@ Whether the result of the operation should contain a L<ReadableStream>
 object (true) or a byte string (false) for the response body.  See
 L<Web::Transport::BasicClient> for more information.
 
+=item forwarding => $boolean (for proxy)
+
+Whether this client is a component of a proxy, forwarding a request to
+the upstream.  This option is only applicable to the C<request> hash
+reference of the argument (or return value) to the C<handle_request>
+callback of L<Web::Transport::ProxyServerConnection>.
+
 =back
 
 Different subsets of these options are also supported by relevant

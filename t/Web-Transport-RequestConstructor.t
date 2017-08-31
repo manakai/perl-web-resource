@@ -222,6 +222,24 @@ test {
   done $c;
 } n => 6, name => 'filter_headers conditional';
 
+test {
+  my $c = shift;
+  my $in = [
+    ["Hoge", "foo", "hoge"],
+    ["Connection", "abc", "connection"],
+    ["If-Match", "abcd", "if-match"],
+    ["ABC", "foo", "abc"],
+  ];
+  my $out = Web::Transport::RequestConstructor->filter_headers
+      ($in, names => {'if-match' => 1, hoge => 1});
+  isnt $out, $in;
+  is 0+@$in, 4;
+  is 0+@$out, 2;
+  is $out->[0]->[0], 'Connection';
+  is $out->[1]->[0], 'ABC';
+  done $c;
+} n => 5, name => 'filter_headers names';
+
 run_tests;
 
 =head1 LICENSE

@@ -99,7 +99,21 @@ default value is used.
 
 =item client => {$name => $value, ...} (proxy server only)
 
-XXX
+The client options for the connections to the upstream server.
+
+Client options are same as those for the
+L<Web::Transport::BasicClient> (see
+L<Web::Transport::BasicClient/"CLIENT OPTIONS">), with following
+exceptions: The C<debug> option's default value is I<$opts>' C<debug>
+option's value.  The C<last_resort_timeout> option's default value is
+C<-1>.  The C<parent_id> option is not available and is set to
+appropriate value by the proxy.
+
+=item debug => $mode
+
+The debug mode.  If not defined, the C<WEBSERVER_DEBUG> environment
+variable's value is used.  See C<WEBSERVER_DEBUG> section in
+L<Web::Transport/"ENVIRONMENT VARIABLES"> for available mode values.
 
 =item parent_id => $string
 

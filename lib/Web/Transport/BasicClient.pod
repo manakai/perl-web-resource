@@ -48,29 +48,36 @@ There are following methods:
 
 =over 4
 
-=item $client = Web::Transport::BasicClient->new_from_host ($string)
+=item $client = Web::Transport::BasicClient->new_from_host ($string[, $opts])
 
 Create a new client object, which is associated with a origin
 (C<https>, I<$string>, C<undef>).  That is, a client for the specified
 host using HTTPS with port C<443> is created.
 
-The argument must be a string, which is either a domain, an IPv4
+The first argument must be a string, which is either a domain, an IPv4
 address, or an IPv6 address enclosed by C<[> and C<]>.  They don't
 have to be in their canonicalized form.  IDNs are also allowed.
 
-=item $client = Web::Transport::BasicClient->new_from_url ($url)
+The second argument, if any, must be a client options (see L</CLIENT
+OPTIONS>).
+
+=item $client = Web::Transport::BasicClient->new_from_url ($url[, $opts])
 
 Create a new client object, which is associated with a URL's origin
 and path.
 
-The argument must be a URL record object (L<Web::URL>).  It's origin
-must be a tuple origin (typically an C<http:> or C<https:> URL).
+The first argument must be a URL record object (L<Web::URL>).  It's
+origin must be a tuple origin (typically an C<http:> or C<https:>
+URL).
 
 The path of the URL is used as the "prefix" of the URL path used for
 the requests (See L<Web::Transport/"REQUEST OPTIONS">' C<path>).
 
 Note that anything other than the origin and path of the URL is
 ignored.
+
+The second argument, if any, must be a client options (see L</CLIENT
+OPTIONS>).
 
 Example:
 
@@ -136,101 +143,86 @@ of the debugging and is never sent to the remote server.
 This method returns a promise, which is fulfilled once the connection
 has been closed.
 
-=item $client->proxy_manager ($pm)
-
-=item $pm = $client->proxy_manager
-
-Get or set the proxy manager used to establish connections.
-Initially, a proxy manager which takes standard environment variables
-into account (i.e. L<Web::Transport::ENVProxyManager>) is set as the
-proxy manager.
-
-This option must be set before the first invocation of the C<request>
-method.
-
-=item $client->resolver ($resolver)
-
-=item $resolver = $client->resolver
-
-Get or set the name resolver used to establish connections.
-Initially, a resolver using system's name resolution API
-(L<Web::Transport::PlatformResolver>) wrapped by DNS caching
-(L<Web::Transport::CachedResolver>) is set as the resolver.
-
-This option must be set before the first invocation of the C<request>
-method.
-
-=item $client->protocol_clock ($clock)
-
-=item $clock = $client->protocol_clock
-
-Get or set the clock object used for various protocol-level date-time
-operations (e.g. obtaining timestamps used in authentications).
-Initially, a clock of C<< Web::DateTime::Clock->realtime_clock >> is
-set.
-
-Please note that this clock cannot alter the value used in OpenSSL.
-
-This option must be set before the first invocation of the C<request>
-method.
-
-=item $client->tls_options ({...})
-
-=item $hashref = $client->tls_options
-
-XXX
-
-This option must be set before the first invocation of the C<request>
-method.
-
-=item $client->max_size ($integer)
-
-=item $integer = $client->max_size
-
-Get or set the maximum size of the (uncompressed) body of the
-response, in bytes.  The initial value is -1, i.e. no limit is set.
-
-If a non-negative number is specified and the response body is greater
-than the value, the connection is aborted as soon as possible.
-
-This option must be set before the first invocation of the C<request>
-method.
-
-=item $client->debug ($mode)
-
-=item $mode = $client->debug
-
-Get or set the debug mode.  The initial value is the C<WEBUA_DEBUG>
-environment variable's value.  See C<WEBUA_DEBUG> section in
-L<Web::Transport> for available mode values.
-
-=item $client->last_resort_timeout ($seconds)
-
-=item $seconds = $client->last_resort_timeout
-
-Get or set the last-resort timeout value, in seconds.  In most
-applications, this value does not have to be changed.  It is used to
-avoid the application blocked by a server which returns infinite
-response body.  If your application has specific realtimeness
-requirement, use your own timer to abort the request, rather than
-reusing this timer.
-
-This option must be set before the first invocation of the C<request>
-method.
-
 =item $origin = $client->origin
 
 Return the origin (L<Web::Origin>) of the connection.
 
 =back
 
+=head1 CLIENT OPTIONS
+
+A B<client options> is a hash reference with zero or more key/value
+pairs:
+
+=over 4
+
+=item proxy_manager => $proxy_manager
+
+The proxy manager used to establish connections (see
+L<Web::Transport/"PROXY MANAGERS">).  If not defined, a proxy manager
+which takes standard environment variables (i.e. C<http_proxy>,
+C<https_proxy>, C<ftp_proxy>, and C<no_proxy>) into account
+(i.e. L<Web::Transport::ENVProxyManager>) is used.
+
+=item resolver => $resolver
+
+The name resolver used to establish connections (see
+L<Web::Transport/"RESOLVERS">).  If not defined, a resolver using
+platform's name resolution API (L<Web::Transport::PlatformResolver>)
+wrapped by in-memory DNS cache (L<Web::Transport::CachedResolver>) is
+used.
+
+=item protocol_clock => $clock
+
+The clock object used for various protocol-level date-time operations
+(e.g. obtaining timestamps used in authentications).  If not defined,
+a clock of C<< Web::DateTime::Clock->realtime_clock >> is used.
+
+Please note that this clock cannot alter the value used by OpenSSL.
+
+=item tls_options => {...}
+
+XXX
+
+=item max_size => $integer
+
+The maximum size of the (uncompressed) body of the response, in bytes.
+If not defined, the maximum is -1, i.e. no limit is set.
+
+If a non-negative number is specified and the response body is greater
+than the value, the connection is aborted as soon as possible after
+receiving the specified number of bytes.
+
+=item debug => $mode
+
+The debug mode.  If not defined, the C<WEBUA_DEBUG> environment
+variable's value is used.  See C<WEBUA_DEBUG> section in
+L<Web::Transport/"ENVIRONMENT VARIABLES"> for available mode values.
+
+=item parent_id => $string
+
+A short string that identifies the "parent" context in which the
+client appears, which will be used in debug outputs.
+
+=item last_resort_timeout => $seconds
+
+The last-resort timeout value, in seconds.  Most applications do not
+have to set this value.  It is used to avoid the application blocked
+by a server which returns infinite response body.  If your application
+has specific realtimeness requirement, use your own timer to abort the
+request, rather than reusing this timer.  If the value is negative, no
+timer is enabled.  If not defined, a value large enough for most
+normal requests is used.
+
+=back
+
+These options are also used by
+L<Web::Transport::ProxyServerConnection>'s clients.
+
 =head1 ENVIRONMENT VARIABLES
 
-This module supports C<WEBUA_DEBUG>.  See L<Web::Transport>.
-
-When the default C<resolver> is used, proxy environment variables
-C<http_proxy>, C<https_proxy>, C<ftp_proxy>, and C<no_proxy> are taken
-into account.  See L<Web::Transport::ENVProxyManager>.
+See the C<resolver> and C<debug> options in the L</"CLIENT OPTIONS">
+section.
 
 =head1 SPECIFICATION
 

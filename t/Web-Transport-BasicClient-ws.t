@@ -123,8 +123,9 @@ sub reading (&$) {
 test {
   my $c = shift;
   my $url = Web::URL->parse_string (qq{ws://notfound.test/});
-  my $client = Web::Transport::BasicClient->new_from_url ($url);
-  $client->resolver (bless {}, 'test::resolver1');
+  my $client = Web::Transport::BasicClient->new_from_url ($url, {
+    resolver => (bless {}, 'test::resolver1'),
+  });
   $client->request (url => $url)->catch (sub {
     my $res = $_[0];
     test {
@@ -817,9 +818,10 @@ test {
     my $url = Web::URL->parse_string (qq{wss://host2.test:$server->{port}/});
     my $res;
     my @data;
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->resolver (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1');
-    $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      resolver => (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1'),
+      tls_options => ({ca_file => Test::Certificates->ca_path ('cert.pem')}),
+    });
     $client->request (url => $url)->then (sub {
       $res = $_[0];
       $res->ws_send_binary ("\x80a\xA1");
@@ -898,10 +900,11 @@ test {
     my $url = Web::URL->parse_string (qq{wss://host2.test});
     my $res;
     my @data;
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
-    $client->proxy_manager (pp [{protocol => 'http', host => $server->{host},
-                                 port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      tls_options => ({ca_file => Test::Certificates->ca_path ('cert.pem')}),
+      proxy_manager => (pp [{protocol => 'http', host => $server->{host},
+                                 port => $server->{port}}]),
+    });
     $client->request (url => $url)->then (sub {
       $res = $_[0];
       $res->ws_send_binary ("\x80a\xA1");

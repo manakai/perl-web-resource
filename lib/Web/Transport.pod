@@ -363,7 +363,7 @@ There are following resolvers in this repository:
 L<Web::Transport::PlatformResolver>,
 L<Web::Transport::CachedResolver>.
 
-=head1 ENVIRONMENT VARIABLE
+=head1 ENVIRONMENT VARIABLES
 
 The C<WEBUA_DEBUG> and C<WEBSERVER_DEBUG> environment variables can be
 used to enable the debug mode of client and server modules,

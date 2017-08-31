@@ -721,9 +721,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'http', host => $server->{host},
-                        port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'http', host => $server->{host},
+                        port => $server->{port}}]),
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -742,8 +743,9 @@ test {
 test {
   my $c = shift;
   my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-  my $client = Web::Transport::BasicClient->new_from_url ($url);
-  $client->proxy_manager (pp [{protocol => 'http', host => 'hoge.fuga.test'}]);
+  my $client = Web::Transport::BasicClient->new_from_url ($url, {
+    proxy_manager => (pp [{protocol => 'http', host => 'hoge.fuga.test'}]),
+  });
   return $client->request (url => $url)->catch (sub {
     my $res = $_[0];
     test {
@@ -761,8 +763,9 @@ test {
 test {
   my $c = shift;
   my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-  my $client = Web::Transport::BasicClient->new_from_url ($url);
-  $client->proxy_manager (pp []);
+  my $client = Web::Transport::BasicClient->new_from_url ($url, {
+    proxy_manager => (pp []),
+  });
   return $client->request (url => $url)->catch (sub {
     my $res = $_[0];
     test {
@@ -780,8 +783,9 @@ test {
 test {
   my $c = shift;
   my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-  my $client = Web::Transport::BasicClient->new_from_url ($url);
-  $client->proxy_manager (pp [{protocol => 'UnknownProtocol'}]);
+  my $client = Web::Transport::BasicClient->new_from_url ($url, {
+    proxy_manager => (pp [{protocol => 'UnknownProtocol'}]),
+  });
   return $client->request (url => $url)->catch (sub {
     my $res = $_[0];
     test {
@@ -809,12 +813,13 @@ test {
   ))->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->resolver (bless {'resolver1.test' => '127.0.0.1'}, 'test::resolver1');
-    $client->proxy_manager (pp [{protocol => 'https',
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      resolver => (bless {'resolver1.test' => '127.0.0.1'}, 'test::resolver1'),
+      proxy_manager => (pp [{protocol => 'https',
                                  host => 'resolver1.test', #$server->{host},
                                  port => $server->{port},
-                                 tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]);
+                                 tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]),
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -843,11 +848,12 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->resolver (bless {'resolver1.test' => '127.0.0.1'}, 'test::resolver1');
-    $client->proxy_manager (pp [{protocol => 'https', host => $server->{host},
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      resolver => (bless {'resolver1.test' => '127.0.0.1'}, 'test::resolver1'),
+      proxy_manager => (pp [{protocol => 'https', host => $server->{host},
                         port => $server->{port},
-                        tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]);
+                        tls_options => {ca_file => Test::Certificates->ca_path ('cert.pem')}}]),
+    });
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {
@@ -876,9 +882,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{https://host2.test:$server->{port}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->resolver (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1');
-    $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      resolver => (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1'),
+      tls_options => ({ca_file => Test::Certificates->ca_path ('cert.pem')}),
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -907,9 +914,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{https://host3.test:$server->{port}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->resolver (bless {'host3.test' => '127.0.0.1'}, 'test::resolver1');
-    $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      resolver => (bless {'host3.test' => '127.0.0.1'}, 'test::resolver1'),
+      tls_options => ({ca_file => Test::Certificates->ca_path ('cert.pem')}),
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -937,9 +945,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{https://host4.test:$server->{port}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->resolver (bless {'host4.test' => '127.0.0.1'}, 'test::resolver1');
-    $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      resolver => (bless {'host4.test' => '127.0.0.1'}, 'test::resolver1'),
+      tls_options => ({ca_file => Test::Certificates->ca_path ('cert.pem')}),
+    });
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {
@@ -974,8 +983,9 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{https://host5.test:$server->{port}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->resolver (bless {'host5.test' => '127.0.0.1'}, 'test::resolver1');
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      resolver => (bless {'host5.test' => '127.0.0.1'}, 'test::resolver1'),
+    });
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {
@@ -1008,11 +1018,11 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{https://hoge.example.net/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'http', host => $server->{host},
-                                 port => $server->{port}}]);
-    $client->tls_options
-        ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'http', host => $server->{host},
+                                 port => $server->{port}}]),
+      tls_options => ({ca_file => Test::Certificates->ca_path ('cert.pem')}),
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -1039,8 +1049,9 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'unix', path => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'unix', path => $server->{port}}]),
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -1063,8 +1074,9 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->last_resort_timeout (0.5);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      last_resort_timeout => 0.5,
+    });
     my $p = $client->request (url => $url);
     test {
       isa_ok $p, 'Promise';
@@ -1097,8 +1109,9 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->last_resort_timeout (0.5);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      last_resort_timeout => 0.5,
+    });
     my $p = $client->request (url => $url);
     test {
       isa_ok $p, 'Promise';
@@ -1132,8 +1145,9 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->last_resort_timeout (0.5);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      last_resort_timeout => 0.5,
+    });
     my $p = $client->request (url => $url);
     test {
       isa_ok $p, 'Promise';
@@ -1164,8 +1178,9 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->last_resort_timeout (0.5);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      last_resort_timeout => 0.5,
+    });
     my $p = $client->request (url => $url);
     test {
       isa_ok $p, 'Promise';
@@ -1191,45 +1206,6 @@ test {
 test {
   my $c = shift;
   server_as_cv (q{
-    receive "GET"
-    "HTTP/1.1 200 OK"CRLF
-    "Content-Length: 4"CRLF
-    CRLF
-    "hoge"
-  })->cb (sub {
-    my $server = $_[0]->recv;
-    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    my $p1 = $client->request (url => $url);
-    $client->last_resort_timeout (0.5);
-    my $p2 = $client->request (url => $url);
-    return $p1->then (sub {
-      my $res1 = $_[0];
-      test {
-        ok ! $res1->is_network_error;
-        is $res1->network_error_message, undef;
-        is $res1->body_bytes, 'hoge';
-      } $c;
-      return $p2;
-    })->catch (sub {
-      my $res2 = $_[0];
-      test {
-        ok $res2->is_network_error;
-        is $res2->network_error_message, 'Last-resort timeout (0.5)';
-        is $res2->body_bytes, undef;
-      } $c;
-    })->then (sub{
-      return $client->close;
-    })->then (sub {
-      done $c;
-      undef $c;
-    });
-  });
-} n => 6, name => 'timeout can retry';
-
-test {
-  my $c = shift;
-  server_as_cv (q{
     receive "GET http://hoge.example.net/foo"
     "HTTP/1.1 203 Hoe"CRLF
     "Content-Length: 6"CRLF
@@ -1238,10 +1214,11 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.example.net/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'http', host => 'unknown.host.test'},
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'http', host => 'unknown.host.test'},
                        {protocol => 'http', host => $server->{host},
-                        port => $server->{port}}]);
+                        port => $server->{port}}]),
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -1268,9 +1245,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'http', host => 'unknown.host.test'},
-                       {protocol => 'tcp'}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'http', host => 'unknown.host.test'},
+                       {protocol => 'tcp'}]),
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -1298,8 +1276,9 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->max_size (6);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      max_size => 6,
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -1329,8 +1308,9 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->max_size (6);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      max_size => 6,
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -3024,8 +3004,9 @@ test {
     my $server = $_[0]->recv;
     my $length = 5_000_000;
     my $url = Web::URL->parse_string (qq{http://host2.test:$server->{port}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->resolver (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1');
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      resolver => (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1'),
+    });
     my $data = '';
     my @alpha = ('0'..'9','A'..'Z','a'..'z');
     $data .= $alpha[rand @alpha] for 1..$length;
@@ -3060,9 +3041,10 @@ test {
     my $server = $_[0]->recv;
     my $length = 5_000_000;
     my $url = Web::URL->parse_string (qq{https://host2.test:$server->{port}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->resolver (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1');
-    $client->tls_options ({ca_file => Test::Certificates->ca_path ('cert.pem')});
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      resolver => (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1'),
+      tls_options => ({ca_file => Test::Certificates->ca_path ('cert.pem')}),
+    });
     my $data = '';
     my @alpha = ('0'..'9','A'..'Z','a'..'z');
     $data .= $alpha[rand @alpha] for 1..$length;
@@ -3257,7 +3239,6 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{https://$server->{host}:$server->{port}/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
     {
       package test::proxyForAbort4;
       use Promised::Flow;
@@ -3267,7 +3248,9 @@ test {
         });
       }
     }
-    $client->proxy_manager (bless {}, 'test::proxyForAbort4');
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (bless {}, 'test::proxyForAbort4'),
+    });
     my $p = $client->request (url => $url);
     my $message = rand;
     (promised_sleep 1)->then (sub {
@@ -3303,8 +3286,10 @@ test {
         ([{protocol => 'http', host => $origin->host, port => $origin->port}]);
     ## Test data from <http://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html>
     my $url = Web::URL->parse_string (q<http://examplebucket.s3.amazonaws.com>);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+      protocol_clock =>sub { return timegm_nocheck (0, 0, 0, 24, 5-1, 2013) },
+    });
     my $access_key_id = 'AKIAIOSFODNN7EXAMPLE';
     my $secret_access_key = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
     my $region = 'us-east-1';
@@ -3313,8 +3298,6 @@ test {
       return $client->close->then ($close);
     } promised_for {
       my $test = shift;
-      $client->protocol_clock
-          (sub { return timegm_nocheck (0, 0, 0, 24, 5-1, 2013) });
       return $client->request (
         method => $test->{method},
         path => $test->{path},
@@ -3443,9 +3426,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                        port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]),
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -3479,9 +3463,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                        port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]),
+    });
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {
@@ -3518,9 +3503,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://badhost.test/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                        port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]),
+    });
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {
@@ -3548,9 +3534,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                        port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]),
+    });
     return promised_cleanup {
       done $c;
       undef $c;
@@ -3587,9 +3574,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                        port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]),
+    });
     return promised_cleanup {
       done $c;
       undef $c;
@@ -3624,9 +3612,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                        port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks4', host => $server->{host},
+                        port => $server->{port}}]),
+    });
     return promised_cleanup {
       done $c;
       undef $c;
@@ -3655,9 +3644,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://$server->{host}/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks4', host => $server->{host},
-                                 port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks4', host => $server->{host},
+                                 port => $server->{port}}]),
+    });
     return promised_cleanup {
       done $c;
       undef $c;
@@ -3712,9 +3702,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
-                                 port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]),
+    });
     return $client->request (url => $url)->then (sub {
       my $res = $_[0];
       test {
@@ -3751,9 +3742,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
-                                 port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]),
+    });
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {
@@ -3786,9 +3778,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
-                                 port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]),
+    });
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {
@@ -3810,9 +3803,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
-                                 port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]),
+    });
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {
@@ -3835,9 +3829,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
-                                 port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]),
+    });
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {
@@ -3866,9 +3861,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
-                                 port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]),
+    });
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {
@@ -3898,9 +3894,10 @@ test {
   })->cb (sub {
     my $server = $_[0]->recv;
     my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager (pp [{protocol => 'socks5', host => $server->{host},
-                                 port => $server->{port}}]);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => (pp [{protocol => 'socks5', host => $server->{host},
+                                 port => $server->{port}}]),
+    });
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {

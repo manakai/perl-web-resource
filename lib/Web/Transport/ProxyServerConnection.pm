@@ -129,12 +129,13 @@ sub _handle_stream ($$$) {
     }
 
     # XXX connection pool
-    $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->{parent_id} = $stream->{id} . '.c';
-    $client->proxy_manager ($opts->{client}->{proxy_manager});
-    $client->resolver ($opts->{client}->{resolver});
-    $client->tls_options ($opts->{client}->{tls_options});
-    $client->last_resort_timeout ($opts->{client}->{last_resort_timeout});
+    my $client_opts = {%{$opts->{client} or {}},
+                       parent_id => $stream->{id} . '.c'};
+    $client_opts->{last_resort_timeout} = -1
+        unless defined $client_opts->{last_resort_timeout};
+    $client_opts->{debug} = $server->{debug}
+        unless defined $server->{debug};
+    $client = Web::Transport::BasicClient->new_from_url ($url, $client_opts);
     # XXX disallow connect to the proxy server itself (even as a
     # $client's proxy)
 

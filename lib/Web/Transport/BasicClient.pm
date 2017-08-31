@@ -25,8 +25,6 @@ push our @CARP_NOT, qw(
   Web::Transport::HTTPStream
 );
 
-use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
-
 sub _te ($) {
   return Web::Transport::TypeError->new ($_[0]);
 } # _te
@@ -35,95 +33,55 @@ sub _pe ($) {
   return Web::Transport::ProtocolError->new ($_[0]);
 } # _pe
 
-sub new_from_url ($$) {
+our $LastResortTimeout;
+$LastResortTimeout = 60*10 unless defined $LastResortTimeout;
+
+sub new_from_url ($$;$) {
   die _te "No URL is specified" unless defined $_[1];
   my $origin = $_[1]->get_origin;
   die _te "The URL does not have a tuple origin" if $origin->is_opaque;
+  my $opts = $_[2] || {};
   return bless {
     base_url => $_[1],
     path_prefix => $_[1]->path,
     origin => $origin,
     queue => Promise->resolve,
-    parent_id => ($$ . '.' . ++$Web::Transport::NextID),
+    parent_id => (defined $opts->{parent_id} ? $opts->{parent_id} : ($$ . '.' . ++$Web::Transport::NextID)),
+    proxy_manager => $opts->{proxy_manager} || do {
+      require Web::Transport::ENVProxyManager;
+      Web::Transport::ENVProxyManager->new;
+    }, # proxy_manager
+    resolver => $opts->{resolver} || do {
+      require Web::Transport::PlatformResolver;
+      require Web::Transport::CachedResolver;
+      require Web::DateTime::Clock;
+      Web::Transport::CachedResolver->new_from_resolver_and_clock
+          (Web::Transport::PlatformResolver->new,
+           Web::DateTime::Clock->monotonic_clock);
+    }, # resolver
+    protocol_clock => $opts->{protocol_clock} || do {
+      require Web::DateTime::Clock;
+      Web::DateTime::Clock->realtime_clock;
+    }, # protocol_clock
+    tls_options => $opts->{tls_options} || {},
+    max_size => (defined $opts->{max_size} ? $opts->{max_size} : -1),
+    debug => (defined $opts->{debug} ? $opts->{debug} : ($ENV{WEBUA_DEBUG} || 0)),
+    last_resort_timeout => (defined $opts->{last_resort_timeout}
+        ? $opts->{last_resort_timeout} : $LastResortTimeout),
   }, $_[0];
 } # new_from_url
 
-sub new_from_host ($$) {
-  my $host = $_[1];
+sub new_from_host ($$;$) {
+  my $class = shift;
+  my $host = shift;
   die _te "Not a valid host" unless defined $host;
-  return $_[0]->new_from_url
-      (Web::URL->parse_string ('https://' . $host->to_ascii));
+  return $class->new_from_url
+      (Web::URL->parse_string ('https://' . $host->to_ascii), @_);
 } # new_from_host
 
 sub origin ($) {
   return $_[0]->{origin};
 } # origin
-
-sub proxy_manager ($;$) {
-  if (@_ > 1) {
-    $_[0]->{proxy_manager} = $_[1];
-  }
-  return $_[0]->{proxy_manager} ||= do {
-    require Web::Transport::ENVProxyManager;
-    Web::Transport::ENVProxyManager->new;
-  };
-} # proxy_manager
-
-sub resolver ($;$) {
-  if (@_ > 1) {
-    $_[0]->{resolver} = $_[1];
-    return unless defined wantarray;
-  }
-  return $_[0]->{resolver} ||= do {
-    require Web::Transport::PlatformResolver;
-    require Web::Transport::CachedResolver;
-    require Web::DateTime::Clock;
-    Web::Transport::CachedResolver->new_from_resolver_and_clock
-        (Web::Transport::PlatformResolver->new,
-         Web::DateTime::Clock->monotonic_clock);
-  };
-} # resolver
-
-sub protocol_clock ($;$) {
-  if (@_ > 1) {
-    $_[0]->{protocol_clock} = $_[1];
-  }
-  return $_[0]->{protocol_clock} ||= do {
-    require Web::DateTime::Clock;
-    Web::DateTime::Clock->realtime_clock;
-  };
-} # protocol_clock
-
-sub tls_options ($;$) {
-  if (@_ > 1) {
-    $_[0]->{tls_options} = $_[1];
-  }
-  return $_[0]->{tls_options};
-} # tls_options
-
-sub max_size ($;$) {
-  if (@_ > 1) {
-    $_[0]->{max_size} = $_[1];
-  }
-  return defined $_[0]->{max_size} ? $_[0]->{max_size} : -1;
-} # max_size
-
-sub debug ($;$) {
-  if (@_ > 1) {
-    $_[0]->{debug} = $_[1];
-  }
-  return defined $_[0]->{debug} ? $_[0]->{debug} : DEBUG;
-} # debug
-
-our $LastResortTimeout;
-$LastResortTimeout = 60*10 unless defined $LastResortTimeout;
-sub last_resort_timeout ($;$) {
-  if (@_ > 1) {
-    $_[0]->{last_resort_timeout} = $_[1];
-  }
-  return defined $_[0]->{last_resort_timeout}
-      ? $_[0]->{last_resort_timeout} : $LastResortTimeout;
-} # last_resort_timeout
 
 my $proxy_to_transport = sub {
   ## create a transport for a proxy configuration
@@ -266,7 +224,7 @@ sub _connect ($$) {
   my $http = delete $self->{http};
   delete $self->{connect_promise};
   $http->abort if defined $http;
-  if ($self->debug) {
+  if ($self->{debug}) {
     if (defined $http) {
       warn "$self->{parent_id}: @{[__PACKAGE__]}: Current connection is no longer active @{[scalar gmtime]}\n";
     } else {
@@ -279,11 +237,10 @@ sub _connect ($$) {
     ## Establish a transport
 
     my $parent_id = $self->{parent_id};
-    my $debug = $self->debug;
+    my $debug = $self->{debug};
 
-    $self->proxy_manager->get_proxies_for_url ($url_record)->then (sub {
+    $self->{proxy_manager}->get_proxies_for_url ($url_record)->then (sub {
       my $proxies = [@{$_[0]}];
-      my $resolver = $self->resolver;
 
       # XXX wait for other connections
 
@@ -291,8 +248,9 @@ sub _connect ($$) {
         if (@$proxies) {
           my $proxy = shift @$proxies;
           my $tid = $parent_id . '.' . ++$self->{tid};
-          return $proxy_to_transport->($tid, $proxy, $url_record, $resolver,
-                                       $self->protocol_clock,
+          return $proxy_to_transport->($tid, $proxy, $url_record,
+                                       $self->{resolver},
+                                       $self->{protocol_clock},
                                        $args{no_cache}, $debug)->catch (sub {
             if (@$proxies) {
               return $get->();
@@ -309,12 +267,12 @@ sub _connect ($$) {
         undef $get;
         if ($url_record->scheme eq 'https') {
           return [{
-            %{$self->{tls_options} or {}},
+            %{$self->{tls_options}},
             class => 'Web::Transport::TLSStream',
             parent => $tparams,
             si_host => $url_record->host,
             sni_host => $url_record->host,
-            protocol_clock => $self->protocol_clock,
+            protocol_clock => $self->{protocol_clock},
           }, 0];
         }
         return [$tparams, $request_mode_is_http_proxy];
@@ -347,7 +305,7 @@ sub _connect ($$) {
 sub _request ($$$$$$$$$$) {
   my ($self, $method, $url_record, $headers,
       $body_ref, $body_reader, $no_cache, $is_ws, $need_readable_stream) = @_;
-  if ($self->debug) {
+  if ($self->{debug}) {
     warn "$self->{parent_id}: @{[__PACKAGE__]}: Request <@{[$url_record->stringify]}> @{[scalar gmtime]}\n";
   }
   return $self->_connect ($url_record, no_cache => $no_cache)->then (sub {
@@ -378,7 +336,7 @@ sub _request ($$$$$$$$$$) {
     ];
 
     my $http = $self->{http};
-    my $timeout = $self->last_resort_timeout;
+    my $timeout = $self->{last_resort_timeout};
     my $timer;
     if ($timeout > 0) {
       $timer = AE::timer $timeout, 0, sub {
@@ -514,7 +472,7 @@ sub _request ($$$$$$$$$$) {
           my $reader = $readable->get_reader ('byob');
           $response->{body} = [];
           my $body_length = 0;
-          my $max = $self->max_size;
+          my $max = $self->{max_size};
           my $read; $read = sub {
             return $reader->read (DataView->new (ArrayBuffer->new (1024*10)))->then (sub {
               return if $_[0]->{done};
@@ -554,7 +512,7 @@ sub request ($%) {
   return $ready->then (sub {
     $args{base_url} ||= $self->{base_url};
     $args{path_prefix} = $self->{path_prefix} if not defined $args{path_prefix};
-    $args{protocol_clock} = $self->protocol_clock;
+    $args{protocol_clock} = $self->{protocol_clock};
     my ($method, $url_record, $header_list, $body_ref, $body_reader)
         = Web::Transport::RequestConstructor->create (\%args);
     die _te $method->{message} if ref $method; # error
@@ -576,7 +534,6 @@ sub request ($%) {
       $url_record = Web::URL->parse_string ($v);
     }
 
-    my $max = $self->max_size;
     my $no_cache = $args{superreload};
     return $self->_request (
       $method, $url_record, $header_list, $body_ref, $body_reader,
@@ -617,7 +574,7 @@ sub close ($) {
     return undef;
   })->then (sub {
     warn "$self->{parent_id}: @{[__PACKAGE__]}: Closed @{[scalar gmtime]}\n"
-        if $self->debug;
+        if $self->{debug};
     return undef;
   });
 } # close
@@ -638,7 +595,7 @@ sub abort ($;$) {
     delete $self->{http};
     delete $self->{connect_promise}; # XXX abort ongoing one
     warn "$self->{parent_id}: @{[__PACKAGE__]}: Aborted ($error) @{[scalar gmtime]}\n"
-        if $self->debug;
+        if $self->{debug};
   }) if defined $self->{http};
   return Promise->resolve;
 } # abort

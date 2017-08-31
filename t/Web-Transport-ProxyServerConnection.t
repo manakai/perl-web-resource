@@ -177,8 +177,9 @@ for my $status (
     }, sub {
       my ($origin, $close) = @_;
       my $url = Web::URL->parse_string (q</abc?d>, $origin);
-      my $client = Web::Transport::BasicClient->new_from_url ($url);
-      $client->proxy_manager ($pm);
+      my $client = Web::Transport::BasicClient->new_from_url ($url, {
+        proxy_manager => $pm,
+      });
       promised_cleanup {
         $close_server->();
         return $client->close->then ($close);
@@ -244,8 +245,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -291,8 +293,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     my $req1 = $client->request (url => $url, headers => {'Fuga' => 'a b'});
     my $req2 = $client->request (url => $url, headers => {'Fuga' => 'a b'});
     promised_cleanup {
@@ -453,8 +456,9 @@ test {
     my $host = rand . 'foo.bar.test';
     my $port = 1024 + int rand 10000;
     my $url = Web::URL->parse_string (qq<http://$host:$port/abc?d>);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close;
@@ -505,8 +509,9 @@ test {
   }, sub {
     my ($origin, $close, $conref) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       undef $responder;
@@ -555,8 +560,9 @@ test {
   })->then (sub {
     my $server = $_[0];
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close;
@@ -607,8 +613,9 @@ test {
   })->then (sub {
     my $server = $_[0];
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close;
@@ -661,8 +668,9 @@ test {
   })->then (sub {
     my $server = $_[0];
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close;
@@ -729,8 +737,9 @@ test {
   })->then (sub {
     my $server = $_[0];
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close;
@@ -791,8 +800,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -835,8 +845,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -881,8 +892,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     my $data = 'abcdefgh';
     promised_cleanup {
       $close_server->();
@@ -927,8 +939,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     my $data = 'abcdefgh' x 1000 x 100;
     promised_cleanup {
       $close_server->();
@@ -972,8 +985,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -1016,8 +1030,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -1061,8 +1076,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     my $req = $client->request (url => $url);
     (promised_wait_until { defined $responder })->then (sub {
       return $client->abort;
@@ -1123,8 +1139,9 @@ test {
     my $close;
     ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -1178,8 +1195,9 @@ test {
     my $close;
     ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -1218,8 +1236,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -1260,8 +1279,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -1304,8 +1324,9 @@ test {
   })->then (sub {
     my $server = $_[0];
     my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close;
@@ -1429,8 +1450,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -1488,8 +1510,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm2);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm2,
+    });
     promised_cleanup {
       $close_server->();
       $close_server2->();
@@ -1537,8 +1560,9 @@ test {
         ([{protocol => 'http', host => $host, port => $port}]);
 
     my $url = Web::URL->parse_string (qq{http://hoge.test/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       done $c; undef $c;
     } promised_cleanup {
@@ -1596,9 +1620,10 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
-    $client->resolver (TLSTestResolver->new ($host));
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+      resolver => TLSTestResolver->new ($host),
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -1640,8 +1665,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -1693,8 +1719,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -1754,8 +1781,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     my $req = $client->request (url => $url);
     (promised_wait_until { $server_invoked } interval => 0.1)->then (sub {
       push @end, $con[0]->close_after_current_response;
@@ -1827,10 +1855,11 @@ test {
   }); # $server_p
 
   my $url = Web::URL->parse_string (qq<https://tlstestserver.test:$port/abc?d>);
-  my $client = Web::Transport::BasicClient->new_from_url ($url);
-  $client->resolver (TLSTestResolver->new ($host));
-  $client->tls_options ({
-    ca_file => Test::Certificates->ca_path ('cert.pem'),
+  my $client = Web::Transport::BasicClient->new_from_url ($url, {
+    resolver => TLSTestResolver->new ($host),
+    tls_options => {
+      ca_file => Test::Certificates->ca_path ('cert.pem'),
+    },
   });
   promised_cleanup {
     $close_server->();
@@ -1890,8 +1919,9 @@ test {
   }, sub {
     my ($origin, $close) = @_;
     my $url = Web::URL->parse_string (q</abc?d>, $origin);
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       $close_server->();
       return $client->close->then ($close);
@@ -1929,8 +1959,9 @@ test {
       ([{protocol => 'http', host => $host, port => $port}]);
 
   my $url = Web::URL->parse_string (qq{http://hoge.test/});
-  my $client = Web::Transport::BasicClient->new_from_url ($url);
-  $client->proxy_manager ($pm);
+  my $client = Web::Transport::BasicClient->new_from_url ($url, {
+    proxy_manager => $pm,
+  });
   promised_cleanup {
     done $c; undef $c;
   } promised_cleanup {
@@ -1966,8 +1997,9 @@ for my $value ('', '0', 'abc/1.2', 'hoge fuga') {
         ([{protocol => 'http', host => $host, port => $port}]);
 
     my $url = Web::URL->parse_string (qq{http://hoge.test/});
-    my $client = Web::Transport::BasicClient->new_from_url ($url);
-    $client->proxy_manager ($pm);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
     promised_cleanup {
       done $c; undef $c;
     } promised_cleanup {
@@ -2003,8 +2035,9 @@ test {
       ([{protocol => 'http', host => $host, port => $port}]);
 
   my $url = Web::URL->parse_string (qq{http://hoge.test/});
-  my $client = Web::Transport::BasicClient->new_from_url ($url);
-  $client->proxy_manager ($pm);
+  my $client = Web::Transport::BasicClient->new_from_url ($url, {
+    proxy_manager => $pm,
+  });
   promised_cleanup {
     done $c; undef $c;
   } promised_cleanup {
@@ -2054,8 +2087,9 @@ test {
       ([{protocol => 'http', host => $host, port => $port}]);
 
   my $url = Web::URL->parse_string (qq{http://hoge.test/});
-  my $client = Web::Transport::BasicClient->new_from_url ($url);
-  $client->proxy_manager ($pm);
+  my $client = Web::Transport::BasicClient->new_from_url ($url, {
+    proxy_manager => $pm,
+  });
   promised_cleanup {
     done $c; undef $c;
   } promised_cleanup {

@@ -379,6 +379,46 @@ sub create_header_list ($$) {
   return ($header_list, $has_header);
 } # create_header_list
 
+## Remove specified kinds of headers.  The first argument must be a
+## canonical headers array reference.  The remaining arguments must be
+## zero or more key/value pairs of kinds:
+##
+##   proxy_removed - Headers removed by proxies upon forwarding,
+##   including headers specified in any |Connection:| header.
+##
+## It returns a new canonical headers array reference.
+sub filter_headers ($$%) {
+  my (undef, $input, %args) = @_;
+
+  # XXX move to _Defs
+  my %remove;
+  if ($args{proxy_removed}) {
+    $remove{$_} = 1 for qw(
+      host content-length transfer-encoding trailer te connection
+      keep-alive proxy-connection upgrade
+      proxy-authenticate proxy-authorization
+    );
+  }
+  for (@$input) {
+    if ($_->[2] eq 'connection') {
+      for (split /,/, $_->[1]) {
+        my $v = $_;
+        $v =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
+        $v =~ s/\A[\x09\x0A\x0D\x20]+//;
+        $v =~ s/[\x09\x0A\x0D\x20]+\z//;
+        $remove{$v} = 1;
+      }
+    }
+  }
+  return [map {
+    if ($remove{$_->[2]}) {
+      ();
+    } else {
+      $_;
+    }
+  } @$input];
+} # filter_headers
+
 1;
 
 =head1 HISTORY

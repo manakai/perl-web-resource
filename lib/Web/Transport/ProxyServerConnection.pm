@@ -28,35 +28,6 @@ sub _pe ($) {
   return Web::Transport::ProtocolError->new ($_[0]);
 } # _pe
 
-sub _headers_without_connection_specific ($) {
-  my $return = {};
-  # XXX move to _Defs
-  my %remove = map { $_ => 1 } qw(
-    host content-length transfer-encoding trailer te connection
-    keep-alive proxy-connection upgrade proxy-authenticate proxy-authorization
-  );
-  for (@{$_[0]}) {
-    if ($_->[2] eq 'connection') {
-      for (split /,/, $_->[1]) {
-        my $v = $_;
-        $v =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
-        $v =~ s/\A[\x09\x0A\x0D\x20]+//;
-        $v =~ s/[\x09\x0A\x0D\x20]+\z//;
-        $remove{$v} = 1;
-      }
-    }
-  }
-  $return->{forwarded} = [map {
-    if ($remove{$_->[2]}) {
-      #push @{$return->{$_->[2]} ||= []}, $_->[1];
-      ();
-    } else {
-      $_;
-    }
-  } @{$_[0]}];
-  return $return;
-} # _headers_without_connection_specific
-
 sub _handle_stream ($$$) {
   my ($server, $stream, $opts) = @_;
   my $client;
@@ -67,11 +38,12 @@ sub _handle_stream ($$$) {
     my $req = $_[0];
     $reqbody = $req->{body}; # or undef
 
-    my $req_headers = _headers_without_connection_specific $req->{headers};
+    my $req_headers = Web::Transport::RequestConstructor->filter_headers
+        ($req->{headers}, proxy_removed => 1);
     my $request = {
       method => $req->{method},
       url => $req->{target_url},
-      headers => $req_headers->{forwarded},
+      headers => $req_headers,
       length => $req->{length}, # or undef
       body_stream => (defined $req->{length} ? $req->{body} : undef),
     };
@@ -180,11 +152,12 @@ sub _handle_stream ($$$) {
         };
       } # 407
 
-      my $res_headers = _headers_without_connection_specific $res->{headers};
+      my $res_headers = Web::Transport::RequestConstructor->filter_headers
+          ($res->{headers}, proxy_removed => 1);
       my $response = {
         status => $res->{status},
         status_text => $res->{status_text},
-        headers => $res_headers->{forwarded},
+        headers => $res_headers,
         body_stream => $resbody = $res->body_stream,
         length => $res->{length}, # or undef
         body_is_incomplete => sub { return $res->incomplete },

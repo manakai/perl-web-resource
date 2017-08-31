@@ -87,7 +87,7 @@ test {
   is $list->[0]->[1], 'ab c';
   is $list->[0]->[2], 'hoge';
   is $list->[1]->[0], 'Foo';
-  is $list->[1]->[1], "\xD1\x84";
+  is $list->[1]->[1], "\x{444}";
   is $list->[1]->[2], 'foo';
   is $list->[2]->[0], 'a-bc';
   is $list->[2]->[1], '';
@@ -115,7 +115,7 @@ test {
   is $list->[0]->[1], 'ab c';
   is $list->[0]->[2], 'hoge';
   is $list->[1]->[0], 'Foo';
-  is $list->[1]->[1], "\xD1\x84";
+  is $list->[1]->[1], "\x{444}";
   is $list->[1]->[2], 'foo';
   is $list->[2]->[0], 'a-bc';
   is $list->[2]->[1], '';
@@ -141,6 +141,65 @@ test {
   is $@->line_number, __LINE__-5;
   done $c;
 } n => 4, name => 'bad arrayref';
+
+test {
+  my $c = shift;
+  my $in = [];
+  my $out = Web::Transport::RequestConstructor->filter_headers ($in);
+  isnt $out, $in;
+  is 0+@$in, 0;
+  is 0+@$out, 0;
+  done $c;
+} n => 3, name => 'filter_headers empty';
+
+test {
+  my $c = shift;
+  my $in = [
+    ["Hoge", "foo", "hoge"],
+  ];
+  my $out = Web::Transport::RequestConstructor->filter_headers ($in);
+  isnt $out, $in;
+  is 0+@$in, 1;
+  is 0+@$out, 1;
+  is $out->[0]->[0], 'Hoge';
+  is $out->[0]->[1], 'foo';
+  is $out->[0]->[2], 'hoge';
+  done $c;
+} n => 6, name => 'filter_headers not empty';
+
+test {
+  my $c = shift;
+  my $in = [
+    ["Hoge", "foo", "hoge"],
+    ["Connection", "abc", "connection"],
+    ["Transfer-Encoding", "chunked", "transfer-encoding"],
+  ];
+  my $out = Web::Transport::RequestConstructor->filter_headers ($in);
+  isnt $out, $in;
+  is 0+@$in, 3;
+  is 0+@$out, 3;
+  is $out->[0]->[0], 'Hoge';
+  is $out->[1]->[0], 'Connection';
+  is $out->[2]->[0], 'Transfer-Encoding';
+  done $c;
+} n => 6, name => 'filter_headers not removed';
+
+test {
+  my $c = shift;
+  my $in = [
+    ["Hoge", "foo", "hoge"],
+    ["Connection", "abc", "connection"],
+    ["Transfer-Encoding", "chunked", "transfer-encoding"],
+    ["ABC", "foo", "abc"],
+  ];
+  my $out = Web::Transport::RequestConstructor->filter_headers
+      ($in, proxy_removed => 1);
+  isnt $out, $in;
+  is 0+@$in, 4;
+  is 0+@$out, 1;
+  is $out->[0]->[0], 'Hoge';
+  done $c;
+} n => 4, name => 'filter_headers proxy_removed';
 
 run_tests;
 

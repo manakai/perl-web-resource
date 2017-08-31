@@ -1,7 +1,7 @@
 package Web::Transport::RequestConstructor;
 use strict;
 use warnings;
-our $VERSION = '2.0';
+our $VERSION = '3.0';
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Encoding qw(serialize_form_urlencoded percent_encode_c);
 use Web::DateTime;
@@ -383,6 +383,8 @@ sub create_header_list ($$) {
 ## canonical headers array reference.  The remaining arguments must be
 ## zero or more key/value pairs of kinds:
 ##
+##   conditional - Headers in the "conditional" category.
+##
 ##   proxy_removed - Headers removed by proxies upon forwarding,
 ##   including headers specified in any |Connection:| header.
 ##
@@ -390,28 +392,29 @@ sub create_header_list ($$) {
 sub filter_headers ($$%) {
   my (undef, $input, %args) = @_;
 
-  # XXX move to _Defs
   my %remove;
   if ($args{proxy_removed}) {
-    $remove{$_} = 1 for qw(
-      host content-length transfer-encoding trailer te connection
-      keep-alive proxy-connection upgrade
-      proxy-authenticate proxy-authorization
-    );
-  }
-  for (@$input) {
-    if ($_->[2] eq 'connection') {
-      for (split /,/, $_->[1]) {
-        my $v = $_;
-        $v =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
-        $v =~ s/\A[\x09\x0A\x0D\x20]+//;
-        $v =~ s/[\x09\x0A\x0D\x20]+\z//;
-        $remove{$v} = 1;
+    for (@$input) {
+      if ($_->[2] eq 'connection') {
+        for (split /,/, $_->[1]) {
+          my $v = $_;
+          $v =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
+          $v =~ s/\A[\x09\x0A\x0D\x20]+//;
+          $v =~ s/[\x09\x0A\x0D\x20]+\z//;
+          $remove{$v} = 1;
+        }
       }
     }
-  }
+  } # proxy_removed
+
   return [map {
     if ($remove{$_->[2]}) {
+      ();
+    } elsif ($args{proxy_removed} and
+             $Web::Transport::_Defs::Headers->{proxy_removed}->{$_->[2]}) {
+      ();
+    } elsif ($args{conditional} and
+             $Web::Transport::_Defs::Headers->{conditional}->{$_->[2]}) {
       ();
     } else {
       $_;

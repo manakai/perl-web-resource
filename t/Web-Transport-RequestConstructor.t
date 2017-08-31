@@ -173,16 +173,18 @@ test {
     ["Hoge", "foo", "hoge"],
     ["Connection", "abc", "connection"],
     ["Transfer-Encoding", "chunked", "transfer-encoding"],
+    ["abc", "d", "abc"],
   ];
   my $out = Web::Transport::RequestConstructor->filter_headers ($in);
   isnt $out, $in;
-  is 0+@$in, 3;
-  is 0+@$out, 3;
+  is 0+@$in, 4;
+  is 0+@$out, 4;
   is $out->[0]->[0], 'Hoge';
   is $out->[1]->[0], 'Connection';
   is $out->[2]->[0], 'Transfer-Encoding';
+  is $out->[3]->[0], 'abc';
   done $c;
-} n => 6, name => 'filter_headers not removed';
+} n => 7, name => 'filter_headers not removed';
 
 test {
   my $c = shift;
@@ -200,6 +202,25 @@ test {
   is $out->[0]->[0], 'Hoge';
   done $c;
 } n => 4, name => 'filter_headers proxy_removed';
+
+test {
+  my $c = shift;
+  my $in = [
+    ["Hoge", "foo", "hoge"],
+    ["Connection", "abc", "connection"],
+    ["If-Match", "abcd", "if-match"],
+    ["ABC", "foo", "abc"],
+  ];
+  my $out = Web::Transport::RequestConstructor->filter_headers
+      ($in, conditional => 1);
+  isnt $out, $in;
+  is 0+@$in, 4;
+  is 0+@$out, 3;
+  is $out->[0]->[0], 'Hoge';
+  is $out->[1]->[0], 'Connection';
+  is $out->[2]->[0], 'ABC';
+  done $c;
+} n => 6, name => 'filter_headers conditional';
 
 run_tests;
 

@@ -4,11 +4,14 @@ WGET = wget
 GIT = git
 PERL = ./perl
 
-updatenightly: build
-	$(GIT) add lib/Web/MIME/_TypeDefs.pm
+updatenightly: local/bin/pmbp.pl clean build
+	$(CURL) -f -l https://gist.githubusercontent.com/wakaba/34a71d3137a52abb562d/raw/gistfile1.txt | sh
+	git add modules t_deps/modules
+	perl local/bin/pmbp.pl --update
+	git add config lib/
 
 clean:
-	rm -fr local/mime-types.json
+	rm -fr local/*.json
 
 ## ------ Setup ------
 
@@ -50,10 +53,12 @@ local/mime-sniffing.json:
 	$(WGET) -O $@ https://raw.github.com/manakai/data-web-defs/master/data/mime-sniffing.json
 
 lib/Web/Transport/_Defs.pm: bin/generate-transport-defs.pl \
-    local/http-status-codes.json
+    local/http-status-codes.json local/headers.json
 	$(PERL) $< > $@
 local/http-status-codes.json:
 	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/http-status-codes.json
+local/headers.json:
+	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/headers.json
 
 ## ------ Tests ------
 

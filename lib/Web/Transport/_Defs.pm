@@ -3,7 +3,7 @@ $Web::Transport::_Defs::ReasonPhrases = {
           '100' => 'Continue',
           '101' => 'Switching Protocols',
           '102' => 'Processing',
-          '103' => 'Access denied while creating Web Service',
+          '103' => 'Early Hints',
           '104' => 'File Format or Program Error',
           '12152' => 'Unknown',
           '122' => 'Request-URI too long',
@@ -94,10 +94,45 @@ $Web::Transport::_Defs::ReasonPhrases = {
           '523' => '',
           '524' => 'Origin Time-out',
           '529' => '',
+          '555' => '',
           '595' => '',
           '596' => '',
           '597' => '',
           '598' => 'Network read timeout error',
           '599' => 'Network connect timeout error'
+        };
+$Web::Transport::_Defs::Headers = {
+          'conditional' => {
+                             'if' => 1,
+                             'if-match' => 1,
+                             'if-modified-since' => 1,
+                             'if-none-match' => 1,
+                             'if-range' => 1,
+                             'if-unmodified-since' => 1,
+                             'overwrite' => 1
+                           },
+          'proxy_removed' => {
+                               'c-ext' => 1,
+                               'c-man' => 1,
+                               'c-opt' => 1,
+                               'c-pep' => 1,
+                               'c-pep-info' => 1,
+                               'close' => 1,
+                               'connection' => 1,
+                               'content-length' => 1,
+                               'host' => 1,
+                               'http2-settings' => 1,
+                               'keep-alive' => 1,
+                               'meter' => 1,
+                               'proxy-authenticate' => 1,
+                               'proxy-authentication-info' => 1,
+                               'proxy-authorization' => 1,
+                               'proxy-connection' => 1,
+                               'proxy-support' => 1,
+                               'te' => 1,
+                               'trailer' => 1,
+                               'transfer-encoding' => 1,
+                               'upgrade' => 1
+                             }
         };
 1;

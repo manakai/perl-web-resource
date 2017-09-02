@@ -45,6 +45,8 @@ sub _handle_stream ($$$) {
   my $api = bless {
     client_opts => $client_opts,
     clients => {},
+    id => $stream->{id},
+    debug => $server->{debug},
   }, __PACKAGE__ . '::API';
 
   return $stream->headers_received->then (sub {
@@ -173,6 +175,7 @@ sub _handle_stream ($$$) {
         info => $stream->{connection}->info, response => $response,
         data => $result->{data},
         closed => $stream->closed,
+        api => $api,
       })->then ($opts->{handle_response} || sub { return $_[0] })->then (sub {
         my $result = $_[0];
         if (defined $result and ref $result eq 'HASH' and
@@ -349,6 +352,7 @@ sub _handle_stream ($$$) {
 
 package Web::Transport::ProxyServerConnection::API;
 use Promise;
+use Web::Encoding;
 use Web::Transport::BasicClient;
 
 push our @CARP_NOT, qw(
@@ -381,6 +385,17 @@ sub filter_headers ($$;%) {
   shift;
   return Web::Transport::RequestConstructor->filter_headers (@_);
 } # filter_headers
+
+sub note ($$;%) {
+  my ($self, $message, %args) = @_;
+  my $level = $args{level} || 0;
+  warn encode_web_utf8 sprintf "%s: %s\n",
+      $self->{id}, $message
+          if $level <= $self->{debug};
+  if ($args{error}) {
+    # XXX error log hook
+  }
+} # note
 
 # XXX CONNECT request forwarded as is (CONNECT response)
 # XXX CONNECT request forwarded as is (non-CONNECT response)

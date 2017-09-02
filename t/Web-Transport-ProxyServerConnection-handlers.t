@@ -1833,6 +1833,8 @@ test {
             isa_ok $api, 'Web::Transport::ProxyServerConnection::API';
           } $c;
 
+          $api->note ("API note method");
+
           my $client = $api->client ($server_url);
           test {
             isa_ok $client, 'Web::Transport::BasicClient';
@@ -3680,6 +3682,58 @@ test {
     });
   });
 } n => 1, name => 'handle_response closed promise';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $closed;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_response => sub {
+          my $args = $_[0];
+          test {
+            isa_ok $args->{api}, 'Web::Transport::ProxyServerConnection::API';
+          } $c;
+          $args->{api}->note ("response API note method");
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return sub {
+      my $writer = $_[0]->([201, []]);
+      $writer->write ('200!');
+      $writer->close;
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url);
+  });
+} n => 1, name => 'handle_response api';
 
 run_tests;
 

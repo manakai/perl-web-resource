@@ -228,6 +228,17 @@ values.
 
 It returns a new canonical headers array reference.
 
+=item $api->note ($message, level => $debug)
+
+Provide an informative or debug message for application's user or
+developer.  The first argument must be a short character string.  The
+remaining arguments must be zero or more key/value pairs of options.
+
+The C<level> option is the verbosity level of the message; the message
+is reported to the standard error output only when the debug level
+(server's C<debug> option's value) is greater than or equal to the
+C<level> value; the default is zero, i.e. always reported.
+
 =back
 
 =head1 FEATURES NOT SUPPORTED BY THIS MODULE

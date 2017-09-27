@@ -64,7 +64,7 @@ local/headers.json:
 
 PROVE = ./prove
 
-test: test-deps test-main
+test: test-deps test-main test-real-main
 
 test-deps: deps
 
@@ -72,12 +72,16 @@ test-main: test-main-main test-main-server
 
 test-main-main:
 	$(PROVE) t/*.t
-	$(PROVE) t/real/*.t
 
 test-main-server:
 	$(PERL) t_deps/bin/rawserver.pl &
 	sleep 1
 	$(PERL) t/httpserver/client.t http://localhost:8522
 	-curl http://localhost:8522/end
+
+test-real: test-deps test-real-main
+
+test-real-main:
+	$(PROVE) t/real/*.t
 
 ## License: Public Domain.

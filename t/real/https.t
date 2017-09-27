@@ -24,7 +24,7 @@ helloworld.letsencrypt.org
 www.hatena.ne.jp
 hatena.g.hatena.ne.jp
 roomhub.jp
-example.herokuapp.com
+opendata500.herokuapp.com
 www.realtokyoestate.co.jp
 )) {
   my $url = qq<https://$host>;

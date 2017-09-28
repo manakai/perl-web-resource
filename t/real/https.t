@@ -24,7 +24,7 @@ helloworld.letsencrypt.org
 www.hatena.ne.jp
 hatena.g.hatena.ne.jp
 roomhub.jp
-bower.herokuapp.com
+opendata500.herokuapp.com
 www.realtokyoestate.co.jp
 )) {
   my $url = qq<https://$host>;
@@ -41,7 +41,10 @@ www.realtokyoestate.co.jp
         ok ! $res->is_network_error;
         ok $res->status == 200 ||
            $res->status == 301 ||
-           $res->status == 302, $res->status;
+           $res->status == 302 ||
+           $res->status == 303 ||
+           $res->status == 307 ||
+           $res->status == 308, $res->status;
         ok ! $res->incomplete;
       } $c;
       return $client->close;

@@ -26,6 +26,7 @@ hatena.g.hatena.ne.jp
 roomhub.jp
 opendata500.herokuapp.com
 www.realtokyoestate.co.jp
+www.amazon.co.jp
 )) {
   my $url = qq<https://$host>;
   test {

@@ -53,6 +53,10 @@ MIME types.
 
 MIME type sniffing.
 
+=item L<Web::Transport::AWS>
+
+AWS API signature calculation.
+
 =back
 
 =head1 REQUEST OPTIONS

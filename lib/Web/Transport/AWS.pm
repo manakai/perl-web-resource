@@ -1,9 +1,12 @@
 package Web::Transport::AWS;
 use strict;
 use warnings;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
 use Digest::SHA qw(sha256_hex hmac_sha256 hmac_sha256_hex);
 use Web::Encoding;
+use MIME::Base64;
+use Web::DateTime;
+use Web::Transport::JSON qw(perl2json_chars);
 
 sub reescape ($) {
   my $s = $_[0];
@@ -108,4 +111,59 @@ sub aws4 ($%) {
       ['authorization', $authorization, 'authorization'];
 } # aws4
 
+## <https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html>
+## <https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-post-example.html>
+sub aws4_post_policy ($%) {
+  my (undef, %args) = @_;
+  no warnings 'uninitialized';
+
+  my $time = int $args{clock}->();
+  
+  my $date = Web::DateTime->new_from_unix_time ($time);
+  my $amz_date = sprintf "%04d%02d%02dT%02d%02d%02dZ",
+      $date->utc_year, $date->utc_month, $date->utc_day,
+      $date->utc_hour, $date->utc_minute, $date->utc_second;
+  my $ymd = sprintf "%04d%02d%02d",
+      $date->utc_year, $date->utc_month, $date->utc_day;
+
+  my $expires = Web::DateTime->new_from_unix_time ($time + $args{max_age});
+  
+  my $credentials = encode_web_utf8 "$args{access_key_id}/$ymd/$args{region}/$args{service}/aws4_request";
+  
+  my $pol = {
+    "expiration" => $expires->to_global_date_and_time_string,
+    "conditions" => [
+      @{$args{policy_conditions}},
+      {"x-amz-credential" => $credentials},
+      {"x-amz-algorithm" => "AWS4-HMAC-SHA256"},
+      {"x-amz-date" => $amz_date},
+    ],
+  };
+  my $policy_json = encode_web_utf8 perl2json_chars $pol;
+  my $encoded_pol = encode_base64 $policy_json, "";
+
+  my $date_key = hmac_sha256 ($ymd, "AWS4" . encode_web_utf8 $args{secret_access_key});
+  my $date_region_key = hmac_sha256 ((encode_web_utf8 $args{region}), $date_key);
+  my $date_region_service_key = hmac_sha256 ((encode_web_utf8 $args{service}), $date_region_key);
+  my $signing_key = hmac_sha256 ("aws4_request", $date_region_service_key);
+  my $signature = hmac_sha256_hex ($encoded_pol, $signing_key);
+
+  return {
+    policy => $encoded_pol,
+    "X-Amz-Signature" => $signature,
+    "X-Amz-Credential" => $credentials,
+    "X-Amz-Algorithm" => "AWS4-HMAC-SHA256",
+    "X-Amz-Date" => $amz_date,
+  };
+} # aws4_post_policy
+
 1;
+
+=head1 LICENSE
+
+Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

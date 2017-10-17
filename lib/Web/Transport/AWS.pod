@@ -1,0 +1,110 @@
+=head1 NAME
+
+Web::Transport::AWS - Protocol features for Amazon Web Services (AWS) Web APIs
+
+=head1 SYNOPSIS
+
+  use Web::Transport::AWS;
+  $form = Web::Transport::AWS->aws4_post_policy
+      (clock => Web::DateTime::Clock->realtime_clock,
+       max_age => 60*60,
+       access_key_id => $id,
+       secret_access_key => $key,
+       region => $region,
+       service => 's3',
+       policy_conditions => [
+         {"bucket" => $bucket},
+         ...,
+       ]);
+  
+  ## Then, generate a form using $form:
+  ##   <form metod=post
+  ##       action="https://$service-$region.amazonaws.com/$bucket/">
+  ##     <input type=hidden name=... value=...> created from $form
+  ##     ...
+  ##     <input type=hidden name="Content-Type" value="image/jpeg">
+  ##     ...
+  ##   </form>
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::AWS> module implements protocol features for
+Amazon Web Services (AWS) Web APIs.
+
+=head1 METHOD
+
+The following method is available:
+
+=over 4
+
+=item $form = Web::Transport::AWS->aws4_post_policy (...)
+
+Prepare form data including POST policy JSON and its signature.
+
+It returns a hash reference of form data name/value pairs, which
+should be used as basis of construction of form data submitted to the
+AWS S3 end points.
+
+The arguments are name/value pairs of following options:
+
+=over 4
+
+=item clock => $clock (required)
+
+The clock used to generate the current timestamps (e.g. C<<
+Web::DateTime::Clock->realtime_clock >>).
+
+=item max_age => $seconds (required)
+
+The lifetime of the POST policy, in seconds from the generation.
+
+=item access_key_id => $string (required)
+
+The access key ID of the AWS credentials.
+
+=item secret_access_key => $string (required)
+
+The secret access key of the AWS credentials.
+
+=item region => $string (required)
+
+The AWS region identifier.
+
+=item service => $string (required)
+
+The AWS service name, such as C<s3>.
+
+=item policy_conditions => [$condition, ...] (required)
+
+An array refeference of the conditions in the POST policy.
+
+=back
+
+=head1 SEE ALSO
+
+L<Web::Transport>.
+
+Signature Calculations for the Authorization Header: Transferring
+Payload in a Single Chunk (AWS Signature Version 4) - Amazon Simple
+Storage Service
+<https://docs.aws.amazon.com/AmazonS3/latest/API/sig-v4-header-based-auth.html>.
+
+Creating a POST Policy - Amazon Simple Storage Service
+<https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html>.
+
+Examples: Browser-Based Upload using HTTP POST (Using AWS Signature
+Version 4) - Amazon Simple Storage Service
+<https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-post-example.html>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

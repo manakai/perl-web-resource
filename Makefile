@@ -1,6 +1,7 @@
 all: build
 
 WGET = wget
+CURL = curl
 GIT = git
 PERL = ./perl
 
@@ -8,7 +9,7 @@ updatenightly: build
 	$(GIT) add lib/Web/MIME/_TypeDefs.pm
 
 clean:
-	rm -fr local/mime-types.json
+	rm -fr local/mime-types.json lib/Web/Transport/JSON.pm
 
 ## ------ Setup ------
 
@@ -37,7 +38,8 @@ build: build-deps build-main
 
 build-deps: deps
 
-build-main: lib/Web/MIME/_TypeDefs.pm lib/Web/Transport/_Defs.pm
+build-main: lib/Web/MIME/_TypeDefs.pm lib/Web/Transport/_Defs.pm \
+    lib/Web/Transport/JSON.pm
 
 lib/Web/MIME/_TypeDefs.pm: bin/generate-list.pl local/mime-types.json \
     local/mime-sniffing.json
@@ -52,6 +54,14 @@ lib/Web/Transport/_Defs.pm: bin/generate-transport-defs.pl \
 	$(PERL) $< > $@
 local/http-status-codes.json:
 	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/http-status-codes.json
+
+lib/Web/Transport/JSON.pm:
+	$(CURL) -S -L -f https://raw.githubusercontent.com/wakaba/perl-json-ps/master/lib/JSON/PS.pm | \
+	    sed -e 's/JSON::PS/Web::Transport::JSON/g' | \
+	    sed -e 's/perl2json_bytes/_UNUSED1/g' | \
+	    sed -e 's/json_bytes2perl/_UNUSED2/g' | \
+	    sed -e 's/file2perl/_UNUSED3/g' > $@
+	$(PERL) -c $@
 
 ## ------ Tests ------
 
@@ -70,7 +80,7 @@ test-main-server:
 	$(PERL) t_deps/bin/rawserver.pl &
 	sleep 1
 	$(PERL) t/httpserver/client.t http://localhost:8522
-	-curl http://localhost:8522/end
+	-$(CURL) http://localhost:8522/end
 
 test-real: test-deps test-real-main
 

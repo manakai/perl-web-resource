@@ -2490,6 +2490,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common'
                                                               },
+                                          'vnd.collabio.xodocuments.document' => {
+                                                                                 'iana' => 'permanent',
+                                                                                 'iana_intended_usage' => 'common'
+                                                                               },
+                                          'vnd.collabio.xodocuments.presentation' => {
+                                                                                     'iana' => 'permanent',
+                                                                                     'iana_intended_usage' => 'common'
+                                                                                   },
                                           'vnd.collection+json' => {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'common',
@@ -5196,6 +5204,10 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vnd.paos.xml' => {
                                                             'iana' => 'permanent'
                                                           },
+                                          'vnd.patentdive' => {
+                                                              'iana' => 'permanent',
+                                                              'iana_intended_usage' => 'common'
+                                                            },
                                           'vnd.pawaafile' => {
                                                              'iana' => 'permanent',
                                                              'iana_intended_usage' => 'common'
@@ -6227,12 +6239,17 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vsd' => {},
                                           'vsix' => {},
                                           'warc' => {},
+                                          'wasm' => {},
                                           'watcherinfo+xml' => {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'common'
                                                              },
                                           'wbs.chart+xml' => {},
                                           'wcz' => {},
+                                          'webpush-options+json' => {
+                                                                    'iana' => 'permanent',
+                                                                    'iana_intended_usage' => 'limited use'
+                                                                  },
                                           'webspec+json' => {},
                                           'wfphelpap' => {},
                                           'wga-plugin' => {},
@@ -12817,19 +12834,31 @@ $Web::MIME::_TypeDefs::Type = {
 $Web::MIME::_TypeDefs::Sniffing = {
           'archive' => [
                        [
-                         qr/(?:Rar\x20\x1A\x07\x00)/,
-                         'application/x-rar-compressed'
+                         qr/(?:PK\x03\x04)/,
+                         'application/zip'
                        ],
                        [
                          qr/(?:\x1F\x8B\x08)/,
                          'application/x-gzip'
                        ],
                        [
-                         qr/(?:PK\x03\x04)/,
-                         'application/zip'
+                         qr/(?:Rar\x20\x1A\x07\x00)/,
+                         'application/x-rar-compressed'
                        ]
                      ],
           'audio_or_video' => [
+                              [
+                                qr/(?:ID3)/,
+                                'audio/mpeg'
+                              ],
+                              [
+                                qr/(?:\.snd)/,
+                                'audio/basic'
+                              ],
+                              [
+                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AVI\x20)/,
+                                'video/avi'
+                              ],
                               [
                                 qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WAVE)/,
                                 'audio/wave'
@@ -12839,24 +12868,12 @@ $Web::MIME::_TypeDefs::Sniffing = {
                                 'audio/aiff'
                               ],
                               [
-                                qr/(?:ID3)/,
-                                'audio/mpeg'
-                              ],
-                              [
                                 qr/(?:MThd\x00\x00\x00\x06)/,
                                 'audio/midi'
                               ],
                               [
-                                qr/(?:\.snd)/,
-                                'audio/basic'
-                              ],
-                              [
                                 qr/(?:OggS\x00)/,
                                 'application/ogg'
-                              ],
-                              [
-                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AVI\x20)/,
-                                'video/avi'
                               ]
                             ],
           'bom1' => [
@@ -12873,50 +12890,50 @@ $Web::MIME::_TypeDefs::Sniffing = {
                   ],
           'font' => [
                     [
-                      qr/(?:[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]LP)/,
-                      'application/vnd.ms-fontobject'
-                    ],
-                    [
-                      qr/(?:ttcf)/,
-                      'font/collection'
-                    ],
-                    [
-                      qr/(?:\x00\x01\x00\x00)/,
-                      'font/ttf'
+                      qr/(?:wOFF)/,
+                      'application/font-woff'
                     ],
                     [
                       qr/(?:OTTO)/,
                       'font/otf'
                     ],
                     [
-                      qr/(?:wOFF)/,
-                      'application/font-woff'
+                      qr/(?:\x00\x01\x00\x00)/,
+                      'font/ttf'
+                    ],
+                    [
+                      qr/(?:[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]LP)/,
+                      'application/vnd.ms-fontobject'
+                    ],
+                    [
+                      qr/(?:ttcf)/,
+                      'font/collection'
                     ]
                   ],
           'image' => [
                      [
-                       qr/(?:\x89PNG\x0D\x0A\x1A\x0A)/,
-                       'image/png'
+                       qr/(?:GIF8[79]a)/,
+                       'image/gif'
                      ],
                      [
                        qr/(?:\x00\x00[\x01\x02]\x00)/,
                        'image/x-icon'
                      ],
                      [
-                       qr/(?:\xFF\xD8\xFF)/,
-                       'image/jpeg'
+                       qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WEBPVP)/,
+                       'image/webp'
                      ],
                      [
                        qr/(?:BM)/,
                        'image/bmp'
                      ],
                      [
-                       qr/(?:GIF8[79]a)/,
-                       'image/gif'
+                       qr/(?:\xFF\xD8\xFF)/,
+                       'image/jpeg'
                      ],
                      [
-                       qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WEBPVP)/,
-                       'image/webp'
+                       qr/(?:\x89PNG\x0D\x0A\x1A\x0A)/,
+                       'image/png'
                      ]
                    ],
           'non_scriptable' => [

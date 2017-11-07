@@ -137,6 +137,7 @@ sub aws4_post_policy ($%) {
       {"x-amz-credential" => $credentials},
       {"x-amz-algorithm" => "AWS4-HMAC-SHA256"},
       {"x-amz-date" => $amz_date},
+      ($args{security_token} ? {"x-amz-security-token" => $args{security_token}} : ()),
     ],
   };
   my $policy_json = encode_web_utf8 perl2json_chars $pol;
@@ -154,6 +155,7 @@ sub aws4_post_policy ($%) {
     "X-Amz-Credential" => $credentials,
     "X-Amz-Algorithm" => "AWS4-HMAC-SHA256",
     "X-Amz-Date" => $amz_date,
+    (defined $args{security_token} ? ("X-Amz-Security-Token" => $args{security_token}) : ()),
   };
 } # aws4_post_policy
 

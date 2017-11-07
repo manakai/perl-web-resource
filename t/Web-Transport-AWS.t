@@ -24,10 +24,37 @@ test {
   ok $result->{"X-Amz-Signature"};
   ok $result->{"X-Amz-Credential"};
   is $result->{"X-Amz-Algorithm"}, "AWS4-HMAC-SHA256";
+  ok ! $result->{"X-Amz-Security-Token"};
   like $result->{"X-Amz-Date"}, qr/\A[0-9]{4,}[0-9]{2}[0-9]{2}T[0-9]{6}Z\z/;
   
   done $c;
-} n => 5, name => 'aws4_post_policy';
+} n => 6, name => 'aws4_post_policy';
+
+test {
+  my $c = shift;
+  my $token = "tarsegegeawg aw3t ag";
+  my $result = Web::Transport::AWS->aws4_post_policy
+      (clock => sub { time },
+       access_key_id => "aeaea4444a3aa535",
+       secret_access_key => "346634gae44444",
+       security_token => $token,
+       service => "foo",
+       region => "ab-ce-453",
+       max_age => 5353,
+       policy_conditions => [
+         {foo => 1333},
+         [abc => 43 => 55],
+       ]);
+
+  ok $result->{policy};
+  ok $result->{"X-Amz-Signature"};
+  ok $result->{"X-Amz-Credential"};
+  is $result->{"X-Amz-Algorithm"}, "AWS4-HMAC-SHA256";
+  is $result->{"X-Amz-Security-Token"}, $token;
+  like $result->{"X-Amz-Date"}, qr/\A[0-9]{4,}[0-9]{2}[0-9]{2}T[0-9]{6}Z\z/;
+  
+  done $c;
+} n => 6, name => 'aws4_post_policy with token';
 
 run_tests;
 

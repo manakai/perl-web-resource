@@ -66,6 +66,11 @@ The access key ID of the AWS credentials.
 
 The secret access key of the AWS credentials.
 
+=item security_token => $string
+
+The security token, as used in |X-Amz-Security-Token| header, if
+necessary.
+
 =item region => $string (required)
 
 The AWS region identifier.

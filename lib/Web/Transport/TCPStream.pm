@@ -1,19 +1,21 @@
 package Web::Transport::TCPStream;
 use strict;
 use warnings;
-our $VERSION = '2.0';
+our $VERSION = '3.0';
 use Carp;
 use Errno qw(EAGAIN EWOULDBLOCK EINTR);
 use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE SO_LINGER);
 use AnyEvent;
 use AnyEvent::Util qw(WSAEWOULDBLOCK);
 use AnyEvent::Socket qw(tcp_connect);
+use AbortController;
 use Promise;
 use Promised::Flow;
 use Streams::IOError;
 use Web::Transport::Error;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
+use Web::Transport::AbortError;
 use DataView;
 use Streams;
 use Streams::Filehandle;
@@ -24,7 +26,7 @@ push our @CARP_NOT, qw(
   ReadableStream ReadableStreamBYOBRequest WritableStream
   Streams::Filehandle
   Web::Transport::Error Web::Transport::TypeError Streams::IOError
-  Web::Transport::ProtocolError
+  Web::Transport::ProtocolError Web::Transport::AbortError
 );
 
 sub _te ($) {
@@ -192,7 +194,7 @@ sub create ($$) {
       undef $fh;
       $s_fh_closed->();
     }, # cancel
-  });
+  }); # $read_stream
   my $write_stream = WritableStream->new ({
     start => sub {
       $wc = $_[1];
@@ -250,34 +252,59 @@ sub create ($$) {
       undef $fh;
       $s_fh_closed->();
     }, # abort
-  });
+  }); # $write_stream
 
   return Promise->new (sub {
     my ($ok, $ng) = @_;
-    if (defined $args->{fh}) {
-      $ok->($args->{fh});
-    } else {
-      if ($args->{addr} eq '127.0.53.53') {
-        return $ng->(Web::Transport::ProtocolError->new ('ICANN_NAME_COLLISION'));
-      }
-      my $caller = [caller ((sub { Carp::short_error_loc })->() - 1)];
-      tcp_connect $args->{addr}, $args->{port}, sub {
-        unless ($_[0]) {
-          package TCPStream::_Dummy;
-          my $file = $caller->[1];
-          $file =~ s/[\x0D\x0A\x22]/_/g;
-          my $error = eval sprintf q{
-#line %d "%s"
-            Streams::IOError->new ($!);
-          }, $caller->[2], $file;
-          return $ng->($error);
-        }
-        $ok->($_[0]);
-      };
-    }
-  })->then (sub {
-    $fh = $_[0];
 
+    my $aborted = sub { };
+    if (defined $args->{signal}) {
+      if ($args->{signal}->aborted) {
+        $ng->(Web::Transport::AbortError->new);
+        return;
+      } else {
+        $args->{signal}->manakai_onabort (sub {
+          $aborted->();
+        });
+      }
+    }
+
+    if (defined $args->{fh}) {
+      $fh = $args->{fh};
+      $ok->();
+      return;
+    }
+    
+    if ($args->{addr} eq '127.0.53.53') {
+      $ng->(Web::Transport::ProtocolError->new ('ICANN_NAME_COLLISION'));
+      return;
+    }
+
+    my $con;
+    $aborted = sub {
+      $ng->(Web::Transport::AbortError->new);
+      $con = $ok = $ng = $aborted = sub { };
+    };
+    my $caller = [caller ((sub { Carp::short_error_loc })->() - 1)];
+    $con = tcp_connect $args->{addr}, $args->{port}, sub {
+      unless ($_[0]) {
+        package TCPStream::_Dummy;
+        my $file = $caller->[1];
+        $file =~ s/[\x0D\x0A\x22]/_/g;
+        my $error = eval sprintf q{
+#line %d "%s"
+          Streams::IOError->new ($!);
+        }, $caller->[2], $file;
+        $ng->($error);
+        $con = $ok = $ng = $aborted = sub { };
+        return;
+      }
+
+      $fh = $_[0];
+      $ok->();
+      $con = $ok = $ng = $aborted = sub { };
+    };
+  })->then (sub {
     if ($info->{type} eq 'TCP') {
       my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $fh;
       $info->{local_host} = Web::Host->new_from_packed_addr ($h);

@@ -583,11 +583,41 @@ test {
   });
 } n => 2, name => 'a line-oriented interactive server';
 
+test {
+  my $c = shift;
+
+  my $path = find_unix_path;
+
+  my $ac = new AbortController;
+  $ac->abort;
+
+  Web::Transport::UnixStream->create ({
+    path => $path,
+    signal => $ac->signal,
+  })->then (sub {
+    test {
+      ok 0;
+    } $c;
+  })->catch (sub {
+    my $e = $_[0];
+    test {
+      isa_ok $e, 'Web::Transport::AbortError';
+      is $e->name, 'AbortError';
+      is $e->message, 'Aborted';
+      is $e->file_name, __FILE__;
+      is $e->line_number, __LINE__+5; # XXX
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'abort connect before connect';
+
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

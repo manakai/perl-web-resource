@@ -397,9 +397,9 @@ repository):
 
 =over 4
 
-=item L<Promise> <https://github.com/wakaba/perl-promise>
+=item modules from perl-promise repository <https://github.com/wakaba/perl-promise>, e.g. L<Promise> and L<AbortController>
 
-=item modules from perl-web-url repository <https://github.com/manakai/perl-web-url>, e.g. L<Web::URL> L<Web::Host>, and L<Web::Origin>
+=item modules from perl-web-url repository <https://github.com/manakai/perl-web-url>, e.g. L<Web::URL>, L<Web::Host>, and L<Web::Origin>
 
 =item modules from perl-web-encodings package <https://github.com/manakai/perl-web-encodings>, e.g. L<Web::Encoding>
 
@@ -435,7 +435,7 @@ information.
 
 Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
 
-Copyright 2014-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2014-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

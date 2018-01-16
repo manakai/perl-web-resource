@@ -57,6 +57,10 @@ MIME types.
 
 MIME type sniffing.
 
+=item L<Web::Transport::AWS>
+
+AWS API signature calculation.
+
 =back
 
 The module L<Web::Transport::ConnectionClient> is deprecated.

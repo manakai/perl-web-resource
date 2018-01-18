@@ -250,22 +250,23 @@ my $httpdcb = sub {
                 if (reason === undefined) reason = '';
                 setResult (cell, x.statusText == reason, x.statusText, reason);
                 var cell = tr.appendChild (document.createElement ('td'));
-                var eHeaders = (test.headers || [''])[0];
-                var aHeaderNames = x.getAllResponseHeaders ()
-                    .split (/[\\u000D\\u000A]+/)
-                    .filter (function (_) { return /:/.test (_); })
-                    .map (function (_) { return _.split (/:/)[0]; });
-                cell.title = x.getAllResponseHeaders () + "\\u000A\\u000A" + aHeaderNames;
-                var aHeaders = aHeaderNames.map (function (name) {
-                  try {
-                    var value = x.getResponseHeader (name);
-                    if (value === null) return '';
-                    return name + ": " + value;
-                  } catch (e) {
-                    return '';
-                  }
-                }).filter (function (_) { return _.length }).join ("\\u000A");
-                setResult (cell, aHeaders == eHeaders, aHeaders, eHeaders);
+        var eHeaders = (test.headers || [''])[0];
+        eHeaders = eHeaders.replace (/^[^:]+/mg, (_) => _.toLowerCase ());
+        var aHeaderNames = x.getAllResponseHeaders ()
+            .split (/[\\u000D\\u000A]+/)
+            .filter (function (_) { return /:/.test (_); })
+            .map (function (_) { return _.split (/:/)[0].toLowerCase (); });
+        cell.title = x.getAllResponseHeaders () + "\\u000A\\u000A" + aHeaderNames;
+        var aHeaders = aHeaderNames.map (function (name) {
+          try {
+            var value = x.getResponseHeader (name);
+            if (value === null) return '';
+            return name + ": " + value;
+          } catch (e) {
+            return '';
+          }
+        }).filter (function (_) { return _.length }).join ("\\u000A");
+        setResult (cell, aHeaders == eHeaders, aHeaders, eHeaders);
 
         var cell = tr.appendChild (document.createElement ('td'));
         if (test["body-length"]) {

@@ -10,6 +10,7 @@ use Encode;
 use JSON::PS;
 use Test::HTCT::Parser;
 use Test::Certificates;
+use Promised::Command;
 
 my $host = '0';
 my $port = $ENV{SERVER_PORT} || 4355;
@@ -39,25 +40,31 @@ sub server_as_cv ($) {
       }
     }; # $stopper
     my $resultdata = [];
-    my $cmd_cv = run_cmd
-        [$root_path->child ('perl'), $root_path->child ('t_deps/server.pl'), 0, $test_port],
-        '<' => \$code,
-        '>' => sub {
-          $data .= $_[0] if defined $_[0];
-          while ($data =~ s/^\[data (.+)\]$//m) {
-            push @$resultdata, json_bytes2perl $1;
-          }
-          return if $started;
-          if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
-            $cv->send ({pid => $pid, host => $1, port => $2,
-                        data => $resultdata, stop => $stopper});
-            $started = 1;
-          }
-        },
-        '$$' => \$pid;
-    $server_pids->{$pid} = 1;
-    $last_server = $stopper;
-    $cmd_cv->cb (sub {
+    my $cmd = Promised::Command->new ([
+      $root_path->child ('perl'),
+      $root_path->child ('t_deps/server.pl'), 0, $test_port,
+    ]);
+    $cmd->stdin (\$code);
+    $cmd->stdout (sub {
+      $data .= $_[0] if defined $_[0];
+      while ($data =~ s/^\[data (.+)\]$//m) {
+        push @$resultdata, json_bytes2perl $1;
+      }
+      return if $started;
+      if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
+        $cv->send ({pid => $pid, host => $1, port => $2,
+                    data => $resultdata, stop => $stopper});
+        $started = 1;
+      }
+    });
+    $cmd->propagate_signal (1);
+    $cmd->signal_before_destruction (1);
+    $cmd->run->then (sub {
+      $pid = $cmd->pid;
+      $server_pids->{$pid} = 1;
+      $last_server = $stopper;
+      return $cmd->wait;
+    })->then (sub {
       for (@after_stop) {
         $_->();
       }
@@ -258,7 +265,8 @@ my $httpdcb = sub {
         var aHeaderNames = x.getAllResponseHeaders ()
             .split (/[\\u000D\\u000A]+/)
             .filter (function (_) { return /:/.test (_); })
-            .map (function (_) { return _.split (/:/)[0].toLowerCase (); });
+            .map (function (_) { return _.split (/:/)[0].toLowerCase (); })
+            .sort ((a, b) => a > b ? b : a);
         cell.title = x.getAllResponseHeaders () + "\\u000A\\u000A" + aHeaderNames;
         var aHeaders = aHeaderNames.map (function (name) {
           try {
@@ -318,6 +326,7 @@ my $httpdcb = sub {
               _then ();
             }
           };
+          x.timeout = 60 * 1000;
           x.send (null);
         }; // then
 

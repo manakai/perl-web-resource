@@ -165,6 +165,7 @@ my $httpdcb = sub {
       CRLF
       "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico>$STYLE<body><script src=http://$host:$port/runner></script>"
       close
+      exit
     } : qq{
       starttls
       receive "GET"
@@ -173,6 +174,7 @@ my $httpdcb = sub {
       CRLF
       "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico>$STYLE<body><script src=https://$host:$tlsport/runner></script>"
       close
+      exit
     })->cb (sub {
       my $server = $_[0]->recv;
       my $scheme = $httpd->port == $port ? 'http' : 'https';

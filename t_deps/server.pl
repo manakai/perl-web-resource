@@ -26,6 +26,8 @@ my $input;
 
 my $Commands = [split /\x0D?\x0A/, $input];
 
+my $Server;
+
 my $DUMP = $ENV{DUMP};
 my $_dump_tls = {};
 our $CurrentID;
@@ -973,6 +975,8 @@ sub run_commands ($$$$) {
       warn "[$states->{id}] @{[time]} @{[scalar gmtime]} $1\n";
     } elsif ($command =~ /^data\s+"([^"]*)"$/) {
       syswrite STDOUT, "[data ".(perl2json_bytes $1)."]\n";
+    } elsif ($command =~ /^exit$/) {
+      undef $Server;
     } elsif ($command =~ /\S/) {
       die "Unknown command: |$command|";
     }
@@ -1222,7 +1226,7 @@ require AnyEvent::Handle;
 }
 
 warn "Listening $host:$port...\n" if $DUMP;
-my $server = tcp_server $host, $port, sub {
+$Server = tcp_server $host, $port, sub {
   my ($fh, $client_host, $client_port) = @_;
   my $id = int rand 100000;
   warn "[$id] @{[time]} @{[scalar gmtime]} connected by $client_host:$client_port\n" if $DUMP;

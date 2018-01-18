@@ -90,11 +90,12 @@ for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.d
     body => {is_prefixed => 1},
     'tunnel-send' => {is_prefixed => 1, multiple => 1},
   }, sub {
-    my $test = $_[0];
+    my ($test, $opts) = @_;
     my $name = join ' - ', $file_name, $test->{name}->[0] // '';
     $name =~ /$filter/o or return;
     $name =~ /$filter_x/o and return;
     $test->{_file_name} = $file_name;
+    $test->{_line} = $opts->{line_number};
     if ($test->{tls}) {
       push @tlstest, $test;
     } else {
@@ -219,7 +220,7 @@ my $httpdcb = sub {
       document.body.appendChild (link);
 
       var resultsContainer = document.createElement ('div');
-      resultsContainer.innerHTML = '<table><thead><tr><th>#<th>Result<th><code>status</code><th><code>statusText</code><th>Headers<th><code>responseText</code><th>Data<th>File<th>Name<tbody></table>';
+      resultsContainer.innerHTML = '<table><thead><tr><th>#<th>Result<th><code>status</code><th><code>statusText</code><th>Headers<th><code>responseText</code><th>Data<th>File<th>Line<th>Name<tbody></table>';
       var results = resultsContainer.firstChild;
       document.body.appendChild (resultsContainer);
       results = results.appendChild (document.createElement ('tbody'));
@@ -308,6 +309,7 @@ my $httpdcb = sub {
                 tr.className = 'PASS';
               }
               tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode (test._file_name));
+              tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode (test._line));
               tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode ((test.name || {})[0]));
               results.appendChild (tr);
 

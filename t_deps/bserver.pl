@@ -458,6 +458,12 @@ my $httpdcb = sub {
           xhr.send (null);
         }
       }
+      if (tests.length === 0) {
+        var tr = document.createElement ('tr');
+        tr.className = 'PASS';
+        tr.innerHTML = '<th>0<td>PASS';
+        results.appendChild (tr);
+      }
       runNext ();
     }]);
   } elsif ($path eq '/last') {

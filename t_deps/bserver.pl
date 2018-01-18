@@ -138,6 +138,16 @@ my $tlshttpd = AnyEvent::HTTPD->new (host => $host, port => $tlsport, ssl => {
 });
 my $cv = AE::cv;
 
+my $STYLE = q{<style>
+      .PASS { background-color: green; color: white }
+      .FAIL { background-color: red; color: white }
+      code { white-space: pre }
+      code:empty::after { content: "(empty)"; color: gray }
+      td table th {
+        text-align: right;
+      }
+</style>};
+
 my $test_result_data = {};
 my $httpdcb = sub {
   my ($httpd, $req) = @_;
@@ -150,7 +160,7 @@ my $httpdcb = sub {
       "HTTP/1.0 200 OK"CRLF
       "Content-Type: text/html; charset=utf-8"CRLF
       CRLF
-      "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico><link rel=stylesheet href=http://$host:$port/css><body><script src=http://$host:$port/runner></script>"
+      "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico>$STYLE<body><script src=http://$host:$port/runner></script>"
       close
     } : qq{
       starttls
@@ -158,7 +168,7 @@ my $httpdcb = sub {
       "HTTP/1.0 200 OK"CRLF
       "Content-Type: text/html; charset=utf-8"CRLF
       CRLF
-      "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico><link rel=stylesheet href=https://$host:$tlsport/css><body><script src=https://$host:$tlsport/runner></script>"
+      "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico>$STYLE<body><script src=https://$host:$tlsport/runner></script>"
       close
     })->cb (sub {
       my $server = $_[0]->recv;
@@ -442,16 +452,6 @@ my $httpdcb = sub {
         }
       }
       runNext ();
-    }]);
-  } elsif ($path eq '/css') {
-    $req->respond ([200, 'OK', {'Content-Type' => 'text/css'}, q{
-      .PASS { background-color: green; color: white }
-      .FAIL { background-color: red; color: white }
-      code { white-space: pre }
-      code:empty::after { content: "(empty)"; color: gray }
-      td table th {
-        text-align: right;
-      }
     }]);
   } elsif ($path eq '/last') {
     $req->respond ([200, 'OK', {}, '']);

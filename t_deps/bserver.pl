@@ -142,11 +142,13 @@ my $STYLE = q{<style>
       .PASS { background-color: green; color: white }
       .FAIL { background-color: red; color: white }
       code { white-space: pre }
-      code:empty::after { content: "(empty)"; color: gray }
+      code:empty::after { content: '(empty)'; color: gray }
       td table th {
         text-align: right;
       }
 </style>};
+$STYLE =~ s/[\x0D\x0A]/ /g;
+die "Bad STYLE" if $STYLE =~ /"/;
 
 my $test_result_data = {};
 my $httpdcb = sub {

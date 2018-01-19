@@ -11,13 +11,15 @@ matrix:
   exclude:
   - perl: "5.14"
     os: osx
-before_install: git submodule update --init
-install:
-#  - make local/bin/pmbp.pl
-#  - perl local/bin/pmbp.pl --install-openssl
-  - make test-deps
-script:
-  - make test-main
+before_install: "true"
+install: "make test-deps"
+script: "make test-main"
+jobs:
+  include:
+    - stage: merge
+      before_install: "true"
+      install: "true"
+      script: curl -f https://gist.githubusercontent.com/wakaba/ab553f86cd017e0cb28c6dbb5364b009/raw/travis-merge-job.pl | perl
 notifications:
   email:
     - wakaba@suikawiki.org
@@ -28,5 +30,3 @@ notifications:
 env:
   global:
     secure: "sJUFu7B+qqJKTWlTElNfRCZpVoauEHA8eTVFq9BNghwt0nVoG3yGQytYxptNkRdFBppV3LXfkaiBLnK+YVIf8idHoBjcAUoWxOt0gYXv9dtGmLFYzKzCXXranQW8oZl7xTddmJYX06tddTfgW3My1rriXbocvW40havj+Zq5AIo="
-after_success:
-  - curl -s -S -L https://gist.githubusercontent.com/wakaba/9970857/raw/travis-merger.pl | perl

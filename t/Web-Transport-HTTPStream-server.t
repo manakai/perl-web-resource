@@ -5815,7 +5815,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Bad header name \|\\x00\| at @{[__FILE__]} line @{[__LINE__-13]}};
+      like $error, qr{^TypeError: Bad header name \|\\x00\| at @{[__FILE__]} line @{[__LINE__-13]}};
       ok $res->is_network_error;
     } $c;
   }, sub {
@@ -5850,7 +5850,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Bad header name \|\| at @{[__FILE__]} line @{[__LINE__-13]}};
+      like $error, qr{^TypeError: Bad header name \|\| at @{[__FILE__]} line @{[__LINE__-13]}};
       ok $res->is_network_error;
     } $c;
   }, sub {
@@ -5885,7 +5885,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Bad header value \|Foo: x\\x0Ab\| at @{[__FILE__]} line @{[__LINE__-13]}};
+      like $error, qr{^TypeError: Bad header value \|Foo: x\\x0Ab\| at @{[__FILE__]} line @{[__LINE__-13]}};
       ok $res->is_network_error;
     } $c;
   }, sub {
@@ -5920,7 +5920,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Header name \|a\| is utf8-flagged at @{[__FILE__]} line @{[__LINE__-13]}};
+      like $error, qr{^TypeError: Header name \|a\| is utf8-flagged at @{[__FILE__]} line @{[__LINE__-13]}};
       ok $res->is_network_error;
     } $c;
   }, sub {
@@ -5955,7 +5955,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      like $error, qr{^Header value of \|X\| is utf8-flagged at @{[__FILE__]} line @{[__LINE__-13]}};
+      like $error, qr{^TypeError: Header value of \|X\| is utf8-flagged at @{[__FILE__]} line @{[__LINE__-13]}};
       ok $res->is_network_error;
     } $c;
   }, sub {

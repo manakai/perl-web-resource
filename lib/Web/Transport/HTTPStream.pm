@@ -2909,6 +2909,14 @@ sub _ws_debug ($$$%) {
   }
 } # _ws_debug
 
+## Return whether the stream is ready to send a response.
+sub can_send_response ($) {
+  my $con = $_[0]->{connection};
+  return ! (not defined $con or
+            defined $con->{write_mode} or
+            not $con->{is_server});
+} # can_send_response
+
 ## Send a response.  The argument must be a hash reference with
 ## following key/value pairs:
 ##
@@ -2933,16 +2941,16 @@ sub _ws_debug ($$$%) {
 ## stream of the response body, as described earlier.
 sub send_response ($$$) {
   my ($stream, $response) = @_;
-  my $con = $stream->{connection};
 
   return Promise->reject (Web::Transport::TypeError->new ("Response is not allowed"))
-      if not defined $con or defined $con->{write_mode} or not $con->{is_server};
+      unless $stream->can_send_response;
 
   return Promise->reject (Web::Transport::TypeError->new ("Bad |status|"))
       unless defined $response->{status} and
              0 <= $response->{status} and
              $response->{status} < 1000;
 
+  my $con = $stream->{connection};
   my $close = $response->{close} ||
               $con->{to_be_closed} ||
               $stream->{request}->{version} eq '0.9';

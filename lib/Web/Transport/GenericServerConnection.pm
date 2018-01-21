@@ -88,7 +88,7 @@ sub onexception ($;$) {
   if (@_ > 1) {
     $_[0]->{onexception} = $_[1];
   }
-  return $_[0]->{onexception} || sub { warn $_[1] };
+  return $_[0]->{onexception} || sub { warn ref $_[0], ": ", $_[1] };
 } # onexception
 
 sub closed ($) {

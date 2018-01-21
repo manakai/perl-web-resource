@@ -1013,7 +1013,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{^TypeError: The argument is a utf8-flaged string at \Q@{[__FILE__]}\E line 6[13]}, $error;
+      like $error, qr{^TypeError: The argument is a utf8-flaged string at \Q@{[__FILE__]}\E line 6[1-4]}, $error;
     } $c;
   });
 } n => 5, name => 'Bad body 1';
@@ -1159,7 +1159,7 @@ test {
     test {
       $error_invoked++;
       if (ref $error) {
-        like $error, qr{^Error: \Q$hoge\E at \Q@{[__FILE__]}\E line 6[13]}, $error;
+        like $error, qr{^Error: \Q$hoge\E at \Q@{[__FILE__]}\E line 6[1-4]}, $error;
       }
     } $c;
   });
@@ -2323,14 +2323,20 @@ test {
         is $res->network_error_message, 'Connection closed without response';
       } $c;
     });
-  }, undef, server_header => "a\x0Db");
-} n => 2, name => 'server_header bad';
+  }, sub {
+    my $error = $_[1];
+    test {
+      like $error, qr{^TypeError: Bad header value \|Server: a\\x0Db\|},
+          "onexception notified of Server: header's value's brokenmess";
+    } $c;
+  }, server_header => "a\x0Db");
+} n => 3, name => 'server_header bad';
 
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

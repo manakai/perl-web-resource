@@ -15,6 +15,7 @@ push our @ISA, qw(Web::Transport::GenericServerConnection);
 push our @CARP_NOT, qw(
   Web::Transport::PSGIServerConnection::Writer
   Web::Transport::TypeError
+  Web::Transport::HTTPStream
 );
 
 sub _te ($) {
@@ -203,7 +204,6 @@ sub _run ($$$$$) {
   my ($res_resolve, $res_reject);
   my $res_promise = Promise->new (sub { ($res_resolve, $res_reject) = @_ });
   my $invoked = 0;
-  my $send_response_invoked = 0;
   my $ondestroy = bless sub {
     $res_reject->(_te "PSGI application did not invoke the responder")
         unless $invoked;
@@ -277,18 +277,18 @@ sub _run ($$$$$) {
         undef $length if $status == 204 or $status == 205 or $status == 304 or
             $method eq 'HEAD';
         Promise->resolve->then (sub {
-          return $stream->send_response (Web::Transport::RequestConstructor->create_response ({
+          my $res = Web::Transport::RequestConstructor->create_response ({
             status => $status,
             headers => $headers,
             length => $length,
-          }));
+          });
+          return $stream->send_response ($res);
         })->then (sub {
           my $w = $_[0]->{body}->get_writer;
           $w->write ($_) for @$body;
           undef $ondestroy2;
           return $w->close;
         })->then ($res_resolve, $res_reject);
-        $send_response_invoked = 1;
         return undef;
       } else { ## Filehandles are not supported
         my $error = _te "PSGI application specified bad response body";
@@ -304,15 +304,15 @@ sub _run ($$$$$) {
              undef $ondestroy2;
            });
       Promise->resolve->then (sub {
-        return $stream->send_response (Web::Transport::RequestConstructor->create_response ({
+        my $res = Web::Transport::RequestConstructor->create_response ({
           status => $status,
           headers => $headers,
-        }));
+        });
+        return $stream->send_response ($res);
       })->then (sub {
         my $w = $_[0]->{body}->get_writer;
         $s_writer->($w);
       })->then ($res_resolve, $res_reject);
-      $send_response_invoked = 1;
       return $writer;
     }
   }; # $responder
@@ -330,29 +330,23 @@ sub _run ($$$$$) {
 
   return $res_promise->catch (sub {
     my $error = Web::Transport::Error->wrap ($_[0]);
-    if ($send_response_invoked) {
-      $stream->abort ($error, graceful => 1);
-      return Promise->resolve->then (sub {
-        return $server->onexception->($server, $error);
-      })->catch (sub {
-        warn $_[0];
-      })->then (sub {
-        undef $ondestroy2;
-      });
-    } else {
+    if ($stream->can_send_response) {
       return Promise->all ([
         Promise->resolve->then (sub {
           return $server->onexception->($server, $error);
         })->catch (sub {
           warn $_[0];
         }),
-        $stream->send_response (Web::Transport::RequestConstructor->create_response ({
-          status => 500,
-          headers => {
-            Server => $server->{server_header},
-            'Content-Type' => 'text/plain; charset=utf-8',
-          },
-        }))->then (sub {
+        Promise->resolve->then (sub {
+          my $res = Web::Transport::RequestConstructor->create_response ({
+            status => 500,
+            headers => {
+              Server => $server->{server_header},
+              'Content-Type' => 'text/plain; charset=utf-8',
+            },
+          });
+          return $stream->send_response ($res);
+        })->then (sub {
           my $writer = $_[0]->{body}->get_writer;
           $writer->write
               (DataView->new (ArrayBuffer->new_from_scalarref (\"500")));
@@ -361,6 +355,15 @@ sub _run ($$$$$) {
           return $stream->abort ($_[0], graceful => 1);
         }),
       ])->then (sub {
+        undef $ondestroy2;
+      });
+    } else {
+      $stream->abort ($error, graceful => 1);
+      return Promise->resolve->then (sub {
+        return $server->onexception->($server, $error);
+      })->catch (sub {
+        warn $_[0];
+      })->then (sub {
         undef $ondestroy2;
       });
     }
@@ -421,7 +424,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

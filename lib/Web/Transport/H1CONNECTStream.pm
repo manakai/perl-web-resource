@@ -23,6 +23,8 @@ sub _tep ($) {
 ##
 ##   target - The |request-target| of the HTTP |CONNECT| request.
 ##
+##   signal
+##
 ##   debug
 sub create ($$) {
   my ($class, $args) = @_;
@@ -45,7 +47,22 @@ sub create ($$) {
           unless defined $parent->{parent}->{debug};
     }
   }
+
   my $http = Web::Transport::HTTPStream->new ($parent);
+
+  my $signal = $args->{signal};
+  if (defined $signal) {
+    if ($signal->aborted) {
+      my $error = $signal->manakai_error;
+      $http->abort ($error)->manakai_set_handled;
+      $http->ready->manakai_set_handled;
+      return Promise->reject ($error);
+    } else {
+      $signal->manakai_onabort (sub {
+        $http->abort ($signal->manakai_error)->manakai_set_handled;
+      });
+    }
+  }
 
   my $info = {
     type => 'CONNECT',
@@ -53,7 +70,10 @@ sub create ($$) {
   };
   $info->{closed} = $http->closed;
 
-  return $http->ready->then (sub {
+  return promised_cleanup {
+    $signal->manakai_onabort (undef) if defined $signal;
+    undef $signal;
+  } $http->ready->then (sub {
     $info->{parent} = $http->info;
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};
     $info->{id} = $info->{parent}->{id} . 'C';
@@ -117,7 +137,7 @@ sub create ($$) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

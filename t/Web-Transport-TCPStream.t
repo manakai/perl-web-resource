@@ -1406,7 +1406,7 @@ test {
   })->catch (sub {
     my $e = $_[0];
     test {
-      isa_ok $e, 'Web::Transport::AbortError';
+      ok $Web::DOM::Error::L1ObjectClass->{ref $e};
       is $e->name, 'AbortError';
       is $e->message, 'Aborted';
       is $e->file_name, __FILE__;
@@ -1452,11 +1452,11 @@ test {
   })->catch (sub {
     my $e = $_[0];
     test {
-      isa_ok $e, 'Web::Transport::AbortError';
+      ok $Web::DOM::Error::L1ObjectClass->{ref $e};
       is $e->name, 'AbortError';
       is $e->message, 'Aborted';
       is $e->file_name, __FILE__;
-      is $e->line_number, __LINE__+7; # XXX
+      is $e->line_number, __LINE__-17;
       is $invoked, 0;
     } $c;
   })->then (sub {

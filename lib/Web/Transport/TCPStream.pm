@@ -15,7 +15,6 @@ use Streams::IOError;
 use Web::Transport::Error;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
-use Web::Transport::AbortError;
 use DataView;
 use Streams;
 use Streams::Filehandle;
@@ -26,7 +25,7 @@ push our @CARP_NOT, qw(
   ReadableStream ReadableStreamBYOBRequest WritableStream
   Streams::Filehandle
   Web::Transport::Error Web::Transport::TypeError Streams::IOError
-  Web::Transport::ProtocolError Web::Transport::AbortError
+  Web::Transport::ProtocolError
 );
 
 sub _te ($) {
@@ -254,17 +253,18 @@ sub create ($$) {
     }, # abort
   }); # $write_stream
 
+  my $signal = $args->{signal};
   return Promise->new (sub {
     my ($ok, $ng) = @_;
 
     my $aborted = sub { };
-    if (defined $args->{signal}) {
-      if ($args->{signal}->aborted) {
-        $ng->(Web::Transport::AbortError->new);
+    if (defined $signal) {
+      if ($signal->aborted) {
+        $ng->($signal->manakai_error);
         return;
       } else {
         $args->{signal}->manakai_onabort (sub {
-          $aborted->();
+          $aborted->($signal->manakai_error);
         });
       }
     }
@@ -282,8 +282,9 @@ sub create ($$) {
 
     my $con;
     $aborted = sub {
-      $ng->(Web::Transport::AbortError->new);
-      $con = $ok = $ng = $aborted = sub { };
+      $ng->($_[0]);
+      $signal->manakai_onabort (sub { }) if defined $signal;
+      $con = $ok = $ng = $aborted = $signal = sub { };
     };
     my $caller = [caller ((sub { Carp::short_error_loc })->() - 1)];
     $con = tcp_connect $args->{addr}, $args->{port}, sub {

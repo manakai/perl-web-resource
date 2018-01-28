@@ -1,7 +1,7 @@
 package Web::Transport::SOCKS4Stream;
 use strict;
 use warnings;
-our $VERSION = '3.0';
+our $VERSION = '4.0';
 use AnyEvent;
 use Promise;
 use Promised::Flow;
@@ -49,9 +49,10 @@ sub create ($$) {
     layered_type => 'SOCKS4',
   };
 
-  my $parent = $args->{parent};
-  $parent = {%$parent, debug => $args->{debug}}
+  my $parent = {%{$args->{parent}}};
+  $parent->{debug} = $args->{debug}
       if $args->{debug} and not defined $parent->{debug};
+  my $signal = $parent->{signal} = $args->{signal}; # or undef
   return $parent->{class}->create ($parent)->then (sub {
     $info->{parent} = $_[0];
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};
@@ -67,14 +68,30 @@ sub create ($$) {
     my $t_w = $writable->get_writer;
 
     my $timer;
-    my $timeout = $HandshakeTimeout;
-    my $ontimer = sub {
-      my $error = _pe "SOCKS4 timeout ($timeout)";
+    my $onerror = sub {
+      my $error = $_[0];
       $t_w->abort ($error) if defined $t_w;
       $t_r->cancel ($error)->catch (sub { }) if defined $t_r;
       undef $timer;
-    }; # $ontimer
-    $timer = AE::timer $timeout, 0, $ontimer;
+      undef $signal;
+    }; # $onerror
+
+    my $timeout = $HandshakeTimeout;
+    $timer = AE::timer $timeout, 0, sub {
+      $onerror->(_pe "SOCKS4 timeout ($timeout)");
+    };
+
+    if (defined $signal) {
+      if ($signal->aborted) {
+        my $error = $signal->manakai_error;
+        $onerror->($error);
+        die $error;
+      } else {
+        $signal->manakai_onabort (sub {
+          $onerror->($signal->manakai_error);
+        });
+      }
+    }
 
     my $port = $args->{port};
     my $addr = $args->{host}->packed_addr;
@@ -96,6 +113,7 @@ sub create ($$) {
     return promised_cleanup { undef $read } $read->()->then (sub {
       if (8 == length $bytes and substr ($bytes, 0, 2) eq "\x00\x5A") {
         undef $timer;
+        undef $signal;
 
         $t_r->release_lock;
         $t_w->release_lock;
@@ -112,9 +130,7 @@ sub create ($$) {
           $message .= ' (empty)';
         }
         my $error = _pe $message;
-        $t_w->abort ($error) if defined $t_w;
-        $t_r->cancel ($error)->catch (sub { }) if defined $t_r;
-        undef $timer;
+        $onerror->($error);
         die $error;
       }
     });
@@ -125,7 +141,7 @@ sub create ($$) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -799,18 +799,19 @@ sub closed ($) {
 
 ## Stop the HTTP connection accepting new requests and close the
 ## connection AFTER any ongoing stream has been completed.  If the
-## HTTP connection is not ready yet, a rejected promise is returned.
-## Otherwise, it returns the |closed| promise.
+## HTTP connection is not ready yet, any ongoing connection attempt is
+## aborted.  It returns the |closed| promise anyway.
 sub close_after_current_stream ($) {
   my $con = $_[0];
-  return Promise->reject (Web::Transport::TypeError->new ("Connection is not ready"))
-      unless defined $con->{state};
+
+  my $error = _pw 'Close by |close_after_current_stream|';
+  return $con->abort ($error) unless defined $con->{state};
 
   $con->{to_be_closed} = 1;
   if ($con->{state} eq 'initial' or
       $con->{state} eq 'before request-line' or # XXXspec
       $con->{state} eq 'waiting') {
-    $con->{exit} = _pw 'Close by |close_after_current_stream|';
+    $con->{exit} = $error;
     $con->_send_done (close => 1);
     $con->_read;
   }
@@ -842,7 +843,7 @@ sub abort ($;$%) {
 
   (delete $con->{aborter})->abort ($error) if defined $con->{aborter};
   if (not defined $con->{state}) {
-    return Promise->reject ($error);
+    return $con->{closed}->[0];
   }
 
   (($args{graceful} && defined $con->{writer}) ? $con->{writer}->write (DataView->new (ArrayBuffer->new (0))) : Promise->resolve)->then (sub {

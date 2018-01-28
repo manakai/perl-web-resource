@@ -60,8 +60,8 @@ sub new_from_envs ($$) {
   }, $_[0];
 } # new_from_envs
 
-sub get_proxies_for_url ($$) {
-  my ($self, $url) = @_;
+sub get_proxies_for_url ($$;%) {
+  my ($self, $url, %args) = @_;
 
   my $host = $url->host;
   return Promise->resolve ([]) unless defined $host;

@@ -18,8 +18,8 @@ sub new_from_arrayref ($$) {
   return bless $list, $_[0];
 } # new_from_arrayref
 
-sub get_proxies_for_url ($$) {
-  my ($self, $url) = @_;
+sub get_proxies_for_url ($$;%) {
+  my ($self, $url, %args) = @_;
   return Promise->resolve ($self);
 } # get_proxies_for_url
 

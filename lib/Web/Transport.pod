@@ -336,11 +336,36 @@ Header names cannot be empty and cannot contain certain bytes
 
 =head1 PROXY MANAGERS
 
-XXX
+A B<proxy manager> is used to retrieve proxy configurations used for
+fetching.  It is an object with the C<get_proxies_for_url> method.
+
+The C<get_proxies_for_url> method is expected to return the list of
+the proxies for the specified URL.  It has a required argument, which
+must be a URL record (L<Web::URL>), for which a proxy configuration is
+requested.
+
+Additionally, following named argument chould be specified:
+
+=over 4
+
+=item signal => $signal
+
+The abort signal (L<AbortSignal>) for the operation.  If the abort
+controller (L<AbortController>) associated with the signal is aborted,
+the operation is expected to be aborted and the method's promise is
+rejected with an object whose C<name> is C<AbortError> whenever
+possible.
+
+=back
+
+The method is expected to return a promise (L<Promise>), which is to
+be resolved with a proxy configuration list (see L</"PROXY
+CONFIGURATIONS">), or to be rejected with an error.
 
 There are following proxy managers in this repository:
 L<Web::Transport::ENVProxyManager> and
-L<Web::Transport::ConstProxyManager>.
+L<Web::Transport::ConstProxyManager>.  Any other object can be used as
+well.
 
 =head1 PROXY CONFIGURATIONS
 

@@ -1,9 +1,10 @@
 package Web::Transport::BasicClient;
 use strict;
 use warnings;
-our $VERSION = '2.0';
+our $VERSION = '3.0';
 use ArrayBuffer;
 use DataView;
+use AbortController;
 use Promise;
 use Promised::Flow;
 use Web::DomainName::Canonicalize qw(canonicalize_url_host);
@@ -68,6 +69,7 @@ sub new_from_url ($$;$) {
     debug => (defined $opts->{debug} ? $opts->{debug} : ($ENV{WEBUA_DEBUG} || 0)),
     last_resort_timeout => (defined $opts->{last_resort_timeout}
         ? $opts->{last_resort_timeout} : $LastResortTimeout),
+    aborter => AbortController->new,
   }, $_[0];
 } # new_from_url
 
@@ -85,12 +87,14 @@ sub origin ($) {
 
 my $proxy_to_transport = sub {
   ## create a transport for a proxy configuration
-  my ($tid, $proxy, $url_record, $resolver, $clock, $no_cache, $debug) = @_;
+  my ($tid, $proxy, $url_record, $resolver, $clock, $no_cache, $signal, $debug) = @_;
 
   ## 1. If $proxy->{protocol} is not supported, return null.
 
   if ($proxy->{protocol} eq 'tcp') {
-    return $resolver->resolve ($url_record->host, no_cache => $no_cache, debug => $debug)->then (sub {
+    return $resolver->resolve ($url_record->host,
+      no_cache => $no_cache, signal => $signal, debug => $debug,
+    )->then (sub {
       my $addr = $_[0];
       die _pe "Can't resolve host |@{[$url_record->host->stringify]}|"
           unless defined $addr;
@@ -108,7 +112,7 @@ my $proxy_to_transport = sub {
       }, 0];
     });
   } elsif ($proxy->{protocol} eq 'http' or $proxy->{protocol} eq 'https') {
-    return $resolver->resolve ($proxy->{host}, debug => $debug)->then (sub {
+    return $resolver->resolve ($proxy->{host}, signal => $signal, debug => $debug)->then (sub {
       die _pe "Can't resolve proxy host |@{[$proxy->{host}->stringify]}|"
           unless defined $_[0];
       my $pport = 0+(defined $proxy->{port} ? $proxy->{port} : ($proxy->{protocol} eq 'https' ? 443 : 80));
@@ -145,9 +149,21 @@ my $proxy_to_transport = sub {
       }
     });
   } elsif ($proxy->{protocol} eq 'socks4') {
-    return Promise->all ([
-      $resolver->resolve ($url_record->host, no_cache => $no_cache, debug => $debug), # XXX force ipv4 option ?
-      $resolver->resolve ($proxy->{host}, debug => $debug),
+    my $ac1 = AbortController->new;
+    my $ac2 = AbortController->new;
+    $signal->manakai_onabort (sub {
+      my $e = $signal->manakai_error;
+      $ac1->abort ($e);
+      $ac2->abort ($e);
+    });
+    return promised_cleanup {
+      $signal->manakai_onabort (undef);
+      undef $signal;
+    } Promise->all ([
+      $resolver->resolve ($url_record->host,
+        no_cache => $no_cache, signal => $ac1->signal, debug => $debug,
+      ), # XXX force ipv4 option ?
+      $resolver->resolve ($proxy->{host}, signal => $ac2->signal, debug => $debug),
     ])->then (sub {
       my $addr = $_[0]->[0];
       die _pe "Can't resolve host |@{[$url_record->host->stringify]}|"
@@ -177,7 +193,7 @@ my $proxy_to_transport = sub {
       }, 0];
     });
   } elsif ($proxy->{protocol} eq 'socks5') {
-    return $resolver->resolve ($proxy->{host}, debug => $debug)->then (sub {
+    return $resolver->resolve ($proxy->{host}, signal => $signal, debug => $debug)->then (sub {
       die _pe "Can't resolve proxy host |@{[$proxy->{host}->stringify]}|"
           unless defined $_[0];
 
@@ -232,14 +248,13 @@ sub _connect ($$) {
     }
   }
 
-  # XXX $self->abort should cancel ongoing connect
   return $self->{connect_promise} ||= do {
     ## Establish a transport
 
     my $parent_id = $self->{parent_id};
     my $debug = $self->{debug};
 
-    $self->{proxy_manager}->get_proxies_for_url ($url_record)->then (sub {
+    $self->{proxy_manager}->get_proxies_for_url ($url_record, signal => $self->{aborter}->signal)->then (sub {
       my $proxies = [@{$_[0]}];
 
       # XXX wait for other connections
@@ -248,10 +263,13 @@ sub _connect ($$) {
         if (@$proxies) {
           my $proxy = shift @$proxies;
           my $tid = $parent_id . '.' . ++$self->{tid};
-          return $proxy_to_transport->($tid, $proxy, $url_record,
-                                       $self->{resolver},
-                                       $self->{protocol_clock},
-                                       $args{no_cache}, $debug)->catch (sub {
+          return $proxy_to_transport->(
+            $tid, $proxy, $url_record,
+            $self->{resolver}, $self->{protocol_clock},
+            $args{no_cache},
+            $self->{aborter}->signal,
+            $debug,
+          )->catch (sub {
             if (@$proxies) {
               return $get->();
             } else {
@@ -504,7 +522,10 @@ sub _request ($$$$$$$$$$) {
 
 sub request ($%) {
   my ($self, %args) = @_;
-  return Promise->reject (_te "Client closed") if $self->{closed};
+  if ($self->{closed}) {
+    my $error = _te "Client closed";
+    return Promise->reject (Web::Transport::Response->new_from_error ($error));
+  }
 
   my $ready = $self->{queue};
   my $s_queue;
@@ -591,9 +612,10 @@ sub abort ($;$) {
       (defined $_[1] ? $_[1] : 'Client aborted');
   $self->{closed} = 1;
   $self->{aborted} = $error;
+  $self->{aborter}->abort ($error);
   return $self->{http}->abort ($error)->then (sub {
     delete $self->{http};
-    delete $self->{connect_promise}; # XXX abort ongoing one
+    delete $self->{connect_promise};
     warn "$self->{parent_id}: @{[__PACKAGE__]}: Aborted ($error) @{[scalar gmtime]}\n"
         if $self->{debug};
   }) if defined $self->{http};
@@ -613,7 +635,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

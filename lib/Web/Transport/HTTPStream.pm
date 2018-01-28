@@ -9,6 +9,7 @@ use Web::Encoding;
 use Encode qw(decode); # XXX
 use ArrayBuffer;
 use TypedArray;
+use AbortController;
 use Promised::Flow;
 use Streams;
 use Web::Transport::Error;
@@ -16,6 +17,7 @@ use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
 
 push our @CARP_NOT, qw(
+  AbortController
   ReadableStreamDefaultController
   Web::Transport::HTTPStream::Stream
   Web::Transport::TCPStream
@@ -97,20 +99,9 @@ sub new ($$) {
     $con->{is_server} = 1;
     $con->{rbuf} = '';
   }
-  if (defined $args->{debug}) {
-    $con->{DEBUG} = $args->{debug};
-  } else {
-    $con->{DEBUG} = $con->{is_server} ? $ENV{WEBSERVER_DEBUG} || 0 : $ENV{WEBUA_DEBUG} || 0;
-  }
 
   $con->{ready} = _pcap;
   $con->{closed} = _pcap;
-
-  my $parent = $args->{parent};
-  if ($con->{DEBUG}) {
-    $parent = {%$parent};
-    $parent->{debug} = $con->{DEBUG} unless defined $parent->{debug};
-  }
 
   $con->{streams} = ReadableStream->new ({
     start => sub {
@@ -131,6 +122,16 @@ sub new ($$) {
     $con->{streams_done} = sub { };
   }; # streams_done
 
+  my $parent = {%{$args->{parent}}};
+  if (defined $args->{debug}) {
+    $con->{DEBUG} = $args->{debug};
+  } else {
+    $con->{DEBUG} = $con->{is_server} ? $ENV{WEBSERVER_DEBUG} || 0 : $ENV{WEBUA_DEBUG} || 0;
+  }
+  $parent->{debug} = $con->{DEBUG}
+      if $con->{DEBUG} and not defined $parent->{debug};
+  $con->{aborter} = AbortController->new;
+  my $signal = $parent->{signal} = $con->{aborter}->signal;
   $parent->{class}->create ($parent)->then (sub {
     my $info = $_[0];
 
@@ -835,13 +836,14 @@ sub is_active ($) {
 ## returns the |closed| promise of the HTTP connection.
 sub abort ($;$%) {
   my ($con, $reason, %args) = @_;
-  if (not defined $con->{state}) {
-    # XXX abort any connection handshake and invalidate $con
-    return Promise->reject (Web::Transport::TypeError->new ("Connection has not been established"));
-  }
 
   my $error = Web::Transport::Error->wrap ($reason);
   $con->{exit} = $error;
+
+  (delete $con->{aborter})->abort ($error) if defined $con->{aborter};
+  if (not defined $con->{state}) {
+    return Promise->reject ($error);
+  }
 
   (($args{graceful} && defined $con->{writer}) ? $con->{writer}->write (DataView->new (ArrayBuffer->new (0))) : Promise->resolve)->then (sub {
     (delete $con->{writer})->abort ($error) if defined $con->{writer};

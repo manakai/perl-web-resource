@@ -5,6 +5,7 @@ use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib');
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
+use AbortController;
 use Web::Host;
 use Web::Transport::PlatformResolver;
 use Web::Transport::CachedResolver;
@@ -183,6 +184,67 @@ test {
     undef $c;
   });
 } n => 3, name => 'input is a domain, custom resolver, cache, no_cache arg';
+
+test {
+  my $c = shift;
+  my $host = Web::Host->parse_string (rand . '.foobar.com');
+  my $r1 = Web::Transport::PlatformResolver->new;
+  my $resolver = Web::Transport::CachedResolver->new_from_resolver_and_clock
+      ($r1, Web::DateTime::Clock->monotonic_clock);
+  my $ac = AbortController->new;
+  my $p = $resolver->resolve ($host, signal => $ac->signal);
+  $ac->abort;
+  isa_ok $p, 'Promise';
+  $p->then (sub {
+    my $resolved = $_[0];
+    test {
+      is $resolved, undef, 'Resolved to undef';
+      ok 1;
+      ok 1;
+      ok 1;
+    } $c;
+  }, sub {
+    my $e = $_[0];
+    test {
+      is $e->name, 'AbortError';
+      is $e->message, 'Aborted';
+      is $e->file_name, __FILE__;
+      is $e->line_number, __LINE__-16;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'resolve abort';
+
+test {
+  my $c = shift;
+  my $host = Web::Host->parse_string (rand . '.foobar.com');
+  my $r1 = Web::Transport::PlatformResolver->new;
+  my $resolver = Web::Transport::CachedResolver->new_from_resolver_and_clock
+      ($r1, Web::DateTime::Clock->monotonic_clock);
+  my $ac = AbortController->new;
+  $ac->abort;
+  my $p = $resolver->resolve ($host, signal => $ac->signal);
+  isa_ok $p, 'Promise';
+  $p->then (sub {
+    my $resolved = $_[0];
+    test {
+      ok 0;
+    } $c;
+  }, sub {
+    my $e = $_[0];
+    test {
+      is $e->name, 'AbortError';
+      is $e->message, 'Aborted';
+      is $e->file_name, __FILE__;
+      is $e->line_number, __LINE__-14;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'resolve abort';
 
 run_tests;
 

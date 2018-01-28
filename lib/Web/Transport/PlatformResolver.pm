@@ -1,7 +1,7 @@
 package Web::Transport::PlatformResolver;
 use strict;
 use warnings;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
 use Promise;
 use Web::Host;
 use AnyEvent::Util qw(fork_call);
@@ -15,6 +15,23 @@ sub resolve ($$;%) {
   return Promise->resolve ($host) if $host->is_ip;
   return Promise->new (sub {
     my ($ok, $ng) = @_;
+
+    my $aborted = 0;
+    my $signal = delete $args{signal};
+    if (defined $signal) {
+      if ($signal->aborted) {
+        my $error = $signal->manakai_error;
+        return $ng->($error);
+      } else {
+        $signal->manakai_onabort (sub {
+          $ng->($signal->manakai_error);
+          undef $signal;
+          $aborted = 1;
+          $ok = $ng = sub { };
+        });
+      }
+    }
+
     my $clock;
     my $time1;
     if ($args{debug}) {
@@ -34,6 +51,9 @@ sub resolve ($$;%) {
               __PACKAGE__, $clock->() - $time1;
         }
       }
+      $signal->manakai_onabort (undef) if defined $signal;
+      undef $signal;
+      return if $aborted;
       if (defined $r and $r->is_ipv4 and $r->text_addr =~ /^0\./) { # 0.0.0.0/8
         $r = undef;
       }
@@ -46,7 +66,7 @@ sub resolve ($$;%) {
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

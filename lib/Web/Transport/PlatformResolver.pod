@@ -27,20 +27,34 @@ Following methods are available:
 
 Create a resolver.
 
-=item $promise = $resolver->resolve ($host, no_cache => $boolean, debug => $mode)
+=item $promise = $resolver->resolve ($host, $name => $value, ...)
 
 Resolve a domain.
 
 The first argument must be a host (L<Web::Host>) to resolve.
 
-Additionally, named arguments can be specified.
+Additionally, following named arguments can be specified:
 
-The C<no_cache> named argument is ignored for this resolver (for now,
-at least).  That is, the platform's DNS cache can't be disabled.
+=over 4
 
-The C<debug> argument specifies the debug mode.  The default value is
-0 (not in the debug mode).  See C<WEBUA_DEBUG> section in
-L<Web::Transport> for available mode values.
+=item no_cache => $boolean
+
+Ignored for this resolver (for now, at least).  That is, the
+platform's DNS cache can't be disabled.
+
+=item signal => $signal
+
+The abort signal (L<AbortSignal>) for the resolution.  If the abort
+controller (L<AbortController>) associated with the signal is aborted,
+the resolution is aborted and the method's promise is rejected with an
+object whose C<name> is C<AbortError> whenever possible.
+
+=item debug => $debug
+
+The debug mode.  The default value is 0 (not in the debug mode).  See
+C<WEBUA_DEBUG> section in L<Web::Transport> for available mode values.
+
+=back
 
 The method returns a promise (L<Promise>), which is to be resolved
 with the result.  If the host is a domain and is successfully resolved
@@ -65,7 +79,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

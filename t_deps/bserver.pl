@@ -10,6 +10,7 @@ use Encode;
 use JSON::PS;
 use Test::HTCT::Parser;
 use Test::Certificates;
+use Promised::Command;
 
 my $host = '0';
 my $port = $ENV{SERVER_PORT} || 4355;
@@ -39,25 +40,31 @@ sub server_as_cv ($) {
       }
     }; # $stopper
     my $resultdata = [];
-    my $cmd_cv = run_cmd
-        [$root_path->child ('perl'), $root_path->child ('t_deps/server.pl'), 0, $test_port],
-        '<' => \$code,
-        '>' => sub {
-          $data .= $_[0] if defined $_[0];
-          while ($data =~ s/^\[data (.+)\]$//m) {
-            push @$resultdata, json_bytes2perl $1;
-          }
-          return if $started;
-          if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
-            $cv->send ({pid => $pid, host => $1, port => $2,
-                        data => $resultdata, stop => $stopper});
-            $started = 1;
-          }
-        },
-        '$$' => \$pid;
-    $server_pids->{$pid} = 1;
-    $last_server = $stopper;
-    $cmd_cv->cb (sub {
+    my $cmd = Promised::Command->new ([
+      $root_path->child ('perl'),
+      $root_path->child ('t_deps/server.pl'), 0, $test_port,
+    ]);
+    $cmd->stdin (\$code);
+    $cmd->stdout (sub {
+      $data .= $_[0] if defined $_[0];
+      while ($data =~ s/^\[data (.+)\]$//m) {
+        push @$resultdata, json_bytes2perl $1;
+      }
+      return if $started;
+      if ($data =~ /^\[server (.+) ([0-9]+)\]/m) {
+        $cv->send ({pid => $pid, host => $1, port => $2,
+                    data => $resultdata, stop => $stopper});
+        $started = 1;
+      }
+    });
+    $cmd->propagate_signal (1);
+    $cmd->signal_before_destruction (1);
+    $cmd->run->then (sub {
+      $pid = $cmd->pid;
+      $server_pids->{$pid} = 1;
+      $last_server = $stopper;
+      return $cmd->wait;
+    })->then (sub {
       for (@after_stop) {
         $_->();
       }
@@ -90,11 +97,12 @@ for my $file_name (glob path (__FILE__)->parent->parent->child ('t_deps/data/*.d
     body => {is_prefixed => 1},
     'tunnel-send' => {is_prefixed => 1, multiple => 1},
   }, sub {
-    my $test = $_[0];
+    my ($test, $opts) = @_;
     my $name = join ' - ', $file_name, $test->{name}->[0] // '';
     $name =~ /$filter/o or return;
     $name =~ /$filter_x/o and return;
     $test->{_file_name} = $file_name;
+    $test->{_line} = $opts->{line_number};
     if ($test->{tls}) {
       push @tlstest, $test;
     } else {
@@ -138,6 +146,18 @@ my $tlshttpd = AnyEvent::HTTPD->new (host => $host, port => $tlsport, ssl => {
 });
 my $cv = AE::cv;
 
+my $STYLE = q{<style>
+      .PASS { background-color: green; color: white }
+      .FAIL { background-color: red; color: white }
+      code { white-space: pre }
+      code:empty::after { content: '(empty)'; color: gray }
+      td table th {
+        text-align: right;
+      }
+</style>};
+$STYLE =~ s/[\x0D\x0A]/ /g;
+die "Bad STYLE" if $STYLE =~ /"/;
+
 my $test_result_data = {};
 my $httpdcb = sub {
   my ($httpd, $req) = @_;
@@ -150,16 +170,18 @@ my $httpdcb = sub {
       "HTTP/1.0 200 OK"CRLF
       "Content-Type: text/html; charset=utf-8"CRLF
       CRLF
-      "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico><link rel=stylesheet href=http://$host:$port/css><body><script src=http://$host:$port/runner></script>"
+      "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico>$STYLE<body><script src=http://$host:$port/runner></script>"
       close
+      exit
     } : qq{
       starttls
       receive "GET"
       "HTTP/1.0 200 OK"CRLF
       "Content-Type: text/html; charset=utf-8"CRLF
       CRLF
-      "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico><link rel=stylesheet href=https://$host:$tlsport/css><body><script src=https://$host:$tlsport/runner></script>"
+      "<!DOCTYPE HTML><link rel='shortcut icon' href=https://test/favicon.ico>$STYLE<body><script src=https://$host:$tlsport/runner></script>"
       close
+      exit
     })->cb (sub {
       my $server = $_[0]->recv;
       my $scheme = $httpd->port == $port ? 'http' : 'https';
@@ -207,7 +229,7 @@ my $httpdcb = sub {
       document.body.appendChild (link);
 
       var resultsContainer = document.createElement ('div');
-      resultsContainer.innerHTML = '<table><thead><tr><th>#<th>Result<th><code>status</code><th><code>statusText</code><th>Headers<th><code>responseText</code><th>Data<th>File<th>Name<tbody></table>';
+      resultsContainer.innerHTML = '<table><thead><tr><th>#<th>Result<th><code>status</code><th><code>statusText</code><th>Headers<th><code>responseText</code><th>Data<th>File<th>Line<th>Name<tbody></table>';
       var results = resultsContainer.firstChild;
       document.body.appendChild (resultsContainer);
       results = results.appendChild (document.createElement ('tbody'));
@@ -238,22 +260,24 @@ my $httpdcb = sub {
                 if (reason === undefined) reason = '';
                 setResult (cell, x.statusText == reason, x.statusText, reason);
                 var cell = tr.appendChild (document.createElement ('td'));
-                var eHeaders = (test.headers || [''])[0];
-                var aHeaderNames = x.getAllResponseHeaders ()
-                    .split (/[\\u000D\\u000A]+/)
-                    .filter (function (_) { return /:/.test (_); })
-                    .map (function (_) { return _.split (/:/)[0]; });
-                cell.title = x.getAllResponseHeaders () + "\\u000A\\u000A" + aHeaderNames;
-                var aHeaders = aHeaderNames.map (function (name) {
-                  try {
-                    var value = x.getResponseHeader (name);
-                    if (value === null) return '';
-                    return name + ": " + value;
-                  } catch (e) {
-                    return '';
-                  }
-                }).filter (function (_) { return _.length }).join ("\\u000A");
-                setResult (cell, aHeaders == eHeaders, aHeaders, eHeaders);
+        var eHeaders = (test.headers || [''])[0];
+        eHeaders = eHeaders.replace (/^[^:]+/mg, (_) => _.toLowerCase ());
+        var aHeaderNames = x.getAllResponseHeaders ()
+            .split (/[\\u000D\\u000A]+/)
+            .filter (function (_) { return /:/.test (_); })
+            .map (function (_) { return _.split (/:/)[0].toLowerCase (); })
+            .sort ((a, b) => a > b ? b : a);
+        cell.title = x.getAllResponseHeaders () + "\\u000A\\u000A" + aHeaderNames;
+        var aHeaders = aHeaderNames.map (function (name) {
+          try {
+            var value = x.getResponseHeader (name);
+            if (value === null) return '';
+            return name + ": " + value;
+          } catch (e) {
+            return '';
+          }
+        }).filter (function (_) { return _.length }).join ("\\u000A");
+        setResult (cell, aHeaders == eHeaders, aHeaders, eHeaders);
 
         var cell = tr.appendChild (document.createElement ('td'));
         if (test["body-length"]) {
@@ -295,12 +319,14 @@ my $httpdcb = sub {
                 tr.className = 'PASS';
               }
               tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode (test._file_name));
+              tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode (test._line));
               tr.appendChild (document.createElement ('td')).appendChild (document.createTextNode ((test.name || {})[0]));
               results.appendChild (tr);
 
               _then ();
             }
           };
+          x.timeout = 60 * 1000;
           x.send (null);
         }; // then
 
@@ -441,17 +467,13 @@ my $httpdcb = sub {
           xhr.send (null);
         }
       }
-      runNext ();
-    }]);
-  } elsif ($path eq '/css') {
-    $req->respond ([200, 'OK', {'Content-Type' => 'text/css'}, q{
-      .PASS { background-color: green; color: white }
-      .FAIL { background-color: red; color: white }
-      code { white-space: pre }
-      code:empty::after { content: "(empty)"; color: gray }
-      td table th {
-        text-align: right;
+      if (tests.length === 0) {
+        var tr = document.createElement ('tr');
+        tr.className = 'PASS';
+        tr.innerHTML = '<th>0<td>PASS';
+        results.appendChild (tr);
       }
+      runNext ();
     }]);
   } elsif ($path eq '/last') {
     $req->respond ([200, 'OK', {}, '']);

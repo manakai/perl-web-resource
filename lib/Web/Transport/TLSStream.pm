@@ -476,9 +476,10 @@ sub create ($$) {
   my ($r_parent_closed, $s_parent_closed) = promised_cv;
   $info->{closed} = Promise->all ([$r_closed, $r_parent_closed]);
 
-  my $parent = $args->{parent};
-  $parent = {%$parent, debug => $args->{debug}}
+  my $parent = {%{$args->{parent}}};
+  $parent->{debug} = $args->{debug}
       if $args->{debug} and not defined $parent->{debug};
+  my $signal = $parent->{signal} = $args->{signal}; # or undef
   $parent->{class}->create ($parent)->then (sub {
     $info->{parent} = $_[0];
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};
@@ -530,6 +531,18 @@ sub create ($$) {
     $t_read->()->catch ($abort);
     $t_r->closed->catch ($abort)->then (sub { undef $t_read });
     $t_w->closed->catch ($abort);
+
+    if (defined $signal) {
+      if ($signal->aborted) {
+        my $error = $signal->manakai_error;
+        $abort->($error);
+        die $error;
+      } else {
+        $signal->manakai_onabort (sub {
+          $abort->($signal->manakai_error);
+        });
+      }
+    }
 
     my $vmode;
     if ($args->{insecure} and not $args->{verify}) {
@@ -796,7 +809,7 @@ sub debug_info ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

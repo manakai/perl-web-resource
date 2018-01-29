@@ -188,7 +188,8 @@ sub ocsp_response ($$;%) {
   my $xdate = '';
   if ($args{revoked}) {
     $status = 'R';
-    $rdate = '160101000000Z';
+    #$rdate = '160101000000Z';
+    $rdate = '';
   }
   if ($args{expired}) {
     $xdate = '150101000000Z';

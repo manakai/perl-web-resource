@@ -130,7 +130,7 @@ test {
       is $e->name, 'AbortError';
       is $e->message, 'Aborted';
       is $e->file_name, __FILE__;
-      is $e->line_number, __LINE__+7;
+      is $e->line_number, __LINE__-25;
       is $invoked, 0;
     } $c;
   })->then (sub {

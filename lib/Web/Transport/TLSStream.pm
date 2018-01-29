@@ -245,7 +245,13 @@ sub create ($$) {
     $close = sub { };
   }; # $close
 
+  my $signal;
   my $abort = sub {
+    if (defined $signal) {
+      $signal->manakai_onabort (undef);
+      undef $signal;
+    }
+
     if (defined $handshake_ok) {
       $handshake_ng->($_[0]);
       $handshake_ok = $handshake_ng = undef;
@@ -479,7 +485,7 @@ sub create ($$) {
   my $parent = {%{$args->{parent}}};
   $parent->{debug} = $args->{debug}
       if $args->{debug} and not defined $parent->{debug};
-  my $signal = $parent->{signal} = $args->{signal}; # or undef
+  $signal = $parent->{signal} = $args->{signal}; # or undef
   $parent->{class}->create ($parent)->then (sub {
     $info->{parent} = $_[0];
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};

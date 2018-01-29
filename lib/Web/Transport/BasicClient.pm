@@ -612,7 +612,7 @@ sub abort ($;$) {
       (defined $_[1] ? $_[1] : 'Client aborted');
   $self->{closed} = 1;
   $self->{aborted} = $error;
-  $self->{aborter}->abort ($error);
+  $self->{aborter}->abort;
   return $self->{http}->abort ($error)->then (sub {
     delete $self->{http};
     delete $self->{connect_promise};

@@ -4231,21 +4231,19 @@ test {
   }});
   $http->close_after_current_stream->then (sub {
     test {
-      ok 0;
+      ok 1;
     } $c;
   }, sub {
     my $error = $_[0];
     test {
-      is $error->name, 'TypeError';
-      is $error->message, 'Connection is not ready';
-      is $error->file_name, __FILE__;
-      is $error->line_number, __LINE__+5;
+      ok 0, $error;
     } $c;
   })->then (sub {
+    $http->ready->manakai_set_handled;
     done $c;
     undef $c;
   });
-} n => 4, name => 'close_after_current_stream when no connection';
+} n => 1, name => 'close_after_current_stream when no connection';
 
 test {
   my $c = shift;

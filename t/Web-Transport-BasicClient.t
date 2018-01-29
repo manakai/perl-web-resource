@@ -3110,8 +3110,9 @@ test {
     })->catch (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error;
-        is $res->network_error_message, $message;
+        ok $res->is_network_error, $res;
+        ok $res->network_error_message eq $message ||
+           $res->network_error_message eq 'Aborted';
       } $c;
     })->then (sub{
       return $client->close;
@@ -3260,8 +3261,9 @@ test {
     })->catch (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error;
-        is $res->network_error_message, $message;
+        ok $res->is_network_error, $res;
+        ok $res->network_error_message eq $message ||
+           $res->network_error_message eq 'Aborted';
       } $c;
     })->then (sub{
       return $client->close;

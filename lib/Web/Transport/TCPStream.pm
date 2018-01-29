@@ -277,6 +277,8 @@ sub create ($$) {
     
     if ($args->{addr} eq '127.0.53.53') {
       $ng->(Web::Transport::ProtocolError->new ('ICANN_NAME_COLLISION'));
+      $signal->manakai_onabort (sub { }) if defined $signal;
+      $ok = $ng = $aborted = $signal = sub { };
       return;
     }
 
@@ -297,13 +299,15 @@ sub create ($$) {
           Streams::IOError->new ($!);
         }, $caller->[2], $file;
         $ng->($error);
-        $con = $ok = $ng = $aborted = sub { };
+        $signal->manakai_onabort (sub { }) if defined $signal;
+        $con = $ok = $ng = $aborted = $signal = sub { };
         return;
       }
 
       $fh = $_[0];
       $ok->();
-      $con = $ok = $ng = $aborted = sub { };
+      $signal->manakai_onabort (sub { }) if defined $signal;
+      $con = $ok = $ng = $aborted = $signal = sub { };
     };
   })->then (sub {
     if ($info->{type} eq 'TCP') {

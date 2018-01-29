@@ -990,6 +990,8 @@ sub _both_done ($) {
   delete $con->{receive_done};
   delete $con->{write_mode};
   delete $con->{exit};
+  $con->{aborter}->signal->manakai_onabort (undef) if defined $con->{aborter};
+  delete $con->{aborter};
 
   delete $con->{disable_timer};
   if ($con->{to_be_closed}) {
@@ -1037,6 +1039,8 @@ sub _both_done ($) {
   delete $con->{response};
   delete $con->{write_mode};
   delete $con->{exit};
+  $con->{aborter}->signal->manakai_onabort (undef) if defined $con->{aborter};
+  delete $con->{aborter};
 
   if ($con->{to_be_closed}) {
     my ($r_written, $s_written) = promised_cv;

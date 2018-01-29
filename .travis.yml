@@ -12,7 +12,11 @@ matrix:
   - perl: "5.14"
     os: osx
 before_install: "true"
-install: "make test-deps"
+install:
+  - "make test-deps"
+  - ./perl --version
+  - ./openssl version
+  - ./perl -MNet::SSLeay -e 'print $Net::SSLeay::VERSION'
 script: "make test-main"
 jobs:
   include:

@@ -170,7 +170,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 4, name => 'new connect error';
+} n => 4, name => 'new connect error', timeout => 60*3;
 
 test {
   my $c = shift;

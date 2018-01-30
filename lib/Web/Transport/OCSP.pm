@@ -1,7 +1,7 @@
 package Web::Transport::OCSP;
 use strict;
 use warnings;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
 use Web::Transport::ASN1;
 use Web::DateTime::Parser;
 use Net::SSLeay;
@@ -234,6 +234,37 @@ sub check_cert_id_with_response_ssleay ($$$$) {
   return undef;
 } # check_cert_id_with_response_ssleay
 
+sub check_ssleay_ocsp_response ($$$$) {
+  my ($class, $tls, $response, $protocol_clock) = @_;
+
+  return undef unless $response;
+
+  my $status = Net::SSLeay::OCSP_response_status ($response);
+  if ($status != Net::SSLeay::OCSP_RESPONSE_STATUS_SUCCESSFUL ()) {
+    return {response_status => $status,
+            error => "OCSP response failed ($status)"};
+  }
+
+  unless (eval { Net::SSLeay::OCSP_response_verify ($tls, $response) }) {
+    return {error => "OCSP response verification failed"};
+  }
+
+  my $cert = Net::SSLeay::get_peer_certificate ($tls);
+  my $certid = eval { Net::SSLeay::OCSP_cert2ids ($tls, $cert) };
+  unless ($certid) {
+    return {error => "Can't get certid from certificate: $@"};
+  }
+
+  my $res = [Net::SSLeay::OCSP_response_results ($response)];
+  my $error = $class->check_cert_id_with_response_ssleay
+      ($res, $certid, $protocol_clock);
+  if (not defined $error) {
+    return {ok => 1, response => $res};
+  } else {
+    return {response => $res, error => $error, fatal => 1};
+  }
+} # check_ssleay_ocsp_response
+
 my $tlsext_oid = Net::SSLeay::OBJ_txt2obj ('1.3.6.1.5.5.7.1.24', 1);
 
 sub x509_has_must_staple ($$) {
@@ -272,7 +303,7 @@ sub x509_has_must_staple ($$) {
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

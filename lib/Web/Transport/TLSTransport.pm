@@ -249,47 +249,20 @@ sub start ($$;%) {
           $tls, Net::SSLeay::TLSEXT_STATUSTYPE_ocsp ();
       Net::SSLeay::CTX_set_tlsext_status_cb $self->{tls_ctx}->ctx, sub {
         my ($tls, $response) = @_;
-        unless ($response) {
+        my $result = Web::Transport::OCSP->check_ssleay_ocsp_response
+            ($tls, $response, $args->{protocol_clock});
+
+        unless (defined $result) { # no OCSP response
           $self->{starttls_data}->{stapling_result} = undef;
           return 1;
         }
 
-        my $status = Net::SSLeay::OCSP_response_status ($response);
-        if ($status != Net::SSLeay::OCSP_RESPONSE_STATUS_SUCCESSFUL ()) {
-          $self->{starttls_data}->{stapling_result}
-              = {failed => 1,
-                 message => "OCSP response failed ($status)",
-                 response => {response_status => $status}};
-          return 1;
-        }
-
-        unless (eval { Net::SSLeay::OCSP_response_verify ($tls, $response) }) {
-          $self->{starttls_data}->{stapling_result}
-              = {failed => 1,
-                 message => "OCSP response verification failed"};
-          return 1;
-        }
-
-        my $cert = Net::SSLeay::get_peer_certificate ($tls);
-        my $certid = eval { Net::SSLeay::OCSP_cert2ids ($tls, $cert) };
-        unless ($certid) {
-          $self->{starttls_data}->{stapling_result}
-              = {failed => 1,
-                 message => "Can't get certid from certificate: $@"};
-          return 1;
-        }
-
-        my $res = [Net::SSLeay::OCSP_response_results ($response)];
-        my $error = Web::Transport::OCSP->check_cert_id_with_response_ssleay
-            ($res, $certid, $args->{protocol_clock});
-        if (not defined $error) {
-          $self->{starttls_data}->{stapling_result} = {response => $res};
-          return 1;
-        } else {
-          $self->{starttls_data}->{stapling_result}
-              = {failed => 1, message => $error, response => $res};
-          return 0;
-        }
+        $self->{starttls_data}->{stapling_result}
+            = {failed => ! $result->{ok},
+               message => $result->{error},
+               response => (defined $result->{response} ? $result->{response} :
+                            defined $result->{response_status} ? {response_status => $result->{response_status}} : undef)};
+        return ! $result->{fatal};
       };
 
       ## XXX As Net::SSLeay does not export OpenSSL's

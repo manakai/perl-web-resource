@@ -610,45 +610,14 @@ sub create ($$) {
           $tls, Net::SSLeay::TLSEXT_STATUSTYPE_ocsp ();
       Net::SSLeay::CTX_set_tlsext_status_cb $tls_ctx->ctx, sub {
         my ($tls, $response) = @_;
-        unless ($response) {
-          return 1;
-        }
+        my $result = Web::Transport::OCSP->check_ssleay_ocsp_response
+            ($tls, $response, $args->{protocol_clock});
 
-        my $status = Net::SSLeay::OCSP_response_status ($response);
-        if ($status != Net::SSLeay::OCSP_RESPONSE_STATUS_SUCCESSFUL ()) {
-          #$info->{tls_stapling}->{ok} = 0;
-          $info->{tls_stapling}->{response_status} = $status;
-          $info->{tls_stapling}->{error} = _pe "OCSP response failed ($status)";
-          return 1;
-        }
+        return 1 unless defined $result; # no OCSP response
 
-        unless (eval { Net::SSLeay::OCSP_response_verify ($tls, $response) }) {
-          #$info->{tls_stapling}->{ok} = 0;
-          $info->{tls_stapling}->{error} = _pe "OCSP response verification failed";
-          return 1;
-        }
-
-        my $cert = Net::SSLeay::get_peer_certificate ($tls);
-        my $certid = eval { Net::SSLeay::OCSP_cert2ids ($tls, $cert) };
-        unless ($certid) {
-          #$info->{tls_stapling}->{ok} = 0;
-          $info->{tls_stapling}->{error} = _pe "Can't get certid from certificate: $@";
-          return 1;
-        }
-
-        my $res = [Net::SSLeay::OCSP_response_results ($response)];
-        my $error = Web::Transport::OCSP->check_cert_id_with_response_ssleay
-            ($res, $certid, $args->{protocol_clock});
-        if (not defined $error) {
-          $info->{tls_stapling}->{ok} = 1;
-          $info->{tls_stapling}->{response} = $res;
-          return 1;
-        } else {
-          #$info->{tls_stapling}->{ok} = 0;
-          $info->{tls_stapling}->{response} = $res;
-          $info->{tls_stapling}->{error} = _pe $error;
-          return 0;
-        }
+        $info->{tls_stapling} = $result;
+        $result->{error} = _pe $result->{error} if defined $result->{error};
+        return ! $result->{fatal};
       };
 
       ## XXX As Net::SSLeay does not export OpenSSL's

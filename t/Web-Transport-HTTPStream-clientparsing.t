@@ -211,7 +211,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
         my $http = Web::Transport::HTTPStream->new ({parent => $tparams});
         my $test_type = $test->{'test-type'}->[1]->[0] || '';
 
-        return $http->ready->then (sub {
+        return promised_cleanup {
+          $server->{stop}->();
+          undef $server;
+        } $http->ready->then (sub {
           if ($test_type eq 'ws') {
             return $http->send_request ({
               method => _a 'GET',
@@ -473,17 +476,15 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             like $result->{exit}->name, qr{\A(?:HTTP parse error|WebSocket Close|OpenSSL error|Protocol error|Perl I/O error)\z}, 'error type';
           } $c;
           return $http->close_after_current_stream;
-        })->then (sub {
-          $server->{stop}->();
-        }, sub {
-          $server->{stop}->();
-        })->catch (sub {
-          warn "Error: $_[0]";
-        })->then (sub {
-          done $c;
-          undef $c;
-          undef $server;
         });
+      })->catch (sub {
+        test {
+          ok 0, 'No exception';
+          is undef, $_[0], 'Exception';
+        } $c;
+      })->then (sub {
+        done $c;
+        undef $c;
       });
     } n => 10, name => [$path, $test->{name}->[0]], timeout => 120;
   };

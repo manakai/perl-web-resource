@@ -821,7 +821,6 @@ test {
     my $client = Web::Transport::BasicClient->new_from_url ($url, {
       resolver => (bless {'host2.test' => '127.0.0.1'}, 'test::resolver1'),
       tls_options => ({ca_file => Test::Certificates->ca_path ('cert.pem')}),
-      debug => 2,
     });
     $client->request (url => $url)->then (sub {
       $res = $_[0];

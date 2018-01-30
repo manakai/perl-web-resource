@@ -17,7 +17,9 @@ install:
   - ./perl --version
   - ./openssl version
   - ./perl -MNet::SSLeay -e 'print $Net::SSLeay::VERSION'
-script: "make test-main"
+script:
+  - DUMP=1 WEBUA_DEBUG=2 TEST_METHOD=15 ./perl t/Web-Transport-BasicClient-ws.t
+  - "make test-main"
 jobs:
   include:
     - stage: merge

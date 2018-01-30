@@ -868,7 +868,7 @@ test {
       undef $c;
     });
   });
-} n => 8, name => 'https - replied by server 1';
+} n => 8, name => 'https - replied by server 1', timeout => 120;
 
 test {
   my $c = shift;

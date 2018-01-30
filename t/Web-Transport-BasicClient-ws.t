@@ -868,7 +868,7 @@ test {
       undef $c;
     });
   });
-} n => 8, name => 'https - replied by server 1', timeout => 120;
+} n => 8, name => 'https - replied by server 1', timeout => 180;
 
 test {
   my $c = shift;
@@ -946,7 +946,7 @@ test {
       undef $c;
     });
   });
-} n => 8, name => 'proxy - https - replied by server';
+} n => 8, name => 'proxy - https - replied by server', timeout => 180;
 
 test {
   my $c = shift;

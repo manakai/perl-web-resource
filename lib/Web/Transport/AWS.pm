@@ -4,8 +4,8 @@ use warnings;
 our $VERSION = '2.0';
 use Digest::SHA qw(sha256_hex hmac_sha256 hmac_sha256_hex);
 use Web::Encoding;
-use MIME::Base64;
 use Web::DateTime;
+use Web::Transport::Base64;
 use Web::Transport::JSON qw(perl2json_chars);
 
 sub reescape ($) {
@@ -141,7 +141,7 @@ sub aws4_post_policy ($%) {
     ],
   };
   my $policy_json = encode_web_utf8 perl2json_chars $pol;
-  my $encoded_pol = encode_base64 $policy_json, "";
+  my $encoded_pol = encode_web_base64 $policy_json;
 
   my $date_key = hmac_sha256 ($ymd, "AWS4" . encode_web_utf8 $args{secret_access_key});
   my $date_region_key = hmac_sha256 ((encode_web_utf8 $args{region}), $date_key);
@@ -163,7 +163,7 @@ sub aws4_post_policy ($%) {
 
 =head1 LICENSE
 
-Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -7,12 +7,12 @@ push our @ISA, qw(Web::Transport::HTTPConnection
                   Web::Transport::HTTPConnection::Stream);
 use Carp qw(croak);
 use Errno;
-use MIME::Base64 qw(encode_base64);
 use Digest::SHA qw(sha1);
 use Errno qw(ECONNRESET);
 use AnyEvent;
 use AnyEvent::Socket;
 use Promise;
+use Web::Transport::Base64;
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
@@ -222,7 +222,7 @@ sub _process_rbuf ($$;%) {
                 s/\A[\x09\x0A\x0D\x20]+//; s/[\x09\x0A\x0D\x20]+\z//; $_;
               } split /,/, $con;
           do { $failed = 1; last } unless
-              $accept eq encode_base64 sha1 ($self->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), '';
+              $accept eq encode_web_base64 sha1 ($self->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11');
           if (defined $proto) {
             do { $failed = 1; last }
                 if not grep { $_ eq $proto } @{$self->{ws_protos}};
@@ -708,7 +708,7 @@ sub send_request_headers ($$;%) {
   # XXX Connection: close
   if ($args{ws}) {
     $self->{ws_state} = 'CONNECTING';
-    $self->{ws_key} = encode_base64 join ('', map { pack 'C', rand 256 } 1..16), '';
+    $self->{ws_key} = encode_web_base64 join ('', map { pack 'C', rand 256 } 1..16);
     push @{$req->{headers} ||= []},
         ['Sec-WebSocket-Key', $self->{ws_key}],
         ['Sec-WebSocket-Version', '13'];
@@ -863,7 +863,7 @@ sub _both_done ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

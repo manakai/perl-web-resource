@@ -652,10 +652,10 @@ package Web::Transport::HTTPServerConnection::Stream;
 push our @ISA, qw(Web::Transport::HTTPConnection::Stream);
 use Carp qw(carp croak);
 use Digest::SHA qw(sha1);
-use MIME::Base64 qw(encode_base64);
 use Web::Encoding;
 use Web::DateTime;
 use Web::DateTime::Clock;
+use Web::Transport::Base64;
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPConnection::Stream::_e4d;
@@ -729,7 +729,7 @@ sub send_response_headers ($$$;%) {
     push @header,
         ['Upgrade', 'websocket'],
         ['Connection', 'Upgrade'],
-        ['Sec-WebSocket-Accept', encode_base64 sha1 ($stream->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), ''];
+        ['Sec-WebSocket-Accept', encode_web_base64 sha1 ($stream->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')];
       # XXX Sec-WebSocket-Protocol
       # XXX Sec-WebSocket-Extensions
   } else {

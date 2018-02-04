@@ -168,10 +168,10 @@ sub create ($$) {
   }
 
   if ($args->{basic_auth}) {
-    require MIME::Base64;
-    my $bauth = MIME::Base64::encode_base64
+    require Web::Transport::Base64;
+    my $bauth = Web::Transport::encode_web_base64
         (encode_web_utf8 ((defined $args->{basic_auth}->[0] ? $args->{basic_auth}->[0] : '') . ':' .
-                          (defined $args->{basic_auth}->[1] ? $args->{basic_auth}->[1] : '')), '');
+                          (defined $args->{basic_auth}->[1] ? $args->{basic_auth}->[1] : '')));
     push @$header_list, ['Authorization', $auth = 'Basic ' . $bauth, 'authorization'];
     $has_header->{authorization} = 1;
   }
@@ -276,7 +276,7 @@ The module partially derived from L<Web::UserAgent::Functions> from
 
 Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
 
-Copyright 2014-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2014-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

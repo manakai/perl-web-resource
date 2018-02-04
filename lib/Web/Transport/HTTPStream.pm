@@ -1084,11 +1084,11 @@ sub DESTROY ($) {
 package Web::Transport::HTTPStream::ClientConnection;
 push our @ISA, qw(Web::Transport::HTTPStream);
 use Carp qw(croak);
-use MIME::Base64 qw(encode_base64);
 use Digest::SHA qw(sha1);
 use AnyEvent;
 use Promise;
 use Promised::Flow;
+use Web::Transport::Base64;
 
 BEGIN {
   *_e4d = \&Web::Transport::HTTPStream::_e4d;
@@ -1375,7 +1375,7 @@ sub _process_rbuf ($$) {
                 s/\A[\x09\x0A\x0D\x20]+//; s/[\x09\x0A\x0D\x20]+\z//; $_;
               } split /,/, $con;
           do { $failed = 1; last } unless
-              $accept eq encode_base64 sha1 ($self->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), '';
+              $accept eq encode_web_base64 sha1 ($self->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11');
           if (defined $proto) {
             do { $failed = 1; last }
                 if not grep { $_ eq $proto } @{$self->{ws_protos}};
@@ -2318,14 +2318,14 @@ sub _timeout ($) {
 
 package Web::Transport::HTTPStream::Stream;
 use Carp qw(croak);
-use MIME::Base64 qw(encode_base64);
 use Digest::SHA qw(sha1);
-use Web::Encoding;
 use ArrayBuffer;
 use DataView;
 use AnyEvent;
 use Promise;
 use Promised::Flow;
+use Web::Encoding;
+use Web::Transport::Base64;
 
 push our @CARP_NOT, qw(
   Web::Transport::TypeError
@@ -2705,7 +2705,7 @@ sub _send_request ($$) {
   # XXX Connection: close
   if ($req->{ws}) {
     $con->{ws_state} = 'CONNECTING';
-    $con->{ws_key} = encode_base64 join ('', map { pack 'C', rand 256 } 1..16), '';
+    $con->{ws_key} = encode_web_base64 join ('', map { pack 'C', rand 256 } 1..16);
     push @{$req->{headers} ||= []},
         ['Sec-WebSocket-Key', $con->{ws_key}],
         ['Sec-WebSocket-Version', '13'];
@@ -3030,7 +3030,7 @@ sub send_response ($$$) {
     push @header,
         ['Upgrade', 'websocket'],
         ['Connection', 'Upgrade'],
-        ['Sec-WebSocket-Accept', encode_base64 sha1 ($stream->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11'), ''];
+        ['Sec-WebSocket-Accept', encode_web_base64 sha1 ($stream->{ws_key} . '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')];
       # XXX Sec-WebSocket-Protocol
       # XXX Sec-WebSocket-Extensions
   } else {

@@ -5447,6 +5447,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'iana' => 'permanent',
                                                                     'iana_intended_usage' => 'common'
                                                                   },
+                                          'vnd.restful+json' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                           'vnd.rig.cryptonote' => {
                                                                   'iana' => 'permanent',
                                                                   'iana_intended_usage' => 'common'
@@ -12920,12 +12923,20 @@ $Web::MIME::_TypeDefs::Sniffing = {
                      ],
           'audio_or_video' => [
                               [
-                                qr/(?:ID3)/,
-                                'audio/mpeg'
+                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AVI\x20)/,
+                                'video/avi'
                               ],
                               [
                                 qr/(?:FORM[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AIFF)/,
                                 'audio/aiff'
+                              ],
+                              [
+                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WAVE)/,
+                                'audio/wave'
+                              ],
+                              [
+                                qr/(?:ID3)/,
+                                'audio/mpeg'
                               ],
                               [
                                 qr/(?:MThd\x00\x00\x00\x06)/,
@@ -12934,14 +12945,6 @@ $Web::MIME::_TypeDefs::Sniffing = {
                               [
                                 qr/(?:OggS\x00)/,
                                 'application/ogg'
-                              ],
-                              [
-                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]AVI\x20)/,
-                                'video/avi'
-                              ],
-                              [
-                                qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WAVE)/,
-                                'audio/wave'
                               ],
                               [
                                 qr/(?:\.snd)/,
@@ -12962,14 +12965,6 @@ $Web::MIME::_TypeDefs::Sniffing = {
                   ],
           'font' => [
                     [
-                      qr/(?:[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]LP)/,
-                      'application/vnd.ms-fontobject'
-                    ],
-                    [
-                      qr/(?:\x00\x01\x00\x00)/,
-                      'font/ttf'
-                    ],
-                    [
                       qr/(?:ttcf)/,
                       'font/collection'
                     ],
@@ -12978,18 +12973,22 @@ $Web::MIME::_TypeDefs::Sniffing = {
                       'application/font-woff'
                     ],
                     [
+                      qr/(?:[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]LP)/,
+                      'application/vnd.ms-fontobject'
+                    ],
+                    [
                       qr/(?:OTTO)/,
                       'font/otf'
+                    ],
+                    [
+                      qr/(?:\x00\x01\x00\x00)/,
+                      'font/ttf'
                     ]
                   ],
           'image' => [
                      [
                        qr/(?:RIFF[\x00-\xFF][\x00-\xFF][\x00-\xFF][\x00-\xFF]WEBPVP)/,
                        'image/webp'
-                     ],
-                     [
-                       qr/(?:\x89PNG\x0D\x0A\x1A\x0A)/,
-                       'image/png'
                      ],
                      [
                        qr/(?:GIF8[79]a)/,
@@ -13002,6 +13001,10 @@ $Web::MIME::_TypeDefs::Sniffing = {
                      [
                        qr/(?:\x00\x00[\x01\x02]\x00)/,
                        'image/x-icon'
+                     ],
+                     [
+                       qr/(?:\x89PNG\x0D\x0A\x1A\x0A)/,
+                       'image/png'
                      ],
                      [
                        qr/(?:\xFF\xD8\xFF)/,
@@ -13020,12 +13023,12 @@ $Web::MIME::_TypeDefs::Sniffing = {
                             'application/pdf'
                           ],
                           [
-                            qr/(?:[\x09\x0A\x0C\x0D\x20]*<\?xml)/,
-                            'text/xml'
-                          ],
-                          [
                             qr/(?:(?:[\x09\x0A\x0C\x0D\x20]*<(?:[Ss](?:[Cc][Rr][Ii][Pp][Tt][\x20>]|[Tt][Yy][Ll][Ee][\x20>])|[Tt](?:[Aa][Bb][Ll][Ee][\x20>]|[Ii][Tt][Ll][Ee][\x20>])|[Hh](?:[Ee][Aa][Dd][\x20>]|[Tt][Mm][Ll][\x20>]|1[\x20>])|[Bb](?:[\x20>]|[Oo][Dd][Yy][\x20>]|[Rr][\x20>])|[Ii][Ff][Rr][Aa][Mm][Ee][\x20>]|[Ff][Oo][Nn][Tt][\x20>]|[Dd][Ii][Vv][\x20>]|[Aa][\x20>]|[Pp][\x20>]|!--)|<![Dd][Oo][Cc][Tt][Yy][Pp][Ee]\x20[Hh][Tt][Mm][Ll][\x20>]))/,
                             'text/html'
+                          ],
+                          [
+                            qr/(?:[\x09\x0A\x0C\x0D\x20]*<\?xml)/,
+                            'text/xml'
                           ]
                         ],
           'text_track' => [

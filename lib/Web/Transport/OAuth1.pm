@@ -4,8 +4,8 @@ use warnings;
 our $VERSION = '3.0';
 use Carp qw(croak);
 use Digest::SHA;
-use MIME::Base64;
 use Web::URL::Encoding qw(oauth1_percent_encode_c oauth1_percent_encode_b);
+use Web::Transport::Base64;
 
 sub create_request_params ($$$$) {
   my ($query, $header, $bodyref, $params) = @_;
@@ -164,8 +164,8 @@ sub authenticate ($%) {
   # 3.4.2.
   my $key = create_hmac_sha1_key
       ($args{client_shared_secret}, $args{token_shared_secret});
-  $result->{oauth_signature} = MIME::Base64::encode_base64
-      (Digest::SHA::hmac_sha1 ($result->{signature_base_string}, $key), '');
+  $result->{oauth_signature} = encode_web_base64
+      (Digest::SHA::hmac_sha1 ($result->{signature_base_string}, $key));
 
   append_oauth_params ($args{container} || 'authorization', \@param,
                        $args{url}, $args{body_ref}, $result);
@@ -204,7 +204,7 @@ The module partially derived from L<Web::UserAgent::OAuth> from
 
 Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
 
-Copyright 2014-2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2014-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

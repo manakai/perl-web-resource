@@ -61,6 +61,10 @@ MIME type sniffing.
 
 AWS API signature calculation.
 
+=item L<Web::Transport::Base64>
+
+A Base64 API.
+
 =back
 
 The module L<Web::Transport::ConnectionClient> is deprecated.

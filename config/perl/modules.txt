@@ -2,6 +2,7 @@ AnyEvent
 AnyEvent::Handle
 AnyEvent::Util
 AnyEvent::Socket
+Carp
 Digest::SHA
 MIME::Base64
 Net::SSLeay

@@ -564,6 +564,18 @@ test {
   done $c;
 } n => 2, name => 'as_valid';
 
+test {
+  my $c = shift;
+  my $mt = Web::MIME::Type->new_from_type_and_subtype ('text', 'css');
+  $mt->param (xza => q[y]);
+  is $mt->as_valid_mime_type, qq[text/css;xza=y];
+  $mt->param (abc => q[x]);
+  is $mt->as_valid_mime_type, qq[text/css;xza=y;abc=x];
+  $mt->param (xza => q[aa]);
+  is $mt->as_valid_mime_type, qq[text/css;xza=aa;abc=x];
+  done $c;
+} n => 3, name => 'as_valid parameter orders';
+
 ## ------ Conformance ------
 
 for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/type-conformance.dat'), {

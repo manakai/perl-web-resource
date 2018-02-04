@@ -78,10 +78,11 @@ parameter), in lowercase.
 If the object is I<invalid>, the result might not be a valid MIME
 type.
 
-=item [I<$a1>, I<$a2>, ...] = I<$t>->attrs
+=item [$string, $string, ...] = $mime->attrs
 
-Retunrs a snapshot list (array reference) of C<attribute>s (i.e. names
-of C<parameter>s), in lowercase, ordered by alphabetical order.
+Return a reference to a new array that contains the keys of the
+parameters of the object (i.e. the list of the parameter names in
+lowercase, in the order of additions).
 
 =item I<$s> = I<$t>->param (I<$attr>, [I<$value>])
 

@@ -26,7 +26,7 @@ my $ErrorLevels = {
 }; # $ErrorLevels
 
 sub new_from_type_and_subtype ($$$) {
-  my $self = bless {}, shift;
+  my $self = bless {param_names => []}, shift;
   $self->{type} = ''.$_[0];
   $self->{type} =~ tr/A-Z/a-z/;
   $self->{subtype} = ''.$_[1];
@@ -70,6 +70,9 @@ sub param ($$;$) {
   my $n = ''.$_[0];
   $n =~ tr/A-Z/a-z/; ## ASCII case-insensitive.
   if (@_ > 1) {
+    if (not defined $self->{params}->{$n}) {
+      push @{$self->{param_names}}, $n;
+    }
     $self->{params}->{$n} = ''.$_[1];
   } else {
     return $self->{params}->{$n};
@@ -77,8 +80,7 @@ sub param ($$;$) {
 }
 
 sub attrs ($) {
-  my $self = shift;
-  return [sort {$a cmp $b} keys %{$self->{params}}];
+  return [@{$_[0]->{param_names}}];
 } # attrs
 
 sub apache_bug ($) {

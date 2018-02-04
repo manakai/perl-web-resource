@@ -200,19 +200,18 @@ sub as_valid_mime_type ($) {
 
   for my $attr (@{$self->attrs}) {
     return undef if not length $attr or $attr =~ /$non_token/o;
-    $ts .= '; ' . $attr . '=';
+    $ts .= ';' . $attr . '=';
 
     my $value = $self->{params}->{$attr};
-    return undef if $value =~ /[^\x00-\x7F]/;
-    $value =~ s/\x0D\x0A?|\x0A/\x0D\x0A /g;
+    return undef if $value =~ /[^\x00-\xFF]/;
 
     if (not length $value or $value =~ /$non_token/o) {
-      $value =~ s/([\x00-\x08\x0B\x0C\x0E-\x1F\x22\x5C\x7F])/\\$1/g;
+      $value =~ s/([\x22\x5C])/\\$1/g;
       $ts .= '"' . $value . '"';
     } else {
       $ts .= $value;
     }
-  } 
+  }
 
   return $ts;
 } # as_valid_mime_type

@@ -1,0 +1,63 @@
+=head1 NAME
+
+Web::Transport::Base64 - Base64 for the Web
+
+=head1 SYNOPSIS
+
+  use Web::Transport::Base64;
+  
+  $encoded = encode_web_base64 $bytes;
+  $bytes = decode_web_base64 $string;
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::Base64> module defines an API to encode or
+decode byte string using Base64.
+
+=head1 FUNCTIONS
+
+These functions are exported by default:
+
+=over 4
+
+=item $string = encode_web_base64 $bytes
+
+Encode a byte string using Base64 and return the result string
+(i.e. Base64-encoded ASCII string).  The argument must not be a
+utf8-flagged string.
+
+This function is an implementation of the "forgiving-base64 encode"
+operation of the Infra Standard.
+
+=item $bytes = decode_web_base64 $string
+
+Decode a string using Base64 and return the result byte string.  If
+the input is not interpretable as a Base64-encoded string, C<undef> is
+returned instead.  The argument must not be a utf8-flagged string.
+
+This function is an implementation of the "forgiving-base64 decode"
+operation of the Infra Standard.
+
+=back
+
+=head1 DEPENDENCY
+
+This module is a wrapper of L<MIME::Base64>, which is a core module of
+Perl.
+
+=head1 SPECIFICATION
+
+Infra Standard <https://infra.spec.whatwg.org/#forgiving-base64>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

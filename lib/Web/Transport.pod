@@ -57,6 +57,10 @@ MIME type sniffing.
 
 AWS API signature calculation.
 
+=item L<Web::Transport::Base64>
+
+A Base64 API.
+
 =back
 
 =head1 REQUEST OPTIONS

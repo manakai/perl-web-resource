@@ -5,11 +5,12 @@ CURL = curl
 GIT = git
 PERL = ./perl
 
-updatenightly: build
+updatenightly: clean build
 	$(GIT) add lib/Web/MIME/_TypeDefs.pm
 
 clean:
 	rm -fr local/mime-types.json lib/Web/Transport/JSON.pm
+	rm -fr intermediate/parsing-errors.json
 
 ## ------ Setup ------
 
@@ -39,7 +40,7 @@ build: build-deps build-main
 build-deps: deps
 
 build-main: lib/Web/MIME/_TypeDefs.pm lib/Web/Transport/_Defs.pm \
-    lib/Web/Transport/JSON.pm
+    lib/Web/Transport/JSON.pm intermediate/parsing-errors.json
 
 lib/Web/MIME/_TypeDefs.pm: bin/generate-list.pl local/mime-types.json \
     local/mime-sniffing.json
@@ -62,6 +63,9 @@ lib/Web/Transport/JSON.pm:
 	    sed -e 's/json_bytes2perl/_UNUSED2/g' | \
 	    sed -e 's/file2perl/_UNUSED3/g' > $@
 	$(PERL) -c $@
+
+intermediate/parsing-errors.json: bin/generate-errors.pl src/parsing-errors.txt
+	$(PERL) $< src/parsing-errors.txt > $@
 
 ## ------ Tests ------
 

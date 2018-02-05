@@ -238,13 +238,13 @@ sub validate ($$;%) {
   my $type_syntax_error;
   my $subtype_syntax_error;
   if ($type !~ /\A[A-Za-z0-9!#\$&.+^_-]{1,127}\z/) {
-    $onerror->(type => 'IMT:type syntax error',
+    $onerror->(type => 'MIME type:bad type',
                level => $ErrorLevels->{must}, # RFC 4288 4.2.
                value => $type);
     $type_syntax_error = 1;
   }
   if ($subtype !~ /\A[A-Za-z0-9!#\$&.+^_-]{1,127}\z/) {
-    $onerror->(type => 'IMT:subtype syntax error',
+    $onerror->(type => 'MIME type:bad subtype',
                level => $ErrorLevels->{must}, # RFC 4288 4.2.
                value => $subtype);
     $subtype_syntax_error = 1;
@@ -311,7 +311,7 @@ sub validate ($$;%) {
 
         my $attr_syntax_error;
         if ($attr !~ /\A[A-Za-z0-9!#\$&.+^_-]{1,127}\z/) {
-          $onerror->(type => 'IMT:attribute syntax error',
+          $onerror->(type => 'params:bad name',
                      level => $ErrorLevels->{mime_fact}, # RFC 4288 4.3.
                      value => $attr);
           $attr_syntax_error = 1;

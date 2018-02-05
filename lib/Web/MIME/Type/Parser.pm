@@ -1,7 +1,7 @@
 package Web::MIME::Type::Parser;
 use strict;
 use warnings;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
 use Web::MIME::Type;
 
 sub new ($) {
@@ -44,14 +44,17 @@ sub parse_string ($$) {
   if ($value =~ /\G($HTTPToken)/ogc) {
     $type = $1;
   } else {
-    $onerror->(type => 'IMT:no type', # XXXdocumentation
+    my $pos = pos $value;
+    $value =~ m{\G([^/]*)}gc;
+    $onerror->(type => 'MIME type:bad type',
                level => 'm',
-               index => pos $value);
+               index => $pos,
+               value => $1);
     return undef;
   }
 
   unless ($value =~ m[\G/]gc) {
-    $onerror->(type => 'IMT:no /', # XXXdocumentation
+    $onerror->(type => 'MIME type:no /',
                level => 'm',
                index => pos $value);
     return undef;
@@ -61,9 +64,12 @@ sub parse_string ($$) {
   if ($value =~ /\G($HTTPToken)/ogc) {
     $subtype = $1;
   } else {
-    $onerror->(type => 'IMT:no subtype', # XXXdocumentation
+    my $pos = pos $value;
+    $value =~ m{\G([^/]*)}gc;
+    $onerror->(type => 'MIME type:bad subtype',
                level => 'm',
-               index => pos $value); 
+               index => $pos,
+               value => $1);
     return undef;
   }
 
@@ -82,17 +88,13 @@ sub parse_string ($$) {
     }
 
     unless ($value =~ /\G=/gc) {
-      if (not length $attr) {
-        $onerror->(type => 'params:no attr', # XXXdocumentation
-                   level => 'm',
-                   index => $attr_pos);
-      } elsif (not $attr =~ /\A$HTTPToken\z/o) {
-        $onerror->(type => 'params:bad attr', # XXXdocumentation
+      if (not $attr =~ /\A$HTTPToken\z/o) {
+        $onerror->(type => 'params:bad name',
                    level => 'm',
                    index => $attr_pos,
                    value => $attr);
       } else {
-        $onerror->(type => 'params:no =', # XXXdocumentation
+        $onerror->(type => 'params:no =',
                    level => 'm',
                    index => pos $value);
       }
@@ -102,17 +104,18 @@ sub parse_string ($$) {
     $attr =~ tr/A-Z/a-z/; ## ASCII lowercase
     my $v;
     my $v_pos = pos $value;
+    my $v_bad;
     if ($value =~ /\G"/gc) {
       $value =~ /\G((?>[^"\\]+|\\.|\\\z)*)/gcs;
       $v = $1;
       $v =~ s/\\(.)/$1/gs;
       unless ($value =~ /\G\x22/gc) {
-        $onerror->(type => 'params:no close quote', # XXXdocumentation
+        $onerror->(type => 'params:no close quote',
                    level => 'm',
                    index => pos $value);
       }
       if ($value =~ /\G[^;]+/gc) {
-        $onerror->(type => 'params:garbage after quoted-string', # XXXdocumentation
+        $onerror->(type => 'params:garbage after quoted-string',
                    level => 'm',
                    index => pos $value);
       }
@@ -120,15 +123,17 @@ sub parse_string ($$) {
       $value =~ /\G([^;]*)/gc;
       $v = $1;
       $v =~ s/[\x09\x0A\x0C\x0D\x20]+\z//g;
+      if (not $v =~ /\A$HTTPToken\z/o) {
+        $onerror->(type => 'params:bad value token',
+                   level => 'm',
+                   index => $v_pos,
+                   value => $v);
+        $v_bad = 1;
+      }
     }
 
-    if (not length $attr) {
-      $onerror->(type => 'params:no attr', # XXXdocumentation
-                 level => 'm',
-                 index => $attr_pos);
-      next;
-    } elsif (not $attr =~ /\A$HTTPToken\z/o) {
-      $onerror->(type => 'params:bad attr', # XXXdocumentation
+    if (not $attr =~ /\A$HTTPToken\z/o) {
+      $onerror->(type => 'params:bad name',
                  level => 'm',
                  index => $attr_pos,
                  value => $attr);
@@ -137,16 +142,17 @@ sub parse_string ($$) {
 
     # HTTP quoted-string token code point
     unless ($v =~ /\A[\x09\x20-~\x80-\xFF]+\z/) {
-      $onerror->(type => 'params:bad value', # XXXdocumentation
+      $onerror->(type => 'params:bad value',
                  level => 'm',
                  index => $v_pos,
-                 value => $v);
+                 value => $v)
+          unless $v_bad;
       next;
     }
 
     my $current = $mt->param ($attr);
     if (defined $current) {
-      $onerror->(type => 'params:duplicate attr', # XXXdocumentation
+      $onerror->(type => 'params:duplicate name',
                  level => 'm',
                  value => $attr,
                  index => $attr_pos);
@@ -157,7 +163,7 @@ sub parse_string ($$) {
   } # params
 
   if (pos $value < length $value) {
-    $onerror->(type => 'MIME type:bad char after subtype', # XXXdocumentation
+    $onerror->(type => 'MIME type:bad char after subtype',
                level => 'm',
                index => pos $value);
     return undef;

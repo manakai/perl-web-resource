@@ -64,8 +64,9 @@ lib/Web/Transport/JSON.pm:
 	    sed -e 's/file2perl/_UNUSED3/g' > $@
 	$(PERL) -c $@
 
-intermediate/parsing-errors.json: bin/generate-errors.pl src/parsing-errors.txt
-	$(PERL) $< src/parsing-errors.txt > $@
+intermediate/parsing-errors.json: bin/generate-errors.pl \
+    src/parsing-errors.txt src/data-errors.txt
+	$(PERL) $< src/parsing-errors.txt src/data-errors.txt > $@
 
 ## ------ Tests ------
 

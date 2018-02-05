@@ -1,19 +1,21 @@
 =head1 NAME
 
-Web::MIME::Type::Parser - MIME type parser
+Web::Transport::DataURL::Parser - data: URL parser
 
 =head1 SYNOPSIS
 
-  use Web::MIME::Type::Parser;
+  use Web::Transport::DataURL::Parser;
   
-  $parser = Web::MIME::Type::Parser->new;
+  $parser = Web::Transport::DataURL::Parser->new;
   $parser->onerror (sub { ... });
   
-  $type = $parser->parse_string ($string);
+  $url = Web::URL->parse_string ("data:,...");
+  $mime = $parser->parse_url ($url);
 
 =head1 DESCRIPTION
 
-The C<Web::MIME::Type::Parser> class is a MIME type parser.
+The C<Web::Transport::DataURL::Parser> class is a C<data:> URL
+processor.
 
 =head1 METHODS
 
@@ -38,30 +40,25 @@ for details of error handling.
 The value should not be set while the parser is running.  If the value
 is changed, the result is undefined.
 
-=item $type = $parser->parse_string ($string)
+=item $data = $parser->parse_url ($url)
 
-Parse a character string or byte string as a MIME type and return the
-MIME type record (L<Web::MIME::Type>).  If the parsing fails, C<undef>
+Process a C<data:> URL record (a L<Web::URL> object whose C<scheme> is
+C<data>) using the C<data:> URL processor and return the C<data:> URL
+struct (L<Web::Transport::DataURL>).  If the process fails, C<undef>
 is returned instead.
 
-This method is an implementation of the "parse a MIME type" steps of
-the MIME Sniffing Standard.
+This method is an implementation of the "C<data:> URL processor" of
+the Fetch Standard.
 
 =back
 
 =head1 SEE ALSO
 
-L<Web::MIME::Type>.
+L<Web::Transport::DataURL>.
 
 =head1 SPECIFICATIONS
 
-MIME Sniffing Standard <https://mimesniff.spec.whatwg.org/>.
-
-A valid MIME type string MUST NOT have duplicate parameter names.
-
-=head1 HISTORY
-
-This module derived from L<Web::MIME::Type>.
+Fetch Standard <https://fetch.spec.whatwg.org/>.
 
 =head1 AUTHOR
 
@@ -69,7 +66,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2007-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

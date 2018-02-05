@@ -60,6 +60,36 @@
             "Web::MIME::Type::Parser" : 1
          }
       },
+      "URL:data:bad base64 data" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>The data part of a \u003Ccode>data:\u003C/code> URL with \u003Ccode>;base64\u003C/code>\u000Aparameter must be a valid Base64-encoded data.\u003C/p>",
+            "ja" : "\u003Cp>\u003Ccode>data:\u003C/code> URL に引数 \u003Ccode>;base64\u003C/code> \u000Aが指定されている時データ部分は妥当な\u000ABase64 符号化されたデータでなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "The Base64 data is broken",
+            "ja" : "Base64 データが壊れています"
+         },
+         "modules" : {
+            "Web::Transport::DataURL::Parser" : 1
+         }
+      },
+      "URL:data:no ," : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>There must be a \u003Ccode>,\u003C/code> character between the MIME type and\u000Athe data of a \u003Ccode>data:\u003C/code> URL.\u003C/p>",
+            "ja" : "\u003Cp>\u003Ccode>data:\u003C/code> URL の MIME 型とデータの間に文字\u000A\u003Ccode>,\u003C/code> が必要です。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "There is no \u003Ccode>,\u003C/code>",
+            "ja" : "\u003Ccode>,\u003C/code> がありません"
+         },
+         "modules" : {
+            "Web::Transport::DataURL::Parser" : 1
+         }
+      },
       "params:bad name" : {
          "default_level" : "m",
          "desc" : {

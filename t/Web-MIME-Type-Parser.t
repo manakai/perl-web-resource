@@ -4,7 +4,6 @@ use Path::Tiny;
 use lib path (__FILE__)->parent->parent->child ('lib')->stringify;
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib')->stringify;
 use Test::More;
-use Test::HTCT::Parser;
 use Test::X1;
 use Web::MIME::Type::Parser;
 use Web::Encoding;

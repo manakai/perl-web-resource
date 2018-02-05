@@ -40,19 +40,13 @@ test {
 
 test {
   my $c = shift;
-  eval {
-    decode_web_base64 substr "\x{FF}\x{100}", 0, 1;
-  };
-  like $@, qr{^Wide character in subroutine entry at \Q@{[__FILE__]}\E line @{[__LINE__-2]}};
+  is decode_web_base64 ("\x{FF}\x{100}"), undef;
   done $c;
 } n => 1, name => 'decode utf8';
 
 test {
   my $c = shift;
-  eval {
-    decode_web_base64 "\x{100}";
-  };
-  like $@, qr{^Wide character in subroutine entry at \Q@{[__FILE__]}\E line @{[__LINE__-2]}};
+  is decode_web_base64 (substr "abcd\x{100}", 0, 4), "\x69\xB7\x1D";
   done $c;
 } n => 1, name => 'decode utf8';
 

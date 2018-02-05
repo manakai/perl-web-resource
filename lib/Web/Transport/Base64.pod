@@ -31,9 +31,9 @@ operation of the Infra Standard.
 
 =item $bytes = decode_web_base64 $string
 
-Decode a string using Base64 and return the result byte string.  If
-the input is not interpretable as a Base64-encoded string, C<undef> is
-returned instead.  The argument must not be a utf8-flagged string.
+Decode a byte or character string using Base64 and return the result
+byte string.  If the input is not interpretable as a Base64-encoded
+string, C<undef> is returned instead.
 
 This function is an implementation of the "forgiving-base64 decode"
 operation of the Infra Standard.

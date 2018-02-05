@@ -73,7 +73,7 @@ Please note that the setter might make the object I<invalid>.
 
 Return the essense (formerly known as MIME type portion) of the
 object, i.e. the "I<type>/I<subtype>" part of the MIME type (without
-parameter), in lowercase.
+parameter), in lowercase.  The result is a character string.
 
 If the object is I<invalid>, the result might not be a valid MIME
 type.
@@ -82,7 +82,8 @@ type.
 
 Return a reference to a new array that contains the keys of the
 parameters of the object (i.e. the list of the parameter names in
-lowercase, in the order of additions).
+lowercase, in the order of additions).  The array items are character
+strings.
 
 =item I<$s> = I<$t>->param (I<$attr>, [I<$value>])
 
@@ -144,13 +145,15 @@ Applications 1.0's definition.
 
 =item $string = $mime->as_valid_mime_type_with_no_params
 
-Serialize the object as a valid MIME type with no parameters in
-lowercase.  If the object is I<invalid>, C<undef> is returned instead.
+Serialize the object as a valid MIME type string with no parameters in
+lowercase.  The result is a character string.  If the object is
+I<invalid>, C<undef> is returned instead.
 
 =item $string = $mime->as_valid_mime_type
 
-Serialize the object as a valid MIME type.  If the object is
-I<invalid>, C<undef> is returned instead.
+Serialize the object as a valid MIME type string.  The result is a
+character string.  If the object is I<invalid>, C<undef> is returned
+instead.
 
 For non-I<invalid> case the method is an implementation of the
 "serialize a MIME type" operation of the MIME Sniffing Standard.

@@ -49,6 +49,10 @@ An environment variable based proxy manager.
 
 MIME types.
 
+=item L<Web::MIME::Type::Parser>
+
+MIME type parser.
+
 =item L<Web::MIME::Sniffing>
 
 MIME type sniffing.

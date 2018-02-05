@@ -41,7 +41,7 @@ for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/types.
   errors => {is_list => 1},
   result => {is_prefixed => 1},
 }, sub {
-  my $test = shift;
+  my ($test, $opts) = @_;
   
   test {
     my $c = shift;
@@ -79,7 +79,7 @@ for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/types.
     }
     is $actual_result, $expected_result, '#result';
     done $c;
-  } n => 2, name => ['parser', $test->{data}->[0]];
+  } n => 2, name => ['parser', $opts->{line_number}, $test->{data}->[0]];
 });
 
 # ------ Accessors ------
@@ -582,7 +582,7 @@ for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/type-c
   data => {is_prefixed => 1, is_list => 1},
   errors => {is_list => 1},
 }, sub {
-  my $test = shift;
+  my ($test, $opts) = @_;
   
   test {
     my $c = shift;
@@ -612,7 +612,7 @@ for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/type-c
       warn qq[No #errors section: ] . join ' ', @{$test->{data}->[0]};
     }
     done $c;
-  } n => 1, name => ['validate', @{$test->{data}->[0]}];
+  } n => 1, name => ['validate', $opts->{line_number}, @{$test->{data}->[0]}];
 });
 
 run_tests;

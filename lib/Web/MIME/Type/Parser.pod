@@ -44,11 +44,20 @@ Parse a character string or byte string as a MIME type and return the
 MIME type record (L<Web::MIME::Type>).  If the parsing fails, C<undef>
 is returned instead.
 
+This method is an implementation of the "parse a MIME type" steps of
+the MIME Sniffing Standard.
+
 =back
 
 =head1 SEE ALSO
 
 L<Web::MIME::Type>.
+
+=head1 SPECIFICATIONS
+
+MIME Sniffing Standard <https://mimesniff.spec.whatwg.org/>.
+
+A valid MIME type string MUST NOT have duplicate parameter names.
 
 =head1 HISTORY
 

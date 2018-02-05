@@ -1,0 +1,61 @@
+=head1 NAME
+
+Web::Transport::DataURL - A data: URL struct
+
+=head1 SYNOPSIS
+
+  use Web::Transport::DataURL;
+  
+  $mime = $parser->parse_string ('text/plain; charset=utf-8');
+  $body = "body byte sequence";
+  
+  $data = Web::Transport::DataURL->new_from_mime_and_scalarref ($mime, \$body);
+  is $data->mime_type, $mime;
+  is ${$data->body_ref}, $body;
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::DataURL> class represents C<data:> URL struct.
+
+=head1 METHODS
+
+=over 4
+
+=item $data = Web::Transport::DataURL->new_from_mime_and_scalarref ($mime, $ref)
+
+Create a new C<data:> URL struct and return it.
+
+The first argument must be a MIME type (a L<Web::MIME::Type> object).
+The C<data:> URL struct's MIME type is set to the argument.
+
+The second argument must be the reference to a scalar value that is a
+byte string.  The C<data:> URL struct's body is set to the scalar
+value.  After the invocation of the method, the application should not
+modify the scalar.
+
+=item $mime = $data->mime_type
+
+Return the MIME type object of the C<data:> URL struct.
+
+=item $ref = $data->body_ref
+
+Return the reference to the body of the C<data:> URL struct.
+
+=back
+
+=head1 SPECIFICATION
+
+Fetch Standard <https://fetch.spec.whatwg.org/>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

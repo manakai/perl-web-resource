@@ -1,0 +1,199 @@
+{
+   "errors" : {
+      "MIME type:bad char after subtype" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>The subtype of a MIME type must be followed by a \u003Ccode>;\u003C/code> character or\u000Aat the end of the string.\u003C/p>",
+            "ja" : "\u003Cp>MIME型の部分型の後には \u003Ccode>;\u003C/code> が来るか、\u000A文字列の末尾でなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "There is no \u003Ccode>;\u003C/code> after the subtype",
+            "ja" : "部分型の後に \u003Ccode>;\u003C/code> がありません"
+         },
+         "modules" : {
+            "Web::MIME::Type::Parser" : 1
+         }
+      },
+      "MIME type:bad subtype" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>The subtype component of a MIME type must be a valid HTTP token.\u003C/p>",
+            "ja" : "\u003Cp>MIME型の部分型の部分は妥当な HTTP の字句でなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "The subtype of the MIME type is not a valid token",
+            "ja" : "MIME型の部分型が妥当な字句ではありません"
+         },
+         "modules" : {
+            "Web::MIME::Type::Parser" : 1
+         }
+      },
+      "MIME type:bad type" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>The type component of a MIME type must be a valid HTTP token.\u003C/p>",
+            "ja" : "\u003Cp>MIME型の型の部分は妥当な HTTP の字句でなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "The type of the MIME type is not a valid token",
+            "ja" : "MIME型の型が妥当な字句ではありません"
+         },
+         "modules" : {
+            "Web::MIME::Type::Parser" : 1
+         }
+      },
+      "MIME type:no /" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>There must be a \u003Ccode>/\u003C/code> character separating type and\u000Asubtype components in a MIME type.\u003C/p>",
+            "ja" : "\u003Cp>MIME型には型と部分型の部分を区切る \u003Ccode>/\u003C/code> \u000Aが含まれなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "There is no \u003Ccode>\u003Cvar>type\u003C/var>\u003Cmark>/\u003C/mark>\u003Cvar>subtype\u003C/var>\u003C/code>\u000Apair in the MIME type",
+            "ja" : "MIME型が\u003Ccode>\u003Cvar>型\u003C/var>\u003Cmark>/\u003C/mark>\u003Cvar>部分型\u003C/var>\u003C/code>の組になっていません"
+         },
+         "modules" : {
+            "Web::MIME::Type::Parser" : 1
+         }
+      },
+      "URL:data:bad base64 data" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>The data part of a \u003Ccode>data:\u003C/code> URL with \u003Ccode>;base64\u003C/code>\u000Aparameter must be a valid Base64-encoded data.\u003C/p>",
+            "ja" : "\u003Cp>\u003Ccode>data:\u003C/code> URL に引数 \u003Ccode>;base64\u003C/code> \u000Aが指定されている時データ部分は妥当な\u000ABase64 符号化されたデータでなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "The Base64 data is broken",
+            "ja" : "Base64 データが壊れています"
+         },
+         "modules" : {
+            "Web::Transport::DataURL::Parser" : 1
+         }
+      },
+      "URL:data:no ," : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>There must be a \u003Ccode>,\u003C/code> character between the MIME type and\u000Athe data of a \u003Ccode>data:\u003C/code> URL.\u003C/p>",
+            "ja" : "\u003Cp>\u003Ccode>data:\u003C/code> URL の MIME 型とデータの間に文字\u000A\u003Ccode>,\u003C/code> が必要です。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "There is no \u003Ccode>,\u003C/code>",
+            "ja" : "\u003Ccode>,\u003C/code> がありません"
+         },
+         "modules" : {
+            "Web::Transport::DataURL::Parser" : 1
+         }
+      },
+      "params:bad name" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>The parameter name of a MIME type must be a valid HTTP token.\u003C/p>",
+            "ja" : "\u003Cp>MIME型の引数名は妥当な HTTP の字句でなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "The parameter name is not a valid token",
+            "ja" : "引数名が妥当な字句ではありません"
+         },
+         "modules" : {
+            "Web::MIME::Type::Parser" : 1
+         }
+      },
+      "params:bad value" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>The parameter value of a MIME type must be a valid HTTP token.\u003C/p>",
+            "ja" : "\u003Cp>MIME型の引数値は妥当な HTTP の字句か引用文字列でなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "The parameter value is invalid",
+            "ja" : "引数値が妥当ではありません"
+         },
+         "modules" : {
+            "Web::MIME::Type::Parser" : 1
+         }
+      },
+      "params:bad value token" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>The parameter value of a MIME type must be a valid HTTP token\u000Aor quoted-string.\u003C/p>",
+            "ja" : "\u003Cp>MIME型の引数値は妥当な HTTP の字句か引用文字列でなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "The parameter value is not a valid token",
+            "ja" : "引数値が妥当な字句ではありません"
+         },
+         "modules" : {
+            "Web::MIME::Type::Parser" : 1
+         }
+      },
+      "params:duplicate name" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>The parameter names in a MIME type must be unique.\u003C/p>",
+            "ja" : "\u003Cp>MIME型の引数の名前が重複してはいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "There is another parameter with same name",
+            "ja" : "同じ名前の引数が他にもあります"
+         },
+         "modules" : {
+            "Web::MIME::Type::Parser" : 1
+         }
+      },
+      "params:garbage after quoted-string" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>A parameter value must be followed by a \u003Ccode>;\u003C/code> character or\u000Aat the end of the string.\u003C/p>",
+            "ja" : "\u003Cp>引数値の後には \u003Ccode>;\u003C/code> が来るか、文字列の末尾でなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "There is no \u003Ccode>;\u003C/code> after the parameter",
+            "ja" : "引数の後に \u003Ccode>;\u003C/code> がありません"
+         },
+         "modules" : {
+            "Web::MIME::Type::Parser" : 1
+         }
+      },
+      "params:no =" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>There must be a \u003Ccode>=\u003C/code> character separating parameter name\u000Aand value.\u003C/p>",
+            "ja" : "\u003Cp>引数名と引数値の間には区切りの \u003Ccode>=\u003C/code> がなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "There is no \u003Ccode>=\u003C/code> after the parameter name",
+            "ja" : "引数名の後に \u003Ccode>=\u003C/code> がありません"
+         },
+         "modules" : {
+            "Web::MIME::Type::Parser" : 1
+         }
+      },
+      "params:no close quote" : {
+         "default_level" : "m",
+         "desc" : {
+            "en" : "\u003Cp>A quoted-string must be closed by a \u003Ccode>\u0022\u003C/code> character.\u003C/p>",
+            "ja" : "\u003Cp>引用文字列は文字 \u003Ccode>\u0022\u003C/code> で閉じなければいけません。\u003C/p>"
+         },
+         "layer" : "microsyntax",
+         "message" : {
+            "en" : "The quoted-string is not closed by \u003Ccode>\u0022\u003C/code>",
+            "ja" : "引用文字列が \u003Ccode>\u0022\u003C/code> で閉じられていません"
+         },
+         "modules" : {
+            "Web::MIME::Type::Parser" : 1
+         }
+      }
+   }
+}

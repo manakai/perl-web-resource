@@ -49,9 +49,9 @@ A DNS cache.
 
 An environment variable based proxy manager.
 
-=item L<Web::MIME::Type>
+=item L<Web::MIME::Type::Parser>
 
-MIME types.
+MIME type parser.
 
 =item L<Web::MIME::Sniffing>
 
@@ -64,6 +64,10 @@ AWS API signature calculation.
 =item L<Web::Transport::Base64>
 
 A Base64 API.
+
+=item L<Web::Transport::DataURL::Parser>
+
+A C<data:> URL processor.
 
 =back
 

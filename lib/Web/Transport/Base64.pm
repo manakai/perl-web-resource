@@ -24,7 +24,6 @@ sub encode_web_base64 ($) {
 } # encode_web_base64
 
 sub decode_web_base64 ($) {
-  croak "Wide character in subroutine entry" if utf8::is_utf8 ($_[0]);
   my $v = $_[0];
   $v =~ s/[\x09\x0A\x0C\x0D\x20]+//g; ## HTML white space
   my $vl = (length $v) % 4;

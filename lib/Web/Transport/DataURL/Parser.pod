@@ -1,0 +1,74 @@
+=head1 NAME
+
+Web::Transport::DataURL::Parser - data: URL parser
+
+=head1 SYNOPSIS
+
+  use Web::Transport::DataURL::Parser;
+  
+  $parser = Web::Transport::DataURL::Parser->new;
+  $parser->onerror (sub { ... });
+  
+  $url = Web::URL->parse_string ("data:,...");
+  $mime = $parser->parse_url ($url);
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::DataURL::Parser> class is a C<data:> URL
+processor.
+
+=head1 METHODS
+
+There are following methods:
+
+=over 4
+
+=item $parser = Web::MIME::Type::Parser->new
+
+Create a new parser.
+
+=item $parser->onerror ($coderef)
+
+=item $coderef = $parser->onerror
+
+Get or set the error handler for the parser.  Any parse error, as well
+as warning and additional processing information, is reported to the
+handler.  See
+<https://github.com/manakai/data-errors/blob/master/doc/onerror.txt>
+for details of error handling.
+
+The value should not be set while the parser is running.  If the value
+is changed, the result is undefined.
+
+=item $data = $parser->parse_url ($url)
+
+Process a C<data:> URL record (a L<Web::URL> object whose C<scheme> is
+C<data>) using the C<data:> URL processor and return the C<data:> URL
+struct (L<Web::Transport::DataURL>).  If the process fails, C<undef>
+is returned instead.
+
+This method is an implementation of the "C<data:> URL processor" of
+the Fetch Standard.
+
+=back
+
+=head1 SEE ALSO
+
+L<Web::Transport::DataURL>.
+
+=head1 SPECIFICATIONS
+
+Fetch Standard <https://fetch.spec.whatwg.org/>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

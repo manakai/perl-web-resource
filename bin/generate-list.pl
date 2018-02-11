@@ -37,9 +37,9 @@ for (keys %$json) {
 $Data->{multipart}->{params}->{boundary}->{required} = 1;
 
 my $SniffingData = {};
-for my $name (keys %{$sniffing->{tables}}) {
+for my $name (sort { $a cmp $b } keys %{$sniffing->{tables}}) {
   my $regexps = $sniffing->{tables}->{$name}->{regexps};
-  for my $type (keys %$regexps) {
+  for my $type (sort { $a cmp $b } keys %$regexps) {
     utf8::encode $regexps->{$type};
     push @{$SniffingData->{$name} ||= []},
         [qr{$regexps->{$type}}, $type];

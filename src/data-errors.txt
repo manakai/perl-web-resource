@@ -1,0 +1,45 @@
+## data: URL parsing errors and warnings
+##
+## This file is used to generate error definition data file available
+## from <https://github.com/manakai/data-errors>.
+##
+## Per CC0 <https://creativecommons.org/publicdomain/zero/1.0/>, to
+## the extent possible under law, the author has waived all copyright
+## and related or neighboring rights to this work.
+
+module=Web::Transport::DataURL::Parser
+
+* URL:data:no ,
+
+layer=microsyntax
+default_level=m
+
+@en
+There is no <code>,</code>
+@ja
+<code>,</code> がありません
+
+@en
+<p>There must be a <code>,</code> character between the MIME type and
+the data of a <code>data:</code> URL.
+@ja
+<p><code>data:</code> URL の MIME 型とデータの間に文字
+<code>,</code> が必要です。
+
+* URL:data:bad base64 data
+
+layer=microsyntax
+default_level=m
+
+@en
+The Base64 data is broken
+@ja
+Base64 データが壊れています
+
+@en
+<p>The data part of a <code>data:</code> URL with <code>;base64</code>
+parameter must be a valid Base64-encoded data.
+@ja
+<p><code>data:</code> URL に引数 <code>;base64</code> 
+が指定されている時データ部分は妥当な
+Base64 符号化されたデータでなければいけません。

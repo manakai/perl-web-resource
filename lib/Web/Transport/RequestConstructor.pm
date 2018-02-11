@@ -173,7 +173,7 @@ sub create ($$) {
 
   if ($args->{basic_auth}) {
     require Web::Transport::Base64;
-    my $bauth = Web::Transport::encode_web_base64
+    my $bauth = Web::Transport::Base64::encode_web_base64
         (encode_web_utf8 ((defined $args->{basic_auth}->[0] ? $args->{basic_auth}->[0] : '') . ':' .
                           (defined $args->{basic_auth}->[1] ? $args->{basic_auth}->[1] : '')));
     push @$header_list, ['Authorization', $auth = 'Basic ' . $bauth, 'authorization'];

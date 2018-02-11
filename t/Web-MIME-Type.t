@@ -41,7 +41,7 @@ for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/types.
   errors => {is_list => 1},
   result => {is_prefixed => 1},
 }, sub {
-  my $test = shift;
+  my ($test, $opts) = @_;
   
   test {
     my $c = shift;
@@ -79,7 +79,7 @@ for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/types.
     }
     is $actual_result, $expected_result, '#result';
     done $c;
-  } n => 2, name => ['parser', $test->{data}->[0]];
+  } n => 2, name => ['parser', $opts->{line_number}, $test->{data}->[0]];
 });
 
 # ------ Accessors ------
@@ -418,7 +418,7 @@ test {
   my $mt = Web::MIME::Type->new_from_type_and_subtype ('text', 'css');
   $mt->param (abc => 'def');
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
-  is $mt->as_valid_mime_type, 'text/css; abc=def';
+  is $mt->as_valid_mime_type, 'text/css;abc=def';
   is $mt->mime_type_portion, 'text/css';
   done $c;
 } n => 3, name => 'as_valid';
@@ -428,7 +428,7 @@ test {
   my $mt = Web::MIME::Type->new_from_type_and_subtype ('text', 'css');
   $mt->param (abc => 'def<xxyz>');
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
-  is $mt->as_valid_mime_type, 'text/css; abc="def<xxyz>"';
+  is $mt->as_valid_mime_type, 'text/css;abc="def<xxyz>"';
   is $mt->mime_type_portion, 'text/css';
   done $c;
 } n => 3, name => 'as_valid';
@@ -439,7 +439,7 @@ test {
   $mt->param (abc => 'def');
   $mt->param (xyz => 1);
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
-  is $mt->as_valid_mime_type, 'text/css; abc=def; xyz=1';
+  is $mt->as_valid_mime_type, 'text/css;abc=def;xyz=1';
   done $c;
 } n => 2, name => 'as_valid';
 
@@ -459,7 +459,7 @@ test {
   $mt->param (abc => 'def');
   $mt->param (xyz => "");
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
-  is $mt->as_valid_mime_type, 'text/css; abc=def; xyz=""';
+  is $mt->as_valid_mime_type, 'text/css;abc=def;xyz=""';
   done $c;
 } n => 2, name => 'as_valid';
 
@@ -469,7 +469,7 @@ test {
   $mt->param (abc => 'def');
   $mt->param (abc => 'xyz');
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
-  is $mt->as_valid_mime_type, 'text/css; abc=xyz';
+  is $mt->as_valid_mime_type, 'text/css;abc=xyz';
   done $c;
 } n => 2, name => 'as_valid';
 
@@ -479,7 +479,7 @@ test {
   $mt->param (abc => 'def');
   $mt->param (xyz => "<M");
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
-  is $mt->as_valid_mime_type, 'text/css; abc=def; xyz="<M"';
+  is $mt->as_valid_mime_type, 'text/css;abc=def;xyz="<M"';
   done $c;
 } n => 2, name => 'as_valid';
 
@@ -515,7 +515,7 @@ test {
   my $mt = Web::MIME::Type->new_from_type_and_subtype ('text', 'css');
   $mt->param (abc => "ab\x0Acd");
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
-  is $mt->as_valid_mime_type, qq[text/css; abc="ab\x0D\x0A cd"];
+  is $mt->as_valid_mime_type, qq[text/css;abc="ab\x0Acd"];
   done $c;
 } n => 2, name => 'as_valid';
 
@@ -524,7 +524,7 @@ test {
   my $mt = Web::MIME::Type->new_from_type_and_subtype ('text', 'css');
   $mt->param (abc => "\x0D\x0D\x0A");
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
-  is $mt->as_valid_mime_type, qq[text/css; abc="\x0D\x0A \x0D\x0A "];
+  is $mt->as_valid_mime_type, qq[text/css;abc="\x0D\x0D\x0A"];
   done $c;
 } n => 2, name => 'as_valid';
 
@@ -533,7 +533,7 @@ test {
   my $mt = Web::MIME::Type->new_from_type_and_subtype ('text', 'css');
   $mt->param (abc => 'de\"f');
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
-  is $mt->as_valid_mime_type, qq[text/css; abc="de\x5C\x5C\x5C"f"];
+  is $mt->as_valid_mime_type, qq[text/css;abc="de\x5C\x5C\x5C"f"];
   done $c;
 } n => 2, name => 'as_valid';
 
@@ -542,9 +542,39 @@ test {
   my $mt = Web::MIME::Type->new_from_type_and_subtype ('text', 'css');
   $mt->param (abc => qq[de\x00f]);
   is $mt->as_valid_mime_type_with_no_params, 'text/css';
-  is $mt->as_valid_mime_type, qq[text/css; abc="de\x5C\x00f"];
+  is $mt->as_valid_mime_type, qq[text/css;abc="de\x00f"];
   done $c;
 } n => 2, name => 'as_valid';
+
+test {
+  my $c = shift;
+  my $mt = Web::MIME::Type->new_from_type_and_subtype ('text', 'css');
+  $mt->param (abc => qq[de\x7Ff]);
+  is $mt->as_valid_mime_type_with_no_params, 'text/css';
+  is $mt->as_valid_mime_type, qq[text/css;abc="de\x7Ff"];
+  done $c;
+} n => 2, name => 'as_valid';
+
+test {
+  my $c = shift;
+  my $mt = Web::MIME::Type->new_from_type_and_subtype ('text', 'css');
+  $mt->param (abc => qq[de\xFE\xFFf]);
+  is $mt->as_valid_mime_type_with_no_params, 'text/css';
+  is $mt->as_valid_mime_type, qq[text/css;abc="de\xFE\xFFf"];
+  done $c;
+} n => 2, name => 'as_valid';
+
+test {
+  my $c = shift;
+  my $mt = Web::MIME::Type->new_from_type_and_subtype ('text', 'css');
+  $mt->param (xza => q[y]);
+  is $mt->as_valid_mime_type, qq[text/css;xza=y];
+  $mt->param (abc => q[x]);
+  is $mt->as_valid_mime_type, qq[text/css;xza=y;abc=x];
+  $mt->param (xza => q[aa]);
+  is $mt->as_valid_mime_type, qq[text/css;xza=aa;abc=x];
+  done $c;
+} n => 3, name => 'as_valid parameter orders';
 
 ## ------ Conformance ------
 
@@ -552,7 +582,7 @@ for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/type-c
   data => {is_prefixed => 1, is_list => 1},
   errors => {is_list => 1},
 }, sub {
-  my $test = shift;
+  my ($test, $opts) = @_;
   
   test {
     my $c = shift;
@@ -582,7 +612,7 @@ for_each_test (path (__FILE__)->parent->parent->child ('t_deps/tests/mime/type-c
       warn qq[No #errors section: ] . join ' ', @{$test->{data}->[0]};
     }
     done $c;
-  } n => 1, name => ['validate', @{$test->{data}->[0]}];
+  } n => 1, name => ['validate', $opts->{line_number}, @{$test->{data}->[0]}];
 });
 
 run_tests;

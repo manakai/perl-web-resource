@@ -3,29 +3,21 @@ use strict;
 use warnings;
 our $VERSION = '3.0';
 use Carp;
-use Errno qw(EAGAIN EWOULDBLOCK EINTR);
-use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE SO_LINGER);
-use AnyEvent;
-use AnyEvent::Util qw(WSAEWOULDBLOCK);
+use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE);
 use AnyEvent::Socket qw(tcp_connect);
 use AbortController;
 use Promise;
-use Promised::Flow;
 use Streams::IOError;
+use Streams::Filehandle;
 use Web::Transport::Error;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
-use DataView;
-use Streams;
-use Streams::Filehandle;
 use Web::Host;
 
 push our @CARP_NOT, qw(
-  ArrayBuffer
-  ReadableStream ReadableStreamBYOBRequest WritableStream
-  Streams::Filehandle
   Web::Transport::Error Web::Transport::TypeError Streams::IOError
   Web::Transport::ProtocolError
+  Promise
 );
 
 sub _te ($) {
@@ -35,183 +27,6 @@ sub _te ($) {
 sub _tep ($) {
   return Promise->reject (Web::Transport::TypeError->new ($_[0]));
 } # _tep
-
-use Streams::Error;
-push our @CARP_NOT, qw(Streams::Error);
-sub _wrap_fh ($) {
-  my ($fh) = @_;
-
-  my ($r_fh_closed, $s_fh_closed) = promised_cv;
-  my $read_active = 1;
-  my $rcancel = sub { };
-  my $wc;
-  my $wcancel;
-
-  my $pull = sub {
-    my ($rc, $req, $rcancelref) = @_;
-    return Promise->new (sub {
-      my $ready = $_[0];
-      my $failed = $_[1];
-      return $failed->() unless defined $fh;
-
-      my $w;
-      $$rcancelref = sub {
-        eval { $rc->error ($_[0]) } if $read_active;
-        my $req = $rc->byob_request;
-        $req->manakai_respond_zero if defined $req;
-
-        undef $w;
-        $failed->($_[0]);
-      };
-      $w = AE::io $fh, 0, sub {
-        $$rcancelref = sub {
-          eval { $rc->error ($_[0]) } if $read_active;
-          my $req = $rc->byob_request;
-          $req->manakai_respond_zero if defined $req;
-        };
-
-        undef $w;
-        $ready->();
-      };
-    })->then (sub {
-      my $bytes_read = eval { $req->manakai_respond_by_sysread ($fh) };
-      if ($@) {
-        my $error = Streams::Error->wrap ($@);
-        my $errno = $error->isa ('Streams::IOError') ? $error->errno : 0;
-        if ($errno != EAGAIN && $errno != EINTR &&
-            $errno != EWOULDBLOCK && $errno != WSAEWOULDBLOCK) {
-          $rcancel->($error) if defined $rcancel;
-          $read_active = $rcancel = undef;
-          if (defined $wc) {
-            $wc->error ($error);
-            $wcancel->() if defined $wcancel;
-            $wc = $wcancel = undef;
-          }
-          undef $fh;
-          $s_fh_closed->();
-          return 0;
-        }
-        return 1;
-      } # $@
-      if (defined $bytes_read and $bytes_read <= 0) {
-        $rc->close;
-        $req->manakai_respond_zero;
-        $read_active = undef;
-        $rcancel->(undef);
-        $rcancel = undef;
-        unless (defined $wc) {
-          undef $fh;
-          $s_fh_closed->();
-        }
-        return 0;
-      }
-      return 1;
-    }, sub {
-      $read_active = $rcancel = undef;
-      unless (defined $wc) {
-        undef $fh;
-        $s_fh_closed->();
-      }
-      return 0;
-    });
-  }; # $pull
-
-  my $read_stream = ReadableStream->new ({
-    type => 'bytes',
-    auto_allocate_chunk_size => 1024*2,
-    pull => sub {
-      my $rc = $_[1];
-      $rcancel = sub {
-        eval { $rc->error ($_[0]) } if $read_active;
-        my $req = $rc->byob_request;
-        $req->manakai_respond_zero if defined $req;
-      };
-      my $run; $run = sub {
-        my $req = $rc->byob_request;
-        return Promise->resolve unless defined $req;
-        return $pull->($rc, $req, \$rcancel)->then (sub {
-          return $run->() if $_[0];
-        });
-      };
-      return $run->()->then (sub { undef $run });
-    }, # pull
-    cancel => sub {
-      my $reason = defined $_[1] ? $_[1] : "Handle reader canceled";
-      $rcancel->($reason) if defined $rcancel;
-      $read_active = $rcancel = undef;
-      if (defined $wc) {
-        $wc->error ($reason);
-        $wcancel->() if defined $wcancel;
-        $wc = $wcancel = undef;
-      }
-      shutdown $fh, 2; # can result in EPIPE
-      undef $fh;
-      $s_fh_closed->();
-    }, # cancel
-  }); # $read_stream
-  my $write_stream = WritableStream->new ({
-    start => sub {
-      $wc = $_[1];
-    },
-    write => sub {
-      return Streams::Filehandle::write_to_fhref (\$fh, $_[1], cancel_ref => \$wcancel)->catch (sub {
-        my $e = $_[0];
-        if (defined $wc) {
-          $wc->error ($e);
-          $wcancel->() if defined $wcancel;
-          $wc = $wcancel = undef;
-        }
-        if ($read_active) {
-          $rcancel->($e);
-          $read_active = $rcancel = undef;
-        }
-        undef $fh;
-        $s_fh_closed->();
-        die $e;
-      });
-    }, # write
-    close => sub {
-      shutdown $fh, 1; # can result in EPIPE
-      $wcancel->() if defined $wcancel;
-      $wc = $wcancel = undef;
-      unless ($read_active) {
-        undef $fh;
-        $s_fh_closed->();
-      }
-      return undef;
-    }, # close
-    abort => sub {
-      ## For TCP tests only
-      if (UNIVERSAL::isa ($_[1], 'Web::Transport::TCPStream::Reset')) {
-        setsockopt $fh, SOL_SOCKET, SO_LINGER, pack "II", 1, 0;
-        $wcancel->() if defined $wcancel;
-        $wc = $wcancel = undef;
-        if ($read_active) {
-          $rcancel->($_[1]);
-          $read_active = $rcancel = undef;
-        }
-        undef $fh;
-        $s_fh_closed->();
-        return undef;
-      }
-
-      $wcancel->() if defined $wcancel;
-      $wc = $wcancel = undef;
-      if ($read_active) {
-        my $reason = defined $_[1] ? $_[1] : "Handle writer aborted";
-        $rcancel->($reason);
-        $read_active = $rcancel = undef;
-      }
-      shutdown $fh, 2; # can result in EPIPE
-      undef $fh;
-      $s_fh_closed->();
-    }, # abort
-  }); # $write_stream
-
-  AnyEvent::Util::fh_nonblocking $fh, 1;
-
-  return ($read_stream, $write_stream, $r_fh_closed);
-} # _wrap_fh
 
 sub create ($$) {
   my ($class, $args) = @_;
@@ -333,7 +148,8 @@ sub create ($$) {
     setsockopt $fh, SOL_SOCKET, SO_KEEPALIVE, 1;
     # XXX KA options
 
-    ($info->{readable}, $info->{writable}, $info->{closed}) = _wrap_fh $fh;
+    ($info->{readable}, $info->{writable}, $info->{closed})
+        = Streams::Filehandle::fh_to_streams $fh;
 
     if ($args->{debug}) {
       if (defined $info->{local_host}) {

@@ -19,6 +19,7 @@ use Web::Transport::OCSP;
 push our @CARP_NOT, qw(
   Web::Transport::Error Web::Transport::TypeError Streams::IOError
   Web::Transport::TLSStream::OpenSSLError Web::Transport::ProtocolError
+  ReadableStream WritableStream
   Web::Transport::TCPStream
   Web::Transport::UnixStream
   Web::Transport::TLSStream

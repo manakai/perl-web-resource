@@ -17,7 +17,7 @@ use Web::Host;
 push our @CARP_NOT, qw(
   Web::Transport::Error Web::Transport::TypeError Streams::IOError
   Web::Transport::ProtocolError
-  Promise
+  Streams::Filehandle
 );
 
 sub _te ($) {

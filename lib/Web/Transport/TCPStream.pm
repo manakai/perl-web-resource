@@ -36,6 +36,8 @@ sub _tep ($) {
   return Promise->reject (Web::Transport::TypeError->new ($_[0]));
 } # _tep
 
+use Streams::Error;
+push our @CARP_NOT, qw(Streams::Error);
 sub _wrap_fh ($) {
   my ($fh) = @_;
 
@@ -74,7 +76,7 @@ sub _wrap_fh ($) {
     })->then (sub {
       my $bytes_read = eval { $req->manakai_respond_by_sysread ($fh) };
       if ($@) {
-        my $error = Web::Transport::Error->wrap ($@);
+        my $error = Streams::Error->wrap ($@);
         my $errno = $error->isa ('Streams::IOError') ? $error->errno : 0;
         if ($errno != EAGAIN && $errno != EINTR &&
             $errno != EWOULDBLOCK && $errno != WSAEWOULDBLOCK) {
@@ -179,8 +181,8 @@ sub _wrap_fh ($) {
       return undef;
     }, # close
     abort => sub {
-      ## For tests only
-      if (UNIVERSAL::isa ($_[1], __PACKAGE__ . '::Reset')) {
+      ## For TCP tests only
+      if (UNIVERSAL::isa ($_[1], 'Web::Transport::TCPStream::Reset')) {
         setsockopt $fh, SOL_SOCKET, SO_LINGER, pack "II", 1, 0;
         $wcancel->() if defined $wcancel;
         $wc = $wcancel = undef;

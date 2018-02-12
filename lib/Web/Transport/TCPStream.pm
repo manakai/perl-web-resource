@@ -56,7 +56,7 @@ sub _wrap_fh ($) {
       $$rcancelref = sub {
         eval { $rc->error ($_[0]) } if $read_active;
         my $req = $rc->byob_request;
-        $req->respond (0) if defined $req;
+        $req->manakai_respond_zero if defined $req;
 
         undef $w;
         $failed->($_[0]);
@@ -65,7 +65,7 @@ sub _wrap_fh ($) {
         $$rcancelref = sub {
           eval { $rc->error ($_[0]) } if $read_active;
           my $req = $rc->byob_request;
-          $req->respond (0) if defined $req;
+          $req->manakai_respond_zero if defined $req;
         };
 
         undef $w;
@@ -93,7 +93,7 @@ sub _wrap_fh ($) {
       } # $@
       if (defined $bytes_read and $bytes_read <= 0) {
         $rc->close;
-        $req->respond (0);
+        $req->manakai_respond_zero;
         $read_active = undef;
         $rcancel->(undef);
         $rcancel = undef;
@@ -122,7 +122,7 @@ sub _wrap_fh ($) {
       $rcancel = sub {
         eval { $rc->error ($_[0]) } if $read_active;
         my $req = $rc->byob_request;
-        $req->respond (0) if defined $req;
+        $req->manakai_respond_zero if defined $req;
       };
       my $run; $run = sub {
         my $req = $rc->byob_request;

@@ -672,7 +672,7 @@ sub _ws_received ($) {
             $rc->close;
             unless ($is_text) {
               my $req = $rc->byob_request;
-              $req->respond (0) if defined $req;
+              $req->manakai_respond_zero if defined $req;
             }
             delete $self->{ws_data_frame};
           }

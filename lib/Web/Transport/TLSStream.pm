@@ -259,7 +259,7 @@ sub create ($$) {
     if (defined $rc) {
       eval { $rc->error ($_[0]) };
       my $req = $rc->byob_request;
-      $req->respond (0) if defined $req;
+      $req->manakai_respond_zero if defined $req;
       undef $rc;
     }
     if (defined $wc) {
@@ -392,7 +392,7 @@ sub create ($$) {
       if (defined $rc) {
         $rc->close;
         my $req = $rc->byob_request;
-        $req->respond (0) if defined $req;
+        $req->manakai_respond_zero if defined $req;
         undef $rc;
       }
       return $close->() unless defined $wc;
@@ -519,7 +519,7 @@ sub create ($$) {
           if (defined $rc) {
             $rc->close;
             my $req = $rc->byob_request;
-            $req->respond (0) if defined $req;
+            $req->manakai_respond_zero if defined $req;
             undef $rc;
           }
           $close->() if not defined $wc;

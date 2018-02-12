@@ -36,56 +36,9 @@ sub _tep ($) {
   return Promise->reject (Web::Transport::TypeError->new ($_[0]));
 } # _tep
 
-sub create ($$) {
-  my ($class, $args) = @_;
+sub _wrap_fh ($) {
+  my ($fh) = @_;
 
-  return _tep "Bad |fh|" if $args->{server} and not defined $args->{fh};
-  if ($class eq 'Web::Transport::UnixStream') {
-    $args->{type} = 'Unix';
-    if (not defined $args->{fh}) {
-      $args->{addr} = 'unix/';
-      return _tep "Bad |path|" unless defined $args->{path};
-      $args->{port} = delete $args->{path};
-    }
-  } else {
-    $args->{type} = 'TCP';
-    return _tep "Bad |host|" unless defined $args->{host} and $args->{host}->is_ip;
-    $args->{addr} = $args->{host}->text_addr;
-    return _tep "Bad |port|" unless defined $args->{port};
-    $args->{port} += 0;
-    return _tep "Bad |port|" unless
-        $args->{port} =~ /\A[0-9]+\z/ and $args->{port} < 2**16;
-  }
-
-  my $id = defined $args->{id} ? $args->{id} : (defined $args->{parent_id} ? $args->{parent_id} : $$) . '.' . ++$Web::Transport::NextID;
-  my $info = {
-    type => $args->{type},
-    layered_type => $args->{type},
-    id => $id,
-    server => !!$args->{server},
-  };
-  if ($args->{type} eq 'TCP' and defined $args->{host}) {
-    $info->{remote_host} = $args->{host};
-    $info->{remote_port} = 0+$args->{port};
-  }
-  if ($args->{type} eq 'Unix' and defined $args->{path}) {
-    $info->{path} = $args->{path};
-  }
-
-  if ($args->{debug}) {
-    my $action = defined $info->{fh}
-        ? $info->{server} ? 'attach as server' : 'attach as client'
-        : 'connect';
-    if (defined $info->{path}) {
-      warn "$id: $info->{type}: $action ($info->{path})...\n"; # XXX $info->{path} can contain non-ASCII bytes
-    } elsif (defined $info->{remote_host}) {
-      warn "$id: $info->{type}: $action (remote: @{[$info->{remote_host}->to_ascii]}:$info->{remote_port})...\n";
-    } else {
-      warn "$id: $info->{type}: $action (filehandle)...\n";
-    }
-  }
-
-  my $fh;
   my ($r_fh_closed, $s_fh_closed) = promised_cv;
   my $read_active = 1;
   my $rcancel = sub { };
@@ -181,7 +134,7 @@ sub create ($$) {
       return $run->()->then (sub { undef $run });
     }, # pull
     cancel => sub {
-      my $reason = defined $_[1] ? $_[1] : "$class reader canceled";
+      my $reason = defined $_[1] ? $_[1] : "Handle reader canceled";
       $rcancel->($reason) if defined $rcancel;
       $read_active = $rcancel = undef;
       if (defined $wc) {
@@ -243,7 +196,7 @@ sub create ($$) {
       $wcancel->() if defined $wcancel;
       $wc = $wcancel = undef;
       if ($read_active) {
-        my $reason = defined $_[1] ? $_[1] : "$class writer aborted";
+        my $reason = defined $_[1] ? $_[1] : "Handle writer aborted";
         $rcancel->($reason);
         $read_active = $rcancel = undef;
       }
@@ -252,6 +205,60 @@ sub create ($$) {
       $s_fh_closed->();
     }, # abort
   }); # $write_stream
+
+  AnyEvent::Util::fh_nonblocking $fh, 1;
+
+  return ($read_stream, $write_stream, $r_fh_closed);
+} # _wrap_fh
+
+sub create ($$) {
+  my ($class, $args) = @_;
+
+  return _tep "Bad |fh|" if $args->{server} and not defined $args->{fh};
+  if ($class eq 'Web::Transport::UnixStream') {
+    $args->{type} = 'Unix';
+    if (not defined $args->{fh}) {
+      $args->{addr} = 'unix/';
+      return _tep "Bad |path|" unless defined $args->{path};
+      $args->{port} = delete $args->{path};
+    }
+  } else {
+    $args->{type} = 'TCP';
+    return _tep "Bad |host|" unless defined $args->{host} and $args->{host}->is_ip;
+    $args->{addr} = $args->{host}->text_addr;
+    return _tep "Bad |port|" unless defined $args->{port};
+    $args->{port} += 0;
+    return _tep "Bad |port|" unless
+        $args->{port} =~ /\A[0-9]+\z/ and $args->{port} < 2**16;
+  }
+
+  my $id = defined $args->{id} ? $args->{id} : (defined $args->{parent_id} ? $args->{parent_id} : $$) . '.' . ++$Web::Transport::NextID;
+  my $info = {
+    type => $args->{type},
+    layered_type => $args->{type},
+    id => $id,
+    server => !!$args->{server},
+  };
+  if ($args->{type} eq 'TCP' and defined $args->{host}) {
+    $info->{remote_host} = $args->{host};
+    $info->{remote_port} = 0+$args->{port};
+  }
+  if ($args->{type} eq 'Unix' and defined $args->{path}) {
+    $info->{path} = $args->{path};
+  }
+
+  if ($args->{debug}) {
+    my $action = defined $info->{fh}
+        ? $info->{server} ? 'attach as server' : 'attach as client'
+        : 'connect';
+    if (defined $info->{path}) {
+      warn "$id: $info->{type}: $action ($info->{path})...\n"; # XXX $info->{path} can contain non-ASCII bytes
+    } elsif (defined $info->{remote_host}) {
+      warn "$id: $info->{type}: $action (remote: @{[$info->{remote_host}->to_ascii]}:$info->{remote_port})...\n";
+    } else {
+      warn "$id: $info->{type}: $action (filehandle)...\n";
+    }
+  }
 
   my $signal = $args->{signal};
   return Promise->new (sub {
@@ -263,15 +270,16 @@ sub create ($$) {
         $ng->($signal->manakai_error);
         return;
       } else {
-        $args->{signal}->manakai_onabort (sub {
+        $signal->manakai_onabort (sub {
           $aborted->($signal->manakai_error);
         });
       }
     }
 
     if (defined $args->{fh}) {
-      $fh = $args->{fh};
-      $ok->();
+      $ok->($args->{fh});
+      $signal->manakai_onabort (sub { }) if defined $signal;
+      $ok = $ng = $aborted = $signal = sub { };
       return;
     }
     
@@ -304,19 +312,18 @@ sub create ($$) {
         return;
       }
 
-      $fh = $_[0];
-      $ok->();
+      $ok->($_[0]);
       $signal->manakai_onabort (sub { }) if defined $signal;
       $con = $ok = $ng = $aborted = $signal = sub { };
     };
   })->then (sub {
+    my $fh = $_[0];
+
     if ($info->{type} eq 'TCP') {
       my ($p, $h) = AnyEvent::Socket::unpack_sockaddr getsockname $fh;
       $info->{local_host} = Web::Host->new_from_packed_addr ($h);
       $info->{local_port} = $p;
     }
-
-    AnyEvent::Util::fh_nonblocking $fh, 1;
 
     ## Applied to TCP only (not applied to Unix domain socket)
     setsockopt $fh, SOL_SOCKET, SO_OOBINLINE, 0;
@@ -324,9 +331,7 @@ sub create ($$) {
     setsockopt $fh, SOL_SOCKET, SO_KEEPALIVE, 1;
     # XXX KA options
 
-    $info->{readable} = $read_stream;
-    $info->{writable} = $write_stream;
-    $info->{closed} = $r_fh_closed;
+    ($info->{readable}, $info->{writable}, $info->{closed}) = _wrap_fh $fh;
 
     if ($args->{debug}) {
       if (defined $info->{local_host}) {
@@ -342,17 +347,6 @@ sub create ($$) {
     return $info;
   })->catch (sub {
     my $error = Web::Transport::Error->wrap ($_[0]);
-    if ($read_active) {
-      $rcancel->($error);
-      $read_active = $rcancel = undef;
-    }
-    if (defined $wc) {
-      $wc->error ($error);
-      $wcancel->() if defined $wcancel;
-      $wc = $wcancel = undef;
-    }
-    undef $fh;
-    $s_fh_closed->();
 
     if ($args->{debug}) {
       warn "$id: $info->{type}: failed ($error)\n";

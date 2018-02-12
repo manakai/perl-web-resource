@@ -149,7 +149,7 @@ sub create ($$) {
     # XXX KA options
 
     ($info->{readable}, $info->{writable}, $info->{closed})
-        = Streams::Filehandle::fh_to_streams $fh;
+        = Streams::Filehandle::fh_to_streams $fh, 1, 1;
 
     if ($args->{debug}) {
       if (defined $info->{local_host}) {

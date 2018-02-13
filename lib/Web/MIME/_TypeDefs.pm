@@ -5616,6 +5616,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common'
                                                               },
+                                          'vnd.sqlite3' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                           'vnd.sss-cod' => {
                                                            'iana' => 'permanent',
                                                            'iana_intended_usage' => 'common'
@@ -6291,6 +6294,9 @@ $Web::MIME::_TypeDefs::Type = {
                                           'voicexml+xml' => {
                                                             'iana' => 'permanent'
                                                           },
+                                          'voucher-cms+json' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                           'vq-rtcpxr' => {
                                                          'iana' => 'permanent',
                                                          'iana_intended_usage' => 'common'

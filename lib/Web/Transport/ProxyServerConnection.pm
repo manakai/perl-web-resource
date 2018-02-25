@@ -193,8 +193,10 @@ sub _handle_stream ($$$) {
       });
     }, sub { # $client->request failed
       my $result = $_[0];
-      my $error = defined $result->{error}
-          ? $result->{error} : Web::Transport::Error->wrap ($result);
+      my $error = Web::Transport::Error->wrap (
+        (ref $result eq 'HASH' and defined $result->{error})
+            ? $result->{error} : $result
+      );
       $client->abort ($error);
       return {
         unused_request_body_stream => $request->{body_stream}, # or undef

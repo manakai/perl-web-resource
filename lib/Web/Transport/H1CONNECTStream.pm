@@ -7,6 +7,7 @@ use Promise;
 use Promised::Flow;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
+use Web::Transport::PlatformInfo;
 use Web::Transport::HTTPStream;
 
 push our @CARP_NOT, qw(
@@ -80,13 +81,15 @@ sub create ($$) {
     warn "$info->{id}: $info->{type}: start (target |$args->{target}|)\n"
         if $args->{debug};
 
+    my $info = $args->{underlying_platform}
+        || Web::Transport::PlatformInfo->new_default;
     return $http->send_request ({
       method => 'CONNECT',
       target => $args->{target},
       headers => [
         [Host => $args->{target}],
         ['Proxy-Connection' => 'keep-alive'],
-        ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36'], # XXX
+        ['User-Agent', $info->user_agent],
         # XXX additional headers
       ],
     })->then (sub {

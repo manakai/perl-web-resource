@@ -4,6 +4,7 @@ use warnings;
 our $VERSION = '1.0';
 use Web::Encoding qw(encode_web_utf8);
 use Web::URL::Encoding qw(serialize_form_urlencoded percent_encode_c);
+use Web::Transport::PlatformInfo;
 
 use constant DEBUG => $ENV{WEBUA_DEBUG} || 0;
 
@@ -157,9 +158,12 @@ sub create ($$) {
 
   push @$header_list, ['Accept', '*/*', 'accept']
       unless $has_header->{'accept'};
+
+  my $info = $args->{underlying_platform}
+      || Web::Transport::PlatformInfo->new_default;
   push @$header_list, ['Accept-Language', 'en', 'accept-language']
       unless $has_header->{'accept-language'};
-  push @$header_list, ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36', 'user-agent']
+  push @$header_list, ['User-Agent', encode_web_utf8 ($info->user_agent . ''), 'user-agent']
       unless $has_header->{'user-agent'};
 
   if (defined $args->{bearer}) {

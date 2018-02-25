@@ -6,6 +6,8 @@ require utf8;
 use Carp qw(croak);
 use AnyEvent;
 use Promise;
+use Web::Encoding;
+use Web::Transport::PlatformInfo;
 
 sub new ($%) {
   my $self = bless {}, shift;
@@ -30,7 +32,9 @@ sub start ($$) {
              target => $args->{target},
              headers => [[Host => $args->{target}],
                          ['Proxy-Connection' => 'keep-alive']]};
-  push @{$req->{headers}}, ['User-Agent', 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/49.0.2623.87 Safari/537.36']; # XXX
+  my $info = Web::Transport::PlatformInfo->new_default;
+  push @{$req->{headers}},
+      ['User-Agent', encode_web_utf8 ($info->user_agent . '')];
 
   # XXX headers
   my $onevent = sub {

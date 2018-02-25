@@ -81,7 +81,7 @@ sub create ($$) {
     warn "$info->{id}: $info->{type}: start (target |$args->{target}|)\n"
         if $args->{debug};
 
-    my $info = $args->{underlying_platform}
+    my $pinfo = $args->{underlying_platform}
         || Web::Transport::PlatformInfo->new_default;
     return $http->send_request ({
       method => 'CONNECT',
@@ -89,7 +89,7 @@ sub create ($$) {
       headers => [
         [Host => $args->{target}],
         ['Proxy-Connection' => 'keep-alive'],
-        ['User-Agent', $info->user_agent],
+        ['User-Agent', $pinfo->user_agent],
         # XXX additional headers
       ],
     })->then (sub {

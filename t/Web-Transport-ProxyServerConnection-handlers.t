@@ -1806,7 +1806,7 @@ test {
         is $res->status, 201;
         ok $res->header ('User-Agent');
         is $res->header ('accept'), '*/*';
-        is $res->header ('accept-language'), 'en';
+        is $res->header ('accept-language'), 'en-US';
       } $c;
     });
   });

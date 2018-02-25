@@ -45,7 +45,8 @@ build: build-deps build-main
 build-deps: deps
 
 build-main: lib/Web/MIME/_TypeDefs.pm lib/Web/Transport/_Defs.pm \
-    lib/Web/Transport/JSON.pm intermediate/parsing-errors.json
+    lib/Web/Transport/JSON.pm intermediate/parsing-errors.json \
+    lib/Web/Transport/_PlatformDefs.pm
 
 lib/Web/MIME/_TypeDefs.pm: bin/generate-list.pl local/mime-types.json \
     local/mime-sniffing.json
@@ -74,6 +75,13 @@ lib/Web/Transport/JSON.pm:
 intermediate/parsing-errors.json: bin/generate-errors.pl \
     src/parsing-errors.txt src/data-errors.txt
 	$(PERL) $< src/parsing-errors.txt src/data-errors.txt > $@
+
+lib/Web/Transport/_PlatformDefs.pm: bin/generate-platform-defs.pl \
+    local/browsers.json
+	$(PERL) $< > $@
+	$(PERL) -c $@
+local/browsers.json:
+	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/browsers.json
 
 ## ------ Tests ------
 

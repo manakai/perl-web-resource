@@ -1272,9 +1272,9 @@ test {
       test {
         my $headers = $res->body_bytes;
         like $headers, qr{\x0AHost: \Q$server->{host}\E};
-        like $headers, qr{\x0AUser-Agent: .};
+        like $headers, qr{\x0AUser-Agent: Mozilla/.+WebKit.+Gecko};
         like $headers, qr{\x0AAccept: \*/\*\x0D\x0A};
-        like $headers, qr{\x0AAccept-Language: .};
+        like $headers, qr{\x0AAccept-Language: en-US\x0D\x0A};
         like $headers, qr{\x0AX-hoge: 124\x0D\x0A};
         unlike $headers, qr{\x0AContent-Type: }i;
       } $c;

@@ -1,0 +1,60 @@
+=head1 NAME
+
+Web::Transport::PlatformInfo - Defaults of platform-dependent configurations
+
+=head1 SYNOPSIS
+
+  use Web::Transport::PlatformInfo;
+  $info = Web::Transport::PlatformInfo->new_default;
+  $info_mobile = Web::Transport::PlatformInfo->new_mobile;
+  warn $info->user_agent;
+  warn $info_mobile->user_agent;
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::PlatformInfo> class is a typical implementation
+of the underlying platform information object (See
+L<Web::Transport/"UNDERLYING PLATFORM INFORMATION OBJECT">).
+
+=head1 METHODS
+
+There are following methods:
+
+=over 4
+
+=item $info = Web::Transport::PlatformInfo->new_default
+
+Create and return a default platform information object.
+
+=item $info = Web::Transport::PlatformInfo->new_mobile
+
+Create and return a default platform information object for mobile
+browsers.
+
+=item $info = Web::Transport::PlatformInfo->new_from_device_os_navigator ($device, $os, $navigator)
+
+Create and return a platform information object.
+
+The first argument is the device type, i.e. C<desktop> (desktop
+browsers), C<tablet> (tablet browsers), or C<mobile> (smartphone
+browsers).  The second argument is the OS, i.e. C<windows>, C<mac>,
+C<ios>, or C<linux>.  The third argument is the navigator
+compatibility mode, i.e. C<chrome>, C<webkit>, or C<gecko>.
+
+If the arguments are invalid comabinations of values, an exception is
+thrown.
+
+=back
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

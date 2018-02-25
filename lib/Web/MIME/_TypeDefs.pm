@@ -5450,7 +5450,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'iana_intended_usage' => 'common'
                                                                   },
                                           'vnd.restful+json' => {
-                                                                'iana' => 'permanent'
+                                                                'iana' => 'permanent',
+                                                                'iana_intended_usage' => 'common'
                                                               },
                                           'vnd.rig.cryptonote' => {
                                                                   'iana' => 'permanent',
@@ -5616,6 +5617,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common'
                                                               },
+                                          'vnd.sqlite3' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
+                                                         },
                                           'vnd.sss-cod' => {
                                                            'iana' => 'permanent',
                                                            'iana_intended_usage' => 'common'
@@ -6291,6 +6296,9 @@ $Web::MIME::_TypeDefs::Type = {
                                           'voicexml+xml' => {
                                                             'iana' => 'permanent'
                                                           },
+                                          'voucher-cms+json' => {
+                                                                'iana' => 'permanent'
+                                                              },
                                           'vq-rtcpxr' => {
                                                          'iana' => 'permanent',
                                                          'iana_intended_usage' => 'common'

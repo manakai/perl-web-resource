@@ -338,13 +338,17 @@ An B<underlying platform information object> represents the underlying
 platform on which the application is running, used to retrive
 platform-dependent configurations.
 
-It is expected to have following method:
+It is expected to have following methods:
 
 =over 4
 
 =item $string = $info->user_agent
 
 Return the default C<User-Agent> value.
+
+=item $string = $info->accept_language
+
+Return the appropriate value for the HTTP C<Accept-Language> header.
 
 =back
 

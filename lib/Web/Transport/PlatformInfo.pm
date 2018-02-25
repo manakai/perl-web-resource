@@ -23,6 +23,11 @@ sub user_agent ($) {
   return $Web::Transport::_PlatformDefs->{ua}->{$_[0]->{ua_key}};
 } # user_agent
 
+# XXX setter
+sub accept_language ($) {
+  return 'en-US';
+} # accept_language
+
 1;
 
 =head1 LICENSE

@@ -161,7 +161,7 @@ sub create ($$) {
 
   my $info = $args->{underlying_platform}
       || Web::Transport::PlatformInfo->new_default;
-  push @$header_list, ['Accept-Language', 'en', 'accept-language']
+  push @$header_list, ['Accept-Language', $info->accept_language, 'accept-language']
       unless $has_header->{'accept-language'};
   push @$header_list, ['User-Agent', encode_web_utf8 ($info->user_agent . ''), 'user-agent']
       unless $has_header->{'user-agent'};

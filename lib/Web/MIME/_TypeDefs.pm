@@ -48,7 +48,9 @@ $Web::MIME::_TypeDefs::Type = {
                                           'activemessage' => {
                                                              'iana' => 'permanent'
                                                            },
-                                          'activity+json' => {},
+                                          'activity+json' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                           'afp' => {},
                                           'akn+xml' => {
                                                        'iana' => 'provisional'
@@ -629,7 +631,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'iana_intended_usage' => 'common'
                                                      },
                                           'fhir+json' => {
-                                                         'iana' => 'provisional'
+                                                         'iana' => 'permanent'
                                                        },
                                           'fhir+xml' => {
                                                         'iana' => 'permanent',
@@ -3422,6 +3424,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                         'iana' => 'permanent',
                                                                         'iana_intended_usage' => 'common'
                                                                       },
+                                          'vnd.hyper+json' => {
+                                                              'iana' => 'permanent'
+                                                            },
                                           'vnd.hyper-item+json' => {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'common'
@@ -10360,7 +10365,7 @@ $Web::MIME::_TypeDefs::Type = {
                                               'iana' => 'permanent'
                                             },
                                     'stl' => {
-                                             'iana' => 'provisional'
+                                             'iana' => 'permanent'
                                            },
                                     'vnd.collada+xml' => {
                                                          'iana' => 'permanent',

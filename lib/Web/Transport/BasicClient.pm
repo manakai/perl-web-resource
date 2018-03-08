@@ -42,10 +42,19 @@ sub new_from_url ($$;$) {
   my $origin = $_[1]->get_origin;
   die _te "The URL does not have a tuple origin" if $origin->is_opaque;
   my $opts = $_[2] || {};
+  if (defined $opts->{server_connection}) {
+    die _te "No |server_connection|'s |url|"
+        unless defined $opts->{server_connection}->{url};
+    die _te "Bad URL scheme |@{[$opts->{server_connection}->{url}->scheme]}|"
+        unless $opts->{server_connection}->{url}->scheme eq 'http';
+    ## Future version could support URL scheme |https| and
+    ## |tls_options| and |si_host|/|sni_host| options as well.
+  }
   return bless {
     base_url => $_[1],
     path_prefix => $_[1]->path,
     origin => $origin,
+    server_connection => $opts->{server_connection}, # or undef
     queue => Promise->resolve,
     parent_id => (defined $opts->{parent_id} ? $opts->{parent_id} : ($$ . '.' . ++$Web::Transport::NextID)),
     proxy_manager => $opts->{proxy_manager} || do {
@@ -229,8 +238,8 @@ my $proxy_to_transport = sub {
   }
 }; # $proxy_to_transport
 
-sub _connect ($$) {
-  my ($self, $url_record, %args) = @_;
+sub _connect ($$$;%) {
+  my ($self, $con_url_record, $url_record, %args) = @_;
   return Promise->reject ($self->{aborted}) if defined $self->{aborted};
 
   if ($self->{http} and $self->{http}->is_active) {
@@ -244,7 +253,7 @@ sub _connect ($$) {
     if (defined $http) {
       warn "$self->{parent_id}: @{[__PACKAGE__]}: Current connection is no longer active @{[scalar gmtime]}\n";
     } else {
-      warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection @{[scalar gmtime]}\n";
+      warn "$self->{parent_id}: @{[__PACKAGE__]}: New connection for <@{[$con_url_record->stringify]}> @{[scalar gmtime]}\n";
     }
   }
 
@@ -254,7 +263,7 @@ sub _connect ($$) {
     my $parent_id = $self->{parent_id};
     my $debug = $self->{debug};
 
-    $self->{proxy_manager}->get_proxies_for_url ($url_record, signal => $self->{aborter}->signal)->then (sub {
+    $self->{proxy_manager}->get_proxies_for_url ($con_url_record, signal => $self->{aborter}->signal)->then (sub {
       my $proxies = [@{$_[0]}];
 
       # XXX wait for other connections
@@ -264,7 +273,7 @@ sub _connect ($$) {
           my $proxy = shift @$proxies;
           my $tid = $parent_id . '.' . ++$self->{tid};
           return $proxy_to_transport->(
-            $tid, $proxy, $url_record,
+            $tid, $proxy, $con_url_record,
             $self->{resolver}, $self->{protocol_clock},
             $args{no_cache},
             $self->{aborter}->signal,
@@ -283,7 +292,7 @@ sub _connect ($$) {
       $get->()->then (sub {
         my ($tparams, $request_mode_is_http_proxy) = @{$_[0]};
         undef $get;
-        if ($url_record->scheme eq 'https') {
+        if ($url_record->scheme eq 'https') { # not $con_url_record
           return [{
             %{$self->{tls_options}},
             class => 'Web::Transport::TLSStream',
@@ -303,7 +312,7 @@ sub _connect ($$) {
       if (not $request_mode_is_http_proxy and
           not $url_record->scheme eq 'http' and
           not $url_record->scheme eq 'https' and
-          not $url_record->scheme eq 'ftp') {
+          not $url_record->scheme eq 'ftp') { # not $con_url_record
         die _te "Bad URL scheme |@{[$url_record->scheme]}|";
       }
       return Promise->reject ($self->{aborted}) if defined $self->{aborted};
@@ -320,13 +329,13 @@ sub _connect ($$) {
   };
 } # _connect
 
-sub _request ($$$$$$$$$$) {
-  my ($self, $method, $url_record, $headers,
+sub _request ($$$$$$$$$$$) {
+  my ($self, $method, $con_url_record, $url_record, $headers,
       $body_ref, $body_reader, $no_cache, $is_ws, $need_readable_stream) = @_;
   if ($self->{debug}) {
     warn "$self->{parent_id}: @{[__PACKAGE__]}: Request <@{[$url_record->stringify]}> @{[scalar gmtime]}\n";
   }
-  return $self->_connect ($url_record, no_cache => $no_cache)->then (sub {
+  return $self->_connect ($con_url_record, $url_record, no_cache => $no_cache)->then (sub {
     return _te "Bad input URL" unless defined $url_record->host;
     my $target;
     if ($self->{request_mode_is_http_proxy}) {
@@ -555,13 +564,17 @@ sub request ($%) {
       $url_record = Web::URL->parse_string ($v);
     }
 
+    my $con_url_record = ($self->{server_connection} || {url => $url_record})->{url};
+
     my $no_cache = $args{superreload};
     return $self->_request (
-      $method, $url_record, $header_list, $body_ref, $body_reader,
+      $method, $con_url_record, $url_record,
+      $header_list, $body_ref, $body_reader,
       $no_cache, $is_ws, $args{stream},
     )->catch (sub {
       return $self->_request (
-        $method, $url_record, $header_list, $body_ref, $body_reader,
+        $method, $con_url_record, $url_record,
+        $header_list, $body_ref, $body_reader,
         $no_cache, $is_ws, $args{stream},
       ) if Web::Transport::ProtocolError->can_http_retry ($_[0]) and
            not defined $body_reader;

@@ -3917,12 +3917,203 @@ test {
   });
 } n => 1, name => 'socks5 proxy bad';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $real_url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/bar});
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {server_connection => {url => $real_url}});
+    return $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{GET /foo HTTP/1.1\x0D\x0A};
+        like $headers, qr{\x0AHost: hoge.test\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'new_from_url server_connection';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    starttls host=hoge.test
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{https://hoge.test/foo});
+    my $real_url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/bar});
+    my $client = Web::Transport::BasicClient->new_from_url
+        ($url, {
+          server_connection => {url => $real_url},
+          tls_options => ({ca_file => Test::Certificates->ca_path ('cert.pem')}),
+        });
+    return $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{GET /foo HTTP/1.1\x0D\x0A};
+        like $headers, qr{\x0AHost: hoge.test\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'new_from_url server_connection (https:)';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    starttls host=hoge.test
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{https://hoge.test/foo});
+    my $real_url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/bar});
+    my $client = Web::Transport::BasicClient->new_from_host
+        ($url->host, {
+          server_connection => {url => $real_url},
+          tls_options => ({ca_file => Test::Certificates->ca_path ('cert.pem')}),
+        });
+    return $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{GET /foo HTTP/1.1\x0D\x0A};
+        like $headers, qr{\x0AHost: hoge.test\x0D\x0A};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'new_from_host server_connection (https:)';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $real_url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/bar});
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      server_connection => {url => $real_url},
+      resolver => (bless {}, 'test::ResolverNotInvokedTest1'),
+    });
+    my $resolver_real_invoked = 0;
+    my $resolver_invoked = 0;
+    no warnings 'once';
+    *test::ResolverNotInvokedTest1::resolve = sub {
+      if ($_[1]->to_ascii eq $server->{host}) {
+        $resolver_real_invoked++;
+        return Web::Transport::PlatformResolver->new->resolve ($_[1]);
+      } else {
+        warn $_[1]->to_ascii;
+        $resolver_invoked++;
+      }
+    };
+    return $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{GET /foo HTTP/1.1\x0D\x0A};
+        like $headers, qr{\x0AHost: hoge.test\x0D\x0A};
+        is $resolver_invoked, 0;
+        is $resolver_real_invoked, 1;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'new_from_url server_connection resolver';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 203 Hoe"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://hoge.test/foo});
+    my $real_url = Web::URL->parse_string (qq{http://notreal.test/bar});
+    no warnings 'once';
+    my $pm_invoked = 0;
+    *test::ServerConnectionProxyManagerTest::get_proxies_for_url = sub {
+      $pm_invoked++;
+      return Promise->resolve ([{
+        protocol => 'http',
+        host => Web::Host->parse_string ($server->{host}),
+        port => $server->{port},
+      }]);
+    };
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      server_connection => {url => $real_url},
+      proxy_manager => (bless {}, 'test::ServerConnectionProxyManagerTest'),
+    });
+    return $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        my $headers = $res->body_bytes;
+        like $headers, qr{GET http://hoge.test/foo HTTP/1.1\x0D\x0A};
+        like $headers, qr{\x0AHost: hoge.test\x0D\x0A};
+        is $pm_invoked, 1;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'new_from_url server_connection proxy manager';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

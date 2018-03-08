@@ -336,6 +336,54 @@ test {
   });
 } n => 2, name => 'socks4 resolver abort';
 
+test {
+  my $c = shift;
+  my $url = Web::URL->parse_string ("http://foo.test");
+  eval {
+    Web::Transport::BasicClient->new_from_url ($url, {
+      server_connection => {},
+    });
+  };
+  like $@, qr{^\QTypeError: No |server_connection|'s |url|\E at \Q@{[__FILE__]}\E line @{[__LINE__-4]}};
+  done $c;
+} n => 1, name => 'new_from_url server_connection no URL';
+
+test {
+  my $c = shift;
+  my $url = Web::Host->parse_string ("foo.test");
+  eval {
+    Web::Transport::BasicClient->new_from_host ($url, {
+      server_connection => {},
+    });
+  };
+  like $@, qr{^\QTypeError: No |server_connection|'s |url|\E at \Q@{[__FILE__]}\E line @{[__LINE__-4]}};
+  done $c;
+} n => 1, name => 'new_from_host server_connection no URL';
+
+test {
+  my $c = shift;
+  my $url = Web::URL->parse_string ("http://foo.test");
+  eval {
+    Web::Transport::BasicClient->new_from_url ($url, {
+      server_connection => {url => Web::URL->parse_string ("ftp://bar.test")},
+    });
+  };
+  like $@, qr{^\QTypeError: Bad URL scheme |ftp|\E at \Q@{[__FILE__]}\E line @{[__LINE__-4]}};
+  done $c;
+} n => 1, name => 'new_from_url server_connection bad URL';
+
+test {
+  my $c = shift;
+  my $url = Web::Host->parse_string ("foo.test");
+  eval {
+    Web::Transport::BasicClient->new_from_host ($url, {
+      server_connection => {url => Web::URL->parse_string ("ftp://bar.test")},
+    });
+  };
+  like $@, qr{^\QTypeError: Bad URL scheme |ftp|\E at \Q@{[__FILE__]}\E line @{[__LINE__-4]}};
+  done $c;
+} n => 1, name => 'new_from_host server_connection bad URL';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

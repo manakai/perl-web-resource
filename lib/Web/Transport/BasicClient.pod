@@ -172,6 +172,22 @@ platform's name resolution API (L<Web::Transport::PlatformResolver>)
 wrapped by in-memory DNS cache (L<Web::Transport::CachedResolver>) is
 used.
 
+=item server_connection => {url => $http_url_record}
+
+The URL of the server connection.  If a non-C<undef> value is
+specified, it must be a hash reference whose C<url> is a URL record
+(L<Web::URL>) whose C<scheme> is C<http>.  If specified, the URL is
+used to establish a connection instead of the request URL.
+
+  For example, if the request URL is <http://website.test/>, the
+  client would try to connect to the TCP server at website.test port
+  80, with the Host: header set to the value |website.test|.  However,
+  given the server connection URL <http://backend.test/> is also
+  specified, the client would try to connect to the TCP server at
+  backend.test host 80, still setting the Host: header value
+  |website.test|.  This feature can be used to implement a reverse
+  proxy.
+
 =item protocol_clock => $clock
 
 The clock object used for various protocol-level date-time operations

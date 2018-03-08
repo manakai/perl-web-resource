@@ -39,7 +39,7 @@ sub _handle_stream ($$$) {
   $client_opts->{last_resort_timeout} = -1
       unless defined $client_opts->{last_resort_timeout};
   $client_opts->{debug} = $server->{debug}
-      unless defined $server->{debug};
+      unless defined $client_opts->{debug};
   # XXX disallow connect to the proxy server itself (even as a
   # $client's proxy)
   my $api = bless {

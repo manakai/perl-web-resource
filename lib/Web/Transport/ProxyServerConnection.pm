@@ -145,7 +145,7 @@ sub _handle_stream ($$$) {
       };
     }
 
-    $client = $api->client ($url);
+    $client = $api->client ($url, $result->{client_options});
     return $client->request (
       %$request,
       stream => 1,
@@ -366,17 +366,25 @@ push our @CARP_NOT, qw(
   Web::Transport::RequestConstructor
 );
 
-sub client ($$) {
-  my ($self, $url) = @_;
+sub client ($$;$) {
+  my ($self, $url, $client_opts) = @_;
+  my $opts = {%{$self->{client_opts}}, %{$client_opts || {}}};
+
   # XXX connection pool
-  my $cons = $self->{clients}->{$url->get_origin->to_ascii} ||= [];
+  my $key;
+  if (defined $opts->{server_connection}) {
+    $key = 'server_connection' . $; . $opts->{server_connection}->{url}->get_origin->to_ascii;
+  } else {
+    $key = $url->get_origin->to_ascii;
+  }
+  my $cons = $self->{clients}->{$key} ||= [];
+
   for (@$cons) {
     unless ($_->is_active) {
       return $_;
     }
   }
-  push @$cons, Web::Transport::BasicClient->new_from_url
-      ($url, $self->{client_opts});
+  push @$cons, Web::Transport::BasicClient->new_from_url ($url, $client_opts);
   return $cons->[-1];
 } # client
 
@@ -436,7 +444,7 @@ sub note ($$;%) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

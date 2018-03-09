@@ -58,6 +58,13 @@ If the returned hash reference does not contain C<response> or
 C<error>, the C<request> is used to send a request to the upstream
 server.
 
+=item client_options => $client_options (return value only)
+
+A hash reference of additional client options, as described for the
+C<client> method of the handler API object (L</"HANDLER API OBJECT">),
+used to obtain the client for making a request with the C<request>
+argument after the completion of the request handler.
+
 =item response => $response (return value only)
 
 A response hash reference.  XXX
@@ -184,21 +191,27 @@ within handlers:
 
 =over 4
 
-=item $client = $api->client ($url)
+=item $client = $api->client ($url, $client_options)
 
 Return a client (L<Web::Transport::BasicClient>) that is ready to send
-a request.  The argument must be a URL (L<Web::URL> object) of the
-target of the request.
+a request.
+
+The first argument must be a URL (L<Web::URL> object) of the target of
+the request.
+
+The second argument must be a hash reference of additional client
+options (see L<Web::Transport::BasicClient/"CLIENT OPTIONS">) used to
+create a client.  By default a set of client options appropriate for
+the proxy server is used, taking the C<client> option of the proxy
+server's constructor argument into account, but this argument can be
+used to override them.
 
 This is effectively equivalent to invoking the C<new_from_url> method
 of the L<Web::Transport::BasicClient> module but this method first
-looks into the connection pool of the proxy server and sets client
-options (see L<Web::Transport::BasicClient/"CLIENT OPTIONS">) of the
-proxy server appropriately (as specified by the C<client> option of
-the proxy server's constructor argument).  Therefore, if a request or
-response handler wants to fetch a resource as part of response
-construction, this method should be used exclusively rather than other
-HTTP client APIs.
+looks into the connection pool of the proxy server with appropriate
+client options.  Therefore, if a request or response handler wants to
+fetch a resource as part of response construction, this method should
+be used exclusively rather than other HTTP client APIs.
 
 =item $out_headers = $api->filter_headers ($in_headers, $name => $value, ...)
 
@@ -266,7 +279,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -3735,11 +3735,163 @@ test {
   });
 } n => 1, name => 'handle_response api';
 
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $server_url;
+  my $real_server_url;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $new_data = 't3watahwa' x 10000;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_request => sub {
+          my $args = $_[0];
+
+          $args->{request}->{url} = $server_url;
+          $args->{client_options} = {
+            server_connection => {url => $real_server_url},
+          };
+
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+        warn $_[1];
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return [201, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    $real_server_url = Web::URL->parse_string (q</abc?d>, $origin);
+    $server_url = Web::URL->parse_string (q</abc?d>, Web::URL->parse_string ("http://proxied.test"));
+    my $url = Web::URL->parse_string (q<http://hoge.fuga.test/agaeweeee>);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->body_bytes, '200!';
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  });
+} n => 4, name => 'handle_request server_connection url';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $server_url;
+  my $real_server_url;
+  my $close_server;
+  my $exception_invoked = 0;
+  my $new_data = 't3watahwa' x 10000;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_request => sub {
+          my $args = $_[0];
+
+          my $api = $args->{api};
+          test {
+            isa_ok $api, 'Web::Transport::ProxyServerConnection::API';
+          } $c;
+
+          my $client = $api->client ($server_url, {
+            server_connection => {url => $real_server_url},
+          });
+          test {
+            isa_ok $client, 'Web::Transport::BasicClient';
+          } $c;
+
+          return $client->request (%{$args->{request}}, url => $server_url)->then (sub {
+            my $res = $_[0];
+            $args->{response} = {
+              status => $res->status + 1,
+              body => "[[" . $res->body_bytes . "]]",
+            };
+            return $args;
+          });
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+        warn $_[1];
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $server_invoked = 0;
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    $server_invoked++;
+    return [201, [], ['200!']];
+  }, sub {
+    my ($origin, $close) = @_;
+    $real_server_url = Web::URL->parse_string (q</abc?d>, $origin);
+    $server_url = Web::URL->parse_string (q</abc?d>, Web::URL->parse_string ("http://proxied.test"));
+    my $url = Web::URL->parse_string (q<http://hoge.fuga.test/agaeweeee>);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 202;
+        is $res->body_bytes, '[[200!]]';
+        is $server_invoked, 1;
+        is $exception_invoked, 0;
+      } $c;
+    });
+  });
+} n => 6, name => 'handle_request custom client fetch with server_connection url';
+
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -384,7 +384,7 @@ sub client ($$;$) {
       return $_;
     }
   }
-  push @$cons, Web::Transport::BasicClient->new_from_url ($url, $client_opts);
+  push @$cons, Web::Transport::BasicClient->new_from_url ($url, $opts);
   return $cons->[-1];
 } # client
 

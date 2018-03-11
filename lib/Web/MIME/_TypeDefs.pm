@@ -3441,7 +3441,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                   },
                                           'vnd.ibm.afplinedata' => {
                                                                    'iana' => 'permanent',
-                                                                   'iana_intended_usage' => 'limited use'
+                                                                   'iana_intended_usage' => 'limited use',
+                                                                   'obsolete' => 1
                                                                  },
                                           'vnd.ibm.electronic-media' => {
                                                                         'iana' => 'permanent',
@@ -3453,7 +3454,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                              },
                                           'vnd.ibm.modcap' => {
                                                               'iana' => 'permanent',
-                                                              'iana_intended_usage' => 'limited use'
+                                                              'iana_intended_usage' => 'limited use',
+                                                              'obsolete' => 1
                                                             },
                                           'vnd.ibm.rights-management' => {
                                                                          'iana' => 'permanent',

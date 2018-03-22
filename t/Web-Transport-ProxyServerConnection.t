@@ -1227,6 +1227,101 @@ test {
   my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
       ([{protocol => 'http', host => $host, port => $port}]);
 
+  my $origin;
+  my $value = rand;
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    test {
+      is $env->{HTTP_COOKIE}, $value;
+      is $env->{HTTP_PRAGMA}, 'no-cache', 'Added by client requestconstructor';
+      is $env->{HTTP_CACHE_CONTROL}, 'no-store', 'Added by client requestconstructor';
+    } $c;
+    return [201, [], ['200!']];
+  }, sub {
+    my $close;
+    ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url, headers => {
+      cookie => $value,
+    });
+  });
+} n => 3, name => 'request headers forwarding, cookies';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  my $origin;
+  my $value = rand;
+  promised_cleanup {
+    done $c; undef $c;
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    test {
+      is $env->{HTTP_COOKIE}, $value;
+      is $env->{HTTP_PRAGMA}, 'no-cache', 'Added by client requestconstructor';
+      is $env->{HTTP_CACHE_CONTROL}, 'must-revalidate, no-store', 'Added by client requestconstructor';
+    } $c;
+    return [201, [], ['200!']];
+  }, sub {
+    my $close;
+    ($origin, $close) = @_;
+    my $url = Web::URL->parse_string (q</abc?d>, $origin);
+    my $client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
+    promised_cleanup {
+      $close_server->();
+      return $client->close->then ($close);
+    } $client->request (url => $url, headers => {
+      cookie => $value,
+      'Cache-control' => 'must-revalidate',
+    });
+  });
+} n => 3, name => 'request headers forwarding, cookies, cache-control';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $close_server;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {});
+      promised_cleanup { $ok->() } $con->completed;
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
   promised_cleanup {
     done $c; undef $c;
     return $server_p;

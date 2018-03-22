@@ -267,7 +267,7 @@ sub create ($$) {
       defined $has_header->{cookie} or
       defined $has_header->{authorization} or
       defined $has_header->{'x-wsse'};
-  if ($nostore) {
+  if ($nostore and not $args->{forwarding}) {
     push @$header_list, ['Pragma', 'no-cache', 'pragma']
         unless $args->{superreload};
     push @$header_list, ['Cache-Control', 'no-store', 'cache-control'];

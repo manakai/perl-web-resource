@@ -183,7 +183,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                     $http->send_text_header (3);
                     $http->send_data (\'stu');
                   }
-                  for (split /\x0D?\x0A/, $test->{'ws-actions'}->[0]) {
+                  for (split /\x0D?\x0A/, $test->{'ws-actions'}->[0] || '') {
                     if (/^send\s+text\s+"([^"]*)"$/) {
                       my $v = _a $1;
                       $http->send_text_header (length $v);
@@ -207,7 +207,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                     } elsif (/\S/) {
                       die "Bad line |$_|";
                     }
-                  }
+                  } # ws-actions
                 }
               } else {
                 if ($test_type eq 'ws') {

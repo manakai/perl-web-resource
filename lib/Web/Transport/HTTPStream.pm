@@ -2770,10 +2770,10 @@ sub send_ws_message ($$$) {
   my $len = '';
   if ($length >= 2**16) {
     $length0 = 0x7F;
-    $len = pack 'n', $length;
+    $len = pack 'Q>', $length;
   } elsif ($length >= 0x7E) {
     $length0 = 0x7E;
-    $len = pack 'Q>', $length;
+    $len = pack 'n', $length;
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask,
                     length => $length) if $self->{DEBUG};

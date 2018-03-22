@@ -87,8 +87,9 @@ sub server ($) {
       warn "$_[0]\n";
       warn "--- ^parsing.t received^ ---\n";
     }
-    while ($data =~ s/^\[data (.+)\]$//m) {
-      push @{$server->{resultdata}}, json_bytes2perl $1;
+    while ($data =~ s/^(?:\[data (.+)\]|\[data-length ([0-9]+)\])$//m) {
+      push @{$server->{resultdata}}, json_bytes2perl $1 if defined $1;
+      push @{$server->{resultdata}}, ['data-length', 0+$2] if defined $2;
     }
     if ($data =~ s/^\[server done\]$//m) {
       #
@@ -237,6 +238,51 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
                       return $writer->close;
                     });
                   }
+                  for (split /\x0D?\x0A/, $test->{'ws-actions'}->[0] || '') {
+                    if (/^send\s+text\s+"([^"]*)"$/) {
+                      my $v = _a $1;
+                      $stream->send_ws_message (length $v, not 'binary')->then (sub {
+                        my $writer = $_[0]->{body}->get_writer;
+                        $writer->write
+                            (DataView->new (ArrayBuffer->new_from_scalarref (\$v)))
+                                if length $v;
+                        return $writer->close;
+                      });
+                    } elsif (/^send\s+binary\s+"([^"]*)"$/) {
+                      my $v = _a $1;
+                      $stream->send_ws_message (length $v, 'binary')->then (sub {
+                        my $writer = $_[0]->{body}->get_writer;
+                        $writer->write
+                            (DataView->new (ArrayBuffer->new_from_scalarref (\$v)))
+                                if length $v;
+                        return $writer->close;
+                      });
+                    } elsif (/^send\s+text\s+"([^"]*)"\s+x\s+([0-9]+)$/) {
+                      my $v = _a $1;
+                      $v = $v x $2;
+                      $stream->send_ws_message (length $v, not 'binary')->then (sub {
+                        my $writer = $_[0]->{body}->get_writer;
+                        $writer->write
+                            (DataView->new (ArrayBuffer->new_from_scalarref (\$v)))
+                                if length $v;
+                        return $writer->close;
+                      });
+                    } elsif (/^send\s+binary\s+"([^"]*)"\s+x\s+([0-9]+)$/) {
+                      my $v = _a $1;
+                      $v = $v x $2;
+                      $stream->send_ws_message (length $v, 'binary')->then (sub {
+                        my $writer = $_[0]->{body}->get_writer;
+                        $writer->write
+                            (DataView->new (ArrayBuffer->new_from_scalarref (\$v)))
+                                if length $v;
+                        return $writer->close;
+                      });
+                    } elsif (/^\s*#/) {
+                      #
+                    } elsif (/\S/) {
+                      die "Bad line |$_|";
+                    }
+                  } # ws-actions
                   return rsread_messages ($test, $got->{messages});
                 } else {
                   $stream->abort;

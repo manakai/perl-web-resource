@@ -73,8 +73,9 @@ sub server_as_cv ($) {
           warn "$_[0]\n";
           warn "--- ^parsing.t received^ ---\n";
         }
-        while ($data =~ s/^\[data (.+)\]$//m) {
-          push @$resultdata, json_bytes2perl $1;
+        while ($data =~ s/^(?:\[data (.+)\]|\[data-length ([0-9]+)\])$//m) {
+          push @$resultdata, json_bytes2perl $1 if defined $1;
+          push @$resultdata, ['data-length', 0+$2] if defined $2;
         }
         if ($data =~ s/^\[server done\]$//m) {
           kill 'TERM', $pid if $close_server;
@@ -177,9 +178,36 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
               }
               if ($flag) {
                 $result->{ws_established} = 1;
-                if ($test_type eq 'ws' and $test->{'ws-send'}) {
-                  $http->send_text_header (3);
-                  $http->send_data (\'stu');
+                if ($test_type eq 'ws') {
+                  if ($test->{'ws-send'}) {
+                    $http->send_text_header (3);
+                    $http->send_data (\'stu');
+                  }
+                  for (split /\x0D?\x0A/, $test->{'ws-actions'}->[0]) {
+                    if (/^send\s+text\s+"([^"]*)"$/) {
+                      my $v = _a $1;
+                      $http->send_text_header (length $v);
+                      $http->send_data (\$v) if length $v;
+                    } elsif (/^send\s+binary\s+"([^"]*)"$/) {
+                      my $v = _a $1;
+                      $http->send_binary_header (length $v);
+                      $http->send_data (\$v) if length $v;
+                    } elsif (/^send\s+text\s+"([^"]*)"\s+x\s+([0-9]+)$/) {
+                      my $v = _a $1;
+                      $v = $v x $2;
+                      $http->send_text_header (length $v);
+                      $http->send_data (\$v) if length $v;
+                    } elsif (/^send\s+binary\s+"([^"]*)"\s+x\s+([0-9]+)$/) {
+                      my $v = _a $1;
+                      $v = $v x $2;
+                      $http->send_binary_header (length $v);
+                      $http->send_data (\$v) if length $v;
+                    } elsif (/^\s*#/) {
+                      #
+                    } elsif (/\S/) {
+                      die "Bad line |$_|";
+                    }
+                  }
                 }
               } else {
                 if ($test_type eq 'ws') {

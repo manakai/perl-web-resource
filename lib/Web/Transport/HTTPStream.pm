@@ -2776,7 +2776,7 @@ sub send_ws_message ($$$) {
     $len = pack 'n', $length;
   }
   $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask,
-                    length => $length) if $self->{DEBUG};
+                    length => $length) if $con->{DEBUG};
   $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | ($is_binary ? 2 : 1), $masked | $length0) . $len . $mask))));
   $con->{write_mode} = 'raw';
@@ -2806,7 +2806,7 @@ sub send_ping ($;%) {
   my $opcode = $args{pong} ? 10 : 9;
   $self->_ws_debug ('S', $args{data}, FIN => 1, opcode => $opcode,
                     mask => $mask, length => length $args{data})
-      if $self->{DEBUG};
+      if $con->{DEBUG};
   unless ($self->{is_server}) {
     for (0..((length $args{data})-1)) {
       substr ($args{data}, $_, 1) = substr ($args{data}, $_, 1) ^ substr ($mask, $_ % 4, 1);

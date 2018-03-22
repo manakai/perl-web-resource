@@ -2775,8 +2775,8 @@ sub send_ws_message ($$$) {
     $length0 = 0x7E;
     $len = pack 'n', $length;
   }
-  $self->_ws_debug ('S', $_[2], FIN => 1, opcode => 2, mask => $mask,
-                    length => $length) if $con->{DEBUG};
+  $self->_ws_debug ('S', '', FIN => 1, opcode => ($is_binary ? 2 : 1),
+                    mask => $mask, length => $length) if $con->{DEBUG};
   $con->{writer}->write
       (DataView->new (ArrayBuffer->new_from_scalarref (\(pack ('CC', 0b10000000 | ($is_binary ? 2 : 1), $masked | $length0) . $len . $mask))));
   $con->{write_mode} = 'raw';

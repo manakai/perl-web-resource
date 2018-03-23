@@ -667,6 +667,144 @@ test {
     CRLF
     "Connection: Upgrade"CRLF
     CRLF
+    ws-receive-header
+    ws-receive-data, capture
+    ws-send-header opcode=2 length=captured
+    sendcaptured
+    ws-receive-header
+    ws-receive-data
+    ws-send-header opcode=8 length=0
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{ws://$server->{host}:$server->{port}/});
+    my $res;
+    my @data;
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    return $client->request (url => $url)->then (sub {
+      $res = $_[0];
+      $res->ws_send_binary ("");
+      $res->ws_close;
+
+      return reading {
+        my $msg = $_[0];
+        my $data = '';
+        return Promise->resolve->then (sub {
+          if (defined $msg->{text_body}) {
+            return reading { $data .= ${$_[0]} } $msg->{text_body};
+          } else {
+            return reading { $data .= $_[0]->manakai_to_string } $msg->{body};
+          }
+        })->then (sub {
+          if (@data and defined $data[-1]) {
+            $data[-1] .= $data;
+          } else {
+            push @data, $data;
+          }
+        });
+      } $res->ws_messages;
+    })->then (sub {
+      return $res->ws_close;
+    })->then (sub {
+      my $res2 = $_[0];
+      test {
+        is 0+@data, 1;
+        is $data[0], "";
+        ok ! $res2->is_network_error;
+        is $res2->status, 0;
+        is $res2->status_text, '';
+        is $res2->ws_code, 1005;
+        is $res2->ws_reason, '';
+        is ''.$res2, 'WebSocket Close: (1005 ) WebSocket closed cleanly';
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 8, name => 'send_binary empty string';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 101 OK"CRLF
+    "Upgrade: websocket"CRLF
+    "Sec-WebSocket-Accept: "
+    ws-accept
+    CRLF
+    "Connection: Upgrade"CRLF
+    CRLF
+    ws-receive-header
+    ws-receive-data, capture
+    ws-send-header opcode=2 length=captured
+    sendcaptured
+    ws-receive-header
+    ws-receive-data
+    ws-send-header opcode=8 length=0
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{ws://$server->{host}:$server->{port}/});
+    my $res;
+    my @data;
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    return $client->request (url => $url)->then (sub {
+      $res = $_[0];
+      $res->ws_send_text ("");
+      $res->ws_close;
+
+      return reading {
+        my $msg = $_[0];
+        my $data = '';
+        return Promise->resolve->then (sub {
+          if (defined $msg->{text_body}) {
+            return reading { $data .= ${$_[0]} } $msg->{text_body};
+          } else {
+            return reading { $data .= $_[0]->manakai_to_string } $msg->{body};
+          }
+        })->then (sub {
+          if (@data and defined $data[-1]) {
+            $data[-1] .= $data;
+          } else {
+            push @data, $data;
+          }
+        });
+      } $res->ws_messages;
+    })->then (sub {
+      return $res->ws_close;
+    })->then (sub {
+      my $res2 = $_[0];
+      test {
+        is 0+@data, 1;
+        is $data[0], "";
+        ok ! $res2->is_network_error;
+        is $res2->status, 0;
+        is $res2->status_text, '';
+        is $res2->ws_code, 1005;
+        is $res2->ws_reason, '';
+        is ''.$res2, 'WebSocket Close: (1005 ) WebSocket closed cleanly';
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 8, name => 'send_text empty string';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 101 OK"CRLF
+    "Upgrade: websocket"CRLF
+    "Sec-WebSocket-Accept: "
+    ws-accept
+    CRLF
+    "Connection: Upgrade"CRLF
+    CRLF
     ws-send-header opcode=2 length=captured
     sendcaptured
     ws-receive-header

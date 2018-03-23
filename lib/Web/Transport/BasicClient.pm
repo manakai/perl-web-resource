@@ -444,7 +444,7 @@ sub _request ($$$$$$$$$$$$) {
                 my $dv = DataView->new (ArrayBuffer->new_from_scalarref ($v)); # or throw
                 return $stream->send_ws_message ($dv->byte_length, 1)->then (sub {
                   my $writer = $_[0]->{body}->get_writer;
-                  $writer->write ($dv);
+                  $writer->write ($dv) if $dv->byte_length;
                   return $writer->close;
                 });
               })->catch (sub {
@@ -459,7 +459,8 @@ sub _request ($$$$$$$$$$$$) {
               })->then (sub {
                 my $writer = $_[0]->{body}->get_writer;
                 $writer->write
-                    (DataView->new (ArrayBuffer->new_from_scalarref (\$text)));
+                    (DataView->new (ArrayBuffer->new_from_scalarref (\$text)))
+                        if length $text;
                 return $writer->close;
               })->catch (sub {
                 $stream->abort ($_[0]);

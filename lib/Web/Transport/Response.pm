@@ -182,7 +182,7 @@ sub stringify ($) {
     if ($self->{ws} == 2) {
       return "WS handshake error: @{[$self->status_line]}";
     } elsif (defined $self->{error}) {
-      return "" . $self->{error};
+      return $self->{error}->name . ': ' . $self->{error}->message;
     } else {
       return sprintf "WS closed (%d |%s| failed = %d, cleanly = %d)",
           $self->{status}, $self->{reason},

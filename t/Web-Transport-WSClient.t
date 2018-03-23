@@ -324,7 +324,7 @@ test {
         is $data[0], 'xyz';
         is $data[1], undef;
         ok ! $res->is_network_error;
-        is $res->status, 1006;
+        is $res->status, 0;
         is $res->status_text, '';
         is $res->ws_code, 1006;
         is $res->ws_reason, '';
@@ -377,7 +377,7 @@ test {
         is $data[0], "\x80a\xA1";
         is $data[1], undef;
         ok ! $res->is_network_error;
-        is $res->status, 1006;
+        is $res->status, 0;
         is $res->status_text, '';
         is $res->ws_code, 1006;
         is $res->ws_reason, '';
@@ -431,7 +431,7 @@ test {
         is $data[0], "\xC2\x80a\xC2\xA1";
         is $data[1], undef;
         ok ! $res->is_network_error;
-        is $res->status, 1006;
+        is $res->status, 0;
         is $res->status_text, '';
         is $res->ws_code, 1006;
         is $res->ws_reason, '';
@@ -482,7 +482,7 @@ test {
       test {
         is 0+@data, 0;
         ok ! $res->is_network_error;
-        is $res->status, 1002;
+        is $res->status, 0;
         is $res->status_text, 'Invalid UTF-8 in text frame';
         is $res->ws_code, 1002;
         is $res->ws_reason, 'Invalid UTF-8 in text frame';
@@ -538,7 +538,7 @@ test {
         is $data[0], "\x80a\xA1";
         is $data[1], undef;
         ok ! $res->is_network_error;
-        is $res->status, 1005;
+        is $res->status, 0;
         is $res->status_text, '';
         is $res->ws_code, 1005;
         is $res->ws_reason, '';
@@ -587,7 +587,7 @@ test {
       test {
         is 0+@data, 0;
         ok ! $res->is_network_error;
-        is $res->status, 1006;
+        is $res->status, 0;
         is $res->status_text, '';
         is $res->ws_code, 1006;
         is $res->ws_reason, '';
@@ -642,7 +642,7 @@ test {
         like $data[0], qr{^GET /abc/def\?hoge=abc HTTP/1.1};
         is $data[1], undef;
         ok ! $res->is_network_error;
-        is $res->status, 1005;
+        is $res->status, 0;
         is $res->status_text, '';
         is $res->ws_code, 1005;
         is $res->ws_reason, '';
@@ -697,7 +697,7 @@ test {
         like $data[0], qr{^Authorization: Basic aG9nZTphYmM=\x0D$}m;
         is $data[1], undef;
         ok ! $res->is_network_error;
-        is $res->status, 1005;
+        is $res->status, 0;
         is $res->status_text, '';
         is $res->ws_code, 1005;
         is $res->ws_reason, '';
@@ -757,7 +757,7 @@ test {
         is $data[0], "\x80a\xA1";
         is $data[1], undef;
         ok ! $res->is_network_error;
-        is $res->status, 1005;
+        is $res->status, 0;
         is $res->status_text, '';
         is $res->ws_code, 1005;
         is $res->ws_reason, '';
@@ -822,7 +822,7 @@ test {
         is $data[0], "\x80a\xA1";
         is $data[1], undef;
         ok ! $res->is_network_error;
-        is $res->status, 1005;
+        is $res->status, 0;
         is $res->status_text, '';
         is $res->ws_code, 1005;
         is $res->ws_reason, '';

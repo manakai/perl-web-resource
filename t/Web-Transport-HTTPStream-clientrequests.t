@@ -261,7 +261,7 @@ test {
         })->catch (sub {
           my $error = $_[0];
           test {
-            like $error, qr{Bad header };
+            like $error, qr{Bad header |is utf8-flagged};
           } $c;
         });
       }

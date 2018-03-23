@@ -333,11 +333,11 @@ test {
         is 0+@data, 1;
         is $data[0], 'xyz';
         ok ! $res2->is_network_error;
-        is $res2->status, 1006;
+        is $res2->status, 0;
         is $res2->status_text, '';
         is $res2->ws_code, 1006;
         is $res2->ws_reason, '';
-        is ''.$res2, 'WS closed (1006 || failed = 1, cleanly = 0)';
+        is ''.$res2, 'WebSocket Close: (1006 ) Connection truncated';
       } $c;
     })->then (sub {
       done $c;
@@ -398,12 +398,12 @@ test {
         is 0+@data, 1;
         is $data[0], "\x80a\xA1";
         ok ! $res2->is_network_error;
-        is $res2->status, 1006;
+        is $res2->status, 0;
         is $res2->status_text, '';
         is $res2->ws_code, 1006;
         is $res2->ws_reason, '';
         ok ! $res2->ws_closed_cleanly;
-        is ''.$res2, 'WS closed (1006 || failed = 1, cleanly = 0)';
+        is ''.$res2, 'WebSocket Close: (1006 ) Connection truncated';
       } $c;
     })->then (sub {
       done $c;
@@ -464,11 +464,11 @@ test {
         is 0+@data, 1;
         is $data[0], "\xC2\x80a\xC2\xA1";
         ok ! $res2->is_network_error;
-        is $res2->status, 1006;
+        is $res2->status, 0;
         is $res2->status_text, '';
         is $res2->ws_code, 1006;
         is $res2->ws_reason, '';
-        is ''.$res2, 'WS closed (1006 || failed = 1, cleanly = 0)';
+        is ''.$res2, 'WebSocket Close: (1006 ) Connection truncated';
       } $c;
     })->then (sub {
       done $c;
@@ -528,11 +528,11 @@ test {
       test {
         is 0+@data, 0;
         ok ! $res2->is_network_error;
-        is $res2->status, 1002;
+        is $res2->status, 0;
         is $res2->status_text, 'Invalid UTF-8 in text frame';
         is $res2->ws_code, 1002;
         is $res2->ws_reason, 'Invalid UTF-8 in text frame';
-        is ''.$res2, 'WS closed (1002 |Invalid UTF-8 in text frame| failed = 1, cleanly = 0)';
+        is ''.$res2, 'WebSocket Close: (1002 Invalid UTF-8 in text frame) Invalid UTF-8 in text frame';
       } $c;
     })->then (sub {
       done $c;
@@ -597,11 +597,11 @@ test {
         is 0+@data, 1;
         is $data[0], "\x80a\xA1";
         ok ! $res2->is_network_error;
-        is $res2->status, 1005;
+        is $res2->status, 0;
         is $res2->status_text, '';
         is $res2->ws_code, 1005;
         is $res2->ws_reason, '';
-        is ''.$res2, 'WS closed (1005 || failed = 0, cleanly = 1)';
+        is ''.$res2, 'WebSocket Close: (1005 ) WebSocket closed cleanly';
       } $c;
     })->then (sub {
       done $c;
@@ -710,12 +710,12 @@ test {
         is 0+@data, 1;
         like $data[0], qr{^GET /abc/def\?hoge=abc HTTP/1.1};
         ok ! $res2->is_network_error;
-        is $res2->status, 1005;
+        is $res2->status, 0;
         is $res2->status_text, '';
         is $res2->ws_code, 1005;
         is $res2->ws_reason, '';
         ok $res2->ws_closed_cleanly;
-        is ''.$res2, 'WS closed (1005 || failed = 0, cleanly = 1)';
+        is ''.$res2, 'WebSocket Close: (1005 ) WebSocket closed cleanly';
       } $c;
     })->then (sub {
       done $c;
@@ -779,11 +779,11 @@ test {
         is 0+@data, 1;
         like $data[0], qr{^Authorization: Basic aG9nZTphYmM=\x0D$}m;
         ok ! $res2->is_network_error;
-        is $res2->status, 1005;
+        is $res2->status, 0;
         is $res2->status_text, '';
         is $res2->ws_code, 1005;
         is $res2->ws_reason, '';
-        is ''.$res2, 'WS closed (1005 || failed = 0, cleanly = 1)';
+        is ''.$res2, 'WebSocket Close: (1005 ) WebSocket closed cleanly';
       } $c;
     })->then (sub {
       done $c;
@@ -852,11 +852,11 @@ test {
         is 0+@data, 1;
         is $data[0], "\x80a\xA1";
         ok ! $res2->is_network_error;
-        is $res2->status, 1005;
+        is $res2->status, 0;
         is $res2->status_text, '';
         is $res2->ws_code, 1005;
         is $res2->ws_reason, '';
-        is ''.$res2, 'WS closed (1005 || failed = 0, cleanly = 1)';
+        is ''.$res2, 'WebSocket Close: (1005 ) WebSocket closed cleanly';
       } $c;
     })->catch (sub {
       my $error = $_[0];
@@ -935,11 +935,11 @@ test {
         is 0+@data, 1;
         is $data[0], "\x80a\xA1";
         ok ! $res2->is_network_error;
-        is $res2->status, 1005;
+        is $res2->status, 0;
         is $res2->status_text, '';
         is $res2->ws_code, 1005;
         is $res2->ws_reason, '';
-        is ''.$res2, 'WS closed (1005 || failed = 0, cleanly = 1)';
+        is ''.$res2, 'WebSocket Close: (1005 ) WebSocket closed cleanly';
       } $c;
     })->then (sub {
       done $c;

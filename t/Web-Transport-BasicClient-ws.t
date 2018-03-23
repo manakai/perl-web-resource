@@ -1053,6 +1053,9 @@ test {
     $client->request (url => $url, ws_protocols => [])->then (sub {
       $res = $_[0];
       $res->ws_close;
+      test {
+        is $res->header ('Sec-WebSocket-Protocol'), undef;
+      } $c;
 
       return reading {
         my $msg = $_[0];
@@ -1086,7 +1089,7 @@ test {
       undef $c;
     });
   });
-} n => 4, name => 'ws_protocols empty';
+} n => 5, name => 'ws_protocols empty';
 
 test {
   my $c = shift;
@@ -1114,6 +1117,9 @@ test {
     $client->request (url => $url, ws_protocols => ['abc'])->then (sub {
       $res = $_[0];
       $res->ws_close;
+      test {
+        is $res->header ('Sec-WebSocket-Protocol'), 'abc';
+      } $c;
 
       return reading {
         my $msg = $_[0];
@@ -1147,7 +1153,7 @@ test {
       undef $c;
     });
   });
-} n => 4, name => 'ws_protocols a value';
+} n => 5, name => 'ws_protocols a value';
 
 test {
   my $c = shift;
@@ -1175,6 +1181,9 @@ test {
     $client->request (url => $url, ws_protocols => ['abc', 'xa', '0'])->then (sub {
       $res = $_[0];
       $res->ws_close;
+      test {
+        is $res->header ('Sec-WebSocket-Protocol'), 'abc';
+      } $c;
 
       return reading {
         my $msg = $_[0];
@@ -1208,7 +1217,7 @@ test {
       undef $c;
     });
   });
-} n => 4, name => 'ws_protocols values';
+} n => 5, name => 'ws_protocols values';
 
 test {
   my $c = shift;
@@ -1236,6 +1245,9 @@ test {
     $client->request (url => $url, ws_protocols => ['abc', '', '0'])->then (sub {
       $res = $_[0];
       $res->ws_close;
+      test {
+        is $res->header ('Sec-WebSocket-Protocol'), 'abc';
+      } $c;
 
       return reading {
         my $msg = $_[0];
@@ -1269,7 +1281,7 @@ test {
       undef $c;
     });
   });
-} n => 4, name => 'ws_protocols empty value';
+} n => 5, name => 'ws_protocols empty value';
 
 test {
   my $c = shift;

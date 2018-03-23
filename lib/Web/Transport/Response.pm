@@ -15,7 +15,7 @@ sub new_from_error ($$) {
     return bless {
       ws => 1,
       failed => ! $_[1]->ws_cleanly,
-      ws_status => $_[1]->ws_status,
+      status => $_[1]->ws_status,
       reason => $_[1]->ws_reason,
       cleanly => $_[1]->ws_cleanly,
       error => $_[1],
@@ -47,6 +47,7 @@ sub network_error_message ($) {
 } # network_error_message
 
 sub status ($) {
+  return 0 if $_[0]->{ws} and $_[0]->{ws} == 1;
   return $_[0]->{status} || 0;
 } # status
 
@@ -80,7 +81,7 @@ sub ws_messages ($) {
 
 sub ws_code ($) {
   if ($_[0]->{ws} and $_[0]->{ws} == 1) {
-    return $_[0]->{ws_status};
+    return $_[0]->{status};
   } else {
     return 1006;
   }
@@ -184,7 +185,7 @@ sub stringify ($) {
       return "" . $self->{error};
     } else {
       return sprintf "WS closed (%d |%s| failed = %d, cleanly = %d)",
-          $self->{ws_status}, $self->{reason},
+          $self->{status}, $self->{reason},
           $self->{failed} ? 1 : 0, $self->{cleanly} ? 1 : 0;
     }
   } elsif ($self->is_network_error) {

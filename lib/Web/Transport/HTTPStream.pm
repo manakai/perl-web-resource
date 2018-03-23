@@ -2637,11 +2637,16 @@ sub _receive_bytes_done ($) {
 sub _send_request ($$) {
   my ($stream, $req) = @_;
 
-  # XXX input validation
+  ## Input validation.  Please note that not all protocol requirements
+  ## are tested.  They should be tested against the requirements by
+  ## the interface module (or RequestConstructor) in principle, but
+  ## some important rules are tested here as security guard.
+
   my $method = defined $req->{method} ? $req->{method} : '';
   if (not length $method or $method =~ /[\x0D\x0A\x09\x20]/) {
     croak "Bad |method|: |$method|";
   }
+  # XXX utf8 $method
   my $url = $req->{target};
   if (not defined $url or
       not length $url or
@@ -2650,12 +2655,8 @@ sub _send_request ($$) {
       $url =~ /[\x09\x20]\z/) {
     croak "Bad |target|: |$url|";
   }
-  for (@{$req->{headers} or []}) {
-    croak "Bad header name |@{[_e4d $_->[0]]}|"
-        unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
-    croak "Bad header value |@{[_e4d $_->[1]]}|"
-        unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
-  }
+  # XXX utf8 $url
+  my @header = @{$req->{headers} or []};
 
   my $cl = $req->{length};
   if ($method eq 'CONNECT') {
@@ -2667,13 +2668,43 @@ sub _send_request ($$) {
         (Web::Transport::TypeError->new ("Bad byte length $cl"))
             unless $cl =~ /\A[0-9]+\z/;
     if ($cl > 0 or $method eq 'POST' or $method eq 'PUT') {
-      push @{$req->{headers} ||= []}, ['Content-Length', $cl];
+      push @header, ['Content-Length', $cl];
     }
   }
 
+  my $ws_key;
+  my @ws_proto = @{$req->{ws_protocols} || []};
+  if ($req->{ws}) {
+    $ws_key = encode_web_base64 join ('', map { pack 'C', rand 256 } 1..16);
+    push @header,
+        ['Sec-WebSocket-Key', $ws_key],
+        ['Sec-WebSocket-Version', '13'];
+    if (@ws_proto) {
+      push @header,
+          ['Sec-WebSocket-Protocol', join ',', @ws_proto];
+    }
+    # XXX extension
+  }
   # XXX croak if WS protocols is bad
-  # XXX utf8 flag
   # XXX header size
+
+  for (@header) {
+    return Promise->reject
+        (Web::Transport::TypeError->new ("Header name |@{[_e4d $_->[0]]}| is utf8-flagged"))
+            if utf8::is_utf8 ($_->[0]);
+    return Promise->reject
+        (Web::Transport::TypeError->new ("Header value |@{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}| is utf8-flagged"))
+            if utf8::is_utf8 ($_->[1]);
+    return Promise->reject
+        (Web::Transport::TypeError->new ("Bad header value |@{[_e4d $_->[0]]}: @{[_e4d $_->[1]]}|"))
+        unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
+    return Promise->reject
+        (Web::Transport::TypeError->new ("Bad header name |@{[_e4d $_->[0]]}|"))
+        unless $_->[0] =~ /\A[!\x23-'*-+\x2D-.0-9A-Z\x5E-z|~]+\z/;
+    return Promise->reject
+        (Web::Transport::TypeError->new ("Bad header value |@{[_e4d $_->[1]]}|"))
+        unless $_->[1] =~ /\A[\x00-\x09\x0B\x0C\x0E-\xFF]*\z/;
+  }
 
   my $con = $stream->{connection};
   if (not defined $con->{state}) {
@@ -2705,20 +2736,12 @@ sub _send_request ($$) {
   # XXX Connection: close
   if ($req->{ws}) {
     $con->{ws_state} = 'CONNECTING';
-    $con->{ws_key} = encode_web_base64 join ('', map { pack 'C', rand 256 } 1..16);
-    push @{$req->{headers} ||= []},
-        ['Sec-WebSocket-Key', $con->{ws_key}],
-        ['Sec-WebSocket-Version', '13'];
-    $con->{ws_protos} = $req->{ws_protocols} || [];
-    if (@{$con->{ws_protos}}) {
-      push @{$req->{headers}},
-          ['Sec-WebSocket-Protocol', join ',', @{$con->{ws_protos}}];
-    }
-    # XXX extension
+    $con->{ws_key} = $ws_key;
+    $con->{ws_protos} = \@ws_proto;
   }
   my $header = join '',
       "$method $url HTTP/1.1\x0D\x0A",
-      (map { "$_->[0]: $_->[1]\x0D\x0A" } @{$req->{headers} || []}),
+      (map { "$_->[0]: $_->[1]\x0D\x0A" } @header),
       "\x0D\x0A";
   if ($con->{DEBUG}) {
     for (split /\x0A/, $header) {

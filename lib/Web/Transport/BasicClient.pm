@@ -329,9 +329,10 @@ sub _connect ($$$;%) {
   };
 } # _connect
 
-sub _request ($$$$$$$$$$$) {
+sub _request ($$$$$$$$$$$$) {
   my ($self, $method, $con_url_record, $url_record, $headers,
-      $body_ref, $body_reader, $no_cache, $is_ws, $need_readable_stream) = @_;
+      $body_ref, $body_reader, $no_cache, $is_ws, $need_readable_stream,
+      $ws_protocols) = @_;
   if ($self->{debug}) {
     warn "$self->{parent_id}: @{[__PACKAGE__]}: Request <@{[$url_record->stringify]}> @{[scalar gmtime]}\n";
   }
@@ -377,6 +378,7 @@ sub _request ($$$$$$$$$$$) {
       target => encode_web_utf8 ($target),
       headers => $headers,
       ws => $is_ws,
+      ws_protocols => $ws_protocols,
       length => $length,
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -543,8 +545,8 @@ sub request ($%) {
     $args{base_url} ||= $self->{base_url};
     $args{path_prefix} = $self->{path_prefix} if not defined $args{path_prefix};
     $args{protocol_clock} = $self->{protocol_clock};
-    my ($method, $url_record, $header_list, $body_ref, $body_reader)
-        = Web::Transport::RequestConstructor->create (\%args);
+    my ($method, $url_record, $header_list, $body_ref, $body_reader,
+        $ws_protos) = Web::Transport::RequestConstructor->create (\%args);
     die _te $method->{message} if ref $method; # error
 
     die _te "Method |CONNECT| not supported" if $method eq 'CONNECT';
@@ -570,12 +572,12 @@ sub request ($%) {
     return $self->_request (
       $method, $con_url_record, $url_record,
       $header_list, $body_ref, $body_reader,
-      $no_cache, $is_ws, $args{stream},
+      $no_cache, $is_ws, $args{stream}, $ws_protos,
     )->catch (sub {
       return $self->_request (
         $method, $con_url_record, $url_record,
         $header_list, $body_ref, $body_reader,
-        $no_cache, $is_ws, $args{stream},
+        $no_cache, $is_ws, $args{stream}, $ws_protos,
       ) if Web::Transport::ProtocolError->can_http_retry ($_[0]) and
            not defined $body_reader;
       die $_[0];

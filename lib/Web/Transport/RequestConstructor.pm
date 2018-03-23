@@ -279,8 +279,17 @@ sub create ($$) {
     $_->[1] =~ tr/\x0D\x0A/\x20\x20/;
   }
 
+  my @ws_proto;
+  for (@{$args->{ws_protocols} || []}) {
+    if (/[^\x21-\x2B\x2D-\x7E]/) {
+      return {failed => 1, message => "Bad WebSocket protocol |$_|"};
+    }
+    push @ws_proto, encode_web_utf8 $_;
+  }
+
   return ($method, $url_record, $header_list,
-          defined $args->{body} ? \($args->{body}) : undef, $body_reader);
+          defined $args->{body} ? \($args->{body}) : undef, $body_reader,
+          \@ws_proto);
 } # create
 
 ##   status - The status code of the response.  It must be an integer

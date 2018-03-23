@@ -247,6 +247,16 @@ C<aws4> option is also specified.
 If specified, the value must be a hash reference, whose keys are
 header names (ASCII case-insensitive) and values are true values.
 
+=item ws_protocols => [$name1, $name2, ...]
+
+Specifies WebSocket protocol names.  The value must be an array
+reference of zero or more byte strings.  Only applicable to WebSocket
+requests.  To establish a WebSocket connection with WebSocket protocol
+names as a WebSocket client, this option must be used (rather than
+directly specifying the C<Sec-WebSocket-Proto:> header value) as the
+protocol names are directly handled by the client module as part of
+the protocol handshake.
+
 =item superreload => $boolean
 
 If true, C<Cache-Control: no-cache> and C<Pragma: no-store> headers

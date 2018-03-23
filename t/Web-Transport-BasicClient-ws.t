@@ -968,6 +968,458 @@ test {
   });
 } n => 6, name => 'No URL';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 101 OK"CRLF
+    "Upgrade: websocket"CRLF
+    "Sec-WebSocket-Accept: "
+    ws-accept
+    CRLF
+    "Connection: Upgrade"CRLF
+    CRLF
+    ws-send-header opcode=2 length=captured
+    sendcaptured
+    ws-send-header opcode=8 length=0
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{ws://$server->{host}:$server->{port}/abc/def});
+    my $res;
+    my @data;
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->request (url => $url)->then (sub {
+      $res = $_[0];
+      $res->ws_close;
+
+      return reading {
+        my $msg = $_[0];
+        my $data = '';
+        return Promise->resolve->then (sub {
+          if (defined $msg->{text_body}) {
+            return reading { $data .= ${$_[0]} } $msg->{text_body};
+          } else {
+            return reading { $data .= $_[0]->manakai_to_string } $msg->{body};
+          }
+        })->then (sub {
+          if (@data and defined $data[-1]) {
+            $data[-1] .= $data;
+          } else {
+            push @data, $data;
+          }
+        });
+      } $res->ws_messages;
+    })->then (sub {
+      return $res->ws_close;
+    })->then (sub {
+      my $res2 = $_[0];
+      test {
+        is 0+@data, 1;
+        like $data[0], qr{^GET /abc/def HTTP/1.1};
+        unlike $data[0], qr{Sec-WebSocket-Protocol:}i;
+        ok ! $res2->is_network_error;
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'ws_protocols none';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 101 OK"CRLF
+    "Upgrade: websocket"CRLF
+    "Sec-WebSocket-Accept: "
+    ws-accept
+    CRLF
+    "Connection: Upgrade"CRLF
+    CRLF
+    ws-send-header opcode=2 length=captured
+    sendcaptured
+    ws-send-header opcode=8 length=0
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{ws://$server->{host}:$server->{port}/abc/def});
+    my $res;
+    my @data;
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->request (url => $url, ws_protocols => [])->then (sub {
+      $res = $_[0];
+      $res->ws_close;
+
+      return reading {
+        my $msg = $_[0];
+        my $data = '';
+        return Promise->resolve->then (sub {
+          if (defined $msg->{text_body}) {
+            return reading { $data .= ${$_[0]} } $msg->{text_body};
+          } else {
+            return reading { $data .= $_[0]->manakai_to_string } $msg->{body};
+          }
+        })->then (sub {
+          if (@data and defined $data[-1]) {
+            $data[-1] .= $data;
+          } else {
+            push @data, $data;
+          }
+        });
+      } $res->ws_messages;
+    })->then (sub {
+      return $res->ws_close;
+    })->then (sub {
+      my $res2 = $_[0];
+      test {
+        is 0+@data, 1;
+        like $data[0], qr{^GET /abc/def HTTP/1.1};
+        unlike $data[0], qr{Sec-WebSocket-Protocol:}i;
+        ok ! $res2->is_network_error;
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'ws_protocols empty';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 101 OK"CRLF
+    "Upgrade: websocket"CRLF
+    "Sec-WebSocket-Accept: "
+    ws-accept
+    CRLF
+    "Sec-WebSocket-Protocol:  abc"CRLF
+    "Connection: Upgrade"CRLF
+    CRLF
+    ws-send-header opcode=2 length=captured
+    sendcaptured
+    ws-send-header opcode=8 length=0
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{ws://$server->{host}:$server->{port}/abc/def});
+    my $res;
+    my @data;
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->request (url => $url, ws_protocols => ['abc'])->then (sub {
+      $res = $_[0];
+      $res->ws_close;
+
+      return reading {
+        my $msg = $_[0];
+        my $data = '';
+        return Promise->resolve->then (sub {
+          if (defined $msg->{text_body}) {
+            return reading { $data .= ${$_[0]} } $msg->{text_body};
+          } else {
+            return reading { $data .= $_[0]->manakai_to_string } $msg->{body};
+          }
+        })->then (sub {
+          if (@data and defined $data[-1]) {
+            $data[-1] .= $data;
+          } else {
+            push @data, $data;
+          }
+        });
+      } $res->ws_messages;
+    })->then (sub {
+      return $res->ws_close;
+    })->then (sub {
+      my $res2 = $_[0];
+      test {
+        is 0+@data, 1;
+        like $data[0], qr{^GET /abc/def HTTP/1.1};
+        like $data[0], qr{^Sec-WebSocket-Protocol: abc\x0D\x0A}m;
+        ok ! $res2->is_network_error;
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'ws_protocols a value';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 101 OK"CRLF
+    "Upgrade: websocket"CRLF
+    "Sec-WebSocket-Accept: "
+    ws-accept
+    CRLF
+    "Sec-WebSocket-Protocol:  abc"CRLF
+    "Connection: Upgrade"CRLF
+    CRLF
+    ws-send-header opcode=2 length=captured
+    sendcaptured
+    ws-send-header opcode=8 length=0
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{ws://$server->{host}:$server->{port}/abc/def});
+    my $res;
+    my @data;
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->request (url => $url, ws_protocols => ['abc', 'xa', '0'])->then (sub {
+      $res = $_[0];
+      $res->ws_close;
+
+      return reading {
+        my $msg = $_[0];
+        my $data = '';
+        return Promise->resolve->then (sub {
+          if (defined $msg->{text_body}) {
+            return reading { $data .= ${$_[0]} } $msg->{text_body};
+          } else {
+            return reading { $data .= $_[0]->manakai_to_string } $msg->{body};
+          }
+        })->then (sub {
+          if (@data and defined $data[-1]) {
+            $data[-1] .= $data;
+          } else {
+            push @data, $data;
+          }
+        });
+      } $res->ws_messages;
+    })->then (sub {
+      return $res->ws_close;
+    })->then (sub {
+      my $res2 = $_[0];
+      test {
+        is 0+@data, 1;
+        like $data[0], qr{^GET /abc/def HTTP/1.1};
+        like $data[0], qr{^Sec-WebSocket-Protocol: abc,xa,0\x0D\x0A}m;
+        ok ! $res2->is_network_error;
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'ws_protocols values';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 101 OK"CRLF
+    "Upgrade: websocket"CRLF
+    "Sec-WebSocket-Accept: "
+    ws-accept
+    CRLF
+    "Sec-WebSocket-Protocol:  abc"CRLF
+    "Connection: Upgrade"CRLF
+    CRLF
+    ws-send-header opcode=2 length=captured
+    sendcaptured
+    ws-send-header opcode=8 length=0
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{ws://$server->{host}:$server->{port}/abc/def});
+    my $res;
+    my @data;
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->request (url => $url, ws_protocols => ['abc', '', '0'])->then (sub {
+      $res = $_[0];
+      $res->ws_close;
+
+      return reading {
+        my $msg = $_[0];
+        my $data = '';
+        return Promise->resolve->then (sub {
+          if (defined $msg->{text_body}) {
+            return reading { $data .= ${$_[0]} } $msg->{text_body};
+          } else {
+            return reading { $data .= $_[0]->manakai_to_string } $msg->{body};
+          }
+        })->then (sub {
+          if (@data and defined $data[-1]) {
+            $data[-1] .= $data;
+          } else {
+            push @data, $data;
+          }
+        });
+      } $res->ws_messages;
+    })->then (sub {
+      return $res->ws_close;
+    })->then (sub {
+      my $res2 = $_[0];
+      test {
+        is 0+@data, 1;
+        like $data[0], qr{^GET /abc/def HTTP/1.1};
+        like $data[0], qr{^Sec-WebSocket-Protocol: abc,,0\x0D\x0A}m;
+        ok ! $res2->is_network_error;
+      } $c;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'ws_protocols empty value';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 101 OK"CRLF
+    "Upgrade: websocket"CRLF
+    "Sec-WebSocket-Accept: "
+    ws-accept
+    CRLF
+    "Sec-WebSocket-Protocol:  abc"CRLF
+    "Connection: Upgrade"CRLF
+    CRLF
+    ws-send-header opcode=2 length=captured
+    sendcaptured
+    ws-send-header opcode=8 length=0
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{ws://$server->{host}:$server->{port}/abc/def});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->request (url => $url, ws_protocols => ["abc\x0A0"])->then (sub {
+      test { ok 0 } $c;
+    }, sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error, $res;
+        is $res->network_error_message, "Bad WebSocket protocol |abc\x0A0|";
+      } $c;
+    })->then (sub {
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'ws_protocols bad value';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 101 OK"CRLF
+    "Upgrade: websocket"CRLF
+    "Sec-WebSocket-Accept: "
+    ws-accept
+    CRLF
+    "Sec-WebSocket-Protocol:  abc"CRLF
+    "Connection: Upgrade"CRLF
+    CRLF
+    ws-send-header opcode=2 length=captured
+    sendcaptured
+    ws-send-header opcode=8 length=0
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{ws://$server->{host}:$server->{port}/abc/def});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->request (url => $url, ws_protocols => ["abc\x{100}0"])->then (sub {
+      test { ok 0 } $c;
+    }, sub {
+      my $res = $_[0];
+      test {
+        ok $res->is_network_error, $res;
+        is $res->network_error_message, "Bad WebSocket protocol |abc\x{100}0|";
+      } $c;
+    })->then (sub {
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'ws_protocols utf8 value';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 101 OK"CRLF
+    "Upgrade: websocket"CRLF
+    "Sec-WebSocket-Accept: "
+    ws-accept
+    CRLF
+    "Connection: Upgrade"CRLF
+    CRLF
+    ws-send-header opcode=2 length=captured
+    sendcaptured
+    ws-send-header opcode=8 length=0
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{ws://$server->{host}:$server->{port}/abc/def});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->request (url => $url, ws_protocols => ['abc'])->then (sub {
+      test { ok 0 } $c;
+    }, sub {
+      my $res = $_[0];
+      test {
+        is $res->ws_code, 1006, $res;
+      } $c;
+    })->then (sub {
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'ws_protocols server unexpected value';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    receive CRLFCRLF, end capture
+    "HTTP/1.1 101 OK"CRLF
+    "Upgrade: websocket"CRLF
+    "Sec-WebSocket-Accept: "
+    ws-accept
+    CRLF
+    "Sec-WebSocket-Protocol: xxx"CRLF
+    "Connection: Upgrade"CRLF
+    CRLF
+    ws-send-header opcode=2 length=captured
+    sendcaptured
+    ws-send-header opcode=8 length=0
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{ws://$server->{host}:$server->{port}/abc/def});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->request (url => $url, ws_protocols => ['abc'])->then (sub {
+      test { ok 0 } $c;
+    }, sub {
+      my $res = $_[0];
+      test {
+        is $res->ws_code, 1006, $res;
+      } $c;
+    })->then (sub {
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 1, name => 'ws_protocols server returned unexpected value';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

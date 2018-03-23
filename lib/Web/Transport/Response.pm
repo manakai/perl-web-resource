@@ -15,7 +15,7 @@ sub new_from_error ($$) {
     return bless {
       ws => 1,
       failed => ! $_[1]->ws_cleanly,
-      status => $_[1]->ws_status,
+      ws_status => $_[1]->ws_status,
       reason => $_[1]->ws_reason,
       cleanly => $_[1]->ws_cleanly,
       error => $_[1],
@@ -80,7 +80,7 @@ sub ws_messages ($) {
 
 sub ws_code ($) {
   if ($_[0]->{ws} and $_[0]->{ws} == 1) {
-    return $_[0]->{status};
+    return $_[0]->{ws_status};
   } else {
     return 1006;
   }
@@ -180,9 +180,11 @@ sub stringify ($) {
   if ($self->{ws}) {
     if ($self->{ws} == 2) {
       return "WS handshake error: @{[$self->status_line]}";
+    } elsif (defined $self->{error}) {
+      return "" . $self->{error};
     } else {
       return sprintf "WS closed (%d |%s| failed = %d, cleanly = %d)",
-          $self->{status}, $self->{reason},
+          $self->{ws_status}, $self->{reason},
           $self->{failed} ? 1 : 0, $self->{cleanly} ? 1 : 0;
     }
   } elsif ($self->is_network_error) {

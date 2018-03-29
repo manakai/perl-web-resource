@@ -378,6 +378,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                          'iana_intended_usage' => 'common'
                                                        },
                                           'cu-seeme' => {},
+                                          'cwt' => {
+                                                   'iana' => 'permanent',
+                                                   'iana_intended_usage' => 'common'
+                                                 },
                                           'cybercash' => {
                                                          'iana' => 'permanent'
                                                        },

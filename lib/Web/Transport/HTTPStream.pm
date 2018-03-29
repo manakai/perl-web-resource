@@ -195,6 +195,10 @@ sub new ($$) {
       delete $con->{timer};
       return undef;
     }) : $con->{reader}->closed->then (sub {
+      return promised_wait_until {
+        return not $con->{read_running};
+      } interval => 0.1;
+    })->then (sub {
       delete $con->{reader};
 
       if ($con->{DEBUG}) {

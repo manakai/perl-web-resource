@@ -893,9 +893,13 @@ $Web::MIME::_TypeDefs::Type = {
                                                     'text' => 1
                                                   },
                                           'json+ld' => {},
+                                          'json+n3' => {},
+                                          'json+ntriples' => {},
                                           'json+oembed' => {},
                                           'json+protobuf' => {},
                                           'json+rdf' => {},
+                                          'json+rdf+xml' => {},
+                                          'json+turtle' => {},
                                           'json-object' => {},
                                           'json-patch+json' => {
                                                                'iana' => 'permanent',
@@ -1319,6 +1323,7 @@ $Web::MIME::_TypeDefs::Type = {
                                           'nss' => {
                                                    'iana' => 'permanent'
                                                  },
+                                          'ntriples' => {},
                                           'oasis' => {},
                                           'ocsp-request' => {
                                                             'iana' => 'permanent',
@@ -10972,6 +10977,7 @@ $Web::MIME::_TypeDefs::Type = {
                                           },
                                    'ng-template' => {},
                                    'nginx' => {},
+                                   'ntriples' => {},
                                    'octave' => {},
                                    'odin' => {},
                                    'ofx' => {},

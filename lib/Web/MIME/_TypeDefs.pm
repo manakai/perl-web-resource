@@ -5586,6 +5586,10 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vnd.shana.informed.package' => {
                                                                           'iana' => 'permanent'
                                                                         },
+                                          'vnd.shootproof+json' => {
+                                                                   'iana' => 'permanent',
+                                                                   'iana_intended_usage' => 'common'
+                                                                 },
                                           'vnd.sigrok.session' => {
                                                                   'iana' => 'permanent',
                                                                   'iana_intended_usage' => 'common'
@@ -8075,7 +8079,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                              },
                                           'xlc' => {},
                                           'xliff+xml' => {
-                                                         'iana' => 'provisional'
+                                                         'iana' => 'permanent',
+                                                         'iana_intended_usage' => 'common'
                                                        },
                                           'xls' => {},
                                           'xml' => {
@@ -8272,7 +8277,8 @@ $Web::MIME::_TypeDefs::Type = {
                                              },
                                     '8svx' => {},
                                     'aac' => {
-                                             'iana' => 'provisional'
+                                             'iana' => 'permanent',
+                                             'iana_intended_usage' => 'common'
                                            },
                                     'ac3' => {
                                              'iana' => 'permanent',

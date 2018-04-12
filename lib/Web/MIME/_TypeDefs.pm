@@ -2289,6 +2289,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'iana' => 'permanent',
                                                               'iana_intended_usage' => 'common'
                                                             },
+                                          'vnd.afpc.afplinedata' => {
+                                                                    'iana' => 'permanent',
+                                                                    'iana_intended_usage' => 'limited use'
+                                                                  },
                                           'vnd.ah-barcode' => {
                                                               'iana' => 'permanent',
                                                               'iana_intended_usage' => 'obsolete',
@@ -2381,7 +2385,7 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vnd.apple.pkpass' => {},
                                           'vnd.arastra.swi' => {
                                                                'iana' => 'permanent',
-                                                               'iana_intended_usage' => 'common',
+                                                               'iana_intended_usage' => 'obsolete',
                                                                'obsolete' => 1
                                                              },
                                           'vnd.aristanetworks.swi' => {
@@ -3208,7 +3212,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                   },
                                           'vnd.geo+json' => {
                                                             'iana' => 'permanent',
-                                                            'iana_intended_usage' => 'common',
+                                                            'iana_intended_usage' => 'obsolete',
                                                             'obsolete' => 1
                                                           },
                                           'vnd.geocube+xml' => {
@@ -3547,7 +3551,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                          },
                                           'vnd.informix-visionary' => {
                                                                       'iana' => 'permanent',
-                                                                      'iana_intended_usage' => 'common',
+                                                                      'iana_intended_usage' => 'obsolete',
                                                                       'obsolete' => 1
                                                                     },
                                           'vnd.infotech.project' => {
@@ -10324,7 +10328,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                          },
                                       'vnd.si.simp' => {
                                                        'iana' => 'permanent',
-                                                       'iana_intended_usage' => 'limited use',
+                                                       'iana_intended_usage' => 'obsolete',
                                                        'obsolete' => 1
                                                      },
                                       'vnd.wfa.wsc' => {

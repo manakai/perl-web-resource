@@ -2260,7 +2260,7 @@ test {
     } $client->request (url => $origin)->then (sub {
       my $res = $_[0];
       test {
-        is $res->header ('Server'), 'Server';
+        is $res->header ('Server'), 'httpd';
       } $c;
     });
   }, undef);

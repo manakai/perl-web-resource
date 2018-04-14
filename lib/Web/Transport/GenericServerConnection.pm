@@ -53,7 +53,7 @@ sub new_from_aeargs_and_opts ($$$) {
   }
 
   $self->{server_header} = encode_web_utf8
-      (defined $opts->{server_header} ? $opts->{server_header} : 'Server');
+      (defined $opts->{server_header} ? $opts->{server_header} : 'httpd');
   $self->{debug} = defined $opts->{debug} ? $opts->{debug} : ($ENV{WEBSERVER_DEBUG} || 0);
 
   $self->{connection} = Web::Transport::HTTPStream->new ({

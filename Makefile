@@ -11,6 +11,8 @@ updatenightly: clean build
 clean:
 	rm -fr local/*.json lib/Web/Transport/JSON.pm
 	rm -fr intermediate/parsing-errors.json
+	rm -fr lib/Web/Transport/_Defs.pm
+	rm -fr lib/Web/Transport/_PlatformDefs.pm
 
 ## ------ Setup ------
 

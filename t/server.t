@@ -4375,7 +4375,7 @@ test {
   $http->request (path => [$path])->then (sub {
     my $res = $_[0];
     test {
-      is $res->header ('Server'), "Server";
+      is $res->header ('Server'), "httpd";
       like $res->header ('Date'), qr{^\w+, \d\d \w+ \d{4} \d\d:\d\d:\d\d GMT$};
     } $c;
   }, sub {

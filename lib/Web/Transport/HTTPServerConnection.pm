@@ -93,7 +93,7 @@ sub server_header ($;$) {
   if (@_ > 1) {
     $_[0]->{server_header} = $_[1];
   }
-  return defined $_[0]->{server_header} ? $_[0]->{server_header} : 'Server';
+  return defined $_[0]->{server_header} ? $_[0]->{server_header} : 'httpd';
 } # server_header
 
 sub _url_scheme ($) {

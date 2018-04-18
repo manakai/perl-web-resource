@@ -5840,6 +5840,10 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vnd.theqvd' => {
                                                           'iana_intended_usage' => 'common'
                                                         },
+                                          'vnd.think-cell.ppttc+json' => {
+                                                                         'iana' => 'permanent',
+                                                                         'iana_intended_usage' => 'common'
+                                                                       },
                                           'vnd.tmd.mediaflex.api+xml' => {
                                                                          'iana' => 'permanent',
                                                                          'iana_intended_usage' => 'limited use'

@@ -5353,6 +5353,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'iana' => 'permanent',
                                                                     'iana_intended_usage' => 'limited use'
                                                                   },
+                                          'vnd.psfs' => {
+                                                        'iana' => 'permanent',
+                                                        'iana_intended_usage' => 'common'
+                                                      },
                                           'vnd.publishare-delta-tree' => {
                                                                          'iana' => 'permanent',
                                                                          'iana_intended_usage' => 'limited use'

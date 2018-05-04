@@ -2293,6 +2293,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'iana' => 'permanent',
                                                                     'iana_intended_usage' => 'limited use'
                                                                   },
+                                          'vnd.afpc.modca' => {
+                                                              'iana' => 'permanent',
+                                                              'iana_intended_usage' => 'limited use'
+                                                            },
                                           'vnd.ah-barcode' => {
                                                               'iana' => 'permanent',
                                                               'iana_intended_usage' => 'obsolete',

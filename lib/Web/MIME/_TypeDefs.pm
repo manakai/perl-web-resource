@@ -701,7 +701,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                          'obsolete' => 1
                                                        },
                                           'gltf-buffer' => {
-                                                           'iana' => 'provisional'
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
                                                          },
                                           'gml+xml' => {
                                                        'iana' => 'permanent',
@@ -2397,6 +2398,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                       'iana_intended_usage' => 'common'
                                                                     },
                                           'vnd.artgalry' => {},
+                                          'vnd.artisan+json' => {
+                                                                'iana' => 'permanent',
+                                                                'iana_intended_usage' => 'common'
+                                                              },
                                           'vnd.artsquare' => {
                                                              'iana' => 'permanent'
                                                            },
@@ -6345,7 +6350,9 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vsd' => {},
                                           'vsix' => {},
                                           'warc' => {},
-                                          'wasm' => {},
+                                          'wasm' => {
+                                                    'iana' => 'provisional'
+                                                  },
                                           'watcherinfo+xml' => {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'common'
@@ -10656,9 +10663,7 @@ $Web::MIME::_TypeDefs::Type = {
                     },
           'qpplication' => {
                            'subtype' => {
-                                          'wasm' => {
-                                                    'iana' => 'provisional'
-                                                  }
+                                          'wasm' => {}
                                         }
                          },
           'security' => {

@@ -481,6 +481,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                    'iana' => 'permanent',
                                                    'iana_intended_usage' => 'limited use'
                                                  },
+                                          'dns+json' => {
+                                                        'iana' => 'permanent',
+                                                        'iana_intended_usage' => 'common'
+                                                      },
                                           'doc' => {},
                                           'docbook+xml' => {},
                                           'docuworks' => {},
@@ -1803,6 +1807,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                    'iana_intended_usage' => 'common'
                                                  },
                                           'sea' => {},
+                                          'secevent+jwt' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'common'
+                                                          },
                                           'sep+xml' => {
                                                        'iana' => 'permanent',
                                                        'iana_intended_usage' => 'common'
@@ -2011,6 +2019,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'iana' => 'permanent'
                                                      },
                                           'testfontstream' => {},
+                                          'tetra_isi' => {
+                                                         'iana' => 'provisional'
+                                                       },
                                           'tex' => {},
                                           'texinfo' => {},
                                           'text' => {},
@@ -8758,6 +8769,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                          'iana' => 'permanent',
                                                          'iana_intended_usage' => 'common'
                                                        },
+                                    'tetra_acelp' => {
+                                                     'iana' => 'provisional'
+                                                   },
                                     'tone' => {
                                               'iana' => 'permanent',
                                               'iana_intended_usage' => 'common'

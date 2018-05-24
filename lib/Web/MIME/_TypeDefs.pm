@@ -4382,6 +4382,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                      'iana' => 'permanent',
                                                                      'iana_intended_usage' => 'common'
                                                                    },
+                                          'vnd.nimn' => {
+                                                        'iana' => 'permanent',
+                                                        'iana_intended_usage' => 'common'
+                                                      },
                                           'vnd.nintendo.nitro.rom' => {
                                                                       'iana' => 'permanent',
                                                                       'iana_intended_usage' => 'common'

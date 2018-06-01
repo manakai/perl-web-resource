@@ -1811,6 +1811,30 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana' => 'permanent',
                                                             'iana_intended_usage' => 'common'
                                                           },
+                                          'senml+cbor' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                          'senml+json' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                          'senml+xml' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                          'senml-exi' => {
+                                                         'iana' => 'permanent'
+                                                       },
+                                          'sensml+cbor' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                          'sensml+json' => {
+                                                           'iana' => 'permanent'
+                                                         },
+                                          'sensml+xml' => {
+                                                          'iana' => 'permanent'
+                                                        },
+                                          'sensml-exi' => {
+                                                          'iana' => 'permanent'
+                                                        },
                                           'sep+xml' => {
                                                        'iana' => 'permanent',
                                                        'iana_intended_usage' => 'common'

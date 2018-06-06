@@ -159,6 +159,79 @@ sub aws4_post_policy ($%) {
   };
 } # aws4_post_policy
 
+sub aws4_signed_url ($%) {
+  my (undef, %args) = @_;
+  no warnings 'uninitialized';
+
+  my $time = int $args{clock}->();
+  my @time = gmtime $time;
+  my $amz_date = sprintf '%04d%02d%02dT%02d%02d%02dZ',
+      $time[5]+1900, $time[4]+1, @time[3, 2, 1, 0];
+  my $ymd = sprintf '%04d%02d%02d', $time[5]+1900, $time[4]+1, $time[3];
+  
+  my @signed_headers = (['host', $args{url}->hostport]);
+  my $signed_headers = join ';', map { $_->[0] } @signed_headers;
+
+  my $region = encode_web_utf8 $args{region};
+  my $service = encode_web_utf8 $args{service};
+  my $scope = join '/', $ymd, $region, $service, 'aws4_request';
+
+  my $query = $args{url}->query;
+  $query .= '&' if length $query;
+  $query .= 'X-Amz-Date=' . $amz_date;
+  $query .= '&X-Amz-Algorithm=AWS4-HMAC-SHA256';
+  $query .= '&X-Amz-Expires=' . (0+$args{max_age});
+  $query .= '&X-Amz-SignedHeaders=' . do {
+    my $v = $signed_headers;
+    $v =~ s/([&=%])/sprintf '%%%02X', ord $1/ge;
+    $v;
+  };
+  $query .= '&X-Amz-Credential=' . do {
+    my $v = (encode_web_utf8 $args{access_key_id}) .'/'. $scope;
+    $v =~ s/([&=%])/sprintf '%%%02X', ord $1/ge;
+    $v;
+  };
+  
+  $query = join "&", map {
+    reescape ($_->[0]) . '=' . reescape (defined $_->[1] ? $_->[1] : '');
+  } sort {
+    $a->[0] cmp $b->[0];
+  } map {
+    [split /=/, $_, 2];
+  } split m{&}, (defined $query ? encode_web_utf8 $query : ''), -1;
+
+  my $canonical_request = encode_web_utf8 join "\x0A",
+      $args{method},
+      $args{url}->path,
+      $query,
+      (map { $_->[0] . ':' . $_->[1] } @signed_headers),
+      '',
+      $signed_headers,
+      'UNSIGNED-PAYLOAD';
+
+  my $string_to_sign = join "\x0A",
+      "AWS4-HMAC-SHA256",
+      $amz_date,
+      $scope,
+      sha256_hex ($canonical_request);
+  my $date_key = hmac_sha256 ($ymd, 'AWS4' . encode_web_utf8 $args{secret_access_key});
+  my $date_region_key = hmac_sha256 ($region, $date_key);
+  my $date_region_service_key = hmac_sha256 ($service, $date_region_key);
+  my $signing_key = hmac_sha256 ('aws4_request', $date_region_service_key);
+  my $signature = hmac_sha256_hex ($string_to_sign, $signing_key);
+
+  #warn $canonical_request;
+  #warn $string_to_sign;
+
+  $query .= '&X-Amz-Signature=' . $signature;
+  my $u = sprintf '%s://%s%s?%s',
+      $args{url}->scheme,
+      $args{url}->hostport,
+      $args{url}->path,
+      $query;
+  return Web::URL->parse_string ($u);
+} # aws4_signed_url
+
 1;
 
 =head1 LICENSE

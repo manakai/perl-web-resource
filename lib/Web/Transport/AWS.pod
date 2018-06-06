@@ -37,6 +37,56 @@ The following method is available:
 
 =over 4
 
+=item $new_url = Web::Transport::AWS->aws4_signed_url (...)
+
+Sign a URL (create a pre-signed URL).  It returns a new L<Web::URL>
+object whose query contains the signature.
+
+The arguments are name/value pairs of following options:
+
+=over 4
+
+=item url => $url (required)
+
+The URL (a L<Web::URL> object).  It must be an HTTP(S) URL (i.e. a URL
+whose scheme is C<http> or C<https>).
+
+=item method => $method (required)
+
+The request method, such as C<GET> or C<POST>.
+
+=item clock => $clock (required)
+
+The clock used to generate the current timestamps (e.g. C<<
+Web::DateTime::Clock->realtime_clock >>).
+
+=item max_age => $seconds (required)
+
+The lifetime of the signed URL, in seconds from the generation.
+
+=item access_key_id => $string (required)
+
+The access key ID of the AWS credentials.
+
+=item secret_access_key => $string (required)
+
+The secret access key of the AWS credentials.
+
+=item security_token => $string
+
+The security token, as used in |X-Amz-Security-Token| parameter, if
+necessary.
+
+=item region => $string (required)
+
+The AWS region identifier.
+
+=item service => $string (required)
+
+The AWS service name, such as C<s3>.
+
+=back
+
 =item $form = Web::Transport::AWS->aws4_post_policy (...)
 
 Prepare form data including POST policy JSON and its signature.
@@ -85,6 +135,8 @@ An array refeference of the conditions in the POST policy.
 
 =back
 
+=back
+
 =head1 SEE ALSO
 
 L<Web::Transport>.
@@ -107,7 +159,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

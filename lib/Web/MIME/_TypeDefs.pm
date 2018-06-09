@@ -11330,6 +11330,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                          'iana' => 'permanent',
                                                          'iana_intended_usage' => 'limited use'
                                                        },
+                                   'vnd.gml' => {
+                                                'iana' => 'permanent',
+                                                'iana_intended_usage' => 'common'
+                                              },
                                    'vnd.graphviz' => {
                                                      'iana' => 'permanent',
                                                      'iana_intended_usage' => 'common'

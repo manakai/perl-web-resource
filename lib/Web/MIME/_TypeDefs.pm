@@ -2075,6 +2075,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common'
                                                               },
+                                          'tlsrpt+gzip' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
+                                                         },
+                                          'tlsrpt+json' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
+                                                         },
                                           'tnauthlist' => {
                                                           'iana' => 'permanent',
                                                           'iana_intended_usage' => 'common'

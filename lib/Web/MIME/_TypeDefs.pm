@@ -53,7 +53,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                              'iana_intended_usage' => 'common'
                                                            },
                                           'afp' => {},
-                                          'akn+xml' => {},
+                                          'akn+xml' => {
+                                                       'iana' => 'provisional'
+                                                     },
                                           'album' => {},
                                           'alps+json' => {
                                                          'params' => {
@@ -156,8 +158,12 @@ $Web::MIME::_TypeDefs::Type = {
                                                            'iana' => 'permanent',
                                                            'iana_intended_usage' => 'common'
                                                          },
-                                          'atsc-dwd+xml' => {},
-                                          'atsc-held+xml' => {},
+                                          'atsc-dwd+xml' => {
+                                                            'iana' => 'provisional'
+                                                          },
+                                          'atsc-held+xml' => {
+                                                             'iana' => 'provisional'
+                                                           },
                                           'attachment' => {},
                                           'atxml' => {
                                                      'iana' => 'permanent',
@@ -815,7 +821,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                        },
                                           'internet-property-stream' => {},
                                           'internet-shortcut' => {},
-                                          'ion' => {},
+                                          'ion' => {
+                                                   'iana' => 'provisional'
+                                                 },
                                           'iotp' => {
                                                     'iana' => 'permanent',
                                                     'iana_intended_usage' => 'common'
@@ -1152,7 +1160,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                      'iana' => 'permanent'
                                                    },
                                           'mime' => {},
-                                          'mmt-aei+xml' => {},
+                                          'mmt-aei+xml' => {
+                                                           'iana' => 'provisional'
+                                                         },
                                           'mmt-usd+xml' => {
                                                            'iana' => 'permanent',
                                                            'iana_intended_usage' => 'common'
@@ -2041,7 +2051,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'iana' => 'permanent'
                                                      },
                                           'testfontstream' => {},
-                                          'tetra_isi' => {},
+                                          'tetra_isi' => {
+                                                         'iana' => 'provisional'
+                                                       },
                                           'tex' => {},
                                           'texinfo' => {},
                                           'text' => {},
@@ -2188,6 +2200,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'common'
                                                                },
+                                          'vnd.3gpp.mcdata-payload' => {
+                                                                       'iana' => 'permanent',
+                                                                       'iana_intended_usage' => 'common'
+                                                                     },
+                                          'vnd.3gpp.mcdata-signalling' => {
+                                                                          'iana' => 'permanent',
+                                                                          'iana_intended_usage' => 'common'
+                                                                        },
                                           'vnd.3gpp.mcptt-affiliation-command+xml' => {
                                                                                       'iana' => 'permanent',
                                                                                       'iana_intended_usage' => 'common'
@@ -2472,6 +2492,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'common'
                                                                },
+                                          'vnd.banana-accounting' => {
+                                                                     'iana' => 'permanent',
+                                                                     'iana_intended_usage' => 'common'
+                                                                   },
                                           'vnd.bbf.usp.msg' => {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'common'
@@ -6393,7 +6417,9 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vsd' => {},
                                           'vsix' => {},
                                           'warc' => {},
-                                          'wasm' => {},
+                                          'wasm' => {
+                                                    'iana' => 'provisional'
+                                                  },
                                           'watcherinfo+xml' => {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'common'
@@ -6431,7 +6457,9 @@ $Web::MIME::_TypeDefs::Type = {
                                           'wlwmanifest+xml' => {},
                                           'wmf' => {},
                                           'woff' => {},
-                                          'won' => {},
+                                          'won' => {
+                                                   'iana' => 'provisional'
+                                                 },
                                           'word' => {},
                                           'wordperf' => {},
                                           'wordperfect' => {
@@ -8797,7 +8825,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                          'iana' => 'permanent',
                                                          'iana_intended_usage' => 'common'
                                                        },
-                                    'tetra_acelp' => {},
+                                    'tetra_acelp' => {
+                                                     'iana' => 'provisional'
+                                                   },
                                     'tone' => {
                                               'iana' => 'permanent',
                                               'iana_intended_usage' => 'common'
@@ -9543,8 +9573,12 @@ $Web::MIME::_TypeDefs::Type = {
                                     'gradation' => {},
                                     'gray' => {},
                                     'hdf' => {},
-                                    'heic' => {},
-                                    'heif' => {},
+                                    'heic' => {
+                                              'iana' => 'provisional'
+                                            },
+                                    'heif' => {
+                                              'iana' => 'provisional'
+                                            },
                                     'hpgl' => {},
                                     'i-vrml' => {},
                                     'ico' => {},
@@ -9600,7 +9634,9 @@ $Web::MIME::_TypeDefs::Type = {
                                              'iana_intended_usage' => 'common'
                                            },
                                     'jutvision' => {},
-                                    'jxr' => {},
+                                    'jxr' => {
+                                             'iana' => 'provisional'
+                                           },
                                     'ktx' => {
                                              'iana' => 'permanent'
                                            },
@@ -11037,7 +11073,9 @@ $Web::MIME::_TypeDefs::Type = {
                                            'iana_intended_usage' => 'common'
                                          },
                                    'ncl' => {},
-                                   'nfo' => {},
+                                   'nfo' => {
+                                            'iana' => 'provisional'
+                                          },
                                    'ng-template' => {},
                                    'nginx' => {},
                                    'ntriples' => {},

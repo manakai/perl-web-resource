@@ -1664,6 +1664,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                'obsolete' => 1
                                                              },
                                           'report' => {},
+                                          'reports+json' => {
+                                                            'iana' => 'provisional'
+                                                          },
                                           'reputon+json' => {
                                                             'iana' => 'permanent',
                                                             'iana_intended_usage' => 'common'
@@ -1995,6 +1998,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'iana' => 'permanent'
                                                       },
                                           'step' => {},
+                                          'stix+json' => {
+                                                         'iana' => 'provisional'
+                                                       },
                                           'stream+json' => {},
                                           'streamingmedia' => {},
                                           'studiom' => {},
@@ -2047,6 +2053,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                    'iana_intended_usage' => 'limited use'
                                                                  },
                                           'tar' => {},
+                                          'taxii+json' => {
+                                                          'iana' => 'provisional'
+                                                        },
                                           'tei+xml' => {
                                                        'iana' => 'permanent'
                                                      },
@@ -3816,6 +3825,10 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vnd.las.las+xml' => {
                                                                'iana' => 'permanent'
                                                              },
+                                          'vnd.leap+json' => {
+                                                             'iana' => 'permanent',
+                                                             'iana_intended_usage' => 'common'
+                                                           },
                                           'vnd.liberty-request+xml' => {
                                                                        'iana' => 'permanent',
                                                                        'iana_intended_usage' => 'limited use'

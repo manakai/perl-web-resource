@@ -715,8 +715,22 @@ $Web::MIME::_TypeDefs::Type = {
                                           'gnumeric' => {},
                                           'gnutar' => {},
                                           'gopher-ask-block' => {},
-                                          'gpx' => {},
-                                          'gpx+xml' => {},
+                                          'gpx' => {
+                                                   'params' => {
+                                                                 'charset' => {
+                                                                              'charset_xml' => 1
+                                                                            }
+                                                               },
+                                                   'text' => 1
+                                                 },
+                                          'gpx+xml' => {
+                                                       'params' => {
+                                                                     'charset' => {
+                                                                                  'charset_xml' => 1
+                                                                                }
+                                                                   },
+                                                       'text' => 1
+                                                     },
                                           'graph-idraw' => {},
                                           'groupwise' => {},
                                           'gxf' => {},
@@ -1811,8 +1825,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                  },
                                           'sea' => {},
                                           'secevent+jwt' => {
-                                                            'iana' => 'permanent',
-                                                            'iana_intended_usage' => 'common'
+                                                            'iana' => 'permanent'
                                                           },
                                           'senml+cbor' => {
                                                           'iana' => 'permanent',
@@ -1999,7 +2012,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                       },
                                           'step' => {},
                                           'stix+json' => {
-                                                         'iana' => 'provisional'
+                                                         'iana' => 'permanent',
+                                                         'iana_intended_usage' => 'common'
                                                        },
                                           'stream+json' => {},
                                           'streamingmedia' => {},
@@ -2054,7 +2068,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  },
                                           'tar' => {},
                                           'taxii+json' => {
-                                                          'iana' => 'provisional'
+                                                          'iana' => 'permanent',
+                                                          'iana_intended_usage' => 'common'
                                                         },
                                           'tei+xml' => {
                                                        'iana' => 'permanent'
@@ -2102,6 +2117,9 @@ $Web::MIME::_TypeDefs::Type = {
                                           'toolbook' => {
                                                         'obsolete' => 1
                                                       },
+                                          'trickle-ice-sdpfrag' => {
+                                                                   'iana' => 'permanent'
+                                                                 },
                                           'trig' => {
                                                     'iana' => 'permanent',
                                                     'iana_intended_usage' => 'common'
@@ -2551,6 +2569,10 @@ $Web::MIME::_TypeDefs::Type = {
                                           'vnd.bw-fontobject' => {},
                                           'vnd.bw-fontobject-b7' => {},
                                           'vnd.bw-fontobject-b8' => {},
+                                          'vnd.byu.uapi+json' => {
+                                                                 'iana' => 'permanent',
+                                                                 'iana_intended_usage' => 'common'
+                                                               },
                                           'vnd.cab-jscript' => {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'common'
@@ -6958,8 +6980,22 @@ $Web::MIME::_TypeDefs::Type = {
                                           'x-google-vlc-plugin' => {},
                                           'x-gopher-query' => {},
                                           'x-gps' => {},
-                                          'x-gpx' => {},
-                                          'x-gpx+xml' => {},
+                                          'x-gpx' => {
+                                                     'params' => {
+                                                                   'charset' => {
+                                                                                'charset_xml' => 1
+                                                                              }
+                                                                 },
+                                                     'text' => 1
+                                                   },
+                                          'x-gpx+xml' => {
+                                                         'params' => {
+                                                                       'charset' => {
+                                                                                    'charset_xml' => 1
+                                                                                  }
+                                                                     },
+                                                         'text' => 1
+                                                       },
                                           'x-gramps-xml' => {},
                                           'x-graphing-calculator' => {},
                                           'x-graphite' => {},
@@ -8191,7 +8227,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                    'iana_intended_usage' => 'common',
                                                    'params' => {
                                                                  'charset' => {
-                                                                              'charset_rfc7303' => 1
+                                                                              'charset_rfc7303' => 1,
+                                                                              'charset_xml' => 1
                                                                             },
                                                                  'version' => {
                                                                               'values' => {
@@ -8220,7 +8257,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                        'iana_intended_usage' => 'common',
                                                        'params' => {
                                                                      'charset' => {
-                                                                                  'charset_rfc7303' => 1
+                                                                                  'charset_rfc7303' => 1,
+                                                                                  'charset_xml' => 1
                                                                                 }
                                                                    },
                                                        'text' => 1
@@ -8230,7 +8268,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                           'iana_intended_usage' => 'common',
                                                                           'params' => {
                                                                                         'charset' => {
-                                                                                                     'charset_rfc7303' => 1
+                                                                                                     'charset_rfc7303' => 1,
+                                                                                                     'charset_xml' => 1
                                                                                                    }
                                                                                       },
                                                                           'text' => 1
@@ -10910,7 +10949,14 @@ $Web::MIME::_TypeDefs::Type = {
                                    'gettext' => {},
                                    'goml' => {},
                                    'google-video-pointer' => {},
-                                   'gpx' => {},
+                                   'gpx' => {
+                                            'params' => {
+                                                          'charset' => {
+                                                                       'charset_xml' => 1
+                                                                     }
+                                                        },
+                                            'text' => 1
+                                          },
                                    'grammar-ref-list' => {
                                                          'iana' => 'permanent'
                                                        },
@@ -11371,6 +11417,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                      'iana' => 'permanent',
                                                      'iana_intended_usage' => 'common'
                                                    },
+                                   'vnd.hgl' => {
+                                                'iana' => 'permanent',
+                                                'iana_intended_usage' => 'common'
+                                              },
                                    'vnd.in3d.3dml' => {
                                                       'iana' => 'permanent',
                                                       'iana_intended_usage' => 'common'
@@ -12084,7 +12134,8 @@ $Web::MIME::_TypeDefs::Type = {
                                             'iana_intended_usage' => 'common',
                                             'params' => {
                                                           'charset' => {
-                                                                       'charset_rfc7303' => 1
+                                                                       'charset_rfc7303' => 1,
+                                                                       'charset_xml' => 1
                                                                      },
                                                           'subtype' => {},
                                                           'version' => {
@@ -12104,7 +12155,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                    'iana_intended_usage' => 'common',
                                                                    'params' => {
                                                                                  'charset' => {
-                                                                                              'charset_rfc7303' => 1
+                                                                                              'charset_rfc7303' => 1,
+                                                                                              'charset_xml' => 1
                                                                                             }
                                                                                }
                                                                  },

@@ -2227,6 +2227,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'common'
                                                                },
+                                          'vnd.3gpp.mc-signalling-ear' => {
+                                                                          'iana' => 'permanent',
+                                                                          'iana_intended_usage' => 'common'
+                                                                        },
                                           'vnd.3gpp.mcdata-payload' => {
                                                                        'iana' => 'permanent',
                                                                        'iana_intended_usage' => 'common'
@@ -9563,6 +9567,14 @@ $Web::MIME::_TypeDefs::Type = {
                                     'any' => {},
                                     'apng' => {},
                                     'ascii-art' => {},
+                                    'avci' => {
+                                              'iana' => 'permanent',
+                                              'iana_intended_usage' => 'common'
+                                            },
+                                    'avcs' => {
+                                              'iana' => 'permanent',
+                                              'iana_intended_usage' => 'common'
+                                            },
                                     'avi' => {},
                                     'avs' => {},
                                     'bci' => {},
@@ -9657,11 +9669,21 @@ $Web::MIME::_TypeDefs::Type = {
                                     'gray' => {},
                                     'hdf' => {},
                                     'heic' => {
-                                              'iana' => 'provisional'
+                                              'iana' => 'permanent',
+                                              'iana_intended_usage' => 'common'
                                             },
+                                    'heic-sequence' => {
+                                                       'iana' => 'permanent',
+                                                       'iana_intended_usage' => 'common'
+                                                     },
                                     'heif' => {
-                                              'iana' => 'provisional'
+                                              'iana' => 'permanent',
+                                              'iana_intended_usage' => 'common'
                                             },
+                                    'heif-sequence' => {
+                                                       'iana' => 'permanent',
+                                                       'iana_intended_usage' => 'common'
+                                                     },
                                     'hpgl' => {},
                                     'i-vrml' => {},
                                     'ico' => {},

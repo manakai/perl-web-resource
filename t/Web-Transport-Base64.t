@@ -50,6 +50,13 @@ test {
   done $c;
 } n => 1, name => 'decode utf8';
 
+test {
+  my $c = shift;
+  "ab cd" =~ /(.+)/;
+  is decode_web_base64 $1, "\x69\xB7\x1D";
+  done $c;
+} n => 1, name => 'decode';
+
 run_tests;
 
 =head1 LICENSE

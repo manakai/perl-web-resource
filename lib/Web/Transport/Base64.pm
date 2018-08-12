@@ -34,7 +34,7 @@ sub decode_web_base64 ($) {
     return undef;
   }
   return undef if $v =~ m{[^+/0-9A-Za-z]};
-  return decode_base64 $_[0];
+  return decode_base64 $v;
 } # decode_web_base64
 
 1;

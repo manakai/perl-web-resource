@@ -3753,8 +3753,8 @@ test {
     return $client->request (url => $url)->catch (sub {
       my $res = $_[0];
       test {
-        is $res->network_error_message,
-           q{Connection is closed|Connection closed without response};
+        like $res->network_error_message,
+           qr{^(?:Connection is closed|Connection closed without response)$};
            #q{SOCKS5 server does not return a valid reply: |\x05\x00\x05\x00\x00\x01\x00\x00\x00\x00|}, $res;
       } $c;
     })->then (sub{

@@ -1,0 +1,118 @@
+package Web::Transport::PKI::Generator;
+use strict;
+use warnings;
+our $VERSION = '1.0';
+use Promise;
+use Net::SSLeay;
+use Web::Transport::TypeError;
+use Web::Transport::NetSSLeayError;
+use Web::DateTime;
+use Web::Transport::PKI::Name;
+use Web::Transport::PKI::RSAKey;
+use Web::Transport::PKI::Parser;
+
+push our @CARP_NOT, qw(Web::Transport::TypeError
+                       Web::Transport::NetSSLeayError Promise);
+
+Net::SSLeay::load_error_strings ();
+Net::SSLeay::SSLeay_add_ssl_algorithms ();
+Net::SSLeay::randomize ();
+
+sub new ($) {
+  return bless {}, $_[0];
+} # new
+
+sub create_rsa_key ($%) {
+  my ($self, %args) = @_;
+  return Promise->resolve->then (sub {
+
+    my $rsa = Net::SSLeay::RSA_generate_key ($args{bits} || 2048, 65537)
+        or Web::Transport::NetSSLeayError->new_current;
+
+    return Web::Transport::PKI::RSAKey->_new ($rsa);
+  });
+} # create_rsa_key
+
+sub create_certificate ($%) {
+  my ($self, %args) = @_;
+  return Promise->resolve->then (sub {
+
+    my $cert = Net::SSLeay::X509_new ()
+        or die Web::Transport::NetSSLeayError->new_current;
+
+    Net::SSLeay::X509_set_version
+        ($cert, defined $args{version} ? $args{version} : 2)
+            or die Web::Transport::NetSSLeayError->new_current;
+
+    if (defined $args{serial_number}) {
+      require Math::BigInt;
+      my $n = Math::BigInt->new ($args{serial_number});
+      my $se = Net::SSLeay::X509_get_serialNumber ($cert)
+          or die Web::Transport::NetSSLeayError->new_current;
+      Net::SSLeay::P_ASN1_INTEGER_set_dec ($se, $n);
+    }
+
+    {
+      my $n = Net::SSLeay::X509_get_notBefore ($cert)
+          or die Web::Transport::NetSSLeayError->new_current;
+      my $dt = $args{not_before} || 0;
+      $dt = Web::DateTime->new_from_unix_time ($dt)
+          unless UNIVERSAL::isa ($dt, 'Web::DateTime');
+      Net::SSLeay::P_ASN1_TIME_set_isotime
+          ($n, $dt->to_global_date_and_time_string)
+              or die Web::Transport::NetSSLeayError->new_current;
+    }
+    {
+      my $n = Net::SSLeay::X509_get_notAfter ($cert)
+          or die Web::Transport::NetSSLeayError->new_current;
+      my $dt = $args{not_after} || 0;
+      $dt = Web::DateTime->new_from_unix_time ($dt)
+          unless UNIVERSAL::isa ($dt, 'Web::DateTime');
+      Net::SSLeay::P_ASN1_TIME_set_isotime
+          ($n, $dt->to_global_date_and_time_string)
+              or die Web::Transport::NetSSLeayError->new_current;
+    }
+
+    {
+      my $ssleay_name = Net::SSLeay::X509_get_issuer_name ($cert)
+          or die Web::Transport::NetSSLeayError->new_current;
+      my $name = Web::Transport::PKI::Name->create ($args{issuer});
+      $name->modify_net_ssleay_name ($ssleay_name);
+    }
+    {
+      my $ssleay_name = Net::SSLeay::X509_get_subject_name ($cert)
+          or die Web::Transport::NetSSLeayError->new_current;
+      my $name = Web::Transport::PKI::Name->create ($args{subject});
+      $name->modify_net_ssleay_name ($ssleay_name);
+    }
+
+    my $digest = Net::SSLeay::EVP_get_digestbyname ('sha256')
+        or die Web::Transport::NetSSLeayError->new_current;
+
+    die Web::Transport::TypeError->new ("No |rsa|") unless defined $args{rsa};
+    Net::SSLeay::X509_set_pubkey ($cert, $args{rsa}->to_net_ssleay_pkey)
+        or die Web::Transport::NetSSLeayError->new_current;
+    Net::SSLeay::X509_sign ($cert, $args{rsa}->to_net_ssleay_pkey, $digest)
+        or die Web::Transport::NetSSLeayError->new_current;
+    # don't free $args{rsa} until this line.
+
+    my $pem = Net::SSLeay::PEM_get_string_X509 ($cert);
+    my $parser = Web::Transport::PKI::Parser->new;
+    my $result = $parser->parse_pem ($pem);
+    
+    Net::SSLeay::X509_free ($cert);
+
+    return $result->[0];
+  });
+} # create_certifciate
+
+1;
+
+=head1 LICENSE
+
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

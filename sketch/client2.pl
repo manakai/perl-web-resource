@@ -52,6 +52,14 @@ delete $RequestOptions->{url} if defined $RequestOptions->{path};
 $client->request (%$RequestOptions)->then (sub {
   warn $_[0]->network_error_message;
   #print $_[0]->body_bytes;
+
+  # XXX
+  use Web::Transport::PKI::Parser;
+  my $parser = Web::Transport::PKI::Parser->new;
+  for (@{$client->{http}->info->{parent}->{tls_cert_chain}}) {
+    my $cert = $parser->parse_pem ($_->[0])->[0];
+    warn $cert->debug_info;
+  }
 })->catch (sub {
   warn "ERROR:[$_[0]]";
 })->then (sub {

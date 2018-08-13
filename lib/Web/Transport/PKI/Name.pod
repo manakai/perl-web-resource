@@ -1,0 +1,57 @@
+=head1 NAME
+
+Web::Transport::PKI::Name - A directory name
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::PKI::Name> module represents a name in
+directories.
+
+=head1 METHODS
+
+There are following methods:
+
+=over 4
+
+=item $name = Web::Transport::PKI::Name->create ($input)
+
+Create a new C<Web::Transport::PKI::Name> object.
+
+If the argument is an C<undef> value, an empty name is returned.
+
+If the argument is a C<Web::Transport::PKI::Name> object, the argument
+itself is returned unchanged.
+
+If the argument is a hash reference, a name with the content of the
+hash is returned.  Any key is interprted as an object identifier (OID)
+in the dotted notation (e.g. C<2.5.4.6>), the short name of an object
+(e.g. C<CN>), or the long name of an object (e.g C<commonName>).  If
+an invalid or unknown key is specified, an exception is thrown.  For
+portability, only limited set of names (such as C<CN>, C<C>, and C<O>)
+should be used and any other object should be represented in the
+dotted notaion.  If the value is an C<undef> value, the key/value pair
+is ignored.  Otherwise, the value is interpreted as the text value for
+the corresponding key.  It is encoded as a C<PrintableString>, if
+possible, or as a C<UTF8String> otherwise.  The key/value pairs in the
+hash are encoded as distinct C<RelativeDistinguishedName>s in order
+determined by the implementation.
+
+=item $text = $name->debug_info
+
+Return a short string that summarises the name, which should be useful
+for developments.
+
+=back
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

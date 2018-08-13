@@ -272,6 +272,17 @@ sub x509_has_must_staple ($$) {
   Net::SSLeay::BIO_write ($bio, $_[1]->[0]);
   my $x509 = Net::SSLeay::PEM_read_bio_X509 ($bio);
 
+  my $result = $_[0]->_x509_has_must_staple ($x509);
+
+  Net::SSLeay::BIO_free ($bio);
+  Net::SSLeay::X509_free ($x509);
+
+  return $result;
+} # x509_has_must_staple
+
+sub _x509_has_must_staple ($$) {
+  my ($class, $x509) = @_;
+
   my $result = 0;
 
   my $index = 0;
@@ -293,11 +304,8 @@ sub x509_has_must_staple ($$) {
     redo;
   }
 
-  Net::SSLeay::BIO_free ($bio);
-  Net::SSLeay::X509_free ($x509);
-
   return $result;
-} # x509_has_must_staple
+} # _x509_has_must_staple
 
 1;
 

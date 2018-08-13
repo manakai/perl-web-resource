@@ -1,0 +1,79 @@
+=head1 NAME
+
+Web::Transport::PKI::Certificate - A certificate
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::PKI::Certificate> module represents an X.509
+certificate for PKIX.
+
+=head1 METHODS
+
+There are following methods:
+
+=over 4
+
+=item $int = $cert->version
+
+Return the version of the certificate.  For a valid certificate, it is
+either C<0> (v1), C<1> (v2), or C<2> (v3).
+
+=item $bigint = $cert->serial_number
+
+Return the serial number of the certificate, as a C<Math::BigInt>
+object.
+
+=item $dt? = $cert->not_before
+
+Return the not before value of the validity of the certificate.  If
+there is no valid not before value, C<undef> is returned.  Otherwise,
+a L<Web::DateTime> object representing the timestamp is returned.
+
+=item $dt? = $cert->not_after
+
+Return the not after value of the validity of the certificate.  If
+there is no valid not after value, C<undef> is returned.  Otherwise, a
+L<Web::DateTime> object representing the timestamp is returned.
+
+=item $name = $cert->issuer
+
+Return the issuer of the certificate, as a
+L<Web::Transport::PKI::Name> object.
+
+=item $name = $cert->subject
+
+Return the subject of the certificate, as a
+L<Web::Transport::PKI::Name> object.
+
+=item $string = $cert->to_pem
+
+Return the C<.pem> serialization of the certificate.
+
+=item $text = $cert->debug_info
+
+Return a short string that summarises the certificate, which should be
+useful for developments.
+
+=back
+
+=head1 SPECIFICATIONS
+
+RFC 5280, Internet X.509 Public Key Infrastructure Certificate and
+Certificate Revocation List (CRL) Profile
+<https://tools.ietf.org/html/rfc5280>.
+
+RFC 7468, Textual Encodings of PKIX, PKCS, and CMS Structures
+<https://tools.ietf.org/html/rfc7468>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

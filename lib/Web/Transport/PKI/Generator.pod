@@ -1,0 +1,103 @@
+=head1 NAME
+
+Web::Transport::PKI::Generator - Factory methods of PKIX objects
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::PKI::Generator> module has factory methods to
+create various PKIX related objects.
+
+=head1 METHODS
+
+There are following methods:
+
+=over 4
+
+=item $gen = Web::Transport::PKI::Generator->new
+
+Create a new instance of the generator.
+
+=item $rsa = $gen->create_rsa_key ($name => $value, ...)
+
+Create a new RSA key pair, using OpenSSL via L<Net::SSLeay>.  The
+L<Web::Transport::PKI::RSAKey> object representing the created key is
+returned.
+
+Following option can be specified as name/value pair:
+
+=over 4
+
+=item bits => $int (Default: auto)
+
+The bit length of the created key, as an integer.  In this version,
+the default is C<2048>.
+
+=back
+
+=item $cert = $gen->create_certificate ($name => $value, ...)
+
+Create a new X.509 certificate, using OpenSSL via L<Net::SSLeay>.  The
+L<Web::Transport::PKI::Certificate> object representing the created
+certificate is returned.
+
+Following options can be specified as name/value pairs:
+
+=over 4
+
+=item version => $int (Default: 2)
+
+The version of the certifcate.  The value must be one of C<0> (v1),
+C<1> (v2), or C<2> (v3).
+
+=item serial_number => $bigint (Default: 0)
+
+The serial number of the certificate.  The value must be an integer or
+a L<Math::BigInt> object.
+
+=item not_before => $dt (Required)
+
+The not before of the validity of the certificate.  The value must be
+a Unix time number or a L<Web::DateTime> object.
+
+=item not_after => $dt (Required)
+
+The not after of the validity of the certificate.  The value must be a
+Unix time number or a L<Web::DateTime> object.
+
+=item issuer => $name (Required)
+
+The issuer of the certificate.  The value must be a value that is
+valid as the argument to the C<create> method of the
+L<Web::Transport::PKI::Name> class.
+
+=item subject => $name (Required)
+
+The subject of the certificate.  The value must be a value that is
+valid as the argument to the C<create> method of the
+L<Web::Transport::PKI::Name> class.
+
+=item rsa => $rsa (Required)
+
+The RSA key used to sign the certifciate.  The value must be a
+L<Web::Transport::PKI::RSAKey> object.
+
+=back
+
+=back
+
+=head1 SEE ALSO
+
+L<Web::Transport::PKI::Parser>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

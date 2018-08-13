@@ -1,0 +1,170 @@
+package Web::Transport::PKI::Certificate;
+use strict;
+use warnings;
+our $VERSION = '1.0';
+use Net::SSLeay;
+#use Web::Transport::NetSSLeayError;
+use Web::Transport::Base64;
+use Web::Transport::ASN1;
+use Web::DateTime::Parser;
+use Web::Transport::PKI::Name;
+
+sub _new ($$$) {
+  return  bless {parsed => $_[1], der_ref => $_[2]}, $_[0];
+} # _new
+
+#  my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
+#  Net::SSLeay::BIO_write ($bio, $_[1]);
+#
+#  my $cert = Net::SSLeay::PEM_read_bio_X509 ($bio)
+#      or Web::Transport::NetSSLeayError->new_current;
+#
+#  Net::SSLeay::BIO_free ($bio);
+
+sub version ($) {
+  #return Net::SSLeay::X509_get_version $_[0]->{cert};
+  return $_[0]->{version} if defined $_[0]->{version};
+
+  my $v = $_[0]->{parsed}->{tbsCertificate}->{version}->[2];
+  $v = Web::Transport::ASN1::decode_der $v if defined $v;
+  if (defined $v and $v->[0]->[0] eq 'int') {
+    return $_[0]->{version} = 0+$v->[0]->[1];
+  }
+
+  return $_[0]->{version} = 0; # v1 (default)
+} # version
+
+sub serial_number ($) {
+  #return Net::SSLeay::P_ASN1_INTEGER_get_dec
+  #    Net::SSLeay::X509_get_serialNumber $_[0]->{cert};
+
+  return $_[0]->{serial_number} if defined $_[0]->{serial_number};
+  require Math::BigInt;
+  my $v = $_[0]->{parsed}->{tbsCertificate}->{serialNumber} || ['int', 0];
+  if ($v->[0] eq 'int') {
+    $_[0]->{serial_number} = Math::BigInt->new ($v->[1]);
+  } elsif ($v->[0] eq 'bigint') {
+    $_[0]->{serial_number} = Math::BigInt->from_hex ($v->[1]);
+  } else {
+    $_[0]->{serial_number} = Math::BigInt->new (0);
+  }
+
+  return $_[0]->{serial_number};
+} # serial_number
+
+sub not_before ($) {
+  #return Web::DateTime::Parser->parse_js_date_time_string
+  #    (Net::SSLeay::P_ASN1_TIME_get_isotime
+  #     Net::SSLeay::X509_get_notBefore $_[0]->{cert});
+
+  return $_[0]->{not_before} if exists $_[0]->{not_before};
+  my $v = $_[0]->{parsed}->{tbsCertificate}->{validity}->{notBefore} // [''];
+  my $parser = Web::DateTime::Parser->new;
+  $parser->onerror (sub { });
+  if ($v->[0] eq 'UTCTime') {
+    return $_[0]->{not_before} = $parser->parse_pkix_utc_time_string ($v->[1]); # or undef
+  } elsif ($v->[0] eq 'GeneralizedTime') {
+    return $_[0]->{not_before} = $parser->parse_pkix_generalized_time_string ($v->[1]); # or undef
+  } else {
+    return $_[0]->{not_before} = undef;
+  }
+} # not_before
+
+sub not_after ($) {
+  #return Web::DateTime::Parser->parse_js_date_time_string
+  #    (Net::SSLeay::P_ASN1_TIME_get_isotime
+  #     Net::SSLeay::X509_get_notAfter $_[0]->{cert});
+
+  return $_[0]->{not_after} if exists $_[0]->{not_after};
+  my $v = $_[0]->{parsed}->{tbsCertificate}->{validity}->{notAfter} // [''];
+  my $parser = Web::DateTime::Parser->new;
+  $parser->onerror (sub { });
+  if ($v->[0] eq 'UTCTime') {
+    return $_[0]->{not_after} = $parser->parse_pkix_utc_time_string ($v->[1]); # or undef
+  } elsif ($v->[0] eq 'GeneralizedTime') {
+    return $_[0]->{not_after} = $parser->parse_pkix_generalized_time_string ($v->[1]); # or undef
+  } else {
+    return $_[0]->{not_after} = undef;
+  }
+} # not_after
+
+sub issuer ($) {
+  # ... (Net::SSLeay::X509_get_issuer_name $_[0]->{cert});
+
+  return $_[0]->{issuer} ||= Web::Transport::PKI::Name->_new
+      (Web::Transport::ASN1->read_name
+          ($_[0]->{parsed}->{tbsCertificate}->{issuer}));
+} # issuer
+
+sub subject ($) {
+  # ... (Net::SSLeay::X509_get_subject_name $_[0]->{cert});
+
+  return $_[0]->{subject} ||= Web::Transport::PKI::Name->_new
+      (Web::Transport::ASN1->read_name
+          ($_[0]->{parsed}->{tbsCertificate}->{subject}));
+} # subject
+
+sub to_pem ($) {
+  #return Net::SSLeay::PEM_get_string_X509 $_[0]->{cert};
+
+  my $s = encode_web_base64 ${$_[0]->{der_ref}};
+  $s =~ s/(.{64})/$1\x0D\x0A/g;
+  $s =~ s/\x0D\x0A\z//;
+  return join "\x0D\x0A",
+      "-----BEGIN CERTIFICATE-----",
+      $s,
+      "-----END CERTIFICATE-----",
+      "";
+} # to_pem
+
+sub debug_info ($) {
+  my $self = $_[0];
+  my $cert = $self->{cert};
+
+  my @r;
+  push @r, "v" . (1 + $self->version);
+  push @r, 'I=' . $self->issuer->debug_info;
+  push @r, 'S=' . $self->subject->debug_info;
+  my @san; # XXX = Net::SSLeay::X509_get_subjectAltNames $cert;
+  while (@san) {
+    my $type = (shift @san);
+    $type = {
+      2 => 'DNS',
+      7 => 'IP', # XXX decode value
+    }->{$type} || $type;
+    push @r, 'SAN.'.$type . '=' . (shift @san);
+  }
+  require Math::BigInt;
+  push @r, '#=' . $self->serial_number->as_hex;
+  push @r, 'notbefore=' . $self->not_before->to_global_date_and_time_string
+      if defined $self->not_before;
+  push @r, 'notafter=' . $self->not_after->to_global_date_and_time_string
+      if defined $self->not_after;
+  my @type; # XXX = Net::SSLeay::P_X509_get_netscape_cert_type $cert;
+  if (@type) {
+    push @r, 'netscapecerttype=' . join ',', @type;
+  }
+
+  #XXX
+  #require Web::Transport::OCSP;
+  #if (Web::Transport::OCSP->_x509_has_must_staple ($cert)) {
+  #  push @r, 'must-staple';
+  #}
+
+  return join ' ', @r;
+} # debug_info
+
+sub DESTROY ($) {
+  #Net::SSLeay::X509_free ($_[0]->{cert});
+} # DESTROY
+
+1;
+
+=head1 LICENSE
+
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

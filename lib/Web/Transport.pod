@@ -452,7 +452,7 @@ printed.
 =head1 DEPENDENCY
 
 These module requires Perl 5.14 or later.  They require several core
-modules such as L<Digest::SHA>.
+modules such as L<Digest::SHA> and L<Math::BigInt>.
 
 They require L<AnyEvent> and L<Net::SSLeay>.  The L<Net::SSLeay>
 module requires OpenSSL or equivalent (e.g. LibreSSL).  For Web

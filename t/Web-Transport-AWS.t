@@ -4,6 +4,7 @@ use Path::Tiny;
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
+use Web::URL;
 use Web::Transport::AWS;
 
 test {
@@ -56,11 +57,32 @@ test {
   done $c;
 } n => 6, name => 'aws4_post_policy with token';
 
+test {
+  my $c = shift;
+
+  my $url1 = Web::URL->parse_string
+      ("https://foo.bar.test:436/ba/%FA5%30.aa?abc=xyy&aaa=geeee");
+  my $url2 = Web::Transport::AWS->aws4_signed_url
+      (clock => sub { time },
+       max_age => 120,
+       access_key_id => 'abcde',
+       secret_access_key => 'eageeee',
+       security_token => 'token',
+       region => 'tweeeee',
+       service => 's3',
+       method => 'GET',
+       url => $url1);
+
+  like $url2->stringify, qr{^https://foo.bar.test:436/ba/%FA50.aa\?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=.+&X-Amz-Date=.+&X-Amz-Expires=120&X-Amz-SignedHeaders=host&aaa=geeee&abc=xyy&X-Amz-Signature=.+$};
+
+  done $c;
+} n => 1, name => 'aws_singed_url';
+
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

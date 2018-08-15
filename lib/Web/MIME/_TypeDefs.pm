@@ -660,7 +660,8 @@ $Web::MIME::_TypeDefs::Type = {
                                           'font-off' => {},
                                           'font-sfnt' => {
                                                          'iana' => 'permanent',
-                                                         'iana_intended_usage' => 'common'
+                                                         'iana_intended_usage' => 'common',
+                                                         'obsolete' => 1
                                                        },
                                           'font-tdpfr' => {
                                                           'iana' => 'permanent',
@@ -669,7 +670,8 @@ $Web::MIME::_TypeDefs::Type = {
                                           'font-ttf' => {},
                                           'font-woff' => {
                                                          'iana' => 'permanent',
-                                                         'iana_intended_usage' => 'common'
+                                                         'iana_intended_usage' => 'common',
+                                                         'obsolete' => 1
                                                        },
                                           'font-woff2' => {},
                                           'force-download' => {},
@@ -693,10 +695,15 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'iana' => 'permanent',
                                                         'iana_intended_usage' => 'common'
                                                       },
+                                          'geo+json)' => {},
                                           'geo+json-seq' => {
                                                             'iana' => 'permanent',
                                                             'iana_intended_usage' => 'common'
                                                           },
+                                          'geopackage+sqlite3' => {
+                                                                  'iana' => 'permanent',
+                                                                  'iana_intended_usage' => 'common'
+                                                                },
                                           'geoxacml+xml' => {
                                                             'iana' => 'permanent',
                                                             'iana_intended_usage' => 'common'
@@ -2471,13 +2478,22 @@ $Web::MIME::_TypeDefs::Type = {
                                                                        'iana_intended_usage' => 'common'
                                                                      },
                                           'vnd.apple.iwork' => {},
-                                          'vnd.apple.keynote' => {},
+                                          'vnd.apple.keynote' => {
+                                                                 'iana' => 'permanent',
+                                                                 'iana_intended_usage' => 'common'
+                                                               },
                                           'vnd.apple.mpegurl' => {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'limited use'
                                                                },
-                                          'vnd.apple.numbers' => {},
-                                          'vnd.apple.pages' => {},
+                                          'vnd.apple.numbers' => {
+                                                                 'iana' => 'permanent',
+                                                                 'iana_intended_usage' => 'common'
+                                                               },
+                                          'vnd.apple.pages' => {
+                                                               'iana' => 'permanent',
+                                                               'iana_intended_usage' => 'common'
+                                                             },
                                           'vnd.apple.pkpass' => {},
                                           'vnd.arastra.swi' => {
                                                                'iana' => 'permanent',
@@ -3318,6 +3334,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'iana' => 'permanent',
                                                               'iana_intended_usage' => 'limited use'
                                                             },
+                                          'vnd.futoin+json' => {
+                                                               'iana' => 'permanent',
+                                                               'iana_intended_usage' => 'common'
+                                                             },
                                           'vnd.fuzzysheet' => {
                                                               'iana' => 'permanent',
                                                               'iana_intended_usage' => 'common'
@@ -10131,6 +10151,7 @@ $Web::MIME::_TypeDefs::Type = {
                                     'x-dxf' => {},
                                     'x-emf' => {
                                                'iana' => 'permanent',
+                                               'obsolete' => 1,
                                                'params' => {
                                                              'version' => {
                                                                           'values' => {
@@ -10303,7 +10324,8 @@ $Web::MIME::_TypeDefs::Type = {
                                     'x-windows-icon' => {},
                                     'x-windows-meta' => {},
                                     'x-wmf' => {
-                                               'iana' => 'permanent'
+                                               'iana' => 'permanent',
+                                               'obsolete' => 1
                                              },
                                     'x-wordperfect-graphics' => {},
                                     'x-xbitmap' => {
@@ -12766,6 +12788,11 @@ $Web::MIME::_TypeDefs::Type = {
                                        'vemmi' => {}
                                      }
                       },
+          'vnd.afpc.afplinedata' => {
+                                    'subtype' => {
+                                                   '' => {}
+                                                 }
+                                  },
           'vnd.android.cursor.dir' => {
                                       'subtype' => {
                                                      'album' => {},

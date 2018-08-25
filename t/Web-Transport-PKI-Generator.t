@@ -280,7 +280,8 @@ for my $test (
                             keyCertSign       => !!1,
                             cRLSign           => !!1,
                             encipherOnly      => !!0,
-                            decipherOnly      => !!0}, name => 'ca'},
+                            decipherOnly      => !!0,
+                            SKI => 1}, name => 'ca'},
   {in => {ee => 1}, out => {ca => !!0,
                             digitalSignature  => !!1,
                             nonRepudiation    => !!0,
@@ -290,7 +291,8 @@ for my $test (
                             keyCertSign       => !!0,
                             cRLSign           => !!0,
                             encipherOnly      => !!0,
-                            decipherOnly      => !!0}, name => 'ee'},
+                            decipherOnly      => !!0,
+                            SKI => 1}, name => 'ee'},
   {in => {ca => 1, path_len_constraint => 3},
    out => {ca => !!1,
            digitalSignature  => !!1,
@@ -301,8 +303,27 @@ for my $test (
            keyCertSign       => !!1,
            cRLSign           => !!1,
            encipherOnly      => !!0,
-           decipherOnly      => !!0, path_len_constraint => 3},
+           decipherOnly      => !!0,
+           SKI => 1, path_len_constraint => 3},
    name => 'ca + pathLenConstraint'},
+  {in => {crl_urls => ['http://www.test/1']},
+   out => {crl_urls => ['http://www.test/1']}, name => 'crl 1'},
+  {in => {crl_urls => ['http://www.test/1', 'FTP://ab/cd']},
+   out => {crl_urls => ['http://www.test/1', 'FTP://ab/cd']}, name => 'crl 2'},
+  {in => {crl_urls => ["http://www.test/\x{4e00}"]},
+   out => {crl_urls => ["http://www.test/\x{4e00}"]}, name => 'crl utf8'},
+  {in => {crl_urls => ['http://www.test/1,2']},
+   out => {crl_urls => ['http://www.test/1,2']}, name => 'crl comma'},
+  {in => {crl_urls => ['1' x 127]},
+   out => {crl_urls => ['1' x 127]}, name => 'crl 127'},
+  {in => {crl_urls => ['1' x 128]},
+   out => {crl_urls => ['1' x 128]}, name => 'crl 128'},
+  {in => {crl_urls => ['1' x 256]},
+   out => {crl_urls => ['1' x 256]}, name => 'crl 256'},
+  {in => {crl_urls => ['1' x 1024]},
+   out => {crl_urls => ['1' x 1024]}, name => 'crl 1024'},
+  {in => {crl_urls => ["http://www.test/\x00a"]},
+   out => {crl_urls => ["http://www.test/\x00a"]}, name => 'crl null'},
 ) {
   test {
     my $c = shift;
@@ -330,12 +351,14 @@ for my $test (
                 encipherOnly decipherOnly)) {
           is $cert->key_usage ($_), $expected->{$_};
         }
+        is !! ($cert->debug_info =~ m{\bSKI\b}), !!$expected->{SKI};
+        is_deeply $cert->crl_distribution_urls, $expected->{crl_urls} || [];
       } $c;
       
       done $c;
       undef $c;
     });
-  } n => 11, name => ['create_certificate options', $test->{name}];
+  } n => 13, name => ['create_certificate options', $test->{name}];
 }
 
 run_tests;

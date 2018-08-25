@@ -156,18 +156,64 @@ sub decode_der ($;%) {
   return $result;
 } # decode_der
 
+sub _decode_value ($$);
+sub _decode_value ($$) {
+  my ($x, $decode) = @_;
+  my $v = decode_der $x, depth => 10;
+  return undef unless defined $v;
+
+  if (ref $decode eq 'ARRAY') {
+    if ($decode->[0] eq 'GeneralNames') {
+      $v->[0] = ['SEQUENCE', [$v->[0]]] unless $v->[0]->[0] eq 'SEQUENCE';
+      my $r = [];
+      for my $w (@{$v->[0]->[1]}) {
+        push @$r, undef && next unless $w->[0] eq 'contextual';
+        my $def = [
+          undef, #[otherName => [{name => 'type-id', types => {oid => 1}},
+                 #        {name => 'value', seq => 0, optional => 1}]], # 0
+          [rfc822Name => 'IA5String'], # 1
+          [dNSName => 'IA5String'], # 2
+          undef, #[x400Address => (ORAddress)], # 3
+          undef, #[directoryName => 'Name'], # 4
+          undef, #[ediPartyName => (EDIPartyName)], # 5
+          [uniformResourceIdentifier => 'IA5String'], # 6
+          [iPAddress => 'bytes'], # 7
+          [registeredID => 'oid'], # 8
+        ]->[$w->[1]];
+        push @$r, undef && next unless defined $def;
+        push @$r, [$def->[0], $def->[1], $w->[2]];
+      } # $w
+      return $r;
+    } elsif ($decode->[0] eq 'RDN') {
+      return __PACKAGE__->read_name (['SEQUENCE', $v->[0]]);
+    } elsif ($decode->[0] eq 'CHOICE') {
+      return undef unless $v->[0]->[0] eq 'contextual';
+      my $def = $decode->[1]->[$v->[0]->[1]];
+      return undef unless defined $def;
+
+      return [$def->{name}, _decode_value ($v->[0]->[2], $def->{decode})];
+    } else {
+      die "Bad decode type |$decode->[0]|";
+    }
+  } else {
+    return $v->[0];
+  }
+} # _decode_value
+
 sub read_sequence ($$$) {
-  my (undef, $def, $parsed) = @_;
+  my ($class, $def, $parsed) = @_;
   return undef unless defined $parsed and $parsed->[0] eq 'SEQUENCE';
   my $result = {};
   my $expected = [@$def];
   for (@{$parsed->[1]}) {
     my $next = shift @$expected;
     my $matched;
+    my $decode;
     while (1) {
       if (defined $next->{seq} and
           $_->[0] eq 'contextual' and $_->[1] == $next->{seq}) {
         $matched = 1;
+        $decode = $next->{decode};
         last;
       } elsif ($next->{types}->{$_->[0]}) {
         $matched = 1;
@@ -181,6 +227,7 @@ sub read_sequence ($$$) {
       last if not defined $next;
     }
     if ($matched) {
+      $_ = _decode_value $_->[2], $decode if defined $decode;
       $result->{$next->{name}} = $_;
     } else {
       warn "Got |$_->[0]| (|$next->{name}| value expected)";
@@ -235,6 +282,30 @@ sub find_oid ($$) {
 
   return $def;
 } # find_oid
+
+sub _encode ($$$) {
+  my ($class, $tag, $bytes) = @_;
+  my $r = '';
+  if ($tag eq 'SEQUENCE') {
+    $r .= pack 'C', 0b00100000 | 0x10;
+  } else {
+    die "Bad tag |$tag|" if $tag > 30;
+    $r .= pack 'C', 0b10000000 | $tag;
+  }
+  my $length = length $bytes;
+  if ($length <= 0x7F) {
+    $r .= pack 'C', $length;
+  } elsif ($length <= 0xFF) {
+    $r .= pack 'C', 0b10000000 | 1;
+    $r .= pack 'C', $length;
+  } elsif ($length <= 0xFFFF) {
+    $r .= pack 'C', 0b10000000 | 2;
+    $r .= pack 'n', $length;
+  } else {
+    die "Bad length |$length|";
+  }
+  return $r . $bytes;
+} # _encode
 
 1;
 

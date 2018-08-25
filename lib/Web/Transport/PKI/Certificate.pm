@@ -4,6 +4,7 @@ use warnings;
 our $VERSION = '1.0';
 use Net::SSLeay;
 #use Web::Transport::NetSSLeayError;
+use Web::Encoding;
 use Web::Transport::Base64;
 use Web::Transport::ASN1;
 use Web::DateTime::Parser;
@@ -116,6 +117,20 @@ my $ExtDefs = {
        optional => 1},
     ],
   },
+  '2.5.29.31' => { # cRLDistributionPoints
+    type => 'SEQUENCE OF',
+    def => [
+      {name => 'distributionPoint', seq => 0, optional => 1,
+       decode => ['CHOICE', [
+         {name => 'fullName', decode => ['GeneralNames']}, # 0
+         {name => 'nameRelativeToCRLIssuer', decode => ['RDN']}, # 1
+       ]]},
+      {name => 'reasons', seq => 1, optional => 1,
+       decode => 1},
+      {name => 'cRLIssuer', seq => 2, optional => 1,
+       decode => ['GeneralNames']},
+    ],
+  },
 };
 
 sub _ext ($$) {
@@ -128,6 +143,16 @@ sub _ext ($$) {
       my $v = Web::Transport::ASN1::decode_der $_->[2], depth => 10;
       if ($def->{type} eq 'SEQUENCE') {
         $_->[3] = Web::Transport::ASN1->read_sequence ($def->{def}, $v->[0]);
+      } elsif ($def->{type} eq 'SEQUENCE OF') {
+        if (defined $v and $v->[0]->[0] eq 'SEQUENCE') {
+          my $r = [];
+          for (@{$v->[0]->[1]}) {
+            my $w = Web::Transport::ASN1->read_sequence ($def->{def}, $_);
+            next unless defined $w;
+            push @$r, $w;
+          }
+          $_->[3] = $r;
+        }
       } elsif ($def->{type} eq 'bits') {
         if (defined $v and $v->[0]->[0] eq 'bytes') {
           $_->[3] = $v->[0]->[1];
@@ -171,6 +196,22 @@ sub key_usage ($$) {
   return undef unless defined $v;
   return !! vec ($v->[3] // "", $x, 1);
 } # key_usage
+
+sub crl_distribution_urls ($) {
+  my $self = $_[0];
+  my $v = $self->_ext ('2.5.29.31') || [];
+  my $r = [];
+  for (@{$v->[3] or []}) {
+    my $w = $_->{distributionPoint} || [];
+    next unless $w->[0] eq 'fullName';
+    for (@{$w->[1]}) {
+      if ($_->[0] eq 'uniformResourceIdentifier') {
+        push @$r, decode_web_utf8 $_->[2]; # IA5String
+      }
+    }
+  }
+  return $r;
+} # crl_distribution_urls
 
 sub to_pem ($) {
   #return Net::SSLeay::PEM_get_string_X509 $_[0]->{cert};
@@ -226,6 +267,10 @@ sub debug_info ($) {
     push @r, $_ if $self->key_usage ($_);
   }
 
+  for (@{$self->crl_distribution_urls}) {
+    push @r, 'CRL=' . $_;
+  }
+
   my @type; # XXX = Net::SSLeay::P_X509_get_netscape_cert_type $cert;
   if (@type) {
     push @r, 'netscapecerttype=' . join ',', @type;
@@ -238,7 +283,12 @@ sub debug_info ($) {
   #}
 
   for (@{$self->{parsed}->{tbsCertificate}->{extensions}}) {
-    unless (defined $ExtDefs->{$_->[0]}) {
+    my $n = {
+      '2.5.29.14' => 'SKI',
+    }->{$_->[0]};
+    if (defined $n) {
+      push @r, $n;
+    } elsif (not defined $ExtDefs->{$_->[0]}) {
       push @r, $_->[0];
     }
   }

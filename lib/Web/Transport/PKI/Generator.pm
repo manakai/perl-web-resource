@@ -3,6 +3,7 @@ use strict;
 use warnings;
 our $VERSION = '1.0';
 use Promise;
+use Web::Encoding;
 use Net::SSLeay;
 use Web::Transport::TypeError;
 use Web::Transport::NetSSLeayError;
@@ -97,6 +98,29 @@ sub create_certificate ($%) {
     $ku->{digitalSignature} = $ku->{keyCertSign} = $ku->{cRLSign} = 1 if $args{ca};
     push @arg, &Net::SSLeay::NID_key_usage => 'critical,' . join ',', keys %$ku
         if keys %$ku;
+    push @arg, &Net::SSLeay::NID_subject_key_identifier => 'hash'
+        if $args{ca} or $args{ee};
+    push @arg, &Net::SSLeay::NID_crl_distribution_points => do {
+      my $der = Web::Transport::ASN1->_encode ('SEQUENCE',
+        join '', map {
+          Web::Transport::ASN1->_encode ('SEQUENCE', # DistributionPoint
+            Web::Transport::ASN1->_encode (0, # distributionPoint
+              Web::Transport::ASN1->_encode (0, # fullName
+                Web::Transport::ASN1->_encode (6, # uniformResourceIdentifier
+                  encode_web_utf8 $_,
+                ),
+              ),
+            ),
+          ),
+        } @{$args{crl_urls}}
+      );
+      'DER:' . join '', map { sprintf '%02X', ord $_ } split //, $der;
+    } if @{$args{crl_urls} or []};
+    #&Net::SSLeay::NID_authority_key_identifier => 'keyid',
+    #&Net::SSLeay::NID_authority_key_identifier => 'issuer',
+    #&Net::SSLeay::NID_ext_key_usage => 'serverAuth,clientAuth',
+    #&Net::SSLeay::NID_netscape_cert_type => 'server',
+    #&Net::SSLeay::NID_subject_alt_name => 'DNS:s1.dom.com,DNS:s2.dom.com,DNS:s3.dom.com',
     if (@arg) {
       Net::SSLeay::P_X509_add_extensions ($cert, $cert, @arg)
           or die Web::Transport::NetSSLeayError->new_current;

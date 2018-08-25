@@ -81,6 +81,27 @@ L<Web::Transport::PKI::Name> class.
 The RSA key used to sign the certifciate.  The value must be a
 L<Web::Transport::PKI::RSAKey> object.
 
+=item ca => $boolean
+
+If true, certificate fields are configured for typical CA
+certificates.
+
+=item ee => $boolean
+
+If true, certificate fields are configured for typical EE
+certificates.
+
+=item path_len_constraint => $integer
+
+The pathLenConstraint value of the basic constraints extension of the
+certificate.
+
+=item crl_urls => [$string1, $string2, ...]
+
+The CRL distribution point URLs of the certificate.  If specified, the
+value must be an array reference of character strings representing the
+URLs.
+
 =back
 
 =back

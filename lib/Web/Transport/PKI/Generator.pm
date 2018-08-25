@@ -116,9 +116,11 @@ sub create_certificate ($%) {
       );
       'DER:' . join '', map { sprintf '%02X', ord $_ } split //, $der;
     } if @{$args{crl_urls} or []};
-    #&Net::SSLeay::NID_authority_key_identifier => 'keyid',
-    #&Net::SSLeay::NID_authority_key_identifier => 'issuer',
-    #&Net::SSLeay::NID_ext_key_usage => 'serverAuth,clientAuth',
+    push @arg, &Net::SSLeay::NID_authority_key_identifier => 'keyid';
+    #&Net::SSLeay::NID_authority_key_identifier => 'issuer';
+    if (($args{ca} and not $args{root_ca}) or $args{ee}) {
+      push @arg, &Net::SSLeay::NID_ext_key_usage => 'serverAuth,clientAuth';
+    }
     #&Net::SSLeay::NID_netscape_cert_type => 'server',
     #&Net::SSLeay::NID_subject_alt_name => 'DNS:s1.dom.com,DNS:s2.dom.com,DNS:s3.dom.com',
     if (@arg) {

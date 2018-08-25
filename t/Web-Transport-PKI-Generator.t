@@ -281,6 +281,7 @@ for my $test (
                             cRLSign           => !!1,
                             encipherOnly      => !!0,
                             decipherOnly      => !!0,
+                            serverAuth => !!1, clientAuth => !!1,
                             SKI => 1}, name => 'ca'},
   {in => {ee => 1}, out => {ca => !!0,
                             digitalSignature  => !!1,
@@ -292,6 +293,7 @@ for my $test (
                             cRLSign           => !!0,
                             encipherOnly      => !!0,
                             decipherOnly      => !!0,
+                            serverAuth => !!1, clientAuth => !!1,
                             SKI => 1}, name => 'ee'},
   {in => {ca => 1, path_len_constraint => 3},
    out => {ca => !!1,
@@ -304,6 +306,7 @@ for my $test (
            cRLSign           => !!1,
            encipherOnly      => !!0,
            decipherOnly      => !!0,
+           serverAuth => !!1, clientAuth => !!1,
            SKI => 1, path_len_constraint => 3},
    name => 'ca + pathLenConstraint'},
   {in => {crl_urls => ['http://www.test/1']},
@@ -324,6 +327,19 @@ for my $test (
    out => {crl_urls => ['1' x 1024]}, name => 'crl 1024'},
   {in => {crl_urls => ["http://www.test/\x00a"]},
    out => {crl_urls => ["http://www.test/\x00a"]}, name => 'crl null'},
+  {in => {ca => 1, root_ca => 1, path_len_constraint => 3},
+   out => {ca => !!1,
+           digitalSignature  => !!1,
+           nonRepudiation    => !!0,
+           keyEncipherment   => !!0,
+           dataEncipherment  => !!0,
+           keyAgreement      => !!0,
+           keyCertSign       => !!1,
+           cRLSign           => !!1,
+           encipherOnly      => !!0,
+           decipherOnly      => !!0,
+           SKI => 1, path_len_constraint => 3},
+   name => 'root_ca'},
 ) {
   test {
     my $c = shift;
@@ -352,13 +368,16 @@ for my $test (
           is $cert->key_usage ($_), $expected->{$_};
         }
         is !! ($cert->debug_info =~ m{\bSKI\b}), !!$expected->{SKI};
+        is !! ($cert->debug_info =~ m{\bAKI\b}), 1;
         is_deeply $cert->crl_distribution_urls, $expected->{crl_urls} || [];
+        is !! $cert->extended_key_usage ('serverAuth'), !! $expected->{serverAuth};
+        is !! $cert->extended_key_usage ('clientAuth'), !! $expected->{clientAuth};
       } $c;
       
       done $c;
       undef $c;
     });
-  } n => 13, name => ['create_certificate options', $test->{name}];
+  } n => 16, name => ['create_certificate options', $test->{name}];
 }
 
 run_tests;

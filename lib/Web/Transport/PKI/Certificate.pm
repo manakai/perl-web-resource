@@ -131,6 +131,10 @@ my $ExtDefs = {
        decode => ['GeneralNames']},
     ],
   },
+  '2.5.29.37' => { # extKeyUsage
+    type => 'SEQUENCE OF',
+    subtype => 'oid',
+  },
 };
 
 sub _ext ($$) {
@@ -145,13 +149,21 @@ sub _ext ($$) {
         $_->[3] = Web::Transport::ASN1->read_sequence ($def->{def}, $v->[0]);
       } elsif ($def->{type} eq 'SEQUENCE OF') {
         if (defined $v and $v->[0]->[0] eq 'SEQUENCE') {
-          my $r = [];
-          for (@{$v->[0]->[1]}) {
-            my $w = Web::Transport::ASN1->read_sequence ($def->{def}, $_);
-            next unless defined $w;
-            push @$r, $w;
+          if (defined $def->{def}) {
+            my $r = [];
+            for (@{$v->[0]->[1]}) {
+              my $w = Web::Transport::ASN1->read_sequence ($def->{def}, $_);
+              next unless defined $w;
+              push @$r, $w;
+            }
+            $_->[3] = $r;
+          } elsif (defined $def->{subtype}) {
+            my $r = [];
+            for (@{$v->[0]->[1]}) {
+              push @$r, $_ if $_->[0] eq $def->{subtype};
+            }
+            $_->[3] = $r;
           }
-          $_->[3] = $r;
         }
       } elsif ($def->{type} eq 'bits') {
         if (defined $v and $v->[0]->[0] eq 'bytes') {
@@ -213,6 +225,24 @@ sub crl_distribution_urls ($) {
   return $r;
 } # crl_distribution_urls
 
+sub _xuoids ($) {
+  my $self = $_[0];
+  for (@{($self->_ext ('2.5.29.37') or [])->[3] or []}) {
+    if ($_->[0] eq 'oid') {
+      $self->{xuoids}->{$_->[1]} = 1;
+    }
+  }
+  return $self->{xuoids};
+} # _xuoids
+
+sub extended_key_usage ($$) {
+  my ($self, $_oid) = @_;
+  my $oids = $self->_xuoids;
+  my $oid = Web::Transport::ASN1->find_oid ($_oid);
+  return undef unless defined $oid;
+  return $oids->{$oid->{oid}};
+} # extended_key_usage
+
 sub to_pem ($) {
   #return Net::SSLeay::PEM_get_string_X509 $_[0]->{cert};
 
@@ -271,6 +301,12 @@ sub debug_info ($) {
     push @r, 'CRL=' . $_;
   }
 
+  my $oids = $self->_xuoids;
+  for (sort { $a cmp $b } keys %$oids) {
+    my $oid = Web::Transport::ASN1->find_oid ($_);
+    push @r, 'extKeyUsage=' . ($oid->{short_name} // $oid->{long_name} // $oid->{oid});
+  }
+
   my @type; # XXX = Net::SSLeay::P_X509_get_netscape_cert_type $cert;
   if (@type) {
     push @r, 'netscapecerttype=' . join ',', @type;
@@ -285,6 +321,7 @@ sub debug_info ($) {
   for (@{$self->{parsed}->{tbsCertificate}->{extensions}}) {
     my $n = {
       '2.5.29.14' => 'SKI',
+      '2.5.29.35' => 'AKI',
     }->{$_->[0]};
     if (defined $n) {
       push @r, $n;

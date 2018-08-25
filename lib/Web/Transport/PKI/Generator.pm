@@ -86,6 +86,22 @@ sub create_certificate ($%) {
       $name->modify_net_ssleay_name ($ssleay_name);
     }
 
+    my @arg;
+    push @arg, &Net::SSLeay::NID_basic_constraints => 'critical,CA:TRUE'
+        . (defined $args{path_len_constraint} ? ',pathlen:' . (0+$args{path_len_constraint}) : '')
+        if $args{ca};
+    push @arg, &Net::SSLeay::NID_basic_constraints => 'critical,CA:FALSE'
+        if $args{ee} and not $args{ca};
+    my $ku = {};
+    $ku->{digitalSignature} = $ku->{keyEncipherment} = 1 if $args{ee};
+    $ku->{digitalSignature} = $ku->{keyCertSign} = $ku->{cRLSign} = 1 if $args{ca};
+    push @arg, &Net::SSLeay::NID_key_usage => 'critical,' . join ',', keys %$ku
+        if keys %$ku;
+    if (@arg) {
+      Net::SSLeay::P_X509_add_extensions ($cert, $cert, @arg)
+          or die Web::Transport::NetSSLeayError->new_current;
+    }
+
     my $digest = Net::SSLeay::EVP_get_digestbyname ('sha256')
         or die Web::Transport::NetSSLeayError->new_current;
 

@@ -191,6 +191,153 @@ test {
   });
 } n => 5, name => 'create_certificate no argument';
 
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_rsa_key->then (sub {
+    my $rsa = $_[0];
+    
+    my $p = $gen->create_certificate (
+      rsa => $rsa,
+      version => 0,
+      serial_number => Math::BigInt->from_hex ('0f642344e44'),
+      not_before => Web::DateTime->new_from_unix_time (63735321144),
+      not_after => Web::DateTime->new_from_unix_time (76467543566),
+      issuer => Web::Transport::PKI::Name->create ({CN => 'hoge.foo'}),
+      subject => Web::Transport::PKI::Name->create ({O => "\x{5353}\x{50000}"}),
+    );
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+
+    return $p;
+  })->then (sub {
+    my $cert = $_[0];
+
+    test {
+      isa_ok $cert, 'Web::Transport::PKI::Certificate';
+      is $cert->version, 0, 'v1';
+      is $cert->serial_number, 1057672678980;
+      is $cert->not_before->to_unix_number, 63735321144;
+      is $cert->not_after->to_unix_number, 76467543566;
+      is $cert->issuer->debug_info, '[CN=(P)hoge.foo]';
+      is $cert->subject->debug_info, "[O=(U)\x{5353}\x{50000}]";
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 8, name => 'create_certificate primitive';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_rsa_key->then (sub {
+    my $rsa = $_[0];
+    
+    my $p = $gen->create_certificate (
+      rsa => $rsa,
+      version => 0,
+      serial_number => Math::BigInt->from_hex ('0f642344e44'),
+      not_before => Web::DateTime->new_from_unix_time (63735321144),
+      not_after => Web::DateTime->new_from_unix_time (76467543566),
+      issuer => Web::Transport::PKI::Name->create ({CN => 'hoge.foo'}),
+      subject => Web::Transport::PKI::Name->create ({O => "\x{5353}\x{50000}"}),
+    );
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+
+    return $p;
+  })->then (sub {
+    my $cert = $_[0];
+
+    test {
+      isa_ok $cert, 'Web::Transport::PKI::Certificate';
+      is $cert->version, 0, 'v1';
+      is $cert->serial_number, 1057672678980;
+      is $cert->not_before->to_unix_number, 63735321144;
+      is $cert->not_after->to_unix_number, 76467543566;
+      is $cert->issuer->debug_info, '[CN=(P)hoge.foo]';
+      is $cert->subject->debug_info, "[O=(U)\x{5353}\x{50000}]";
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 8, name => 'create_certificate primitive';
+
+for my $test (
+  {in => {}, out => {}},
+  {in => {ca => 1}, out => {ca => !!1,
+                            digitalSignature  => !!1,
+                            nonRepudiation    => !!0,
+                            keyEncipherment   => !!0,
+                            dataEncipherment  => !!0,
+                            keyAgreement      => !!0,
+                            keyCertSign       => !!1,
+                            cRLSign           => !!1,
+                            encipherOnly      => !!0,
+                            decipherOnly      => !!0}, name => 'ca'},
+  {in => {ee => 1}, out => {ca => !!0,
+                            digitalSignature  => !!1,
+                            nonRepudiation    => !!0,
+                            keyEncipherment   => !!1,
+                            dataEncipherment  => !!0,
+                            keyAgreement      => !!0,
+                            keyCertSign       => !!0,
+                            cRLSign           => !!0,
+                            encipherOnly      => !!0,
+                            decipherOnly      => !!0}, name => 'ee'},
+  {in => {ca => 1, path_len_constraint => 3},
+   out => {ca => !!1,
+           digitalSignature  => !!1,
+           nonRepudiation    => !!0,
+           keyEncipherment   => !!0,
+           dataEncipherment  => !!0,
+           keyAgreement      => !!0,
+           keyCertSign       => !!1,
+           cRLSign           => !!1,
+           encipherOnly      => !!0,
+           decipherOnly      => !!0, path_len_constraint => 3},
+   name => 'ca + pathLenConstraint'},
+) {
+  test {
+    my $c = shift;
+
+    my $gen = Web::Transport::PKI::Generator->new;
+    $gen->create_rsa_key->then (sub {
+      my $rsa = $_[0];
+      
+      return $gen->create_certificate (
+        rsa => $rsa,
+        version => 2,
+        %{$test->{in}},
+      );
+    })->then (sub {
+      my $cert = $_[0];
+      test {
+        my $expected = {
+          version => 2,
+          %{$test->{out}},
+        };
+        is $cert->version, $expected->{version};
+        is $cert->ca, $expected->{ca};
+        for (qw(digitalSignature nonRepudiation keyEncipherment
+                dataEncipherment keyAgreement keyCertSign cRLSign
+                encipherOnly decipherOnly)) {
+          is $cert->key_usage ($_), $expected->{$_};
+        }
+      } $c;
+      
+      done $c;
+      undef $c;
+    });
+  } n => 11, name => ['create_certificate options', $test->{name}];
+}
+
 run_tests;
 
 =head1 LICENSE

@@ -59,6 +59,28 @@ sub parse_certificate_der ($$) {
     {name => 'notAfter', types => {UTCTime => 1, GeneralizedTime => 1}},
   ], $certificate->{tbsCertificate}->{validity});
 
+  my $exts = $certificate->{tbsCertificate}->{extensions};
+  if (defined $exts and $exts->[0] eq 'contextual') {
+    my $decoded = Web::Transport::ASN1::decode_der $exts->[2], depth => 10;
+    $exts = [];
+    if (defined $decoded and $decoded->[0]->[0] eq 'SEQUENCE') {
+      for (@{$decoded->[0]->[1]}) {
+        my $v = Web::Transport::ASN1->read_sequence ([
+          {name => 'extnID', types => {oid => 1}},
+          {name => 'critical', types => {BOOLEAN => 1}, optional => 1},
+          {name => 'extnValue', types => {bytes => 1}},
+        ], $_);
+        next unless defined $v and defined $v->{extnID};
+        push @$exts, [$v->{extnID}->[1],
+                      $v->{critical}->[1],
+                      $v->{extnValue}->[1] // ''];
+      }
+    }
+  } else {
+    $exts = [];
+  }
+  $certificate->{tbsCertificate}->{extensions} = $exts;
+
   return Web::Transport::PKI::Certificate->_new ($certificate, \$bytes);
 } # parse_certificate_der
 

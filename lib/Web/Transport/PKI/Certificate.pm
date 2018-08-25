@@ -104,6 +104,74 @@ sub subject ($) {
           ($_[0]->{parsed}->{tbsCertificate}->{subject}));
 } # subject
 
+my $ExtDefs = {
+  '2.5.29.15' => { # keyUsage
+    type => 'bits',
+  },
+  '2.5.29.19' => { # basicConstraints
+    type => 'SEQUENCE',
+    def => [
+      {name => 'cA', types => {BOOLEAN => 1}, optional => 1},
+      {name => 'pathLenConstraint', types => {int => 1, bigint => 0},
+       optional => 1},
+    ],
+  },
+};
+
+sub _ext ($$) {
+  my ($self, $oid) = @_;
+  return $self->{exts}->{$oid} if exists $self->{exts}->{$oid};
+
+  for (@{$self->{parsed}->{tbsCertificate}->{extensions}}) {
+    if ($_->[0] eq $oid) {
+      my $def = $ExtDefs->{$oid} or die "No definition for |$oid|";
+      my $v = Web::Transport::ASN1::decode_der $_->[2], depth => 10;
+      if ($def->{type} eq 'SEQUENCE') {
+        $_->[3] = Web::Transport::ASN1->read_sequence ($def->{def}, $v->[0]);
+      } elsif ($def->{type} eq 'bits') {
+        if (defined $v and $v->[0]->[0] eq 'bytes') {
+          $_->[3] = $v->[0]->[1];
+        }
+      }
+      return $self->{exts}->{$oid} = undef unless defined $_->[3];
+      return $self->{exts}->{$oid} = $_;
+    }
+  }
+
+  return $self->{exts}->{$oid} = undef;
+} # _ext
+
+sub ca ($) {
+  my $self = $_[0];
+  my $v = $self->_ext ("2.5.29.19");
+  return undef unless defined $v;
+  return !! $v->[3]->{cA}->[1];
+} # ca
+
+sub path_len_constraint ($) {
+  my $self = $_[0];
+  return (($self->_ext ('2.5.29.19') or [])->[3]->{pathLenConstraint}->[1]); # or undef
+} # path_len_constraint
+
+sub key_usage ($$) {
+  my ($self, $field) = @_;
+  my $x = {
+    digitalSignature  => 7,
+    nonRepudiation    => 6, contentCommitment => 6,
+    keyEncipherment   => 5,
+    dataEncipherment  => 4,
+    keyAgreement      => 3,
+    keyCertSign       => 2,
+    cRLSign           => 1,
+    encipherOnly      => 0,
+    decipherOnly      => 15,
+  }->{$field};
+  return undef unless defined $x;
+  my $v = $self->_ext ('2.5.29.15');
+  return undef unless defined $v;
+  return !! vec ($v->[3] // "", $x, 1);
+} # key_usage
+
 sub to_pem ($) {
   #return Net::SSLeay::PEM_get_string_X509 $_[0]->{cert};
 
@@ -119,7 +187,6 @@ sub to_pem ($) {
 
 sub debug_info ($) {
   my $self = $_[0];
-  my $cert = $self->{cert};
 
   my @r;
   push @r, "v" . (1 + $self->version);
@@ -140,6 +207,25 @@ sub debug_info ($) {
       if defined $self->not_before;
   push @r, 'notafter=' . $self->not_after->to_global_date_and_time_string
       if defined $self->not_after;
+
+  push @r, 'CA' if $self->ca;
+  push @r, 'pathLenConstraint=' . $self->path_len_constraint
+      if defined $self->path_len_constraint;
+
+  for (qw(
+    digitalSignature
+    nonRepudiation
+    keyEncipherment
+    dataEncipherment
+    keyAgreement
+    keyCertSign
+    cRLSign
+    encipherOnly
+    decipherOnly
+  )) {
+    push @r, $_ if $self->key_usage ($_);
+  }
+
   my @type; # XXX = Net::SSLeay::P_X509_get_netscape_cert_type $cert;
   if (@type) {
     push @r, 'netscapecerttype=' . join ',', @type;
@@ -150,6 +236,12 @@ sub debug_info ($) {
   #if (Web::Transport::OCSP->_x509_has_must_staple ($cert)) {
   #  push @r, 'must-staple';
   #}
+
+  for (@{$self->{parsed}->{tbsCertificate}->{extensions}}) {
+    unless (defined $ExtDefs->{$_->[0]}) {
+      push @r, $_->[0];
+    }
+  }
 
   return join ' ', @r;
 } # debug_info

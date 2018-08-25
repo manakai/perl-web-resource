@@ -15,7 +15,6 @@ for my $test (
   ['2.5.4.3' => '2.5.4.3', 'CN', 'commonName'],
   ['CN' => '2.5.4.3', 'CN', 'commonName'],
   ['commonName' => '2.5.4.3', 'CN', 'commonName'],
-  ['iso', '1.0', 'ISO', 'iso'],
   ['2.23.140.1.2.1', '2.23.140.1.2.1', undef, undef],
   ['a b c', undef, undef, undef],
 ) {

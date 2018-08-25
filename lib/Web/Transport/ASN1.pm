@@ -66,10 +66,9 @@ sub decode_der ($;%) {
         }
         next;
       } elsif ($tag == 3) { # BIT STRING
-        if (@data > 0 and $data[0] eq "\x00") {
-          push @$result, ['bytes', (join '', @data[1..$#data])];
-          next;
-        }
+        # $data[0] is # of redundant bits at the end of the sequence
+        push @$result, ['bytes', (join '', @data[1..$#data])];
+        next;
       } elsif ($tag == 4) { # OCTET STRING
         push @$result, ['bytes', (join '', @data)];
         next;
@@ -165,16 +164,21 @@ sub read_sequence ($$$) {
   for (@{$parsed->[1]}) {
     my $next = shift @$expected;
     my $matched;
-    while (defined $next->{seq}) {
-      if ($_->[0] eq 'contextual' and $_->[1] == $next->{seq}) {
+    while (1) {
+      if (defined $next->{seq} and
+          $_->[0] eq 'contextual' and $_->[1] == $next->{seq}) {
         $matched = 1;
+        last;
+      } elsif ($next->{types}->{$_->[0]}) {
+        $matched = 1;
+        last;
+      } elsif (defined $next->{seq} or $next->{optional}) {
+        #
+      } else {
         last;
       }
       $next = shift @$expected;
       last if not defined $next;
-    }
-    if (not $matched and $next->{types}->{$_->[0]}) {
-      $matched = 1;
     }
     if ($matched) {
       $result->{$next->{name}} = $_;

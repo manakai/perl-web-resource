@@ -340,6 +340,21 @@ for my $test (
            decipherOnly      => !!0,
            SKI => 1, path_len_constraint => 3},
    name => 'root_ca'},
+  {in => {aia_ocsp_url => "http://www.test/\x00a"},
+   out => {aia_ocsp_url => "http://www.test/\x00a"}, name => 'ocsp null'},
+  {in => {aia_ocsp_url => "http://www.test/,,a"},
+   out => {aia_ocsp_url => "http://www.test/,,a"}, name => 'ocsp comma'},
+  {in => {aia_ocsp_url => "http://www.test/\x{4e00}a"},
+   out => {aia_ocsp_url => "http://www.test/\x{4e00}a"}, name => 'ocsp utf8'},
+  {in => {aia_ca_issuers_url => "http://www.test/\x00a"},
+   out => {aia_ca_issuers_url => "http://www.test/\x00a"},
+   name => 'ca_issuers null'},
+  {in => {aia_ca_issuers_url => "http://www.test/,,a"},
+   out => {aia_ca_issuers_url => "http://www.test/,,a"},
+   name => 'ca_issuers comma'},
+  {in => {aia_ca_issuers_url => "http://www.test/\x{4e00}a"},
+   out => {aia_ca_issuers_url => "http://www.test/\x{4e00}a"},
+   name => 'ca_issuers utf8'},
 ) {
   test {
     my $c = shift;
@@ -372,12 +387,14 @@ for my $test (
         is_deeply $cert->crl_distribution_urls, $expected->{crl_urls} || [];
         is !! $cert->extended_key_usage ('serverAuth'), !! $expected->{serverAuth};
         is !! $cert->extended_key_usage ('clientAuth'), !! $expected->{clientAuth};
+        is $cert->aia_ocsp_url, $expected->{aia_ocsp_url};
+        is $cert->aia_ca_issuers_url, $expected->{aia_ca_issuers_url};
       } $c;
       
       done $c;
       undef $c;
     });
-  } n => 16, name => ['create_certificate options', $test->{name}];
+  } n => 18, name => ['create_certificate options', $test->{name}];
 }
 
 run_tests;

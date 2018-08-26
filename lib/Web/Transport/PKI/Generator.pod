@@ -44,12 +44,12 @@ Following options can be specified as name/value pairs:
 
 =over 4
 
-=item version => $int (Default: 2)
+=item version => $int? (Default: 2)
 
 The version of the certifcate.  The value must be one of C<0> (v1),
 C<1> (v2), or C<2> (v3).
 
-=item serial_number => $bigint (Default: 0)
+=item serial_number => $bigint? (Default: 0)
 
 The serial number of the certificate.  The value must be an integer or
 a L<Math::BigInt> object.
@@ -91,16 +91,26 @@ certificates.
 If true, certificate fields are configured for typical EE
 certificates.
 
-=item path_len_constraint => $integer
+=item path_len_constraint => $integer?
 
 The pathLenConstraint value of the basic constraints extension of the
-certificate.
+certificate, if any, or C<undef>.
 
 =item crl_urls => [$string1, $string2, ...]
 
 The CRL distribution point URLs of the certificate.  If specified, the
 value must be an array reference of character strings representing the
 URLs.
+
+=item aia_ocsp_url => $string?
+
+The OCSP URL of the Authority Information Access extension of the
+certificate as a character string, if any, or C<undef>.
+
+=item aia_ca_issuers_url => $string?
+
+The CA issuers URL of the Authority Information Access extension of
+the certificate as a character string, if any, or C<undef>.
 
 =back
 

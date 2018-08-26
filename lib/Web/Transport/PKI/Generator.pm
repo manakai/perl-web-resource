@@ -87,6 +87,74 @@ sub create_certificate ($%) {
       $name->modify_net_ssleay_name ($ssleay_name);
     }
 
+    {
+      my @ext;
+      
+      my @aia;
+      push @aia, Web::Transport::ASN1->_encode ('SEQUENCE',
+        join '',
+        Web::Transport::ASN1->_encode ('oid', '1.3.6.1.5.5.7.48.1'),
+        Web::Transport::ASN1->_encode (\6, encode_web_utf8 $args{aia_ocsp_url}),
+      ) if defined $args{aia_ocsp_url};
+      push @aia, Web::Transport::ASN1->_encode ('SEQUENCE',
+        join '',
+        Web::Transport::ASN1->_encode ('oid', '1.3.6.1.5.5.7.48.2'),
+        Web::Transport::ASN1->_encode (\6, encode_web_utf8 $args{aia_ca_issuers_url}),
+      ) if defined $args{aia_ca_issuers_url};
+      push @ext, Web::Transport::ASN1->_encode ('SEQUENCE',
+        join '',
+        Web::Transport::ASN1->_encode ('oid', '1.3.6.1.5.5.7.1.1'),
+        Web::Transport::ASN1->_encode (0x4,
+          Web::Transport::ASN1->_encode ('SEQUENCE', join '', @aia),
+        ),
+      ) if @aia;
+
+      last unless @ext;
+
+      my $csr_der = Web::Transport::ASN1->_encode ('SEQUENCE',
+        join '',
+        Web::Transport::ASN1->_encode ('SEQUENCE',
+          join '',
+          Web::Transport::ASN1->_encode (0x2, "\x00"), # version
+          Web::Transport::ASN1->_encode ('SEQUENCE', ""), # subject : Name
+          Web::Transport::ASN1->_encode ('SEQUENCE', # subjectPKInfo
+            join '',
+            Web::Transport::ASN1->_encode ('SEQUENCE',
+              Web::Transport::ASN1->_encode ('oid', '0.0'),
+            ),
+            Web::Transport::ASN1->_encode (0x3, "\x00"),
+          ),
+          Web::Transport::ASN1->_encode (\0, # attributes
+            Web::Transport::ASN1->_encode ('SEQUENCE',
+              join '',
+              Web::Transport::ASN1->_encode ('oid', '1.2.840.113549.1.9.14'),
+              Web::Transport::ASN1->_encode ('SET',
+                join '',
+                Web::Transport::ASN1->_encode ('SEQUENCE', join '', @ext),
+              ),
+            ),
+          ),
+        ), # certifciationRequestInfo
+        Web::Transport::ASN1->_encode ('SEQUENCE', # signatureAlgorithm
+          Web::Transport::ASN1->_encode ('oid', '0.0'), # XXX
+        ),
+        Web::Transport::ASN1->_encode (0x3, "\x00"),
+      );
+
+      my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ())
+          or die Web::Transport::NetSSLeayError->new_current;
+      Net::SSLeay::BIO_write ($bio, $csr_der)
+          or die Web::Transport::NetSSLeayError->new_current;
+      my $csr = Net::SSLeay::d2i_X509_REQ_bio ($bio)
+          or die Web::Transport::NetSSLeayError->new_current;
+
+      Net::SSLeay::P_X509_copy_extensions ($csr, $cert, 0)
+          or die Web::Transport::NetSSLeayError->new_current;
+
+      Net::SSLeay::BIO_free ($bio);
+      Net::SSLeay::X509_REQ_free ($csr);
+    }
+
     my @arg;
     push @arg, &Net::SSLeay::NID_basic_constraints => 'critical,CA:TRUE'
         . (defined $args{path_len_constraint} ? ',pathlen:' . (0+$args{path_len_constraint}) : '')
@@ -104,9 +172,9 @@ sub create_certificate ($%) {
       my $der = Web::Transport::ASN1->_encode ('SEQUENCE',
         join '', map {
           Web::Transport::ASN1->_encode ('SEQUENCE', # DistributionPoint
-            Web::Transport::ASN1->_encode (0, # distributionPoint
-              Web::Transport::ASN1->_encode (0, # fullName
-                Web::Transport::ASN1->_encode (6, # uniformResourceIdentifier
+            Web::Transport::ASN1->_encode (\0, # distributionPoint
+              Web::Transport::ASN1->_encode (\0, # fullName
+                Web::Transport::ASN1->_encode (\6, # uniformResourceIdentifier
                   encode_web_utf8 $_,
                 ),
               ),
@@ -121,10 +189,10 @@ sub create_certificate ($%) {
     if (($args{ca} and not $args{root_ca}) or $args{ee}) {
       push @arg, &Net::SSLeay::NID_ext_key_usage => 'serverAuth,clientAuth';
     }
-    #&Net::SSLeay::NID_netscape_cert_type => 'server',
     #&Net::SSLeay::NID_subject_alt_name => 'DNS:s1.dom.com,DNS:s2.dom.com,DNS:s3.dom.com',
     if (@arg) {
-      Net::SSLeay::P_X509_add_extensions ($cert, $cert, @arg)
+      my $ca_cert = $cert;
+      Net::SSLeay::P_X509_add_extensions ($cert, $ca_cert, @arg)
           or die Web::Transport::NetSSLeayError->new_current;
     }
 

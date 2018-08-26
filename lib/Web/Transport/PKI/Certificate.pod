@@ -83,6 +83,18 @@ and C<clientAuth>.
 Return the CRL distribution point URLs of the certifciate.  It returns
 an array references of character strings represeting the URLs.
 
+=item $string? = $cert->aia_ocsp_url
+
+Return the OCSP URL of the Authority Information Access extension of
+the certificate, if any, or C<undef>.  If specified, it returns a
+character string representing the URL.
+
+=item $string? = $cert->aia_ca_issuers_url
+
+Return the CA issuers URL of the Authority Information Access
+extension of the certificate, if any, or C<undef>.  If specified, it
+returns a character string representing the URL.
+
 =item $string = $cert->to_pem
 
 Return the C<.pem> serialization of the certificate.

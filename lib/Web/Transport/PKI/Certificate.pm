@@ -106,6 +106,14 @@ sub subject ($) {
 } # subject
 
 my $ExtDefs = {
+  '1.3.6.1.5.5.7.1.1' => { # authorityInfoAccess
+    type => 'SEQUENCE OF',
+    def => [
+      {name => 'accessMethod', types => {oid => 1}},
+      {name => 'accessLocation', types => {contextual => 1},
+       GeneralName => 1},
+    ],
+  },
   '2.5.29.15' => { # keyUsage
     type => 'bits',
   },
@@ -227,6 +235,8 @@ sub crl_distribution_urls ($) {
 
 sub _xuoids ($) {
   my $self = $_[0];
+  return $self->{xuoids} if defined $self->{xuoids};
+  $self->{xuoids} = {};
   for (@{($self->_ext ('2.5.29.37') or [])->[3] or []}) {
     if ($_->[0] eq 'oid') {
       $self->{xuoids}->{$_->[1]} = 1;
@@ -242,6 +252,31 @@ sub extended_key_usage ($$) {
   return undef unless defined $oid;
   return $oids->{$oid->{oid}};
 } # extended_key_usage
+
+sub _aia ($) {
+  my $self = $_[0];
+  return $self->{aia} if defined $self->{aia};
+  $self->{aia} = {};
+  for (@{($self->_ext ('1.3.6.1.5.5.7.1.1') or [])->[3] or []}) {
+    if ($_->{accessMethod}->[0] eq 'oid' and
+        $_->{accessLocation}->[0] eq 'uniformResourceIdentifier') {
+      $self->{aia}->{$_->{accessMethod}->[1]} = $_->{accessLocation}->[2];
+    }
+  }
+  return $self->{aia};
+} # _aia
+
+sub aia_ocsp_url ($) {
+  my $v = $_[0]->_aia->{'1.3.6.1.5.5.7.48.1'};
+  return $v unless defined $v;
+  return decode_web_utf8 $v;
+} # aia_ocsp_url
+
+sub aia_ca_issuers_url ($) {
+  my $v = $_[0]->_aia->{'1.3.6.1.5.5.7.48.2'};
+  return $v unless defined $v;
+  return decode_web_utf8 $v;
+} # aia_ca_issuers_url
 
 sub to_pem ($) {
   #return Net::SSLeay::PEM_get_string_X509 $_[0]->{cert};
@@ -279,7 +314,9 @@ sub debug_info ($) {
   push @r, 'notafter=' . $self->not_after->to_global_date_and_time_string
       if defined $self->not_after;
 
-  push @r, 'CA' if $self->ca;
+  if (defined $self->ca) {
+    push @r, $self->ca ? 'CA' : '!CA';
+  }
   push @r, 'pathLenConstraint=' . $self->path_len_constraint
       if defined $self->path_len_constraint;
 
@@ -305,6 +342,12 @@ sub debug_info ($) {
   for (sort { $a cmp $b } keys %$oids) {
     my $oid = Web::Transport::ASN1->find_oid ($_);
     push @r, 'extKeyUsage=' . ($oid->{short_name} // $oid->{long_name} // $oid->{oid});
+  }
+
+  my $aias = $self->_aia;
+  for (sort { $a cmp $b } keys %$aias) {
+    my $oid = Web::Transport::ASN1->find_oid ($_);
+    push @r, 'AIA:' . ($oid->{short_name} // $oid->{long_name} // $oid->{oid}) . '=' . $aias->{$_};
   }
 
   my @type; # XXX = Net::SSLeay::P_X509_get_netscape_cert_type $cert;

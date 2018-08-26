@@ -382,25 +382,26 @@ sub debug_info ($) {
   my $self = $_[0];
 
   my @r;
-  push @r, "v" . (1 + $self->version);
-  push @r, 'I=' . $self->issuer->debug_info;
-  push @r, 'S=' . $self->subject->debug_info;
 
+  ## Subject
+  push @r, 'S=' . $self->subject->debug_info;
   for (@{$self->san_hosts}) {
     push @r, 'SAN=' . (ref $_ ? 'IP:' . $_->to_ascii : $_);
   }
 
+  ## Certificate
   require Math::BigInt;
-  push @r, '#=' . $self->serial_number->as_hex;
-  push @r, 'notbefore=' . $self->not_before->to_global_date_and_time_string
-      if defined $self->not_before;
-  push @r, 'notafter=' . $self->not_after->to_global_date_and_time_string
-      if defined $self->not_after;
+  push @r, '#' . $self->serial_number->as_hex;
+  push @r,
+      (defined $self->not_before ? $self->not_before->to_global_date_and_time_string : '')
+          . '/' .
+      (defined $self->not_after ? $self->not_after->to_global_date_and_time_string : '');
 
+  push @r, "v" . (1 + $self->version);
   if (defined $self->ca) {
     push @r, $self->ca ? 'CA' : '!CA';
   }
-  push @r, 'pathLenConstraint=' . $self->path_len_constraint
+  push @r, 'pathLen=' . $self->path_len_constraint
       if defined $self->path_len_constraint;
 
   for (qw(
@@ -414,40 +415,23 @@ sub debug_info ($) {
     encipherOnly
     decipherOnly
   )) {
-    push @r, 'keyUsage=' . $_ if $self->key_usage ($_);
-  }
-
-  for (@{$self->crl_distribution_urls}) {
-    push @r, 'CRL=' . $_;
+    push @r, 'usage=' . $_ if $self->key_usage ($_);
   }
 
   my $oids = $self->_xuoids;
   for (sort { $a cmp $b } keys %$oids) {
     my $oid = Web::Transport::ASN1->find_oid ($_);
-    push @r, 'extKeyUsage=' . ($oid->{short_name} // $oid->{long_name} // $oid->{oid});
+    push @r, 'usage=' . ($oid->{short_name} // $oid->{long_name} // $oid->{oid});
   }
 
-  my $aias = $self->_aia;
-  for (sort { $a cmp $b } keys %$aias) {
-    my $oid = Web::Transport::ASN1->find_oid ($_);
-    push @r, 'AIA:' . ($oid->{short_name} // $oid->{long_name} // $oid->{oid}) . '=' . $aias->{$_};
-  }
-
-  my @type; # XXX = Net::SSLeay::P_X509_get_netscape_cert_type $cert;
-  if (@type) {
-    push @r, 'netscapecerttype=' . join ',', @type;
-  }
-
-  #XXX
-  #require Web::Transport::OCSP;
-  #if (Web::Transport::OCSP->_x509_has_must_staple ($cert)) {
-  #  push @r, 'must-staple';
-  #}
+  ## Issuer
+  push @r, 'I=' . $self->issuer->debug_info;
 
   my $pols = $self->_policies;
   for (@{$pols->{oids}}) {
     push @r, 'policy=' . ({
       '2.5.29.32.0' => 'anyPolicy',
+      '2.23.140.1.1' => 'EV',
       '2.23.140.1.2.1' => 'DV',
       '2.23.140.1.2.2' => 'OV',
     }->{$_} // $_);
@@ -458,6 +442,22 @@ sub debug_info ($) {
   if (defined $pols->{user_notice}) {
     push @r, 'policy:userNotice=[' . (substr $pols->{user_notice}, 0, 20) . '...]';
   }
+
+  for (@{$self->crl_distribution_urls}) {
+    push @r, 'CRL=' . $_;
+  }
+
+  my $aias = $self->_aia;
+  for (sort { $a cmp $b } keys %$aias) {
+    my $oid = Web::Transport::ASN1->find_oid ($_);
+    push @r, 'AIA:' . ($oid->{short_name} // $oid->{long_name} // $oid->{oid}) . '=' . $aias->{$_};
+  }
+
+  #XXX
+  #require Web::Transport::OCSP;
+  #if (Web::Transport::OCSP->_x509_has_must_staple ($cert)) {
+  #  push @r, 'must-staple';
+  #}
 
   for (@{$self->{parsed}->{tbsCertificate}->{extensions}}) {
     my $n = {

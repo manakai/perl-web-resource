@@ -45,6 +45,17 @@ L<Web::Transport::PKI::Name> object.
 Return the subject of the certificate, as a
 L<Web::Transport::PKI::Name> object.
 
+=item [$value1, $value2, ...] = $cert->san_hosts
+
+Return an array reference of the hosts in the subject alternative
+names extension of the certificate.
+
+A C<dNSName> value (a domain or a wildcard domain) is represented by a
+character string in the array.
+
+A C<iPAddress> value (an IPv4 or IPv6 address) is represented by a
+L<Web::Host> object.
+
 =item $boolean? = $cert->ca
 
 Return the cA of the basic constraints extension of the certificate.

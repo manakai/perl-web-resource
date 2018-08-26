@@ -7,6 +7,7 @@ use Test::More;
 use Test::X1;
 use Math::BigInt;
 use Web::DateTime;
+use Web::Host;
 use Web::Transport::PKI::Name;
 use Web::Transport::PKI::Generator;
 
@@ -388,6 +389,18 @@ for my $test (
    out => {cp_oids => ['2.23.140.1.2.2'],
            cps_url => "https://foo/,\x{4e00}ab",
            policy_user_notice_text => "https://foo/,\x{4e00}ab"}, name => 'cp qualifeirs'},
+  {in => {san_hosts => ["foo.bar,\x00\x{4e00}ab"]},
+   out => {san_hosts => ["foo.bar,\x00\x{4e00}ab"]}, name => 'san domain'},
+  {in => {san_hosts => ["*.foo.bar", "abc.def."]},
+   out => {san_hosts => ["*.foo.bar", "abc.def."]}, name => 'san domain'},
+  {in => {san_hosts => ["*.foo.bar", "5.5.3.1",
+                        Web::Host->parse_string ("1.2.3.4"),
+                        Web::Host->parse_string ("[2001::4]"),
+                        Web::Host->parse_string ("*.\x{4e00}abc.test")]},
+   out => {san_hosts => ["*.foo.bar", "5.5.3.1",
+                         Web::Host->new_from_packed_addr ("\x01\x02\x03\x04"),
+                         Web::Host->new_from_packed_addr (Web::Host->parse_string ("[2001::4]")->packed_addr),
+                         "%2A.xn--abc-p18d.test"]}, name => 'san domain'},
 ) {
   test {
     my $c = shift;
@@ -425,12 +438,13 @@ for my $test (
         is_deeply [sort { $a cmp $b } @{$cert->policy_oids}], $expected->{cp_oids} || [];
         is $cert->cps_url, $expected->{cps_url};
         is $cert->policy_user_notice_text, $expected->{policy_user_notice_text};
+        is_deeply $cert->san_hosts, $expected->{san_hosts} || [];
       } $c;
       
       done $c;
       undef $c;
     });
-  } n => 21, name => ['create_certificate options', $test->{name}];
+  } n => 22, name => ['create_certificate options', $test->{name}];
 }
 
 run_tests;

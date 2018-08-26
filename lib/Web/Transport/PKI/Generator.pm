@@ -89,6 +89,26 @@ sub create_certificate ($%) {
 
     {
       my @ext;
+
+      push @ext, Web::Transport::ASN1->_encode ('SEQUENCE',
+        join '',
+        Web::Transport::ASN1->_encode ('oid', '2.5.29.17'),
+        Web::Transport::ASN1->_encode (0x4,
+          Web::Transport::ASN1->_encode ('SEQUENCE', join '', map {
+            if (UNIVERSAL::isa ($_, 'Web::Host')) {
+              if ($_->is_ip) {
+                Web::Transport::ASN1->_encode (\7, $_->packed_addr); # iPAddress
+              } elsif ($_->is_domain) {
+                Web::Transport::ASN1->_encode (\2, encode_web_utf8 $_->to_ascii); # dNSName
+              } else {
+                die new Web::Transport::TypeError ("Bad host |$_|");
+              }
+            } else {
+              Web::Transport::ASN1->_encode (\2, encode_web_utf8 $_); # dNSName
+            }
+          } @{$args{san_hosts}}),
+        ),
+      ) if @{$args{san_hosts} or []};
       
       my @aia;
       push @aia, Web::Transport::ASN1->_encode ('SEQUENCE',

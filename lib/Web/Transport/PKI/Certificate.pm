@@ -5,6 +5,7 @@ our $VERSION = '1.0';
 use Net::SSLeay;
 #use Web::Transport::NetSSLeayError;
 use Web::Encoding;
+use Web::Host;
 use Web::Transport::Base64;
 use Web::Transport::ASN1;
 use Web::DateTime::Parser;
@@ -117,6 +118,9 @@ my $ExtDefs = {
   '2.5.29.15' => { # keyUsage
     type => 'bits',
   },
+  '2.5.29.17' => { # subjectAltName
+    type => 'GeneralNames',
+  },
   '2.5.29.19' => { # basicConstraints
     type => 'SEQUENCE',
     def => [
@@ -179,6 +183,14 @@ sub _ext ($$) {
             }
             $_->[3] = $r;
           }
+        }
+      } elsif ($def->{type} eq 'GeneralNames') {
+        if (defined $v and $v->[0]->[0] eq 'SEQUENCE') {
+          my $r = [];
+          for my $w (@{$v->[0]->[1]}) {
+            push @$r, Web::Transport::ASN1::_general_name $w;
+          } # $w
+          $_->[3] = $r;
         }
       } elsif ($def->{type} eq 'bits') {
         if (defined $v and $v->[0]->[0] eq 'bytes') {
@@ -333,6 +345,26 @@ sub policy_user_notice_text ($) {
   return $self->_policies->{user_notice}; # or undef
 } # policy_user_notice_text
 
+sub _san ($) {
+  my $self = $_[0];
+  return $self->{san} if defined $self->{san};
+  $self->{san} = [];
+  my $v = $self->_ext ('2.5.29.17') || [];
+  for (@{$v->[3] or []}) {
+    if ($_->[0] eq 'dNSName' and $_->[1] eq 'IA5String') {
+      push @{$self->{san}}, decode_web_utf8 $_->[2];
+    } elsif ($_->[0] eq 'iPAddress' and $_->[1] eq 'bytes') {
+      my $host = Web::Host->new_from_packed_addr ($_->[2]);
+      push @{$self->{san}}, $host if defined $host;
+    }
+  }
+  return $self->{san};
+} # _san
+
+sub san_hosts ($) {
+  return $_[0]->_san;
+} # san_hosts
+
 sub to_pem ($) {
   #return Net::SSLeay::PEM_get_string_X509 $_[0]->{cert};
 
@@ -353,15 +385,11 @@ sub debug_info ($) {
   push @r, "v" . (1 + $self->version);
   push @r, 'I=' . $self->issuer->debug_info;
   push @r, 'S=' . $self->subject->debug_info;
-  my @san; # XXX = Net::SSLeay::X509_get_subjectAltNames $cert;
-  while (@san) {
-    my $type = (shift @san);
-    $type = {
-      2 => 'DNS',
-      7 => 'IP', # XXX decode value
-    }->{$type} || $type;
-    push @r, 'SAN.'.$type . '=' . (shift @san);
+
+  for (@{$self->san_hosts}) {
+    push @r, 'SAN=' . (ref $_ ? 'IP:' . $_->to_ascii : $_);
   }
+
   require Math::BigInt;
   push @r, '#=' . $self->serial_number->as_hex;
   push @r, 'notbefore=' . $self->not_before->to_global_date_and_time_string

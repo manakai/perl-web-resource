@@ -115,6 +115,10 @@ my $ExtDefs = {
        GeneralName => 1},
     ],
   },
+  '1.3.6.1.5.5.7.1.24' => { # tlsfeature
+    type => 'SEQUENCE OF',
+    subtype => 'int',
+  },
   '2.5.29.15' => { # keyUsage
     type => 'bits',
   },
@@ -365,6 +369,16 @@ sub san_hosts ($) {
   return $_[0]->_san;
 } # san_hosts
 
+sub must_staple ($) {
+  my $self = $_[0];
+  for (@{($self->_ext ('1.3.6.1.5.5.7.1.24') or [])->[3]}) {
+    if ($_->[1] == 5) {
+      return 1;
+    }
+  }
+  return 0;
+} # must_staple
+
 sub to_pem ($) {
   #return Net::SSLeay::PEM_get_string_X509 $_[0]->{cert};
 
@@ -443,6 +457,7 @@ sub debug_info ($) {
     push @r, 'policy:userNotice=[' . (substr $pols->{user_notice}, 0, 20) . '...]';
   }
 
+  ## Revocation
   for (@{$self->crl_distribution_urls}) {
     push @r, 'CRL=' . $_;
   }
@@ -453,11 +468,13 @@ sub debug_info ($) {
     push @r, 'AIA:' . ($oid->{short_name} // $oid->{long_name} // $oid->{oid}) . '=' . $aias->{$_};
   }
 
-  #XXX
-  #require Web::Transport::OCSP;
-  #if (Web::Transport::OCSP->_x509_has_must_staple ($cert)) {
-  #  push @r, 'must-staple';
-  #}
+  for (@{($self->_ext ('1.3.6.1.5.5.7.1.24') or [])->[3]}) {
+    if ($_->[1] == 5) {
+      push @r, 'must-staple';
+    } else {
+      push @r, 'tlsfeature=' . $_->[1];
+    }
+  }
 
   for (@{$self->{parsed}->{tbsCertificate}->{extensions}}) {
     my $n = {

@@ -158,6 +158,11 @@ certification policy of the certifcate as a character string, if any,
 or C<undef>.  If this option is specified but there is no other option
 specifying a certification policy OID, the C<anyPolicy> OID is added.
 
+=item must_staple => $boolean
+
+Whether the must-staple flag in the TLS feature extension of the
+certificate is set or not.
+
 =back
 
 =back

@@ -401,6 +401,8 @@ for my $test (
                          Web::Host->new_from_packed_addr ("\x01\x02\x03\x04"),
                          Web::Host->new_from_packed_addr (Web::Host->parse_string ("[2001::4]")->packed_addr),
                          "%2A.xn--abc-p18d.test"]}, name => 'san domain'},
+  {in => {must_staple => !!1},
+   out => {must_staple => !!1}, name => 'must-staple'},
 ) {
   test {
     my $c = shift;
@@ -439,12 +441,13 @@ for my $test (
         is $cert->cps_url, $expected->{cps_url};
         is $cert->policy_user_notice_text, $expected->{policy_user_notice_text};
         is_deeply $cert->san_hosts, $expected->{san_hosts} || [];
+        is !!$cert->must_staple, !!$expected->{must_staple};
       } $c;
       
       done $c;
       undef $c;
     });
-  } n => 22, name => ['create_certificate options', $test->{name}];
+  } n => 23, name => ['create_certificate options', $test->{name}];
 }
 
 run_tests;

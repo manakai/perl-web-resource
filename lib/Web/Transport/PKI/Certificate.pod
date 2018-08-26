@@ -123,6 +123,11 @@ Return the display text of the user notice of a policy qualifier of a
 certification policy of the certifcate as a character string, if any,
 or C<undef>.
 
+=item $boolean = $cert->must_staple
+
+Return whether there is the must-staple flag in the TLS feature
+extension of the certificate or not.
+
 =item $string = $cert->to_pem
 
 Return the C<.pem> serialization of the certificate.

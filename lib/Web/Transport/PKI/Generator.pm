@@ -184,6 +184,12 @@ sub create_certificate ($%) {
         ),
       ) if @cp;
 
+      push @ext, Web::Transport::ASN1->_encode ('SEQUENCE',
+        join '',
+        Web::Transport::ASN1->_encode ('oid', '1.3.6.1.5.5.7.1.24'),
+        Web::Transport::ASN1->_encode (0x4, "\x30\x03\x02\x01\x05"),
+      ) if $args{must_staple};
+
       last unless @ext;
 
       my $csr_der = Web::Transport::ASN1->_encode ('SEQUENCE',

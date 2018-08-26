@@ -355,6 +355,39 @@ for my $test (
   {in => {aia_ca_issuers_url => "http://www.test/\x{4e00}a"},
    out => {aia_ca_issuers_url => "http://www.test/\x{4e00}a"},
    name => 'ca_issuers utf8'},
+  {in => {aia_ca_issuers_url => "http://www.test/\x{4e00}a",
+          aia_ocsp_url => "http://abc/def\x{55000}"},
+   out => {aia_ca_issuers_url => "http://www.test/\x{4e00}a",
+           aia_ocsp_url => "http://abc/def\x{55000}"},
+   name => 'ca_issuers and ocsp'},
+  {in => {dv => 1}, out => {cp_oids => ['2.23.140.1.2.1']}, name => 'cp oids'},
+  {in => {ov => 1}, out => {cp_oids => ['2.23.140.1.2.2']}, name => 'cp oids'},
+  {in => {dv => 1, ov => 1},
+   out => {cp_oids => ['2.23.140.1.2.1', '2.23.140.1.2.2']}, name => 'cp oids'},
+  {in => {ev => '1.2.392.200081.1.1'},
+   out => {cp_oids => ['1.2.392.200081.1.1', '2.23.140.1.1']}, name => 'cp oids'},
+  {in => {dv => 1, policy_oids => ['1.2.392.200081.1.1']},
+   out => {cp_oids => ['1.2.392.200081.1.1', '2.23.140.1.2.1']}, name => 'cp oids'},
+  {in => {cps_url => "https://foo/,\x00ab"},
+   out => {cp_oids => ['2.5.29.32.0'],
+           cps_url => "https://foo/,\x00ab"}, name => 'cp qualifeirs'},
+  {in => {cps_url => "https://foo/,\x{4e00}ab"},
+   out => {cp_oids => ['2.5.29.32.0'],
+           cps_url => "https://foo/,\x{4e00}ab"}, name => 'cp qualifeirs'},
+  {in => {policy_user_notice_text => "https://foo/,\x{4e00}ab"},
+   out => {cp_oids => ['2.5.29.32.0'],
+           policy_user_notice_text => "https://foo/,\x{4e00}ab"}, name => 'cp qualifeirs'},
+  {in => {cps_url => "https://foo/,\x{4e00}ab",
+          policy_user_notice_text => "https://foo/,\x{4e00}ab"},
+   out => {cp_oids => ['2.5.29.32.0'],
+           cps_url => "https://foo/,\x{4e00}ab",
+           policy_user_notice_text => "https://foo/,\x{4e00}ab"}, name => 'cp qualifeirs'},
+  {in => {ov => 1,
+          cps_url => "https://foo/,\x{4e00}ab",
+          policy_user_notice_text => "https://foo/,\x{4e00}ab"},
+   out => {cp_oids => ['2.23.140.1.2.2'],
+           cps_url => "https://foo/,\x{4e00}ab",
+           policy_user_notice_text => "https://foo/,\x{4e00}ab"}, name => 'cp qualifeirs'},
 ) {
   test {
     my $c = shift;
@@ -389,12 +422,15 @@ for my $test (
         is !! $cert->extended_key_usage ('clientAuth'), !! $expected->{clientAuth};
         is $cert->aia_ocsp_url, $expected->{aia_ocsp_url};
         is $cert->aia_ca_issuers_url, $expected->{aia_ca_issuers_url};
+        is_deeply [sort { $a cmp $b } @{$cert->policy_oids}], $expected->{cp_oids} || [];
+        is $cert->cps_url, $expected->{cps_url};
+        is $cert->policy_user_notice_text, $expected->{policy_user_notice_text};
       } $c;
       
       done $c;
       undef $c;
     });
-  } n => 18, name => ['create_certificate options', $test->{name}];
+  } n => 21, name => ['create_certificate options', $test->{name}];
 }
 
 run_tests;

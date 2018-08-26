@@ -139,6 +139,13 @@ my $ExtDefs = {
        decode => ['GeneralNames']},
     ],
   },
+  '2.5.29.32' => { # certifciatePolicies
+    type => 'SEQUENCE OF',
+    def => [
+      {name => 'policyIdentifier', types => {oid => 1}},
+      {name => 'policyQualifiers', types => {SEQUENCE => 1}, optional => 1},
+    ],
+  },
   '2.5.29.37' => { # extKeyUsage
     type => 'SEQUENCE OF',
     subtype => 'oid',
@@ -278,6 +285,54 @@ sub aia_ca_issuers_url ($) {
   return decode_web_utf8 $v;
 } # aia_ca_issuers_url
 
+sub _policies ($) {
+  my $self = $_[0];
+  return $self->{_policies} if defined $self->{_policies};
+  $self->{_policies} = {oids => []};
+  my $v = $self->_ext ('2.5.29.32') || [];
+  for (@{$v->[3] or []}) {
+    if ($_->{policyIdentifier}->[0] eq 'oid') {
+      push @{$self->{_policies}->{oids}}, $_->{policyIdentifier}->[1];
+      if (defined $_->{policyQualifiers} and
+          $_->{policyQualifiers}->[0] eq 'SEQUENCE') {
+        for (@{$_->{policyQualifiers}->[1]}) {
+          if ($_->[0] eq 'SEQUENCE' and
+              $_->[1]->[0]->[0] eq 'oid' and
+              $_->[1]->[0]->[1] eq '1.3.6.1.5.5.7.2.1' and
+              ($_->[1]->[1]->[0] eq 'IA5String' or
+               $_->[1]->[1]->[0] eq 'UTF8String')) {
+            $self->{_policies}->{cps} = decode_web_utf8 $_->[1]->[1]->[1];
+          } elsif ($_->[0] eq 'SEQUENCE' and
+                   $_->[1]->[0]->[0] eq 'oid' and
+                   $_->[1]->[0]->[1] eq '1.3.6.1.5.5.7.2.2' and
+                   $_->[1]->[1]->[0] eq 'SEQUENCE' and
+                   @{$_->[1]->[1]->[1]} and
+                   ($_->[1]->[1]->[1]->[0]->[0] eq 'IA5String' or
+                    $_->[1]->[1]->[1]->[0]->[0] eq 'UTF8String')) {
+            $self->{_policies}->{user_notice} = decode_web_utf8 $_->[1]->[1]->[1]->[0]->[1];
+          }
+        }
+      }
+    }
+  }
+  return $self->{_policies};
+} # _policies
+
+sub policy_oids ($) {
+  my $self = $_[0];
+  return $self->_policies->{oids};
+} # policy_oids
+
+sub cps_url ($) {
+  my $self = $_[0];
+  return $self->_policies->{cps}; # or undef
+} # cps_url
+
+sub policy_user_notice_text ($) {
+  my $self = $_[0];
+  return $self->_policies->{user_notice}; # or undef
+} # policy_user_notice_text
+
 sub to_pem ($) {
   #return Net::SSLeay::PEM_get_string_X509 $_[0]->{cert};
 
@@ -331,7 +386,7 @@ sub debug_info ($) {
     encipherOnly
     decipherOnly
   )) {
-    push @r, $_ if $self->key_usage ($_);
+    push @r, 'keyUsage=' . $_ if $self->key_usage ($_);
   }
 
   for (@{$self->crl_distribution_urls}) {
@@ -360,6 +415,21 @@ sub debug_info ($) {
   #if (Web::Transport::OCSP->_x509_has_must_staple ($cert)) {
   #  push @r, 'must-staple';
   #}
+
+  my $pols = $self->_policies;
+  for (@{$pols->{oids}}) {
+    push @r, 'policy=' . ({
+      '2.5.29.32.0' => 'anyPolicy',
+      '2.23.140.1.2.1' => 'DV',
+      '2.23.140.1.2.2' => 'OV',
+    }->{$_} // $_);
+  }
+  if (defined $pols->{cps}) {
+    push @r, 'CPS=' . $pols->{cps};
+  }
+  if (defined $pols->{user_notice}) {
+    push @r, 'policy:userNotice=[' . (substr $pols->{user_notice}, 0, 20) . '...]';
+  }
 
   for (@{$self->{parsed}->{tbsCertificate}->{extensions}}) {
     my $n = {

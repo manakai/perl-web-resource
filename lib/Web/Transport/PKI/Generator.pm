@@ -109,6 +109,61 @@ sub create_certificate ($%) {
         ),
       ) if @aia;
 
+      my @oid;
+      if (defined $args{ev}) {
+        my $ev = Web::Transport::ASN1->find_oid ($args{ev});
+        die new Web::Transport::TypeError ("Bad EV OID |$args{ev}|")
+            unless defined $ev;
+        push @oid, $ev->{oid}, '2.23.140.1.1';
+      }
+      push @oid, map {
+        my $x = Web::Transport::ASN1->find_oid ($_);
+        die new Web::Transport::TypeError ("Bad policy OID |$_|")
+            unless defined $x;
+        $x->{oid};
+      } @{$args{policy_oids} or []};
+      push @oid, '2.23.140.1.2.1' if $args{dv};
+      push @oid, '2.23.140.1.2.2' if $args{ov};
+      my @cp;
+      if (defined $args{cps_url} or
+          (defined $args{policy_user_notice_text} and
+           length $args{policy_user_notice_text})) {
+        push @oid, '2.5.29.32.0' unless @oid; # anyPolicy
+        push @cp, Web::Transport::ASN1->_encode ('SEQUENCE',
+          join '',
+          Web::Transport::ASN1->_encode ('oid', $oid[0]),
+          Web::Transport::ASN1->_encode ('SEQUENCE',
+            join '',
+            (defined $args{cps_url} ? Web::Transport::ASN1->_encode ('SEQUENCE',
+              join '',
+              Web::Transport::ASN1->_encode ('oid', '1.3.6.1.5.5.7.2.1'),
+              Web::Transport::ASN1->_encode ($args{cps_url} =~ /[^\x00-\x7F]/ ? 0x0C : 0x16, encode_web_utf8 $args{cps_url}), # UTF8String / IA5String
+            ) : ()),
+            ((defined $args{policy_user_notice_text} and
+              length $args{policy_user_notice_text}) ? Web::Transport::ASN1->_encode ('SEQUENCE',
+              join '',
+              Web::Transport::ASN1->_encode ('oid', '1.3.6.1.5.5.7.2.2'),
+              Web::Transport::ASN1->_encode ('SEQUENCE',
+                join '',
+                Web::Transport::ASN1->_encode (0x0C, encode_web_utf8 $args{policy_user_notice_text}), # UTF8String
+              ),
+            ) : ()),
+          ),
+        );
+        shift @oid;
+      }
+      push @cp, Web::Transport::ASN1->_encode ('SEQUENCE',
+        join '',
+        Web::Transport::ASN1->_encode ('oid', $_),
+      ) for @oid;
+      push @ext, Web::Transport::ASN1->_encode ('SEQUENCE',
+        join '',
+        Web::Transport::ASN1->_encode ('oid', '2.5.29.32'),
+        Web::Transport::ASN1->_encode (0x4,
+          Web::Transport::ASN1->_encode ('SEQUENCE', join '', @cp),
+        ),
+      ) if @cp;
+
       last unless @ext;
 
       my $csr_der = Web::Transport::ASN1->_encode ('SEQUENCE',

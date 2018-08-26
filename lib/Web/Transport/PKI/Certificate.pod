@@ -95,6 +95,23 @@ Return the CA issuers URL of the Authority Information Access
 extension of the certificate, if any, or C<undef>.  If specified, it
 returns a character string representing the URL.
 
+=item [$string1, $string2, ...] = $cert->policy_oids
+
+Return the policy identifiers of the certifciation policy extension of
+the certificate, as an array reference of OIDs in the dotted notation.
+
+=item $string? = $cert->cps_url
+
+Return the CPS URL specified as a policy qualifer of a certifciation
+policy of the certificate, if any, or C<undef>.  If specifeid, it
+returns a character string representing the URL.
+
+=item $string? = $cert->policy_user_notice_text
+
+Return the display text of the user notice of a policy qualifier of a
+certification policy of the certifcate as a character string, if any,
+or C<undef>.
+
 =item $string = $cert->to_pem
 
 Return the C<.pem> serialization of the certificate.

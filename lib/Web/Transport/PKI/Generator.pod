@@ -112,6 +112,41 @@ certificate as a character string, if any, or C<undef>.
 The CA issuers URL of the Authority Information Access extension of
 the certificate as a character string, if any, or C<undef>.
 
+=item dv => $boolean
+
+Whether it is a DV certificate or not.
+
+=item ov => $boolean
+
+Whether it is an OV certificate or not.
+
+=item ev => $string?
+
+The OID of the EV CA's certification policy in the dotted notaion, if
+it is an EV certificate.  If the EV OID is specified, the
+certification policy identifier of EV is also added as well as the EV
+OID.
+
+=item policy_oids => [$string1, $string2, ...]
+
+The additional policy identifiers of the certifciation policy
+extension of the certificate, as an array reference of OIDs in the
+dotted notation.
+
+=item cps_url => $string?
+
+The CPS URL specified as a policy qualifer of a certifciation policy
+of the certificate as a character string, if any, or C<undef>.  If
+this option is specified but there is no other option specifying a
+certification policy OID, the C<anyPolicy> OID is added.
+
+=item policy_user_notice_text => $string?
+
+The display text of the user notice of a policy qualifier of a
+certification policy of the certifcate as a character string, if any,
+or C<undef>.  If this option is specified but there is no other option
+specifying a certification policy OID, the C<anyPolicy> OID is added.
+
 =back
 
 =back

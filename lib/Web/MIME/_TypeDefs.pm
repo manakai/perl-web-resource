@@ -485,6 +485,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'iana' => 'permanent',
                                                         'iana_intended_usage' => 'common'
                                                       },
+                                          'dns-message' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
+                                                         },
                                           'doc' => {},
                                           'docbook+xml' => {},
                                           'docuworks' => {},

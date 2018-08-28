@@ -2,8 +2,11 @@ package Web::Transport::PKI::Parser;
 use strict;
 use warnings;
 our $VERSION = '1.0';
+use Net::SSLeay;
+use Web::Transport::NetSSLeayError;
 use Web::Transport::Base64;
 use Web::Transport::ASN1;
+use Web::Transport::PKI::RSAKey;
 use Web::Transport::PKI::Certificate;
 
 sub new ($) {
@@ -16,18 +19,37 @@ sub onerror { }
 sub parse_pem ($$) {
   my ($self, $s) = @_;
   my $result = [];
-  while ($s =~ m{-----BEGIN ([A-Z0-9][\x20-\x7E]*[A-Z0-9])-----[\x0D\x0A]+([^-]*?)[\x0D\x0A]+-----END [A-Z0-9][\x20-\x7E]*[A-Z0-9]-----}gs) {
-    my $type = $1;
-    my $data = decode_web_base64 $2;
+  while ($s =~ m{(-----BEGIN ([A-Z0-9][\x20-\x7E]*[A-Z0-9])-----[\x0D\x0A]+([^-]*?)[\x0D\x0A]+-----END [A-Z0-9][\x20-\x7E]*[A-Z0-9]-----)}gs) {
+    my $type = $2;
     if ($type eq 'CERTIFICATE' or
         $type eq 'X509 CERTIFICATE' or
         $type eq 'X.509 CERTIFICATE') {
+      my $data = decode_web_base64 $3;
       my $cert = $self->parse_certificate_der ($data);
       push @$result, $cert if defined $cert;
+    } elsif ($type eq 'PRIVATE KEY') {
+      my $rsa = $self->_parse_private_key_pem ($1);
+      push @$result, $rsa if defined $rsa;
     }
   }
   return $result;
 } # parse_pem
+
+sub _parse_private_key_pem ($$) {
+  my ($self, undef) = @_;
+
+  my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ())
+      or die Web::Transport::NetSSLeayError->new_current;
+  Net::SSLeay::BIO_write ($bio, $_[1])
+      or die Web::Transport::NetSSLeayError->new_current;
+
+  my $privkey = Net::SSLeay::PEM_read_bio_PrivateKey ($bio, sub {
+    my ($max_passwd_size, $rwflag, $data) = @_;
+    return '';
+  }) or die Web::Transport::NetSSLeayError->new_current;
+  
+  return Web::Transport::PKI::RSAKey->_new_pkey ($privkey);
+} # _parse_private_key_pem
 
 sub parse_certificate_der ($$) {
   my ($self, $bytes) = @_;

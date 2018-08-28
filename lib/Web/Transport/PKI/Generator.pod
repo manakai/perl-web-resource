@@ -64,11 +64,12 @@ a Unix time number or a L<Web::DateTime> object.
 The not after of the validity of the certificate.  The value must be a
 Unix time number or a L<Web::DateTime> object.
 
-=item issuer => $name (Required)
+=item issuer => $name (Required if root CA)
 
 The issuer of the certificate.  The value must be a value that is
 valid as the argument to the C<create> method of the
-L<Web::Transport::PKI::Name> class.
+L<Web::Transport::PKI::Name> class.  Defaulted to the C<ca_cert>'s
+C<subject>.
 
 =item subject => $name (Required)
 
@@ -86,11 +87,6 @@ specified, it is interpreted as a C<dNSName>, i.e. a domain or a
 wildcard domain.  If a L<Web::Host> object is specified, it is
 interpreted as a C<dNSName> or an C<iPAddress> depending on its
 C<is_domain> and C<is_ip> method values.
-
-=item rsa => $rsa (Required)
-
-The RSA key used to sign the certifciate.  The value must be a
-L<Web::Transport::PKI::RSAKey> object.
 
 =item ca => $boolean
 
@@ -162,6 +158,24 @@ specifying a certification policy OID, the C<anyPolicy> OID is added.
 
 Whether the must-staple flag in the TLS feature extension of the
 certificate is set or not.
+
+=item ca_rsa => $rsa (Required)
+
+The RSA key of the CA that signs the certificate.  The value must be a
+L<Web::Transport::PKI::RSAKey> object.  The value can be same as
+C<rsa>'s value when this is a root CA.
+
+=item ca_cert => $cert (Required unless root CA)
+
+The certificate (a L<Web::Transport::PKI::Certificate> object) of the
+CA that signs the certificate.  This option can be omitted if this is
+a root CA certificate and C<rsa>'s value is equal to C<ca_rsa>'s
+value.
+
+=item rsa => $rsa (Required)
+
+The RSA key of the certifciate.  The value must be a
+L<Web::Transport::PKI::RSAKey> object.
 
 =back
 

@@ -6,6 +6,7 @@ use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib');
 use Test::More;
 use Test::X1;
 use Web::Transport::PKI::Generator;
+use Web::Transport::PKI::Parser;
 
 test {
   my $c = shift;
@@ -22,6 +23,27 @@ test {
     undef $c;
   });
 } n => 1, name => 'to_pem';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_rsa_key->then (sub {
+    my $rsa = $_[0];
+
+    my $parser = Web::Transport::PKI::Parser->new;
+    my $results = $parser->parse_pem ($rsa->to_pem);
+
+    test {
+      is 0+@$results, 1;
+      isa_ok $results->[0], 'Web::Transport::PKI::RSAKey';
+      is $results->[0]->to_pem, $rsa->to_pem;
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'to_pem roundtrip';
 
 run_tests;
 

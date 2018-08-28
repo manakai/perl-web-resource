@@ -11,6 +11,10 @@ sub _new ($$) {
   return bless {rsa => $_[1]}, $_[0];
 } # _new
 
+sub _new_pkey ($$) {
+  return bless {pkey => $_[1]}, $_[0];
+} # _new_pkey
+
 sub to_net_ssleay_pkey ($) {
   my $self = $_[0];
 

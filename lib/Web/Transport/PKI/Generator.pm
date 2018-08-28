@@ -38,6 +38,14 @@ sub create_certificate ($%) {
   my ($self, %args) = @_;
   return Promise->resolve->then (sub {
 
+    die Web::Transport::TypeError->new ("No |ca_rsa|")
+        if not defined $args{ca_rsa};
+    die Web::Transport::TypeError->new ("No |rsa|")
+        if not defined $args{rsa};
+    my $is_root_ca = $args{ca_rsa} eq $args{rsa};
+    die Web::Transport::TypeError->new ("No |ca_cert|")
+        if not $is_root_ca and not defined $args{ca_cert};
+
     my $cert = Net::SSLeay::X509_new ()
         or die Web::Transport::NetSSLeayError->new_current;
 
@@ -75,9 +83,12 @@ sub create_certificate ($%) {
     }
 
     {
+      my $issuer = $args{issuer} ||= do {
+        $args{ca_cert} ? $args{ca_cert}->subject : undef;
+      };
       my $ssleay_name = Net::SSLeay::X509_get_issuer_name ($cert)
           or die Web::Transport::NetSSLeayError->new_current;
-      my $name = Web::Transport::PKI::Name->create ($args{issuer});
+      my $name = Web::Transport::PKI::Name->create ($issuer);
       $name->modify_net_ssleay_name ($ssleay_name);
     }
     {
@@ -267,23 +278,25 @@ sub create_certificate ($%) {
     } if @{$args{crl_urls} or []};
     push @arg, &Net::SSLeay::NID_authority_key_identifier => 'keyid';
     #&Net::SSLeay::NID_authority_key_identifier => 'issuer';
-    if (($args{ca} and not $args{root_ca}) or $args{ee}) {
+    if (($args{ca} and not $is_root_ca) or $args{ee}) {
       push @arg, &Net::SSLeay::NID_ext_key_usage => 'serverAuth,clientAuth';
     }
     #&Net::SSLeay::NID_subject_alt_name => 'DNS:s1.dom.com,DNS:s2.dom.com,DNS:s3.dom.com',
+
     if (@arg) {
-      my $ca_cert = $cert;
+      my $ca_cert = defined $args{ca_cert} ? $args{ca_cert}->to_net_ssleay_x509 : $cert;
       Net::SSLeay::P_X509_add_extensions ($cert, $ca_cert, @arg)
           or die Web::Transport::NetSSLeayError->new_current;
+      # don't free $ca_cert until here.
     }
 
     my $digest = Net::SSLeay::EVP_get_digestbyname ('sha256')
         or die Web::Transport::NetSSLeayError->new_current;
 
-    die Web::Transport::TypeError->new ("No |rsa|") unless defined $args{rsa};
     Net::SSLeay::X509_set_pubkey ($cert, $args{rsa}->to_net_ssleay_pkey)
         or die Web::Transport::NetSSLeayError->new_current;
-    Net::SSLeay::X509_sign ($cert, $args{rsa}->to_net_ssleay_pkey, $digest)
+
+    Net::SSLeay::X509_sign ($cert, $args{ca_rsa}->to_net_ssleay_pkey, $digest)
         or die Web::Transport::NetSSLeayError->new_current;
     # don't free $args{rsa} until this line.
 

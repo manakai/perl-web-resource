@@ -3,7 +3,7 @@ use strict;
 use warnings;
 our $VERSION = '1.0';
 use Net::SSLeay;
-#use Web::Transport::NetSSLeayError;
+use Web::Transport::NetSSLeayError;
 use Web::Encoding;
 use Web::Host;
 use Web::Transport::Base64;
@@ -14,14 +14,6 @@ use Web::Transport::PKI::Name;
 sub _new ($$$) {
   return  bless {parsed => $_[1], der_ref => $_[2]}, $_[0];
 } # _new
-
-#  my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
-#  Net::SSLeay::BIO_write ($bio, $_[1]);
-#
-#  my $cert = Net::SSLeay::PEM_read_bio_X509 ($bio)
-#      or Web::Transport::NetSSLeayError->new_current;
-#
-#  Net::SSLeay::BIO_free ($bio);
 
 sub version ($) {
   #return Net::SSLeay::X509_get_version $_[0]->{cert};
@@ -379,6 +371,23 @@ sub must_staple ($) {
   return 0;
 } # must_staple
 
+sub to_net_ssleay_x509 ($) {
+  my $self = $_[0];
+  return $self->{net_ssleay_x509} if defined $self->{net_ssleay_x509};
+
+  my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ())
+      or die Web::Transport::NetSSLeayError->new_current;
+  Net::SSLeay::BIO_write ($bio, $self->to_pem)
+      or die Web::Transport::NetSSLeayError->new_current;
+
+  $self->{net_ssleay_x509} = Net::SSLeay::PEM_read_bio_X509 ($bio)
+      or Web::Transport::NetSSLeayError->new_current;
+
+  Net::SSLeay::BIO_free ($bio);
+
+  return $self->{net_ssleay_x509};
+} # to_net_ssleay_x509
+
 sub to_pem ($) {
   #return Net::SSLeay::PEM_get_string_X509 $_[0]->{cert};
 
@@ -492,7 +501,8 @@ sub debug_info ($) {
 } # debug_info
 
 sub DESTROY ($) {
-  #Net::SSLeay::X509_free ($_[0]->{cert});
+  Net::SSLeay::X509_free ($_[0]->{net_ssleay_x509})
+      if defined $_[0]->{net_ssleay_x509};
 } # DESTROY
 
 1;

@@ -60,6 +60,7 @@ test {
     
     my $p = $gen->create_certificate (
       rsa => $rsa,
+      ca_rsa => $rsa,
     );
     test {
       isa_ok $p, 'Promise';
@@ -95,6 +96,7 @@ test {
     
     my $p = $gen->create_certificate (
       rsa => $rsa,
+      ca_rsa => $rsa,
       version => 0,
       serial_number => 64234444,
       not_before => 634634444,
@@ -134,6 +136,7 @@ test {
     
     my $p = $gen->create_certificate (
       rsa => $rsa,
+      ca_rsa => $rsa,
       version => 0,
       serial_number => Math::BigInt->from_hex ('0f642344e44'),
       not_before => Web::DateTime->new_from_unix_time (63735321144),
@@ -182,6 +185,34 @@ test {
 
     test {
       isa_ok $err, 'Web::Transport::TypeError';
+      is $err->message, 'No |ca_rsa|';
+      is $err->file_name, __FILE__;
+      is $err->line_number, __LINE__-13;
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'create_certificate no argument';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_rsa_key->then (sub {
+    my $rsa = $_[0];
+    
+    my $p = $gen->create_certificate (ca_rsa => $rsa);
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+
+    return $p;
+  })->then (sub { test { ok 0 } $c }, sub {
+    my $err = $_[0];
+
+    test {
+      isa_ok $err, 'Web::Transport::TypeError';
       is $err->message, 'No |rsa|';
       is $err->file_name, __FILE__;
       is $err->line_number, __LINE__-13;
@@ -201,6 +232,7 @@ test {
     
     my $p = $gen->create_certificate (
       rsa => $rsa,
+      ca_rsa => $rsa,
       version => 0,
       serial_number => Math::BigInt->from_hex ('0f642344e44'),
       not_before => Web::DateTime->new_from_unix_time (63735321144),
@@ -240,6 +272,7 @@ test {
     
     my $p = $gen->create_certificate (
       rsa => $rsa,
+      ca_rsa => $rsa,
       version => 0,
       serial_number => Math::BigInt->from_hex ('0f642344e44'),
       not_before => Web::DateTime->new_from_unix_time (63735321144),
@@ -269,6 +302,104 @@ test {
     undef $c;
   });
 } n => 8, name => 'create_certificate primitive';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  Promise->all ([
+    $gen->create_rsa_key,
+    $gen->create_rsa_key,
+  ])->then (sub {
+    my ($ca_rsa, $rsa) = @{$_[0]};
+    
+    my $ca_cert;
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+    )->then (sub {
+      $ca_cert = $_[0];
+      return $gen->create_certificate (
+        rsa => $rsa,
+        ca_rsa => $ca_rsa,
+        ca_cert => $ca_cert,
+      );
+    })->then (sub {
+      my $cert = $_[0];
+
+      test {
+        isa_ok $cert, 'Web::Transport::PKI::Certificate';
+        is $cert->issuer->debug_info, '[O=(P)The Root CA]';
+      } $c;
+
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'create_certificate CA';
+
+for my $test (
+  {in => {ca => 1, path_len_constraint => 3},
+   out => {ca => !!1,
+           digitalSignature  => !!1,
+           nonRepudiation    => !!0,
+           keyEncipherment   => !!0,
+           dataEncipherment  => !!0,
+           keyAgreement      => !!0,
+           keyCertSign       => !!1,
+           cRLSign           => !!1,
+           encipherOnly      => !!0,
+           decipherOnly      => !!0,
+           SKI => 1, path_len_constraint => 3},
+   name => 'root_ca'},
+) {
+  test {
+    my $c = shift;
+
+    my $gen = Web::Transport::PKI::Generator->new;
+    $gen->create_rsa_key->then (sub {
+      my $rsa = $_[0];
+      
+      return $gen->create_certificate (
+        rsa => $rsa,
+        ca_rsa => $rsa,
+        version => 2,
+        %{$test->{in}},
+      );
+    })->then (sub {
+      my $cert = $_[0];
+      test {
+        my $expected = {
+          version => 2,
+          %{$test->{out}},
+        };
+        is $cert->version, $expected->{version};
+        is $cert->ca, $expected->{ca};
+        for (qw(digitalSignature nonRepudiation keyEncipherment
+                dataEncipherment keyAgreement keyCertSign cRLSign
+                encipherOnly decipherOnly)) {
+          is $cert->key_usage ($_), $expected->{$_};
+        }
+        is !! ($cert->debug_info =~ m{\bSKI\b}), !!$expected->{SKI};
+        is !! ($cert->debug_info =~ m{\bAKI\b}), 1;
+        is_deeply $cert->crl_distribution_urls, $expected->{crl_urls} || [];
+        is !! $cert->extended_key_usage ('serverAuth'), !! $expected->{serverAuth};
+        is !! $cert->extended_key_usage ('clientAuth'), !! $expected->{clientAuth};
+        is $cert->aia_ocsp_url, $expected->{aia_ocsp_url};
+        is $cert->aia_ca_issuers_url, $expected->{aia_ca_issuers_url};
+        is_deeply [sort { $a cmp $b } @{$cert->policy_oids}], $expected->{cp_oids} || [];
+        is $cert->cps_url, $expected->{cps_url};
+        is $cert->policy_user_notice_text, $expected->{policy_user_notice_text};
+        is_deeply $cert->san_hosts, $expected->{san_hosts} || [];
+        is !!$cert->must_staple, !!$expected->{must_staple};
+      } $c;
+      
+      done $c;
+      undef $c;
+    });
+  } n => 23, name => ['create_certificate options (root CA)', $test->{name}];
+}
 
 for my $test (
   {in => {}, out => {}},
@@ -328,19 +459,6 @@ for my $test (
    out => {crl_urls => ['1' x 1024]}, name => 'crl 1024'},
   {in => {crl_urls => ["http://www.test/\x00a"]},
    out => {crl_urls => ["http://www.test/\x00a"]}, name => 'crl null'},
-  {in => {ca => 1, root_ca => 1, path_len_constraint => 3},
-   out => {ca => !!1,
-           digitalSignature  => !!1,
-           nonRepudiation    => !!0,
-           keyEncipherment   => !!0,
-           dataEncipherment  => !!0,
-           keyAgreement      => !!0,
-           keyCertSign       => !!1,
-           cRLSign           => !!1,
-           encipherOnly      => !!0,
-           decipherOnly      => !!0,
-           SKI => 1, path_len_constraint => 3},
-   name => 'root_ca'},
   {in => {aia_ocsp_url => "http://www.test/\x00a"},
    out => {aia_ocsp_url => "http://www.test/\x00a"}, name => 'ocsp null'},
   {in => {aia_ocsp_url => "http://www.test/,,a"},
@@ -408,16 +526,30 @@ for my $test (
     my $c = shift;
 
     my $gen = Web::Transport::PKI::Generator->new;
-    $gen->create_rsa_key->then (sub {
-      my $rsa = $_[0];
+    Promise->all ([
+      $gen->create_rsa_key,
+      $gen->create_rsa_key,
+    ])->then (sub {
+      my ($ca_rsa, $rsa) = @{$_[0]};
       
+      my $ca_cert;
       return $gen->create_certificate (
-        rsa => $rsa,
-        version => 2,
-        %{$test->{in}},
-      );
+        rsa => $ca_rsa,
+        ca_rsa => $ca_rsa,
+        subject => {O => 'The Root CA'},
+      )->then (sub {
+        $ca_cert = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          version => 2,
+          %{$test->{in}},
+        );
+      });
     })->then (sub {
       my $cert = $_[0];
+      
       test {
         my $expected = {
           version => 2,

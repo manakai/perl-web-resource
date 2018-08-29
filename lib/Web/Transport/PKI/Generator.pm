@@ -42,9 +42,9 @@ sub create_certificate ($%) {
         if not defined $args{ca_rsa};
     die Web::Transport::TypeError->new ("No |rsa|")
         if not defined $args{rsa};
-    my $is_root_ca = $args{ca_rsa} eq $args{rsa};
+    my $is_root = $args{ca_rsa} eq $args{rsa};
     die Web::Transport::TypeError->new ("No |ca_cert|")
-        if not $is_root_ca and not defined $args{ca_cert};
+        if not $is_root and not defined $args{ca_cert};
 
     my $cert = Net::SSLeay::X509_new ()
         or die Web::Transport::NetSSLeayError->new_current;
@@ -97,6 +97,10 @@ sub create_certificate ($%) {
       my $name = Web::Transport::PKI::Name->create ($args{subject});
       $name->modify_net_ssleay_name ($ssleay_name);
     }
+
+    Net::SSLeay::X509_set_pubkey ($cert, $args{rsa}->to_net_ssleay_pkey)
+        or die Web::Transport::NetSSLeayError->new_current;
+    # don't free $args{rsa} until this line.
 
     {
       my @ext;
@@ -259,7 +263,7 @@ sub create_certificate ($%) {
     push @arg, &Net::SSLeay::NID_key_usage => 'critical,' . join ',', keys %$ku
         if keys %$ku;
     push @arg, &Net::SSLeay::NID_subject_key_identifier => 'hash'
-        if $args{ca} or $args{ee};
+        if ($args{ca} or $args{ee});
     push @arg, &Net::SSLeay::NID_crl_distribution_points => do {
       my $der = Web::Transport::ASN1->_encode ('SEQUENCE',
         join '', map {
@@ -277,11 +281,9 @@ sub create_certificate ($%) {
       'DER:' . join '', map { sprintf '%02X', ord $_ } split //, $der;
     } if @{$args{crl_urls} or []};
     push @arg, &Net::SSLeay::NID_authority_key_identifier => 'keyid';
-    #&Net::SSLeay::NID_authority_key_identifier => 'issuer';
-    if (($args{ca} and not $is_root_ca) or $args{ee}) {
+    if (($args{ca} and not $is_root) or $args{ee}) {
       push @arg, &Net::SSLeay::NID_ext_key_usage => 'serverAuth,clientAuth';
     }
-    #&Net::SSLeay::NID_subject_alt_name => 'DNS:s1.dom.com,DNS:s2.dom.com,DNS:s3.dom.com',
 
     if (@arg) {
       my $ca_cert = defined $args{ca_cert} ? $args{ca_cert}->to_net_ssleay_x509 : $cert;
@@ -293,12 +295,9 @@ sub create_certificate ($%) {
     my $digest = Net::SSLeay::EVP_get_digestbyname ('sha256')
         or die Web::Transport::NetSSLeayError->new_current;
 
-    Net::SSLeay::X509_set_pubkey ($cert, $args{rsa}->to_net_ssleay_pkey)
-        or die Web::Transport::NetSSLeayError->new_current;
-
     Net::SSLeay::X509_sign ($cert, $args{ca_rsa}->to_net_ssleay_pkey, $digest)
         or die Web::Transport::NetSSLeayError->new_current;
-    # don't free $args{rsa} until this line.
+    # don't free $args{ca_rsa} until this line.
 
     my $pem = Net::SSLeay::PEM_get_string_X509 ($cert);
     my $parser = Web::Transport::PKI::Parser->new;

@@ -295,6 +295,12 @@ test {
     my $closed_fulfilled;
     my $closed_rejected;
     $http->ready->then (sub {
+      test {
+        ok $http->info->{id};
+        is $http->info->{parent}->{type}, 'TCP';
+        is $http->info->{type}, 'H1';
+        is $http->info->{layered_type}, 'H1/TCP';
+      } $c;
       return $http->send_request ({method => 'GET', target => '/'});
     })->then (sub {
       my $stream = $_[0]->{stream};
@@ -302,6 +308,10 @@ test {
       $closed->then (sub { $closed_fulfilled = 1 }, sub { $closed_rejected = 1 });
       test {
         isa_ok $stream, 'Web::Transport::HTTPStream::Stream';
+        ok $stream->info->{id};
+        is $stream->info->{parent}, $http->info;
+        is $stream->info->{type}, 'Stream';
+        is $stream->info->{layered_type}, 'Stream/H1/TCP';
       } $c;
       return $stream->headers_received;
     })->then (sub {
@@ -336,7 +346,7 @@ test {
       undef $c;
     });
   });
-} n => 15, name => 'send_request gets a response';
+} n => 23, name => 'send_request gets a response';
 
 test {
   my $c = shift;

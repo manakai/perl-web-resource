@@ -788,6 +788,13 @@ sub send_request ($$;%) {
       if $con->{is_server};
 
   my $stream = bless {
+    #id => ,
+    info => {
+      #id => ,
+      type => 'Stream',
+      layered_type => 'Stream/' . $con->{info}->{layered_type},
+      parent => $con->{info},
+    },
     connection => $con,
   },'Web::Transport::HTTPStream::Stream';
   return $stream->_send_request ($req, @_);
@@ -1769,10 +1776,17 @@ sub _url_hostport ($) {
 sub _new_stream ($) {
   my $con = $_[0];
 
+  my $id = $con->{id} . '.' . $con->{next_stream_id}++;
   my $stream = $con->{stream} = bless {
     is_server => 1,
     connection => $con,
-    id => $con->{id} . '.' . $con->{next_stream_id}++,
+    id => $id,
+    info => {
+      id => $id,
+      parent => $con->{info},
+      type => 'Stream',
+      layered_type => 'Stream/' . $con->{info}->{layered_type},
+    },
     request => {
       headers => [],
       # method target_url version
@@ -2350,6 +2364,19 @@ BEGIN {
   *_pcap = \&Web::Transport::HTTPStream::_pcap;
 }
 
+## Returns the "info" hash reference of the HTTP stream, which
+## contains the metadata on the HTTP stream.  The hash reference
+## contains following key/value pairs:
+##
+##   id - The short string identifying the HTTP stream, provided for
+##   debugging.
+##
+##   parent - The "info" hash reference of the HTTP stream's HTTP
+##   connection.
+sub info ($) {
+  return $_[0]->{info};
+} # info
+
 sub _open_sending_stream ($$;%) {
   my ($stream, $slot_length, %args) = @_;
   my $con = $stream->{connection};
@@ -2720,7 +2747,7 @@ sub _send_request ($$) {
     return Promise->reject (Web::Transport::TypeError->new ("Connection is busy"));
   }
 
-  $stream->{id} = $con->{id} . '.' . $con->{next_stream_id}++;
+  $stream->{info}->{id} = $stream->{id} = $con->{id} . '.' . $con->{next_stream_id}++;
   if ($con->{DEBUG}) {
     warn "$con->{id}: ========== @{[ref $con]}\n";
     warn "$con->{id}: startstream $stream->{id} @{[scalar gmtime]}\n";
@@ -3143,7 +3170,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

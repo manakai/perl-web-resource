@@ -96,11 +96,22 @@ test {
     my $r = $x->streams->get_reader;
     $r->read->then (sub {
       return 0 if $_[0]->{done};
+      test {
+        ok $x->info->{id};
+        is $x->info->{parent}->{type}, 'TCP';
+        is $x->info->{type}, 'H1';
+        is $x->info->{layered_type}, 'H1/TCP';
+      } $c;
       $ready2 = $ready1;
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         my $path = $stream->{request}->{target_url}->path;
-
+        test {
+          ok $stream->info->{id};
+          is $stream->info->{parent}, $x->info;
+          is $stream->info->{type}, 'Stream';
+          is $stream->info->{layered_type}, 'Stream/H1/TCP';
+        } $c;
         return $stream->send_response
             ({status => 210, status_text => $stream->{id}, headers => []})->then (sub {
           return $_[0]->{body}->get_writer->close;
@@ -129,7 +140,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 2, name => 'server connection ready promise';
+} n => 10, name => 'server connection ready promise';
 
 test {
   my $c = shift;
@@ -211,7 +222,6 @@ test {
       my $stream = $_[0]->{value};
       return $stream->headers_received->then (sub {
         my $path = $stream->{request}->{target_url}->path;
-
         return $stream->send_response
             ({status => 210, status_text => $stream->{id}, headers => []})->then (sub {
           return $_[0]->{body}->get_writer->close;

@@ -12517,6 +12517,10 @@ $Web::MIME::_TypeDefs::Type = {
                                     'vc1' => {
                                              'iana' => 'permanent'
                                            },
+                                    'vc2' => {
+                                             'iana' => 'permanent',
+                                             'iana_intended_usage' => 'common'
+                                           },
                                     'vdo' => {},
                                     'vivo' => {},
                                     'vmx' => {},

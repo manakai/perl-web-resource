@@ -20,6 +20,7 @@ push our @CARP_NOT, qw(
   AbortController
   ReadableStreamDefaultController
   Web::Transport::HTTPStream::Stream
+  Web::Transport::CustomStream
   Web::Transport::TCPStream
   Web::Transport::UnixStream
   Web::Transport::TLSStream

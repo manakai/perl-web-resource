@@ -13,6 +13,7 @@ use DataView;
 
 push our @CARP_NOT, qw(
   Web::Transport::TypeError Web::Transport::ProtocolError
+  Web::Transport::CustomStream
   Web::Transport::TCPStream
   Web::Transport::UnixStream
   Web::Transport::TLSStream

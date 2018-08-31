@@ -80,6 +80,46 @@ sub new_from_aeargs_and_opts ($$$) {
   return $self;
 } # new_from_aeargs_and_opts
 
+sub _new_mitm_server ($$$) {
+  my ($class, $parent, $opts) = @_;
+  my $self = bless {}, $class;
+  if ($opts->{tls}) {
+    $parent = {
+      %{$opts->{tls}},
+      class => 'Web::Transport::TLSStream',
+      server => 1,
+      parent => $parent,
+    };
+  }
+
+  $self->{server_header} = encode_web_utf8
+      (defined $opts->{server_header} ? $opts->{server_header} : 'httpd');
+  $self->{debug} = defined $opts->{debug} ? $opts->{debug} : ($ENV{WEBSERVER_DEBUG} || 0);
+
+  $self->{connection} = Web::Transport::HTTPStream->new ({
+    parent => $parent,
+    server => 1,
+    debug => $self->{debug},
+  });
+  $self->{completed_cv} = AE::cv;
+  $self->{completed_cv}->begin;
+  my $reader = $self->{connection}->streams->get_reader;
+  my $read; $read = sub {
+    return $reader->read->then (sub {
+      return if $_[0]->{done};
+      $self->{completed_cv}->begin;
+      promised_cleanup {
+        $self->{completed_cv}->end;
+      } $self->_handle_stream ($_[0]->{value}, $opts);
+      return $read->();
+    });
+  }; # $read
+  promised_cleanup { undef $read } $read->();
+  $self->{connection}->closed->then (sub { $self->{completed_cv}->end });
+  $self->{completed} = Promise->from_cv ($self->{completed_cv});
+  return $self;
+} # _new_mitm_server
+
 sub id ($) {
   return $_[0]->{connection}->info->{id};
 } # id

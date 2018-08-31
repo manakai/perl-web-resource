@@ -459,8 +459,8 @@ push our @CARP_NOT, qw(
   Web::Transport::RequestConstructor
 );
 
-sub client ($$;$) {
-  my ($self, $url, $client_opts) = @_;
+sub client ($$;$$) {
+  my ($self, $url, $client_opts, $args) = @_;
   my $opts = {%{$self->{client_opts}}, %{$client_opts || {}}};
 
   # XXX connection pool
@@ -470,6 +470,7 @@ sub client ($$;$) {
   } else {
     $key = $url->get_origin->to_ascii;
   }
+  $key .= $; . 'k=' . $args->{key} if defined $args->{key};
   my $cons = $self->{clients}->{$key} ||= [];
 
   for (@$cons) {

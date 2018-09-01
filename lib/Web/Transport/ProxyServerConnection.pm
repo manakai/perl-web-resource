@@ -1,7 +1,7 @@
 package Web::Transport::ProxyServerConnection;
 use strict;
 use warnings;
-our $VERSION = '3.0';
+our $VERSION = '4.0';
 use Web::Transport::GenericServerConnection;
 use Promised::Flow;
 use Web::Transport::Error;
@@ -328,13 +328,12 @@ sub _handle_stream ($$$) {
 
       if (defined $reqbody and not $reqbody->locked) {
         my $reader = $reqbody->get_reader;
-        my $read; $read = sub {
+        # XXX pipeTo null
+        push @wait, promised_until {
           return $reader->read->then (sub {
-            return if $_[0]->{done};
-            return $read->();
+            return $_[0]->{done};
           });
         }; # $read
-        push @wait, promised_cleanup { undef $read } $read->();
       }
     }
 
@@ -392,13 +391,14 @@ sub _handle_stream ($$$) {
 
       if (defined $reader) {
         # XXX pipeTo
-        my $read; $read = sub {
+        return ((promised_until {
           return $reader->read (DataView->new (ArrayBuffer->new (1024*1024)))->then (sub {
-            return if $_[0]->{done};
-            return $writer->write ($_[0]->{value})->then ($read);
+            return 'done' if $_[0]->{done};
+            return $writer->write ($_[0]->{value})->then (sub {
+              return not 'done';
+            });
           });
-        }; # $read
-        return promised_cleanup { undef $read } $read->()->then (sub {
+        })->then (sub {
           return 0 unless defined $response->{body_is_incomplete};
           return $response->{body_is_incomplete}->();
         })->then (sub {
@@ -414,7 +414,7 @@ sub _handle_stream ($$$) {
           $reader->cancel ($error)->catch (sub { });
           $writer->abort ($error);
           die $error;
-        });
+        }));
       } # body_stream
 
       if (defined $response->{body}) {
@@ -435,13 +435,11 @@ sub _handle_stream ($$$) {
     if (defined $resbody and not $resbody->locked) {
       # XXX pipeTo null
       my $reader = $resbody->get_reader;
-      my $read; $read = sub {
+      push @wait, promised_until {
         return $reader->read->then (sub {
-          return if $_[0]->{done};
-          return $read->();
+          return $_[0]->{done};
         });
-      }; # $read
-      push @wait, promised_cleanup { undef $read } $read->();
+      };
     }
     push @wait, $api->_close; # XXX persist client
   })->then (sub {

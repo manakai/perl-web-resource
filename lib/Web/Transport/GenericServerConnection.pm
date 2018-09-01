@@ -1,7 +1,7 @@
 package Web::Transport::GenericServerConnection;
 use strict;
 use warnings;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
 use ArrayBuffer;
 use DataView;
 use AnyEvent;
@@ -64,17 +64,17 @@ sub new_from_aeargs_and_opts ($$$) {
   $self->{completed_cv} = AE::cv;
   $self->{completed_cv}->begin;
   my $reader = $self->{connection}->streams->get_reader;
-  my $read; $read = sub {
+  # not return
+  promised_until {
     return $reader->read->then (sub {
-      return if $_[0]->{done};
+      return 'done' if $_[0]->{done};
       $self->{completed_cv}->begin;
       promised_cleanup {
         $self->{completed_cv}->end;
       } $self->_handle_stream ($_[0]->{value}, $opts);
-      return $read->();
+      return not 'done';
     });
-  }; # $read
-  promised_cleanup { undef $read } $read->();
+  };
   $self->{connection}->closed->then (sub { $self->{completed_cv}->end });
   $self->{completed} = Promise->from_cv ($self->{completed_cv});
   return $self;
@@ -104,17 +104,17 @@ sub _new_mitm_server ($$$) {
   $self->{completed_cv} = AE::cv;
   $self->{completed_cv}->begin;
   my $reader = $self->{connection}->streams->get_reader;
-  my $read; $read = sub {
+  # not return
+  promised_until {
     return $reader->read->then (sub {
-      return if $_[0]->{done};
+      return 'done' if $_[0]->{done};
       $self->{completed_cv}->begin;
       promised_cleanup {
         $self->{completed_cv}->end;
       } $self->_handle_stream ($_[0]->{value}, $opts);
-      return $read->();
+      return not 'done';
     });
-  }; # $read
-  promised_cleanup { undef $read } $read->();
+  };
   $self->{connection}->closed->then (sub { $self->{completed_cv}->end });
   $self->{completed} = Promise->from_cv ($self->{completed_cv});
   return $self;
@@ -168,7 +168,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -1,7 +1,7 @@
 package Web::Transport::SOCKS4Stream;
 use strict;
 use warnings;
-our $VERSION = '4.0';
+our $VERSION = '5.0';
 use AnyEvent;
 use Promise;
 use Promised::Flow;
@@ -101,17 +101,16 @@ sub create ($$) {
 
     my $bytes = '';
     my $dv = DataView->new (ArrayBuffer->new (8));
-    my $read; $read = sub {
+    return ((promised_until {
       return $t_r->read ($dv)->then (sub {
-        return if $_[0]->{done};
+        return 'done' if $_[0]->{done};
         $dv = $_[0]->{value};
         $bytes .= $dv->manakai_to_string;
         $dv = DataView->new ($dv->buffer, $dv->byte_offset + $dv->byte_length);
-        return if $dv->byte_length == 0;
-        $read->();
+        return 'done' if $dv->byte_length == 0;
+        return not 'done';
       });
-    }; # $read
-    return promised_cleanup { undef $read } $read->()->then (sub {
+    })->then (sub {
       if (8 == length $bytes and substr ($bytes, 0, 2) eq "\x00\x5A") {
         undef $timer;
         undef $signal;
@@ -134,7 +133,7 @@ sub create ($$) {
         $onerror->($error);
         die $error;
       }
-    });
+    }));
   });
 } # create
 

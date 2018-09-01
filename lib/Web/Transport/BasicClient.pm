@@ -1,7 +1,7 @@
 package Web::Transport::BasicClient;
 use strict;
 use warnings;
-our $VERSION = '3.0';
+our $VERSION = '4.0';
 use ArrayBuffer;
 use DataView;
 use AbortController;
@@ -268,7 +268,8 @@ sub _connect ($$$;%) {
 
       # XXX wait for other connections
 
-      my $get; $get = sub {
+      my ($tparams, $request_mode_is_http_proxy);
+      return ((promised_until {
         if (@$proxies) {
           my $proxy = shift @$proxies;
           my $tid = $parent_id . '.' . ++$self->{tid};
@@ -278,20 +279,20 @@ sub _connect ($$$;%) {
             $args{no_cache},
             $self->{aborter}->signal,
             $debug,
-          )->catch (sub {
+          )->then (sub {
+            ($tparams, $request_mode_is_http_proxy) = @{$_[0]};
+            return 'done';
+          }, sub {
             if (@$proxies) {
-              return $get->();
+              return not 'done';
             } else {
               die $_[0];
             }
           });
         } else {
-          return Promise->reject (_te "No proxy available");
+          die _te "No proxy available";
         }
-      }; # $get
-      $get->()->then (sub {
-        my ($tparams, $request_mode_is_http_proxy) = @{$_[0]};
-        undef $get;
+      })->then (sub {
         if ($url_record->scheme eq 'https') { # not $con_url_record
           return [{
             %{$self->{tls_options}},
@@ -303,10 +304,7 @@ sub _connect ($$$;%) {
           }, 0];
         }
         return [$tparams, $request_mode_is_http_proxy];
-      }, sub {
-        undef $get;
-        die $_[0];
-      });
+      }));
     })->then (sub {
       my ($tparams, $request_mode_is_http_proxy) = @{$_[0]};
       if (not $request_mode_is_http_proxy and
@@ -398,13 +396,15 @@ sub _request ($$$$$$$$$$$$) {
       } elsif (defined $body_reader) {
         if (defined $reqbody) {
           my $writer = $reqbody->get_writer;
-          my $read; $read = sub {
+          # not return
+          (promised_until {
             return $body_reader->read (DataView->new (ArrayBuffer->new (1024*1024)))->then (sub {
-              return if $_[0]->{done};
-              return $writer->write ($_[0]->{value})->then ($read);
+              return 'done' if $_[0]->{done};
+              return $writer->write ($_[0]->{value})->then (sub {
+                return not 'done';
+              });
             });
-          }; # $read
-          promised_cleanup { undef $read } $read->()->then (sub {
+          })->then (sub {
             return $writer->close;
           })->catch (sub {
             $writer->abort ($_[0]);
@@ -503,9 +503,9 @@ sub _request ($$$$$$$$$$$$) {
           $response->{body} = [];
           my $body_length = 0;
           my $max = $self->{max_size};
-          my $read; $read = sub {
+          return ((promised_until {
             return $reader->read (DataView->new (ArrayBuffer->new (1024*10)))->then (sub {
-              return if $_[0]->{done};
+              return 'done' if $_[0]->{done};
               push @{$response->{body}}, \($_[0]->{value}->manakai_to_string);
 
               if ($max >= 0) {
@@ -514,16 +514,14 @@ sub _request ($$$$$$$$$$$$) {
                   $stream->abort (_pe "Response body is larger than max_size ($max)");
                 }
               }
-
-              return $read->();
+              return not 'done';
             });
-          }; # $read
-          return (promised_cleanup { undef $read } $read->())->then (sub {
+          })->then (sub {
             return $stream->closed;
           })->then (sub {
             die $_[0] if Web::Transport::ProtocolError->is_error ($_[0]);
             return [$response, undef];
-          });
+          }));
         } # $readable
 
         return [$response, $stream->closed];

@@ -1,7 +1,7 @@
 package Web::Transport::PSGIServerConnection;
 use strict;
 use warnings;
-our $VERSION = '3.0';
+our $VERSION = '4.0';
 use Web::Transport::RequestConstructor;
 use Web::Transport::GenericServerConnection;
 use Web::Transport::TypeError;
@@ -143,10 +143,10 @@ sub _handle_stream ($$$) {
 
     my $input = '';
     my $reader = defined $_[0]->{body} ? $_[0]->{body}->get_reader ('byob') : undef;
-    my $read; $read = defined $reader ? sub {
+    return Promise->resolve (defined $reader ? promised_until {
       my $dv = DataView->new (ArrayBuffer->new (1024*8));
       return $reader->read ($dv)->then (sub {
-        return if $_[0]->{done};
+        return 'done' if $_[0]->{done};
 
         if (defined $max and
             (length $input) + $_[0]->{value}->byte_length > $max) {
@@ -165,14 +165,15 @@ sub _handle_stream ($$$) {
           })->then (sub {
             $reader->cancel (413);
             return $stream->abort (413);
+          })->then (sub {
+            return 'done';
           });
         }
 
         $input .= $_[0]->{value}->manakai_to_string;
-        return $read->();
+        return not 'done';
       });
-    } : sub { return Promise->resolve }; # $read
-    return promised_cleanup { undef $read } $read->()->then (sub {
+    } : undef)->then (sub {
       $env->{CONTENT_LENGTH} = length $input;
       open $env->{'psgi.input'}, '<', \$input;
       return $server->_run ($stream, $opts->{psgi_app}, $env, $method);

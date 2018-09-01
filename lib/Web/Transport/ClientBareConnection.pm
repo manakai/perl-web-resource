@@ -1,9 +1,10 @@
 package Web::Transport::ClientBareConnection;
 use strict;
 use warnings;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
 use AnyEvent;
 use Promise;
+use Promised::Flow;
 use Web::Transport::TCPTransport;
 use Web::Transport::TLSTransport;
 use Web::Transport::HTTPClientConnection;
@@ -189,15 +190,20 @@ sub connect ($%) {
 
       # XXX wait for other connections
 
-      my $get; $get = sub {
+      my $transport;
+      # not return but last value
+      (promised_until {
         if (@$proxies) {
           my $proxy = shift @$proxies;
           my $tid = $parent_id . '.' . ++$self->{tid};
           return $proxy_to_transport->($tid, $proxy, $url_record, $resolver,
                                        $self->protocol_clock,
-                                       $args{no_cache}, $debug)->catch (sub {
+                                       $args{no_cache}, $debug)->then (sub {
+            $transport = $_[0];
+            return 'done';
+          }, sub {
             if (@$proxies) {
-              return $get->();
+              return not 'done';
             } else {
               die $_[0];
             }
@@ -205,22 +211,16 @@ sub connect ($%) {
         } else {
           return Promise->reject ("No proxy available\n");
         }
-      }; # $get
-      $get->()->then (sub {
-        my $transport = $_[0];
-        undef $get;
+      })->then (sub {
         if ($url_record->scheme eq 'https') {
           return Web::Transport::TLSTransport->new
               (%{$self->{tls_options}},
                si_host => $url_record->host,
                sni_host => $url_record->host,
-               transport => $_[0],
+               transport => $transport,
                protocol_clock => $self->protocol_clock);
         }
         return $transport;
-      }, sub {
-        undef $get;
-        die $_[0];
       });
     })->then (sub {
       if (not $_[0]->request_mode eq 'HTTP proxy' and
@@ -377,7 +377,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

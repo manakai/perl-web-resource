@@ -3,7 +3,7 @@ use strict;
 use warnings;
 no warnings 'utf8';
 use warnings FATAL => 'recursion';
-our $VERSION = '1.0';
+our $VERSION = '2.0';
 use AnyEvent;
 use Web::Encoding;
 use Encode qw(decode); # XXX
@@ -1811,9 +1811,9 @@ sub _new_stream ($) {
 sub _read ($) {
   my $self = $_[0];
   return unless defined $self->{reader};
-  my $read; $read = sub {
+  return ((promised_until {
     return $self->{reader}->read (DataView->new (ArrayBuffer->new (1024*2)))->then (sub {
-      return if $_[0]->{done};
+      return 'done' if $_[0]->{done};
 
       if ($self->{disable_timer}) {
         delete $self->{timer};
@@ -1822,13 +1822,12 @@ sub _read ($) {
       }
       $self->_ondata ($_[0]->{value});
 
-      return $read->();
+      return not 'done';
     });
-  }; # $read;
-  return $read->()->catch (sub {
+  })->catch (sub {
     $self->abort ($_[0]);
     return undef;
-  })->then (sub { undef $read });
+  }));
 } # _read
 
 sub _ondata ($$) {

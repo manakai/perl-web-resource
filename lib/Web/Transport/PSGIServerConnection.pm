@@ -2,6 +2,7 @@ package Web::Transport::PSGIServerConnection;
 use strict;
 use warnings;
 our $VERSION = '4.0';
+use Streams::_Common;
 use Web::Transport::RequestConstructor;
 use Web::Transport::GenericServerConnection;
 use Web::Transport::TypeError;
@@ -144,7 +145,7 @@ sub _handle_stream ($$$) {
     my $input = '';
     my $reader = defined $_[0]->{body} ? $_[0]->{body}->get_reader ('byob') : undef;
     return Promise->resolve (defined $reader ? promised_until {
-      my $dv = DataView->new (ArrayBuffer->new (1024*8));
+      my $dv = DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize));
       return $reader->read ($dv)->then (sub {
         return 'done' if $_[0]->{done};
 

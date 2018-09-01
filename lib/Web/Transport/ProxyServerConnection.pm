@@ -2,6 +2,7 @@ package Web::Transport::ProxyServerConnection;
 use strict;
 use warnings;
 our $VERSION = '4.0';
+use Streams::_Common;
 use Web::Transport::GenericServerConnection;
 use Promised::Flow;
 use Web::Transport::Error;
@@ -392,7 +393,7 @@ sub _handle_stream ($$$) {
       if (defined $reader) {
         # XXX pipeTo
         return ((promised_until {
-          return $reader->read (DataView->new (ArrayBuffer->new (1024*1024)))->then (sub {
+          return $reader->read (DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize)))->then (sub {
             return 'done' if $_[0]->{done};
             return $writer->write ($_[0]->{value})->then (sub {
               return not 'done';

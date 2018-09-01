@@ -7,6 +7,7 @@ our $VERSION = '2.0';
 use AnyEvent;
 use Web::Encoding;
 use Encode qw(decode); # XXX
+use Streams::_Common;
 use ArrayBuffer;
 use TypedArray;
 use AbortController;
@@ -1162,7 +1163,7 @@ sub _read ($) {
     } # $expected_size
   } # byob
 
-  my $view = DataView->new (ArrayBuffer->new (1024*2));
+  my $view = DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize));
   $view->buffer->manakai_label ('HTTP-client reading');
   return $self->{reader}->read ($view)->then (sub {
     delete $self->{read_running};
@@ -1812,7 +1813,7 @@ sub _read ($) {
   my $self = $_[0];
   return unless defined $self->{reader};
   return ((promised_until {
-    return $self->{reader}->read (DataView->new (ArrayBuffer->new (1024*2)))->then (sub {
+    return $self->{reader}->read (DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize)))->then (sub {
       return 'done' if $_[0]->{done};
 
       if ($self->{disable_timer}) {
@@ -2572,7 +2573,7 @@ sub _headers_received ($;%) {
   } else { # not is_ws
     my $read_stream = ReadableStream->new ({
       type => 'bytes',
-      auto_allocate_chunk_size => 1024*2,
+      auto_allocate_chunk_size => $Streams::_Common::DefaultBufferSize,
       start => sub {
         $stream->{body_controller} = $_[1];
         return undef;

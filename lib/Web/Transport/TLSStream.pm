@@ -2,6 +2,7 @@ package Web::Transport::TLSStream;
 use strict;
 use warnings;
 our $VERSION = '2.0';
+use Streams::_Common;
 use Streams::IOError;
 use Web::Transport::Error;
 use Web::Transport::TypeError;
@@ -338,7 +339,7 @@ sub create ($$) {
           next;
         }
       } else {
-        $read = Net::SSLeay::read ($tls, 1024);
+        $read = Net::SSLeay::read ($tls, $Streams::_Common::DefaultBufferSize);
         if (defined $read and length $read) {
           note_buffer_copy length $read, "TLS", "TLS reader";
           my $src = ArrayBuffer->new_from_scalarref (\$read);
@@ -419,7 +420,7 @@ sub create ($$) {
 
   $info->{readable} = ReadableStream->new ({
     type => 'bytes',
-    auto_allocate_chunk_size => 1024*2,
+    auto_allocate_chunk_size => $Streams::_Common::DefaultBufferSize,
     start => sub {
       $rc = $_[1];
     },
@@ -507,7 +508,7 @@ sub create ($$) {
     $t_w = (delete $info->{parent}->{writable})->get_writer;
     $t_read = sub {
       return $t_read_pausing = 1 if $t_read_pausing;
-      my $view = DataView->new (ArrayBuffer->new (1024));
+      my $view = DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize));
       $view->buffer->manakai_label ('TLS underlying transport reader');
       return $t_r->read ($view)->then (sub {
         my $v = $_[0];

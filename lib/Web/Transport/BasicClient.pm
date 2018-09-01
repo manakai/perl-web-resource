@@ -7,6 +7,7 @@ use DataView;
 use AbortController;
 use Promise;
 use Promised::Flow;
+use Streams::_Common;
 use Web::DomainName::Canonicalize qw(canonicalize_url_host);
 use Web::Transport::RequestConstructor;
 use Web::Encoding;
@@ -398,7 +399,7 @@ sub _request ($$$$$$$$$$$$) {
           my $writer = $reqbody->get_writer;
           # not return
           (promised_until {
-            return $body_reader->read (DataView->new (ArrayBuffer->new (1024*1024)))->then (sub {
+            return $body_reader->read (DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize)))->then (sub {
               return 'done' if $_[0]->{done};
               return $writer->write ($_[0]->{value})->then (sub {
                 return not 'done';
@@ -504,7 +505,7 @@ sub _request ($$$$$$$$$$$$) {
           my $body_length = 0;
           my $max = $self->{max_size};
           return ((promised_until {
-            return $reader->read (DataView->new (ArrayBuffer->new (1024*10)))->then (sub {
+            return $reader->read (DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize)))->then (sub {
               return 'done' if $_[0]->{done};
               push @{$response->{body}}, \($_[0]->{value}->manakai_to_string);
 

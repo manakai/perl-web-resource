@@ -17,6 +17,7 @@ for my $version (0, 1, 2) {
     return $gen->create_rsa_key->then (sub {
       return $gen->create_certificate (
         rsa => $_[0],
+        ca_rsa => $_[0],
         version => $version,
       );
     })->then (sub {
@@ -46,6 +47,7 @@ for my $test (
     return $gen->create_rsa_key->then (sub {
       return $gen->create_certificate (
         rsa => $_[0],
+        ca_rsa => $_[0],
         serial_number => $test->[0],
       );
     })->then (sub {
@@ -78,6 +80,7 @@ for my $test (
     return $gen->create_rsa_key->then (sub {
       return $gen->create_certificate (
         rsa => $_[0],
+        ca_rsa => $_[0],
         not_before => $test,
       );
     })->then (sub {
@@ -102,6 +105,7 @@ for my $test (
     return $gen->create_rsa_key->then (sub {
       return $gen->create_certificate (
         rsa => $_[0],
+        ca_rsa => $_[0],
         not_after => $test,
       );
     })->then (sub {
@@ -131,6 +135,7 @@ for my $test (
       return $gen->create_rsa_key->then (sub {
         return $gen->create_certificate (
           rsa => $_[0],
+          ca_rsa => $_[0],
           $method => $test->[0],
         );
       })->then (sub {
@@ -157,6 +162,7 @@ test {
   return $gen->create_rsa_key->then (sub {
     return $gen->create_certificate (
       rsa => $_[0],
+      ca_rsa => $_[0],
       subject => {CN => $cn},
     );
   })->then (sub {
@@ -183,12 +189,13 @@ test {
   return $gen->create_rsa_key->then (sub {
     return $gen->create_certificate (
       rsa => $_[0],
+      ca_rsa => $_[0],
     );
   })->then (sub {
     my $cert = $_[0];
 
     test {
-      like $cert->debug_info, qr{^v3 .+};
+      like $cert->debug_info, qr{ v3 };
     } $c;
 
     done $c;

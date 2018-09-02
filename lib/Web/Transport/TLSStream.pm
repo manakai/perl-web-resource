@@ -365,7 +365,7 @@ sub create ($$) {
     } # while 1
 
     while (1){
-      my $read = Net::SSLeay::BIO_read ($wbio);
+      my $read = Net::SSLeay::BIO_read ($wbio, $Streams::_Common::DefaultBufferSize);
       if (defined $read and length $read) {
         note_buffer_copy length $read, "TLS", "Underlying transport writer of TLS";
         if (defined $t_w) {
@@ -507,35 +507,42 @@ sub create ($$) {
     $t_r = (delete $info->{parent}->{readable})->get_reader ('byob');
     $t_w = (delete $info->{parent}->{writable})->get_writer;
     $t_read = sub {
-      return $t_read_pausing = 1 if $t_read_pausing;
-      my $view = DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize));
-      $view->buffer->manakai_label ('TLS underlying transport reader');
-      return $t_r->read ($view)->then (sub {
-        my $v = $_[0];
-        if ($v->{done}) {
-          $process_tls->();
-
-          return $abort->(_pe "Underlying transport closed during TLS handshake")
-              if defined $handshake_ok;
-
-          ## Implementation does not always send TLS closure alert.
-          if (defined $rc) {
-            $rc->close;
-            my $req = $rc->byob_request;
-            $req->manakai_respond_zero if defined $req;
-            undef $rc;
-          }
-          $close->() if not defined $wc;
-          undef $t_r;
-          return;
-        } else {
-          Net::SSLeay::BIO_write ($rbio, $v->{value}->manakai_to_string);
-          note_buffer_copy $v->{value}->byte_length,
-              $v->{value}->buffer->debug_info, "TLS";
-          $process_tls->();
-          return $t_read->();
+      return promised_until {
+        if ($t_read_pausing) {
+          $t_read_pausing = 1;
+          return 'done';
         }
-      });
+        my $view = DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize));
+        $view->buffer->manakai_label ('TLS underlying transport reader');
+        return $t_r->read ($view)->then (sub {
+          my $v = $_[0];
+          if ($v->{done}) {
+            $process_tls->();
+
+            if (defined $handshake_ok) {
+              $abort->(_pe "Underlying transport closed during TLS handshake");
+              return 'done';
+            }
+
+            ## Implementation does not always send TLS closure alert.
+            if (defined $rc) {
+              $rc->close;
+              my $req = $rc->byob_request;
+              $req->manakai_respond_zero if defined $req;
+            undef $rc;
+            }
+            $close->() if not defined $wc;
+            undef $t_r;
+            return 'done';
+          } else {
+            Net::SSLeay::BIO_write ($rbio, $v->{value}->manakai_to_string);
+            note_buffer_copy $v->{value}->byte_length,
+                $v->{value}->buffer->debug_info, "TLS";
+            $process_tls->();
+            return not 'done';
+          }
+        });
+      };
     }; # $t_read
     $t_read->()->catch ($abort);
     $t_r->closed->catch ($abort)->then (sub { undef $t_read });

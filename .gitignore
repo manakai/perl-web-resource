@@ -9,3 +9,6 @@
 _Inline
 /deps/
 /openssl
+nytprof.*
+nytprof/
+/nytprofhtml

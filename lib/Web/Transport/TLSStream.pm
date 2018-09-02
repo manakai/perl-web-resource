@@ -269,6 +269,10 @@ sub create ($$) {
       $wc->error ($_[0]);
       undef $wc;
     }
+    if (defined $wreject) {
+      $wreject->();
+      $wview = $wresolve = $wreject = undef;
+    }
 
     if (defined $tls) {
       Net::SSLeay::set_quiet_shutdown ($tls, 1);
@@ -372,7 +376,7 @@ sub create ($$) {
           my $ab = ArrayBuffer->new_from_scalarref (\$read);
           $ab->manakai_label ('TLS underlying transport writer');
           my $p = $t_w->write (DataView->new ($ab));
-          if ($t_w->desired_size <= 0) {
+          if (not defined $t_w->desired_size or $t_w->desired_size <= 0) {
             $p->then ($process_tls);
             return 0; # no retry
           }

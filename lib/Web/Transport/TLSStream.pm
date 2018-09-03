@@ -270,7 +270,7 @@ sub create ($$) {
       undef $wc;
     }
     if (defined $wreject) {
-      $wreject->();
+      $wreject->($_[0]);
       $wview = $wresolve = $wreject = undef;
     }
 

@@ -169,7 +169,7 @@ sub aws4_signed_url ($%) {
       $time[5]+1900, $time[4]+1, @time[3, 2, 1, 0];
   my $ymd = sprintf '%04d%02d%02d', $time[5]+1900, $time[4]+1, $time[3];
   
-  my @signed_headers = (['host', $args{url}->hostport]);
+  my @signed_headers = (['host', defined $args{signed_hostport} ? $args{signed_hostport} : $args{url}->hostport]);
   my $signed_headers = join ';', map { $_->[0] } @signed_headers;
 
   my $region = encode_web_utf8 $args{region};

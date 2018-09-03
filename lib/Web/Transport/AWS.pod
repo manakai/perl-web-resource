@@ -51,6 +51,11 @@ The arguments are name/value pairs of following options:
 The URL (a L<Web::URL> object).  It must be an HTTP(S) URL (i.e. a URL
 whose scheme is C<http> or C<https>).
 
+=item signed_hostport => $string
+
+The hostport of the URL used to generate the signature.  This option
+is required only when it is different from C<url>'s hostport.
+
 =item method => $method (required)
 
 The request method, such as C<GET> or C<POST>.

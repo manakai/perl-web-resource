@@ -84,7 +84,8 @@ sub create_certificate ($%) {
 
     {
       my $issuer = $args{issuer} ||= do {
-        $args{ca_cert} ? $args{ca_cert}->subject : undef;
+        $args{ca_cert} ? $args{ca_cert}->subject :
+        $is_root ? $args{subject} : undef;
       };
       my $ssleay_name = Net::SSLeay::X509_get_issuer_name ($cert)
           or die Web::Transport::NetSSLeayError->new_current;

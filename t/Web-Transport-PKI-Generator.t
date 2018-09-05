@@ -226,6 +226,32 @@ test {
 test {
   my $c = shift;
 
+  my $o = rand;
+  my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_rsa_key->then (sub {
+    my $rsa = $_[0];
+    
+    return $gen->create_certificate (
+      rsa => $rsa, ca_rsa => $rsa,
+      subject => {O => $o},
+    );
+  })->then (sub {
+    my $cert = $_[0];
+
+    test {
+      isa_ok $cert, 'Web::Transport::PKI::Certificate';
+      is $cert->issuer->debug_info, $cert->subject->debug_info;
+      is $cert->subject->debug_info, "[O=(P)$o]";
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'root no explicit issuer';
+
+test {
+  my $c = shift;
+
   my $gen = Web::Transport::PKI::Generator->new;
   $gen->create_rsa_key->then (sub {
     my $rsa = $_[0];

@@ -15,3 +15,4 @@ my $obj_id = Net::SSLeay::OBJ_obj2txt ($obj_obj, 1);
 warn "Short: $obj_sn\n";
 warn "Long:  $obj_ln\n";
 warn "Text:  $obj_id\n";
+warn "NID:   $obj_nid\n" if $obj_nid;

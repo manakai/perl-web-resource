@@ -521,6 +521,31 @@ for my $test (
                          "%2A.xn--abc-p18d.test"]}, name => 'san domain'},
   {in => {must_staple => !!1},
    out => {must_staple => !!1}, name => 'must-staple'},
+  {in => {name_constraints_permitted => [
+    'foo.bar', "ab,\x00de\x{4000}", ".xa.xy", "*.foo",
+    Web::Host->new_from_packed_addr ("\x01\x02\x03\x04"),
+    [Web::Host->new_from_packed_addr ("\x01\x02\x03\x06"),
+     Web::Host->new_from_packed_addr ("\xFF\xFF\x00\x00")],
+    "abc.",
+   ]},
+   out => {ncs => "nameConstraints:+foo.bar nameConstraints:+ab,\x00de\x{4000} nameConstraints:+.xa.xy nameConstraints:+*.foo nameConstraints:+IP:1.2.3.4/255.255.255.255 nameConstraints:+IP:1.2.3.6/255.255.0.0 nameConstraints:+abc."},
+   name => 'nameConstraints +'},
+  {in => {name_constraints_excluded => [
+     [Web::Host->new_from_packed_addr ("\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02"),
+      Web::Host->new_from_packed_addr ("\xFE\xFF\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02")],
+      Web::Host->parse_string ("\xFE\x{4000}.abc"),
+   ]},
+   out => {ncs => "nameConstraints:-IP:[304:102:304:102:304:102:304:102]/[feff:102:304:102:304:102:304:102] nameConstraints:-xn--vda4733a.abc"},
+   name => 'nameConstraints -'},
+  {in => {name_constraints_permitted => [
+     Web::Host->new_from_packed_addr ("\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04"),
+   ], name_constraints_excluded => [
+     [Web::Host->new_from_packed_addr ("\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02"),
+      Web::Host->new_from_packed_addr ("\xFE\xFF\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02\x03\x04\x01\x02")],
+      Web::Host->parse_string ("\xFE\x{4000}.abc"),
+   ]},
+   out => {ncs => "nameConstraints:+IP:[102:304:102:304:102:304:102:304]/[ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff] nameConstraints:-IP:[304:102:304:102:304:102:304:102]/[feff:102:304:102:304:102:304:102] nameConstraints:-xn--vda4733a.abc"},
+   name => 'nameConstraints'},
 ) {
   test {
     my $c = shift;
@@ -574,12 +599,17 @@ for my $test (
         is $cert->policy_user_notice_text, $expected->{policy_user_notice_text};
         is_deeply $cert->san_hosts, $expected->{san_hosts} || [];
         is !!$cert->must_staple, !!$expected->{must_staple};
+        if (defined $expected->{ncs}) {
+          like $cert->debug_info, qr{\Q$expected->{ncs}\E};
+        } else {
+          unlike $cert->debug_info, qr{nameConstraints};
+        }
       } $c;
       
       done $c;
       undef $c;
     });
-  } n => 23, name => ['create_certificate options', $test->{name}];
+  } n => 24, name => ['create_certificate options', $test->{name}];
 }
 
 run_tests;

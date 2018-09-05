@@ -84,9 +84,9 @@ specified, must be an array reference of hosts.
 
 A host can be represented in two forms: If a character string is
 specified, it is interpreted as a C<dNSName>, i.e. a domain or a
-wildcard domain.  If a L<Web::Host> object is specified, it is
-interpreted as a C<dNSName> or an C<iPAddress> depending on its
-C<is_domain> and C<is_ip> method values.
+wildcard domain, serialized in ASCII (A-labels).  If a L<Web::Host>
+object is specified, it is interpreted as a C<dNSName> or an
+C<iPAddress> depending on its C<is_domain> and C<is_ip> method values.
 
 =item ca => $boolean
 
@@ -153,6 +153,26 @@ The display text of the user notice of a policy qualifier of a
 certification policy of the certifcate as a character string, if any,
 or C<undef>.  If this option is specified but there is no other option
 specifying a certification policy OID, the C<anyPolicy> OID is added.
+
+=item name_constraints_permitted => [$item1, $item2, ...]
+
+=item name_constraints_excluded => [$item1, $item2, ...]
+
+The host ranges in the certifciate's name constraints extension's
+permitted or excluded subtrees, if any.
+
+A host range can be represented in three forms: If a character string
+is specified, it is interpreted as a C<dNSName>, i.e. a domain or a
+C<.> character followed by a domain, serialized in ASCII (A-labels).
+If a L<Web::Host> object is specified, it is interpreted as a
+C<dNSName> or an C<iPAddress> depending on its C<is_domain> and
+C<is_ip> method values.  If it is an IP address, the CIDR address
+range (subnet mask) is set to the full length of the address.  If an
+array reference which has exactly two L<Web::Host> objects whose
+C<is_ipv4> are true or whose C<is_ipv6> are true, the zeroth item is
+interpreted as an C<iPAddress>'s IP address and the first item is
+interpreted as an C<iPAddress>'s CIDR address range (subnet mask).
+
 
 =item must_staple => $boolean
 

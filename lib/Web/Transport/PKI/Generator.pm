@@ -285,6 +285,56 @@ sub create_certificate ($%) {
       push @arg, &Net::SSLeay::NID_ext_key_usage => 'serverAuth,clientAuth';
     }
 
+    if (@{$args{name_constraints_permitted} or []} or
+        @{$args{name_constraints_excluded} or []}) {
+      my @p = map { join '', map {
+        Web::Transport::ASN1->_encode ('SEQUENCE', $_); # GeneralSubtree
+      } map {
+        if (UNIVERSAL::isa ($_, 'Web::Host')) {
+          if ($_->is_ipv4) {
+            Web::Transport::ASN1->_encode (\7, # iPAddress
+              $_->packed_addr . "\xFF\xFF\xFF\xFF",
+            );
+          } elsif ($_->is_ipv6) {
+            Web::Transport::ASN1->_encode (\7, # iPAddress
+              $_->packed_addr . ("\xFF" x 16),
+            );
+          } elsif ($_->is_domain) {
+            Web::Transport::ASN1->_encode (\2, # dNSName
+              encode_web_utf8 $_->to_ascii,
+            );
+          } else {
+            Web::Transport::ASN1->_encode (\2, # dNSName
+              encode_web_utf8 $_,
+            );
+          }
+        } elsif (ref $_ eq 'ARRAY' and
+                 UNIVERSAL::isa ($_->[0], 'Web::Host') and
+                 UNIVERSAL::isa ($_->[1], 'Web::Host') and
+                 (($_->[0]->is_ipv4 and $_->[1]->is_ipv4) or
+                  ($_->[0]->is_ipv6 and $_->[1]->is_ipv6))) {
+          Web::Transport::ASN1->_encode (\7, # iPAddress
+            $_->[0]->packed_addr . $_->[1]->packed_addr,
+          );
+        } else {
+          Web::Transport::ASN1->_encode (\2, # dNSName
+            encode_web_utf8 $_,
+          );
+        }
+      } @$_ }
+          $args{name_constraints_permitted} || [],
+          $args{name_constraints_excluded} || [];
+
+      my $der = Web::Transport::ASN1->_encode ('SEQUENCE', # NameConstraints
+        join '',
+        (length $p[0] ? Web::Transport::ASN1->_encode (\0, $p[0]) : ''),
+        (length $p[1] ? Web::Transport::ASN1->_encode (\1, $p[1]) : ''),
+      );
+
+      push @arg, 666, 'critical,DER:'
+          . join '', map { sprintf '%02X', ord $_ } split //, $der;
+    }
+
     if (@arg) {
       my $ca_cert = defined $args{ca_cert} ? $args{ca_cert}->to_net_ssleay_x509 : $cert;
       Net::SSLeay::P_X509_add_extensions ($cert, $ca_cert, @arg)

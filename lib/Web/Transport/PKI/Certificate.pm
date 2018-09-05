@@ -125,6 +125,13 @@ my $ExtDefs = {
        optional => 1},
     ],
   },
+  '2.5.29.30' => { # nameConstraints
+    type => 'SEQUENCE',
+    def => [
+      {name => 'permittedSubtrees', seq => 0, optional => 1},
+      {name => 'excludedSubtrees', seq => 1, optional => 1},
+    ],
+  },
   '2.5.29.31' => { # cRLDistributionPoints
     type => 'SEQUENCE OF',
     def => [
@@ -371,6 +378,33 @@ sub must_staple ($) {
   return 0;
 } # must_staple
 
+sub _name_constraints ($) {
+  my $self = $_[0];
+  return $self->{name_constraints} if defined $self->{name_constraints};
+
+  $self->{name_constraints} = {};
+
+  my $nc = ($self->_ext ('2.5.29.30') || [])->[3] || {};
+  for my $key (qw(permittedSubtrees excludedSubtrees)) {
+    next unless $nc->{$key};
+
+    my $v = Web::Transport::ASN1::decode_der $nc->{$key}->[2], depth => 10;
+    next unless defined $v;
+
+    for (@{$v}) {
+      push @{$self->{name_constraints}->{$key} ||= []}, Web::Transport::ASN1->read_sequence ([
+        {name => 'base', types => {contextual => 1}, GeneralName => 1},
+        {name => 'minimum', seq => 0, optional => 1},
+        {name => 'maximum', seq => 0, optional => 1},
+      ], $_);
+    }
+
+
+  }
+
+  return $self->{name_constraints};
+} # _name_constraints
+
 sub to_net_ssleay_x509 ($) {
   my $self = $_[0];
   return $self->{net_ssleay_x509} if defined $self->{net_ssleay_x509};
@@ -426,6 +460,29 @@ sub debug_info ($) {
   }
   push @r, 'pathLen=' . $self->path_len_constraint
       if defined $self->path_len_constraint;
+
+  my $nc = $self->_name_constraints;
+  for (['permittedSubtrees', '+'], ['excludedSubtrees', '-']) {
+    my ($key, $sym) = @$_;
+    for (@{$nc->{$key} or []}) {
+      if (defined $_->{base}) {
+        if ($_->{base}->[0] eq 'dNSName' and $_->{base}->[1] eq 'IA5String') {
+          push @r, 'nameConstraints:' . $sym . decode_web_utf8 $_->{base}->[2];
+          next;
+        } elsif ($_->{base}->[0] eq 'iPAddress' and
+                 (8 == length $_->{base}->[2] or
+                  32 == length $_->{base}->[2])) {
+          my $a1 = Web::Host->new_from_packed_addr
+              (substr $_->{base}->[2], 0, 0.5 * length $_->{base}->[2]);
+          my $a2 = Web::Host->new_from_packed_addr
+              (substr $_->{base}->[2], 0.5 * length $_->{base}->[2]);
+          push @r, 'nameConstraints:' . $sym . 'IP:' . $a1->to_ascii . '/' . $a2->to_ascii;
+          next;
+        }
+      }
+      push @r, 'nameConstraints:' . $sym . '...';
+    }
+  }
 
   for (qw(
     digitalSignature

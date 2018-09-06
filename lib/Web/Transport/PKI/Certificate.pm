@@ -554,17 +554,36 @@ sub debug_info ($) {
     }
   }
 
-  ## Signature
-  my $sa = $self->{parsed}->{signatureAlgorithm}->{algorithm};
-  if (defined $sa and $sa->[0] eq 'oid') {
+  ## Key and signature
+  my $pka = $self->{parsed}->{tbsCertificate}->{subjectPublicKeyInfo}->{algorithm};
+  if (defined $pka->{algorithm} and $pka->{algorithm}->[0] eq 'oid') {
+    my $name = {
+      '1.2.840.113549.1.1.1' => 'RSA',
+      '1.2.840.10045.2.1' => 'EC',
+    }->{$pka->{algorithm}->[1]} // $pka->{algorithm}->[1];
+    my $info = '';
+    if ($pka->{algorithm}->[1] eq '1.2.840.10045.2.1' and 
+        defined $pka->{parameters} and
+        $pka->{parameters}->[0] eq 'oid') {
+      $info .= ',' . ({
+        '1.2.840.10045.3.1.7' => 'prime256v1',
+        '1.3.132.0.34' => 'secp384r1',
+        '1.3.132.0.35' => 'secp521r1',
+      }->{$pka->{parameters}->[1]} // $pka->{parameters}->[1]);
+    }
+    push @r, 'SPKI=' . $name . $info;
+  }
+
+  my $sa = $self->{parsed}->{signatureAlgorithm};
+  if (defined $sa->{algorithm} and $sa->{algorithm}->[0] eq 'oid') {
     my $name = {
       '1.2.840.113549.1.1.5' => 'SHA-1/RSA',
       '1.2.840.113549.1.1.11' => 'SHA-256/RSA',
       '1.2.840.113549.1.1.12' => 'SHA-384/RSA',
       '1.2.840.10045.4.3.2' => 'SHA-256/ECDSA',
       '1.2.840.10045.4.3.3' => 'SHA-384/ECDSA',
-    }->{$sa->[1]};
-    push @r, 'sig=' . (defined $name ? $name : $sa->[1]);
+    }->{$sa->{algorithm}->[1]};
+    push @r, 'sig=' . $name;
   }
 
   return join ' ', @r;

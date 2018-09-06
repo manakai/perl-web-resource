@@ -3,10 +3,12 @@ use strict;
 use warnings;
 our $VERSION = '1.0';
 use Net::SSLeay;
+use Web::Transport::TypeError;
 use Web::Transport::NetSSLeayError;
 use Web::Transport::Base64;
 use Web::Transport::ASN1;
 use Web::Transport::PKI::RSAKey;
+use Web::Transport::PKI::ECKey;
 use Web::Transport::PKI::Certificate;
 
 sub new ($) {
@@ -47,8 +49,15 @@ sub _parse_private_key_pem ($$) {
     my ($max_passwd_size, $rwflag, $data) = @_;
     return '';
   }) or die Web::Transport::NetSSLeayError->new_current;
-  
-  return Web::Transport::PKI::RSAKey->_new_pkey ($privkey);
+
+  my $type = Net::SSLeay::OBJ_nid2sn (Net::SSLeay::EVP_PKEY_id ($privkey));
+  if ($type eq 'rsaEncryption') {
+    return Web::Transport::PKI::RSAKey->_new_pkey ($privkey);
+  } elsif ($type eq 'id-ecPublicKey') {
+    return Web::Transport::PKI::ECKey->_new_pkey ($privkey);
+  } else {
+    die new Web::Transport::TypeError "Bad private key type |$type|";
+  }
 } # _parse_private_key_pem
 
 sub parse_certificate_der ($$) {
@@ -81,6 +90,17 @@ sub parse_certificate_der ($$) {
     {name => 'subjectUniqueID', seq => 2},
     {name => 'extensions', seq => 3},
   ], $certificate->{tbsCertificate});
+
+  $certificate->{tbsCertificate}->{subjectPublicKeyInfo} = Web::Transport::ASN1->read_sequence ([
+    {name => 'algorithm', types => {SEQUENCE => 1}},
+    {name => 'subjectPublicKey', types => {bytes => 1}},
+  ], $certificate->{tbsCertificate}->{subjectPublicKeyInfo});
+
+  $certificate->{tbsCertificate}->{subjectPublicKeyInfo}->{algorithm} = Web::Transport::ASN1->read_sequence ([
+    ## AlgorithmIdentifeir
+    {name => 'algorithm', types => {oid => 1}},
+    {name => 'parameters', optional => 1, any => 1},
+  ], $certificate->{tbsCertificate}->{subjectPublicKeyInfo}->{algorithm});
 
   $certificate->{tbsCertificate}->{validity} = Web::Transport::ASN1->read_sequence ([
     {name => 'notBefore', types => {UTCTime => 1, GeneralizedTime => 1}},

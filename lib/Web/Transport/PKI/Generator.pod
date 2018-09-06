@@ -17,7 +17,7 @@ There are following methods:
 
 Create a new instance of the generator.
 
-=item $rsa = $gen->create_rsa_key ($name => $value, ...)
+=item $gen->create_rsa_key ($name => $value, ...)->then (sub { $rsa = shift })
 
 Create a new RSA key pair, using OpenSSL via L<Net::SSLeay>.  The
 L<Web::Transport::PKI::RSAKey> object representing the created key is
@@ -34,7 +34,24 @@ the default is C<2048>.
 
 =back
 
-=item $cert = $gen->create_certificate ($name => $value, ...)
+=item $gen->create_ec_key ($name => $value, ...)->then (sub { $ec = shift })
+
+Create a new EC key pair, using OpenSSL via L<Net::SSLeay>.  The
+L<Web::Transport::PKI::ECKey> object representing the created key is
+returned.
+
+Following option can be specified as name/value pair:
+
+=over 4
+
+=item curve => $string (Default: auto)
+
+The curve of the created key.  Either C<prime256v1>, C<secp384r1>, or
+C<secp521r1>.  In this version, the default is C<prime256v1>.
+
+=back
+
+=item $gen->create_certificate ($name => $value, ...)->then (sub { $cert = shift })
 
 Create a new X.509 certificate, using OpenSSL via L<Net::SSLeay>.  The
 L<Web::Transport::PKI::Certificate> object representing the created
@@ -180,16 +197,20 @@ interpreted as an C<iPAddress>'s CIDR address range (subnet mask).
 Whether the must-staple flag in the TLS feature extension of the
 certificate is set or not.
 
-=item digest => $string (Default: auto, C<sha256> for now)
+=item digest => $string (Default: auto)
 
 The certificate's signature's digest algorithm.  The value must be one
-of: C<sha1>, C<sha256>, or C<sha384>.
+of: C<sha1>, C<sha256>, or C<sha384>.  In this version, the default is
+C<sha256>.
 
 =item ca_rsa => $rsa (Required)
 
-The RSA key of the CA that signs the certificate.  The value must be a
-L<Web::Transport::PKI::RSAKey> object.  The value can be same as
-C<rsa>'s value when this is a root CA.
+=item ca_ec => $ec (Required)
+
+The RSA or EC key of the CA that signs the certificate.  The value
+must be a L<Web::Transport::PKI::RSAKey> object.  The value can be
+same as C<rsa> or C<ec> when this is a root CA.  Exactly one of
+C<ca_rsa> and C<ca_ec> must be specified.
 
 =item ca_cert => $cert (Required unless root CA)
 
@@ -200,8 +221,11 @@ value.
 
 =item rsa => $rsa (Required)
 
+=item ec => $ec (Required)
+
 The RSA key of the certifciate.  The value must be a
-L<Web::Transport::PKI::RSAKey> object.
+L<Web::Transport::PKI::RSAKey> object.  Exactly one of C<rsa> and
+C<ec> must be specified.
 
 =back
 

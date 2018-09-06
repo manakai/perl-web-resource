@@ -55,6 +55,53 @@ test {
   my $c = shift;
 
   my $gen = Web::Transport::PKI::Generator->new;
+  my $p = $gen->create_ec_key;
+  isa_ok $p, 'Promise';
+
+  $p->then (sub {
+    my $rsa = $_[0];
+
+    test {
+      isa_ok $rsa, 'Web::Transport::PKI::ECKey';
+      like $rsa->to_pem, qr{^-----BEGIN PRIVATE KEY-----\x0D?\x0A[A-Za-z0-9/+=\x0D\x0A]+\x0D?\x0A-----END PRIVATE KEY-----\x0D?\x0A$};
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'create_ec_key';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  my $name = rand;
+  my $p = $gen->create_ec_key (curve => $name);
+  isa_ok $p, 'Promise';
+
+  $p->then (sub {
+    test {
+      ok 0;
+    } $c;
+  }, sub {
+    my $e = $_[0];
+
+    test {
+      is $e->name, 'TypeError';
+      is $e->message, "Bad curve |$name|";
+      is $e->file_name, __FILE__;
+      is $e->line_number, __LINE__-14;
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'create_ec_key bad curve';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
   $gen->create_rsa_key->then (sub {
     my $rsa = $_[0];
     
@@ -69,7 +116,7 @@ test {
 
     test {
       isa_ok $err, 'Web::Transport::TypeError';
-      is $err->message, 'No |ca_rsa|';
+      is $err->message, 'No |ca_rsa| or |ca_ec|';
       is $err->file_name, __FILE__;
       is $err->line_number, __LINE__-13;
     } $c;
@@ -97,7 +144,7 @@ test {
 
     test {
       isa_ok $err, 'Web::Transport::TypeError';
-      is $err->message, 'No |rsa|';
+      is $err->message, 'No |rsa| or |ec|';
       is $err->file_name, __FILE__;
       is $err->line_number, __LINE__-13;
     } $c;
@@ -162,12 +209,73 @@ test {
          '1970-01-01T00:00:00Z';
       is $cert->issuer->debug_info, '';
       is $cert->subject->debug_info, '';
+      like $cert->debug_info, qr{SPKI=RSA};
     } $c;
 
     done $c;
     undef $c;
   });
-} n => 8, name => 'create_certificate default rsa';
+} n => 9, name => 'create_certificate default rsa';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_ec_key->then (sub {
+    my $ec = $_[0];
+    
+    my $p = $gen->create_certificate (
+      ec => $ec,
+      ca_ec => $ec,
+    );
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+
+    return $p;
+  })->then (sub {
+    my $cert = $_[0];
+
+    test {
+      isa_ok $cert, 'Web::Transport::PKI::Certificate';
+      like $cert->debug_info, qr{SPKI=EC,prime256v1};
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'create_certificate ec';
+
+for my $curve (qw(prime256v1 secp384r1 secp521r1)) {
+  test {
+    my $c = shift;
+
+    my $gen = Web::Transport::PKI::Generator->new;
+    $gen->create_ec_key (curve => $curve)->then (sub {
+      my $ec = $_[0];
+      
+      my $p = $gen->create_certificate (
+        ec => $ec,
+        ca_ec => $ec,
+      );
+      test {
+        isa_ok $p, 'Promise';
+      } $c;
+      
+      return $p;
+    })->then (sub {
+      my $cert = $_[0];
+
+      test {
+        isa_ok $cert, 'Web::Transport::PKI::Certificate';
+        like $cert->debug_info, qr{SPKI=EC,$curve};
+      } $c;
+      
+      done $c;
+      undef $c;
+    });
+  } n => 3, name => ['create_certificate ec', $curve];
+}
 
 test {
   my $c = shift;
@@ -389,6 +497,43 @@ test {
     });
   });
 } n => 2, name => 'create_certificate CA';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  Promise->all ([
+    $gen->create_rsa_key,
+    $gen->create_ec_key,
+  ])->then (sub {
+    my ($ca_rsa, $rsa) = @{$_[0]};
+    
+    my $ca_cert;
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+    )->then (sub {
+      $ca_cert = $_[0];
+      return $gen->create_certificate (
+        ec => $rsa,
+        ca_rsa => $ca_rsa,
+        ca_cert => $ca_cert,
+      );
+    })->then (sub {
+      my $cert = $_[0];
+
+      test {
+        isa_ok $cert, 'Web::Transport::PKI::Certificate';
+        is $cert->issuer->debug_info, '[O=(P)The Root CA]';
+        like $cert->debug_info, qr{SPKI=EC,};
+      } $c;
+
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'create_certificate CA RSA EC';
 
 for my $test (
   {in => {ca => 1, path_len_constraint => 3},

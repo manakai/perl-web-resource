@@ -10,6 +10,7 @@ use Web::Transport::NetSSLeayError;
 use Web::DateTime;
 use Web::Transport::PKI::Name;
 use Web::Transport::PKI::RSAKey;
+use Web::Transport::PKI::ECKey;
 use Web::Transport::PKI::Parser;
 
 push our @CARP_NOT, qw(Web::Transport::TypeError
@@ -23,26 +24,39 @@ sub new ($) {
   return bless {}, $_[0];
 } # new
 
-sub create_rsa_key ($%) {
+sub create_rsa_key ($;%) {
   my ($self, %args) = @_;
   return Promise->resolve->then (sub {
-
     my $rsa = Net::SSLeay::RSA_generate_key ($args{bits} || 2048, 65537)
         or Web::Transport::NetSSLeayError->new_current;
-
     return Web::Transport::PKI::RSAKey->_new ($rsa);
   });
 } # create_rsa_key
 
+sub create_ec_key ($;%) {
+  my ($self, %args) = @_;
+  return Promise->resolve->then (sub {
+    my $curve = defined $args{curve} ? {
+      'prime256v1' => 'prime256v1',
+      'secp384r1' => 'secp384r1',
+      'secp521r1' => 'secp521r1',
+    }->{$args{curve}} : 'prime256v1';
+    die new Web::Transport::TypeError "Bad curve |$args{curve}|"
+        unless defined $curve;
+    my $ec = Net::SSLeay::EC_KEY_generate_key ($curve)
+        or Web::Transport::NetSSLeayError->new_current;
+    return Web::Transport::PKI::ECKey->_new ($ec);
+  });
+} # create_ec_key
+
 sub create_certificate ($%) {
   my ($self, %args) = @_;
   return Promise->resolve->then (sub {
-
-    die Web::Transport::TypeError->new ("No |ca_rsa|")
-        if not defined $args{ca_rsa};
-    die Web::Transport::TypeError->new ("No |rsa|")
-        if not defined $args{rsa};
-    my $is_root = $args{ca_rsa} eq $args{rsa};
+    my $ca_key = $args{ca_ec} || $args{ca_rsa}
+        or die Web::Transport::TypeError->new ("No |ca_rsa| or |ca_ec|");
+    my $key = $args{ec} || $args{rsa}
+        or die Web::Transport::TypeError->new ("No |rsa| or |ec|");
+    my $is_root = $key eq $ca_key;
     die Web::Transport::TypeError->new ("No |ca_cert|")
         if not $is_root and not defined $args{ca_cert};
 
@@ -101,9 +115,9 @@ sub create_certificate ($%) {
       $name->modify_net_ssleay_name ($ssleay_name);
     }
 
-    Net::SSLeay::X509_set_pubkey ($cert, $args{rsa}->to_net_ssleay_pkey)
+    Net::SSLeay::X509_set_pubkey ($cert, $key->to_net_ssleay_pkey)
         or die Web::Transport::NetSSLeayError->new_current;
-    # don't free $args{rsa} until this line.
+    # don't free $key until this line.
 
     {
       my @ext;
@@ -354,9 +368,9 @@ sub create_certificate ($%) {
     my $digest = Net::SSLeay::EVP_get_digestbyname ($dn)
         or die Web::Transport::NetSSLeayError->new_current;
 
-    Net::SSLeay::X509_sign ($cert, $args{ca_rsa}->to_net_ssleay_pkey, $digest)
+    Net::SSLeay::X509_sign ($cert, $ca_key->to_net_ssleay_pkey, $digest)
         or die Web::Transport::NetSSLeayError->new_current;
-    # don't free $args{ca_rsa} until this line.
+    # don't free $ca_key until this line.
 
     my $pem = Net::SSLeay::PEM_get_string_X509 ($cert);
     my $parser = Web::Transport::PKI::Parser->new;

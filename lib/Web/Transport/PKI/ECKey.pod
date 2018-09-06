@@ -1,0 +1,36 @@
+=head1 NAME
+
+Web::Transport::PKI::RSAKey - An EC key
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::PKI::ECKey> module represents an EC key.
+
+=head1 METHOD
+
+There is following method:
+
+=over 4
+
+=item $string = $rsa->to_pem
+
+Return the C<.pem> serialization of the EC private key.
+
+=back
+
+=head1 SEE ALSO
+
+L<Web::Transport::PKI::Generator>.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

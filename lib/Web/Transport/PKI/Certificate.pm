@@ -554,6 +554,19 @@ sub debug_info ($) {
     }
   }
 
+  ## Signature
+  my $sa = $self->{parsed}->{signatureAlgorithm}->{algorithm};
+  if (defined $sa and $sa->[0] eq 'oid') {
+    my $name = {
+      '1.2.840.113549.1.1.5' => 'SHA-1/RSA',
+      '1.2.840.113549.1.1.11' => 'SHA-256/RSA',
+      '1.2.840.113549.1.1.12' => 'SHA-384/RSA',
+      '1.2.840.10045.4.3.2' => 'SHA-256/ECDSA',
+      '1.2.840.10045.4.3.3' => 'SHA-384/ECDSA',
+    }->{$sa->[1]};
+    push @r, 'sig=' . (defined $name ? $name : $sa->[1]);
+  }
+
   return join ' ', @r;
 } # debug_info
 

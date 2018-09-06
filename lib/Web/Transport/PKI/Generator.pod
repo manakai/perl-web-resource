@@ -173,11 +173,15 @@ C<is_ipv4> are true or whose C<is_ipv6> are true, the zeroth item is
 interpreted as an C<iPAddress>'s IP address and the first item is
 interpreted as an C<iPAddress>'s CIDR address range (subnet mask).
 
-
 =item must_staple => $boolean
 
 Whether the must-staple flag in the TLS feature extension of the
 certificate is set or not.
+
+=item digest => $string (Default: auto, C<sha256> for now)
+
+The certificate's signature's digest algorithm.  The value must be one
+of: C<sha1>, C<sha256>, or C<sha384>.
 
 =item ca_rsa => $rsa (Required)
 

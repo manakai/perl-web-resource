@@ -63,6 +63,12 @@ sub parse_certificate_der ($$) {
   ], $decoded->[0]);
   return undef unless defined $certificate;
 
+  $certificate->{signatureAlgorithm} = Web::Transport::ASN1->read_sequence ([
+    ## AlgorithmIdentifeir
+    {name => 'algorithm', types => {oid => 1}},
+    {name => 'parameters', optional => 1, any => 1},
+  ], $certificate->{signatureAlgorithm});
+
   $certificate->{tbsCertificate} = Web::Transport::ASN1->read_sequence ([
     {name => 'version', seq => 0},
     {name => 'serialNumber', types => {int => 1, bigint => 1}},

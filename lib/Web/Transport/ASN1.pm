@@ -220,7 +220,7 @@ sub read_sequence ($$$) {
         $matched = 1;
         $_ = _decode_value $_->[2], $next->{decode} if defined $next->{decode};
         last;
-      } elsif ($next->{types}->{$_->[0]}) {
+      } elsif ($next->{types}->{$_->[0]} or $next->{any}) {
         $matched = 1;
         if ($next->{GeneralName} and $_->[0] eq 'contextual') {
           $_ = _general_name $_;

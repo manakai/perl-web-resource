@@ -343,7 +343,13 @@ sub create_certificate ($%) {
       # don't free $ca_cert until here.
     }
 
-    my $digest = Net::SSLeay::EVP_get_digestbyname ('sha256')
+    my $dn = {
+      'sha1' => 'sha1',
+      'sha256' => 'sha256',
+      'sha384' => 'sha384',
+    }->{$args{digest} // 'sha256'} or
+        die new Web::Transport::TypeError ("Bad digest algorithm |$args{digest}|");
+    my $digest = Net::SSLeay::EVP_get_digestbyname ($dn)
         or die Web::Transport::NetSSLeayError->new_current;
 
     Net::SSLeay::X509_sign ($cert, $args{ca_rsa}->to_net_ssleay_pkey, $digest)

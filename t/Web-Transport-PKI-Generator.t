@@ -572,6 +572,9 @@ for my $test (
    ]},
    out => {ncs => "nameConstraints:+IP:[102:304:102:304:102:304:102:304]/[ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff] nameConstraints:-IP:[304:102:304:102:304:102:304:102]/[feff:102:304:102:304:102:304:102] nameConstraints:-xn--vda4733a.abc"},
    name => 'nameConstraints'},
+  {in => {digest => 'sha1'}, out => {digest => 'sha1'}, name => 'digest=sha1'},
+  {in => {digest => 'sha256'}, out => {digest => 'sha256'}, name => 'digest=sha256'},
+  {in => {digest => 'sha384'}, out => {digest => 'sha384'}, name => 'digest=sha384'},
 ) {
   test {
     my $c = shift;
@@ -630,12 +633,21 @@ for my $test (
         } else {
           unlike $cert->debug_info, qr{nameConstraints};
         }
+        if (defined $expected->{digest}) {
+          like $cert->debug_info, qr{sig=@{[{
+            sha1 => 'SHA-1',
+            sha256 => 'SHA-256',
+            sha384 => 'SHA-384',
+          }->{$expected->{digest}}]}/RSA};
+        } else {
+          like $cert->debug_info, qr{sig=SHA-256/RSA};
+        }
       } $c;
       
       done $c;
       undef $c;
     });
-  } n => 24, name => ['create_certificate options', $test->{name}];
+  } n => 25, name => ['create_certificate options', $test->{name}];
 }
 
 run_tests;

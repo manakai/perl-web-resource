@@ -57,12 +57,14 @@ a L<Math::BigInt> object.
 =item not_before => $dt (Required)
 
 The not before of the validity of the certificate.  The value must be
-a Unix time number or a L<Web::DateTime> object.
+a Unix time number or a L<Web::DateTime> object.  Any fractional part
+of the second of the time is ignored.
 
 =item not_after => $dt (Required)
 
 The not after of the validity of the certificate.  The value must be a
-Unix time number or a L<Web::DateTime> object.
+Unix time number or a L<Web::DateTime> object.  Any fractional part of
+the second of the time is ignored.
 
 =item issuer => $name (Required if root CA)
 

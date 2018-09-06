@@ -67,6 +67,7 @@ sub create_certificate ($%) {
       my $dt = $args{not_before} || 0;
       $dt = Web::DateTime->new_from_unix_time ($dt)
           unless UNIVERSAL::isa ($dt, 'Web::DateTime');
+      $dt = Web::DateTime->new_from_unix_time ($dt->to_unix_integer);
       Net::SSLeay::P_ASN1_TIME_set_isotime
           ($n, $dt->to_global_date_and_time_string)
               or die Web::Transport::NetSSLeayError->new_current;
@@ -77,6 +78,7 @@ sub create_certificate ($%) {
       my $dt = $args{not_after} || 0;
       $dt = Web::DateTime->new_from_unix_time ($dt)
           unless UNIVERSAL::isa ($dt, 'Web::DateTime');
+      $dt = Web::DateTime->new_from_unix_time ($dt->to_unix_integer);
       Net::SSLeay::P_ASN1_TIME_set_isotime
           ($n, $dt->to_global_date_and_time_string)
               or die Web::Transport::NetSSLeayError->new_current;

@@ -58,122 +58,6 @@ test {
   $gen->create_rsa_key->then (sub {
     my $rsa = $_[0];
     
-    my $p = $gen->create_certificate (
-      rsa => $rsa,
-      ca_rsa => $rsa,
-    );
-    test {
-      isa_ok $p, 'Promise';
-    } $c;
-
-    return $p;
-  })->then (sub {
-    my $cert = $_[0];
-
-    test {
-      isa_ok $cert, 'Web::Transport::PKI::Certificate';
-      is $cert->version, 2, 'v3';
-      is $cert->serial_number, 0;
-      is $cert->not_before->to_global_date_and_time_string,
-         '1970-01-01T00:00:00Z';
-      is $cert->not_after->to_global_date_and_time_string,
-         '1970-01-01T00:00:00Z';
-      is $cert->issuer->debug_info, '';
-      is $cert->subject->debug_info, '';
-    } $c;
-
-    done $c;
-    undef $c;
-  });
-} n => 8, name => 'create_certificate default rsa';
-
-test {
-  my $c = shift;
-
-  my $gen = Web::Transport::PKI::Generator->new;
-  $gen->create_rsa_key->then (sub {
-    my $rsa = $_[0];
-    
-    my $p = $gen->create_certificate (
-      rsa => $rsa,
-      ca_rsa => $rsa,
-      version => 0,
-      serial_number => 64234444,
-      not_before => 634634444,
-      not_after => 76467543566,
-      issuer => {CN => 'hoge.foo'},
-      subject => {O => "\x{5353}\x{50000}"},
-    );
-    test {
-      isa_ok $p, 'Promise';
-    } $c;
-
-    return $p;
-  })->then (sub {
-    my $cert = $_[0];
-
-    test {
-      isa_ok $cert, 'Web::Transport::PKI::Certificate';
-      is $cert->version, 0, 'v1';
-      is $cert->serial_number, 64234444;
-      is $cert->not_before->to_unix_number, 634634444;
-      is $cert->not_after->to_unix_number, 76467543566;
-      is $cert->issuer->debug_info, '[CN=(P)hoge.foo]';
-      is $cert->subject->debug_info, "[O=(U)\x{5353}\x{50000}]";
-    } $c;
-
-    done $c;
-    undef $c;
-  });
-} n => 8, name => 'create_certificate primitive';
-
-test {
-  my $c = shift;
-
-  my $gen = Web::Transport::PKI::Generator->new;
-  $gen->create_rsa_key->then (sub {
-    my $rsa = $_[0];
-    
-    my $p = $gen->create_certificate (
-      rsa => $rsa,
-      ca_rsa => $rsa,
-      version => 0,
-      serial_number => Math::BigInt->from_hex ('0f642344e44'),
-      not_before => Web::DateTime->new_from_unix_time (63735321144),
-      not_after => Web::DateTime->new_from_unix_time (76467543566),
-      issuer => Web::Transport::PKI::Name->create ({CN => 'hoge.foo'}),
-      subject => Web::Transport::PKI::Name->create ({O => "\x{5353}\x{50000}"}),
-    );
-    test {
-      isa_ok $p, 'Promise';
-    } $c;
-
-    return $p;
-  })->then (sub {
-    my $cert = $_[0];
-
-    test {
-      isa_ok $cert, 'Web::Transport::PKI::Certificate';
-      is $cert->version, 0, 'v1';
-      is $cert->serial_number, 1057672678980;
-      is $cert->not_before->to_unix_number, 63735321144;
-      is $cert->not_after->to_unix_number, 76467543566;
-      is $cert->issuer->debug_info, '[CN=(P)hoge.foo]';
-      is $cert->subject->debug_info, "[O=(U)\x{5353}\x{50000}]";
-    } $c;
-
-    done $c;
-    undef $c;
-  });
-} n => 8, name => 'create_certificate primitive';
-
-test {
-  my $c = shift;
-
-  my $gen = Web::Transport::PKI::Generator->new;
-  $gen->create_rsa_key->then (sub {
-    my $rsa = $_[0];
-    
     my $p = $gen->create_certificate;
     test {
       isa_ok $p, 'Promise';
@@ -259,12 +143,48 @@ test {
     my $p = $gen->create_certificate (
       rsa => $rsa,
       ca_rsa => $rsa,
+    );
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+
+    return $p;
+  })->then (sub {
+    my $cert = $_[0];
+
+    test {
+      isa_ok $cert, 'Web::Transport::PKI::Certificate';
+      is $cert->version, 2, 'v3';
+      is $cert->serial_number, 0;
+      is $cert->not_before->to_global_date_and_time_string,
+         '1970-01-01T00:00:00Z';
+      is $cert->not_after->to_global_date_and_time_string,
+         '1970-01-01T00:00:00Z';
+      is $cert->issuer->debug_info, '';
+      is $cert->subject->debug_info, '';
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 8, name => 'create_certificate default rsa';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_rsa_key->then (sub {
+    my $rsa = $_[0];
+    
+    my $p = $gen->create_certificate (
+      rsa => $rsa,
+      ca_rsa => $rsa,
       version => 0,
-      serial_number => Math::BigInt->from_hex ('0f642344e44'),
-      not_before => Web::DateTime->new_from_unix_time (63735321144),
-      not_after => Web::DateTime->new_from_unix_time (76467543566),
-      issuer => Web::Transport::PKI::Name->create ({CN => 'hoge.foo'}),
-      subject => Web::Transport::PKI::Name->create ({O => "\x{5353}\x{50000}"}),
+      serial_number => 64234444,
+      not_before => 634634444,
+      not_after => 76467543566,
+      issuer => {CN => 'hoge.foo'},
+      subject => {O => "\x{5353}\x{50000}"},
     );
     test {
       isa_ok $p, 'Promise';
@@ -277,8 +197,8 @@ test {
     test {
       isa_ok $cert, 'Web::Transport::PKI::Certificate';
       is $cert->version, 0, 'v1';
-      is $cert->serial_number, 1057672678980;
-      is $cert->not_before->to_unix_number, 63735321144;
+      is $cert->serial_number, 64234444;
+      is $cert->not_before->to_unix_number, 634634444;
       is $cert->not_after->to_unix_number, 76467543566;
       is $cert->issuer->debug_info, '[CN=(P)hoge.foo]';
       is $cert->subject->debug_info, "[O=(U)\x{5353}\x{50000}]";
@@ -287,7 +207,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 8, name => 'create_certificate primitive';
+} n => 8, name => 'create_certificate primitive arguments';
 
 test {
   my $c = shift;
@@ -327,7 +247,112 @@ test {
     done $c;
     undef $c;
   });
-} n => 8, name => 'create_certificate primitive';
+} n => 8, name => 'create_certificate object arguments';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_rsa_key->then (sub {
+    my $rsa = $_[0];
+    
+    my $p = $gen->create_certificate (
+      rsa => $rsa,
+      ca_rsa => $rsa,
+      version => 0,
+      serial_number => Math::BigInt->from_hex ('0f642344e44'),
+      not_before => Web::DateTime->new_from_unix_time (63735321144),
+      not_after => Web::DateTime->new_from_unix_time (76467543566),
+      issuer => Web::Transport::PKI::Name->create ({CN => 'hoge.foo'}),
+      subject => Web::Transport::PKI::Name->create ({O => "\x{5353}\x{50000}"}),
+    );
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+
+    return $p;
+  })->then (sub {
+    my $cert = $_[0];
+
+    test {
+      isa_ok $cert, 'Web::Transport::PKI::Certificate';
+      is $cert->version, 0, 'v1';
+      is $cert->serial_number, 1057672678980;
+      is $cert->not_before->to_unix_number, 63735321144;
+      is $cert->not_after->to_unix_number, 76467543566;
+      is $cert->issuer->debug_info, '[CN=(P)hoge.foo]';
+      is $cert->subject->debug_info, "[O=(U)\x{5353}\x{50000}]";
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 8, name => 'create_certificate object arguments';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_rsa_key->then (sub {
+    my $rsa = $_[0];
+    
+    my $p = $gen->create_certificate (
+      rsa => $rsa,
+      ca_rsa => $rsa,
+      version => 0,
+      serial_number => Math::BigInt->from_hex ('0f642344e44'),
+      not_before => Web::DateTime->new_from_unix_time (63735321144),
+      not_after => Web::DateTime->new_from_unix_time (76467543566),
+      issuer => Web::Transport::PKI::Name->create ({CN => 'hoge.foo'}),
+      subject => Web::Transport::PKI::Name->create ({O => "\x{5353}\x{50000}"}),
+    );
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+
+    return $p;
+  })->then (sub {
+    my $cert = $_[0];
+
+    test {
+      isa_ok $cert, 'Web::Transport::PKI::Certificate';
+      is $cert->version, 0, 'v1';
+      is $cert->serial_number, 1057672678980;
+      is $cert->not_before->to_unix_number, 63735321144;
+      is $cert->not_after->to_unix_number, 76467543566;
+      is $cert->issuer->debug_info, '[CN=(P)hoge.foo]';
+      is $cert->subject->debug_info, "[O=(U)\x{5353}\x{50000}]";
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 8, name => 'create_certificate object arguments';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_rsa_key->then (sub {
+    my $rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $rsa,
+      ca_rsa => $rsa,
+      not_before => 3636355677.63344,
+      not_after => 7547457455.53333,
+    );
+  })->then (sub {
+    my $cert = $_[0];
+    test {
+      isa_ok $cert, 'Web::Transport::PKI::Certificate';
+      is $cert->not_before->to_unix_number, 3636355677;
+      is $cert->not_after->to_unix_number, 7547457455;
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'fractional second timestamps';
 
 test {
   my $c = shift;

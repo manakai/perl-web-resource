@@ -15,11 +15,12 @@ use Promise;
 use Promised::Flow;
 use Net::SSLeay;
 use AnyEvent::TLS;
+use Web::Transport::NetSSLeayError;
 use Web::Transport::OCSP;
 
 push our @CARP_NOT, qw(
   Web::Transport::Error Web::Transport::TypeError Streams::IOError
-  Web::Transport::TLSStream::OpenSSLError Web::Transport::ProtocolError
+  Web::Transport::NetSSLeayError Web::Transport::ProtocolError
   ReadableStream WritableStream
   Web::Transport::CustomStream
   Web::Transport::TCPStream
@@ -307,7 +308,7 @@ sub create ($$) {
         if ($r == ERROR_SYSCALL) {
           return $abort->(Streams::IOError->new ($!));
         } elsif ($r != ERROR_WANT_READ and $r != ERROR_SYSCALL) {
-          return $abort->(Web::Transport::TLSStream::OpenSSLError->new_current);
+          return $abort->(Web::Transport::NetSSLeayError->new_current);
         } else {
           $retry = 1;
         }
@@ -362,7 +363,7 @@ sub create ($$) {
         if ($r == ERROR_SYSCALL) {
           return $abort->(Streams::IOError->new ($!));
         } elsif ($r != ERROR_WANT_READ and $r != ERROR_SYSCALL) {
-          return $abort->(Web::Transport::TLSStream::OpenSSLError->new_current);
+          return $abort->(Web::Transport::NetSSLeayError->new_current);
         }
         last;
       }
@@ -726,20 +727,6 @@ sub create ($$) {
     die $error;
   });
 } # start
-
-package Web::Transport::TLSStream::OpenSSLError;
-push our @ISA, qw(Web::Transport::ProtocolError);
-
-$Web::DOM::Error::L1ObjectClass->{(__PACKAGE__)} = 1;
-
-sub new_current ($) {
-  my $self = $_[0]->SUPER::new ('');
-  $self->{errno} = Net::SSLeay::ERR_get_error ();
-  $self->{message} = Net::SSLeay::ERR_error_string ($self->{errno});
-  return $self;
-} # new_current
-
-sub name ($) { 'OpenSSL error' }
 
 package Web::Transport::TLSStream::Certificate;
 

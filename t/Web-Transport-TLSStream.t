@@ -745,12 +745,6 @@ test {
 
 test {
   my $c = shift;
-  ok $Web::DOM::Error::L1ObjectClass->{'Web::Transport::TLSStream::OpenSSLError'};
-  done $c;
-} n => 1, name => 'Perl Error Object Interface Level 1';
-
-test {
-  my $c = shift;
 
   my $port = find_listenable_port;
   my $host = Web::Host->parse_string ('127.0.0.1');

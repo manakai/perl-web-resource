@@ -1,7 +1,7 @@
 package Web::Transport::TLSStream;
 use strict;
 use warnings;
-our $VERSION = '2.0';
+our $VERSION = '3.0';
 use Streams::_Common;
 use Streams::IOError;
 use Web::Transport::Error;
@@ -17,6 +17,7 @@ use Net::SSLeay;
 use AnyEvent::TLS;
 use Web::Transport::NetSSLeayError;
 use Web::Transport::OCSP;
+use Web::Transport::PKI::Parser;
 
 push our @CARP_NOT, qw(
   Web::Transport::Error Web::Transport::TypeError Streams::IOError
@@ -601,14 +602,14 @@ sub create ($$) {
         Net::SSLeay::set_tlsext_host_name ($tls, $args->{sni_host}->stringify);
       }
 
+      my $parser = Web::Transport::PKI::Parser->new;
       ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_verify.html>
       Net::SSLeay::set_verify $tls, $vmode, sub {
         my ($preverify_ok, $x509_store_ctx) = @_;
         my $depth = Net::SSLeay::X509_STORE_CTX_get_error_depth ($x509_store_ctx);
         my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
         $info->{tls_cert_chain}->[$depth]
-            = bless [Net::SSLeay::PEM_get_string_X509 ($cert)],
-                __PACKAGE__ . '::Certificate';
+            = $parser->parse_pem (Net::SSLeay::PEM_get_string_X509 ($cert))->[0];
 
         if ($depth == 0) {
           if (defined $args->{si_host}) {
@@ -679,7 +680,7 @@ sub create ($$) {
     ## Check must-staple flag
     if (not defined $info->{tls_stapling} and
         defined $info->{tls_cert_chain}->[0] and
-        Web::Transport::OCSP->x509_has_must_staple ($info->{tls_cert_chain}->[0])) {
+        $info->{tls_cert_chain}->[0]->must_staple) {
       my $error = _pe "There is no stapled OCSP response, which is required by the certificate";
       $abort->($error);
       die $error;
@@ -727,53 +728,6 @@ sub create ($$) {
     die $error;
   });
 } # start
-
-package Web::Transport::TLSStream::Certificate;
-
-sub debug_info ($) {
-  my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
-  Net::SSLeay::BIO_write ($bio, $_[0]->[0]);
-  my $cert = Net::SSLeay::PEM_read_bio_X509 ($bio);
-  return 'Bad certificate' unless $cert;
-
-  my @r;
-  my $ver = Net::SSLeay::X509_get_version $cert;
-  push @r, "version=$ver";
-  my $in = Net::SSLeay::X509_get_issuer_name $cert;
-  push @r, 'I=' . Net::SSLeay::X509_NAME_print_ex ($in, Net::SSLeay::XN_FLAG_RFC2253 (), 0);
-  my $sn = Net::SSLeay::X509_get_subject_name $cert;
-  push @r, 'S=' . Net::SSLeay::X509_NAME_print_ex ($sn, Net::SSLeay::XN_FLAG_RFC2253 (), 0);
-  my @san = Net::SSLeay::X509_get_subjectAltNames $cert;
-  while (@san) {
-    my $type = (shift @san);
-    $type = {
-      2 => 'DNS',
-      7 => 'IP', # XXX decode value
-    }->{$type} || $type;
-    push @r, 'SAN.'.$type . '=' . (shift @san);
-  }
-  push @r, '#=' . Net::SSLeay::P_ASN1_INTEGER_get_hex Net::SSLeay::X509_get_serialNumber $cert;
-  {
-    my $time = Net::SSLeay::X509_get_notBefore $cert;
-    push @r, 'notbefore=' . Net::SSLeay::P_ASN1_TIME_get_isotime $time;
-  }
-  {
-    my $time = Net::SSLeay::X509_get_notAfter $cert;
-    push @r, 'notafter=' . Net::SSLeay::P_ASN1_TIME_get_isotime $time;
-  }
-  my @type = Net::SSLeay::P_X509_get_netscape_cert_type $cert;
-  if (@type) {
-    push @r, 'netscapecerttype=' . join ',', @type;
-  }
-  if (Web::Transport::OCSP->x509_has_must_staple ($_[0])) {
-    push @r, 'must-staple';
-  }
-
-  Net::SSLeay::BIO_free ($bio);
-  Net::SSLeay::X509_free ($cert);
-
-  return join ' ', @r;
-} # debug_info
 
 1;
 

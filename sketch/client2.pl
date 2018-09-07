@@ -57,8 +57,8 @@ $client->request (%$RequestOptions)->then (sub {
   use Web::Transport::PKI::Parser;
   my $parser = Web::Transport::PKI::Parser->new;
   for (@{$client->{http}->info->{parent}->{tls_cert_chain}}) {
-    my $cert = $parser->parse_pem ($_->[0])->[0];
-    warn $cert->debug_info;
+    warn $_->debug_info;
+    #warn $cert->to_pem;
   }
 })->catch (sub {
   warn "ERROR:[$_[0]]";

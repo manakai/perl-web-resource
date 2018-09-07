@@ -249,7 +249,7 @@ sub create_certificate ($%) {
           ),
         ), # certifciationRequestInfo
         Web::Transport::ASN1->_encode ('SEQUENCE', # signatureAlgorithm
-          Web::Transport::ASN1->_encode ('oid', '0.0'), # XXX
+          Web::Transport::ASN1->_encode ('oid', '0.0'),
         ),
         Web::Transport::ASN1->_encode (0x3, "\x00"),
       );
@@ -348,7 +348,7 @@ sub create_certificate ($%) {
         (length $p[1] ? Web::Transport::ASN1->_encode (\1, $p[1]) : ''),
       );
 
-      push @arg, 666, 'critical,DER:'
+      push @arg, Net::SSLeay::OBJ_txt2nid ("2.5.29.30"), 'critical,DER:'
           . join '', map { sprintf '%02X', ord $_ } split //, $der;
     }
 

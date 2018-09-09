@@ -1299,6 +1299,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'iana' => 'permanent',
                                                         'iana_intended_usage' => 'common'
                                                       },
+                                          'multipart-core' => {
+                                                              'iana' => 'provisional'
+                                                            },
                                           'mxf' => {
                                                    'iana' => 'permanent',
                                                    'iana_intended_usage' => 'common'
@@ -9856,6 +9859,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                  'text' => 1
                                                },
                                     'svh' => {},
+                                    'swid+xml' => {
+                                                  'iana' => 'provisional'
+                                                },
                                     't38' => {
                                              'iana' => 'permanent',
                                              'iana_intended_usage' => 'common'

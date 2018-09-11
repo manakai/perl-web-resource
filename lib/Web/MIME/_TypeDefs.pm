@@ -3341,6 +3341,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'iana' => 'permanent',
                                                               'iana_intended_usage' => 'limited use'
                                                             },
+                                          'vnd.futoin+cbor' => {
+                                                               'iana' => 'permanent',
+                                                               'iana_intended_usage' => 'common'
+                                                             },
                                           'vnd.futoin+json' => {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'common'

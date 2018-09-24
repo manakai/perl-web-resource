@@ -28,7 +28,7 @@ $Data::Dumper::Sortkeys = 1;
   };
   for my $header_name (sort { $a cmp $b } keys %{$Input->{headers}}) {
     my $def = $Input->{headers}->{$header_name};
-    for (qw(proxy_removed conditional)) {
+    for (qw(proxy_removed conditional mitm_proxy_removed)) {
       $Data->{$_}->{$header_name} = 1 if $def->{http}->{$_};
     }
   }

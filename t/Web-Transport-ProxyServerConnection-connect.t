@@ -672,6 +672,10 @@ test {
                 headers => [
                   [URL => $args->{request}->{url}->stringify],
                   [method => $args->{request}->{method}],
+                  ['Expect-CT', 'abc'],
+                  ['Public-key-Pins', 'ffa'],
+                  ['Public-key-Pins-report-only', 'ffax'],
+                  ['Upgrade', 'MySuperHTTP'],
                 ],
                 body_stream => $args->{request}->{body_stream},
                 forwarding => 1,
@@ -715,12 +719,16 @@ test {
           ok $res->header ('date');
           is $res->header ('url'), $url->stringify;
           is $res->header ('method'), 'POST';
+          is $res->header ('expect-ct'), 'abc';
+          is $res->header ('public-key-pins'), 'ffa';
+          is $res->header ('public-key-pins-report-only'), 'ffax';
+          is $res->header ('upgrade'), 'MySuperHTTP';
           is $res->body_bytes, $body;
         } $c;
       });
     });
   });
-} n => 7, name => 'mitm normal response by proxy';
+} n => 11, name => 'mitm normal response by proxy';
 
 test {
   my $c = shift;
@@ -824,7 +832,7 @@ test {
   my $port = find_listenable_port;
 
   my $remote_host = '127.0.0.1';
-  my $remote_port = 3533;
+  my $remote_port = find_listenable_port;
   Promise->all ([
     ca_cert, 
     ca_cert,
@@ -893,6 +901,10 @@ test {
                 headers => [
                   [URL => $args->{request}->{url}->stringify],
                   [method => $args->{request}->{method}],
+                  ['Expect-CT', 'abc'],
+                  ['Public-key-Pins', 'ffa'],
+                  ['Public-key-Pins-report-only', 'ffax'],
+                  ['Upgrade', 'MySuperHTTP'],
                 ],
                 body_stream => $args->{request}->{body_stream},
               }};
@@ -941,13 +953,17 @@ test {
           is $res->header ('Server'), $remote_server_name;
           is $res->header ('URL'), $url->stringify;
           is $res->header ('method'), 'POST';
+          is $res->header ('expect-ct'), undef;
+          is $res->header ('public-key-pins'), undef;
+          is $res->header ('public-key-pins-report-only'), undef;
+          is $res->header ('upgrade'), undef;
           is $res->body_bytes, $body;
           is $exception_invoked, 0;
         } $c;
       });
     });
   });
-} n => 7, name => 'mitm upstream server remote origin server response';
+} n => 11, name => 'mitm upstream server remote origin server response';
 
 test {
   my $c = shift;
@@ -956,7 +972,7 @@ test {
   my $port = find_listenable_port;
 
   my $remote_host = '127.0.0.1';
-  my $remote_port = 3533;
+  my $remote_port = find_listenable_port;
   Promise->all ([
     ca_cert, 
     ca_cert,

@@ -111,6 +111,11 @@ $Web::Transport::_Defs::Headers = {
                              'if-unmodified-since' => 1,
                              'overwrite' => 1
                            },
+          'mitm_proxy_removed' => {
+                                    'expect-ct' => 1,
+                                    'public-key-pins' => 1,
+                                    'public-key-pins-report-only' => 1
+                                  },
           'proxy_removed' => {
                                'c-ext' => 1,
                                'c-man' => 1,

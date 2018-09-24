@@ -418,7 +418,8 @@ sub filter_headers ($$%) {
     if ($remove{$_->[2]} or $names->{$_->[2]}) {
       ();
     } elsif ($args{proxy_removed} and
-             $Web::Transport::_Defs::Headers->{proxy_removed}->{$_->[2]}) {
+             ($Web::Transport::_Defs::Headers->{proxy_removed}->{$_->[2]} or
+              $Web::Transport::_Defs::Headers->{mitm_proxy_removed}->{$_->[2]})) {
       ();
     } elsif ($args{conditional} and
              $Web::Transport::_Defs::Headers->{conditional}->{$_->[2]}) {

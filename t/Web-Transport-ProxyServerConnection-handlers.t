@@ -103,10 +103,6 @@ sub _server_as_cv ($$$$) {
   return $cv;
 } # _server_as_cv
 
-sub rawserver ($) {
-  return Promise->from_cv (_server_as_cv ('localhost', '127.0.0.1', find_listenable_port, $_[0]));
-} # rawserver
-
 sub rawclient ($$$) {
   my ($host, $port, $input) = @_;
   my $tcp = Web::Transport::TCPTransport->new (host => $host, port => $port);

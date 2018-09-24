@@ -134,18 +134,34 @@ sub _handle_stream ($$$) {
     ##   a) By returning an error response and close the connection,
     ##      if the |handle_request| handler returns no |upstream|.
     ##
+    ##        upstream => undef,
+    ##
     ##     1. Response.  If there is no |response|, a 405 response is
     ##        returned.  Otherwise, a response created from |response|
     ##        is returned.  Note that the |response|'s status can't be
     ##        2xx.
     ##
-    ##   b) By establishing a tunnel to the upstream server, if the
-    ##      |handle_request| handler returns |upstream| but not
-    ##      |mitm_server|. XXX This is not yet implemented.
+    ##   b) By forwarding the |CONNECT| request to the upstream
+    ##      server, if the |handle_request| handler returns |upstream|
+    ##      whose |type| is |forward|.  XXX not implemented
     ##
-    ##     1. Upstream.  If there is |upstream|, a connection is
-    ##        created from |upstream|.  If failed, an error response
-    ##        is returned and the stream is aborted.
+    ##        upstream => {
+    ##          type => 'forward',
+    ##          XXX upstream proxy URL
+    ##        },
+    ##
+    ##   c) By establishing a tunnel to the upstream server, if the
+    ##      |handle_request| handler returns |upstream| whose |type|
+    ##      is |direct|.  XXX not implemented
+    ##
+    ##        upstream => {
+    ##          type => 'direct',
+    ##        },
+    ##
+    ##     1. Upstream.  A transport connection to |request|'s |url|'s
+    ##        origin is created, using the proxy server's client
+    ##        options.  If failed, an error response is returned and
+    ##        the stream is aborted.
     ##
     ##     2. Response.  If there is no |response|, a 200 response is
     ##        returned.  Otherwise, a response created from |response|
@@ -154,26 +170,44 @@ sub _handle_stream ($$$) {
     ##
     ##     3. The upstream connection is associated with the tunnel.
     ##
-    ##   c) By establishing a tunnel to an MITM HTTPS server, if
-    ##      |handle_request| handler returns |upstream| and
-    ##      |mitm_server|.
+    ##   d) By establishing a tunnel to a custom handler, if the
+    ##      |handle_request| handler returns |upstream| whose |type|
+    ##      is |custom|.  XXX not implemented
     ##
-    ##     1. Upstream.  If there is |upstream|, a connection is
-    ##        created from |upstream|.  If failed, an error response
-    ##        is returned.
+    ##        upstream => {
+    ##          type => 'custom',
+    ##          XXX readable
+    ##          XXX writable
+    ##        },
+    ##
+    ##   e) By establishing a tunnel to an MITM HTTPS server, if
+    ##      |handle_request| handler returns |upstream| whose |type|
+    ##      is |mitm|.
+    ##
+    ##        upstream => {
+    ##          type => 'mitm',
+    ##          tls => {tls options},
+    ##        },
+    ##
+    ##     1. Upstream.  If XXX not implemented flag is enabled, an
+    ##        HTTPS connection to |request|'s |url|'s origin is
+    ##        created, using the proxy server's client options.  If
+    ##        failed, an error response is returned.
     ##
     ##     2. Response.  If there is no |response|, a 200 response is
     ##        returned.  Otherwise, a response created from |response|
     ##        is returned.  Note that the |response|'s status must be
     ##        2xx.
     ##
-    ##     3. MITM HTTPS server.  An MITM HTTPS server is created from
-    ##        |mitm_server| over the tunnel.  Any request to the MITM
-    ##        HTTPS server is handled in the normal ways (e.g. the
-    ##        |handle_request| handler is invoked).
+    ##     3. MITM HTTPS server.  An MITM HTTPS server is created
+    ##        using |upstream|'s |tls| option over the tunnel.  Any
+    ##        request to the MITM HTTPS server is handled in the
+    ##        normal ways (e.g. the |handle_request| handler is
+    ##        invoked).
     if ($request->{method} eq 'CONNECT') {
       if (defined $result->{upstream}) {
-        if (defined $result->{mitm_server}) { # c)
+        my $type = $result->{upstream}->{type} || '';
+        if ($type eq 'mitm') {
           # XXX preconnect $result->{upstream}
 
           $result->{response} = {
@@ -182,8 +216,8 @@ sub _handle_stream ($$$) {
           # XXX if bad status
           $mode = 'mitm';
           return $result;
-        } else { # b)
-          die "XXX Not implemented yet";
+        } else { # b) c) d)
+          die "Bad |upstream| |type|: |$type|";
         }
       } else { # a)
         return {
@@ -283,9 +317,14 @@ sub _handle_stream ($$$) {
     my $result = $_[0];
     my $response = $result->{response};
 
+    my $reader;
+    if (defined $response and
+        defined $response->{body_stream}) {
+      $reader = $response->{body_stream}->get_reader ('byob'); # or throw
+    }
+
     if (defined $result->{error} and not defined $response) {
       my $error = Web::Transport::Error->wrap ($result->{error});
-
       if (defined $reqbody and not $reqbody->locked) {
         $reqbody->cancel ($error);
       }
@@ -338,11 +377,6 @@ sub _handle_stream ($$$) {
       }
     }
 
-    my $reader;
-    if (defined $response->{body_stream}) {
-      $reader = $response->{body_stream}->get_reader ('byob'); # or throw
-    }
-
     return [$response, $reader, $result];
   })->catch (sub {
     my $error = Web::Transport::Error->wrap ($_[0]);
@@ -368,27 +402,41 @@ sub _handle_stream ($$$) {
               unless $response->{forwarding};
       return $stream->send_response ($response);
     })->then (sub {
+      my $writer;
       if (defined $_[0]->{readable} and defined $_[0]->{writable}) { # CONNECT
-        die "CONNECT response in bad mode |$mode|" unless $mode eq 'mitm';
-        my $custom = {
-          readable => $_[0]->{readable},
-          writable => $_[0]->{writable},
-          closed => $stream->closed,
-          id => $stream->info->{id} . 'C',
-          parent_layered_type => $stream->info->{parent}->{parent}->{layered_type},
-          type => 'CONNECT',
-          class => 'Web::Transport::CustomStream',
-        };
-        my $con = __PACKAGE__->_new_mitm_server ($custom, {
-          %$opts,
-          parent_id => undef,
-          tls => $result->{mitm_server}->{tls} || {},
-          _allowed_scheme => 'https',
-        });
-        return $con->closed;
+        if ($mode eq 'mitm') {
+          my $custom = {
+            readable => $_[0]->{readable},
+            writable => $_[0]->{writable},
+            closed => $stream->closed,
+            id => $stream->info->{id} . 'C',
+            parent_layered_type => $stream->info->{parent}->{parent}->{layered_type},
+            type => 'CONNECT',
+            class => 'Web::Transport::CustomStream',
+          };
+          my $con = __PACKAGE__->_new_mitm_server ($custom, {
+            %$opts,
+            parent_id => undef,
+            tls => $result->{upstream}->{tls} || {},
+            _allowed_scheme => 'https',
+          });
+          $con->onexception ($server->onexception);
+          return $con->completed;
+        } else { # $mode ne 'mitm'
+          $writer = $_[0]->{writable}->get_writer;
+          my $reader = $_[0]->{readable}->get_reader;
+          promised_until { # XXX pipeTo null
+            return $reader->read->then (sub {
+              return $_[0]->{done};
+            });
+          };
+          $writer->closed->then (sub {
+            return $reader->cancel;
+          });
+        }
+      } else { # non-CONNECT response
+        $writer = $_[0]->{body}->get_writer;
       }
-
-      my $writer = $_[0]->{body}->get_writer;
 
       if (defined $reader) {
         # XXX pipeTo
@@ -485,7 +533,7 @@ sub _close ($) {
   my $self = $_[0];
   return Promise->all ([map {
     $_->close;
-  } map { @$_ } values %{$self->{clients}}]);
+  } map { @$_ } values %{delete $self->{clients}}]);
 } # _close
 
 sub filter_headers ($$;%) {
@@ -504,24 +552,21 @@ sub note ($$;%) {
   }
 } # note
 
+sub DESTROY ($) {
+  local $@;
+  eval { die };
+  warn "$$: Reference to $_[0] is not discarded before global destruction\n"
+      if $@ =~ /during global destruction/;
+} # DESTROY
+
 # XXX CONNECT documentation
 # XXX CONNECT request forwarded as is (CONNECT response)
 # XXX CONNECT request forwarded as is (non-CONNECT response)
 # XXX CONNECT request forwarded with modification (CONNECT response)
 # XXX CONNECT request forwarded with modification (non-CONNECT response)
-# XXX CONNECT request forwarded as non-CONNECT (non-2xx)
-# XXX CONNECT request forwarded as non-CONNECT (2xx)
 # XXX CONNECT request connects to specified TCP server
 # XXX CONNECT request connects to another TCP server
 # XXX CONNECT request responded with |response|, connected to application
-# XXX CONNECT request responded with |response| (2xx with body)
-# XXX CONNECT request responded with |response| (non-2xx)
-# XXX CONNECT request responded with |error|
-# XXX CONNECT request rejected
-# XXX non-CONNECT request forwarded as CONNECT
-# XXX CONNECT |handle_request| sets only |respnse| with 2xx
-# XXX CONNECT |handle_request| sets |response| with non-2xx and |upstream|
-# XXX CONNECT |upstream| and |mitm_server|
 
 # XXX WS request forwarded as is (WS response)
 # XXX WS request forwarded as is (non-WS response)
@@ -535,7 +580,6 @@ sub note ($$;%) {
 # XXX WS message proxying
 # XXX non-WS request forwarded as WS (WS response)
 # XXX non-WS request forwarded as WS (non-WS response)
-
 
 1;
 

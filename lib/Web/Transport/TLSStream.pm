@@ -221,6 +221,7 @@ sub create ($$) {
   my $rbio;
   my $wbio;
   my $process_tls;
+  my $verify_error;
 
   my $handshake_ok;
   my $handshake_ng;
@@ -258,6 +259,7 @@ sub create ($$) {
     }
 
     if (defined $handshake_ok) {
+      $verify_error = $tls && Net::SSLeay::get_verify_result ($tls);
       $handshake_ng->($_[0]);
       $handshake_ok = $handshake_ng = undef;
     }
@@ -709,10 +711,12 @@ sub create ($$) {
         not $info->{tls_stapling}->{ok}) {
       $error = Web::Transport::Error->wrap ($info->{tls_stapling}->{error});
     } else {
-      my $n = $tls && Net::SSLeay::get_verify_result ($tls);
-      if ($n) {
-        my $s = Net::SSLeay::X509_verify_cert_error_string ($n);
-        $error = _pe "Certificate verification error $n - $s";
+      if ($verify_error) {
+        ## <https://www.openssl.org/docs/manmaster/man3/SSL_get_verify_result.html>
+        ## <https://www.openssl.org/docs/manmaster/man1/verify.html#DIAGNOSTICS>
+        ## <https://metacpan.org/pod/Net::SSLeay#Low-level-API%3A-SSL_*-related-functions>
+        my $s = Net::SSLeay::X509_verify_cert_error_string ($verify_error);
+        $error = _pe "Certificate verification error $verify_error - $s";
       } else {
         $error = Web::Transport::Error->wrap ($_[0]);
       }

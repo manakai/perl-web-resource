@@ -541,12 +541,14 @@ sub request ($%) {
   my $ready = $self->{queue};
   my $s_queue;
   ($self->{queue}, $s_queue) = promised_cv;
+  my $body_reader;
   return $ready->then (sub {
     $args{base_url} ||= $self->{base_url};
     $args{path_prefix} = $self->{path_prefix} if not defined $args{path_prefix};
     $args{protocol_clock} = $self->{protocol_clock};
-    my ($method, $url_record, $header_list, $body_ref, $body_reader,
+    my ($method, $url_record, $header_list, $body_ref, $br,
         $ws_protos) = Web::Transport::RequestConstructor->create (\%args);
+    $body_reader = $br;
     die _te $method->{message} if ref $method; # error
 
     die _te "Method |CONNECT| not supported" if $method eq 'CONNECT';
@@ -591,6 +593,7 @@ sub request ($%) {
     die $_[0] if UNIVERSAL::isa ($_[0], 'Web::Transport::Response');
     my $error = Web::Transport::Error->wrap ($_[0]);
     $s_queue->(undef);
+    $body_reader->cancel ($error) if defined $body_reader;
     die Web::Transport::Response->new_from_error ($error);
   });
 } # request
@@ -642,7 +645,7 @@ sub DESTROY ($) {
 
   local $@;
   eval { die };
-  warn "$$: Reference to @{[ref $_[0]]} is not discarded before global destruction\n"
+  warn "$$: Reference to $_[0] is not discarded before global destruction\n"
       if $@ =~ /during global destruction/;
 } # DESTROY
 

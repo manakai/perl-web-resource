@@ -3143,6 +3143,8 @@ sub send_response ($$$) {
 
   $con->{to_be_closed} = 1 if $close;
   $con->{write_mode} = $write_mode;
+  $con->_receive_done if $stream->{request}->{method} eq 'CONNECT' and
+                         not $connect;
   my ($ws) = $stream->_open_sending_stream ($to_be_sent);
 
   if ($connect and defined $stream->{tunnel_readable}) {

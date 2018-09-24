@@ -648,6 +648,14 @@ sub _ws_received ($) {
                 return $self->_read;
               }, # pull
               cancel => sub {
+                if (defined $rc and not $is_text) {
+                  ## As the readable stream is not returned to the
+                  ## application until the last frame is seen, this
+                  ## should never be invoked.
+                  my $req = $rc->byob_request;
+                  $req->manakai_respond_with_new_view
+                      (DataView->new (ArrayBuffer->new (0))) if defined $req;
+                }
                 undef $rc;
                 return $self->abort (Web::Transport::Error->wrap ($_[1]));
               }, # cancel
@@ -2582,7 +2590,12 @@ sub _headers_received ($;%) {
         return $stream->{connection}->_read;
       },
       cancel => sub {
-        delete $stream->{body_controller};
+        my $rc = delete $stream->{body_controller};
+        if (defined $rc) {
+          my $req = $rc->byob_request;
+          $req->manakai_respond_with_new_view
+              (DataView->new (ArrayBuffer->new (0))) if defined $req;
+        }
         return $con->abort (Web::Transport::Error->wrap ($_[1]));
       },
     });

@@ -4365,12 +4365,189 @@ test {
   });
 } n => 1, name => 'abort';
 
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $loop = 0;
+    return $http->ready->then (sub {
+      return $http->send_request ({
+        method => 'GET',
+        target => '/',
+      });
+    })->then (sub {
+      my $got = $_[0];
+      my $body = $got->{body};
+      $body->get_writer->close;
+      $got->{stream}->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      my $body = $got->{body};
+      my $r = $body->get_reader ('byob');
+      my $p = $r->read (DataView->new (ArrayBuffer->new (100)))->then (sub {
+        my $v = $_[0];
+        test {
+          is $v->{value}->manakai_to_string, 'abc';
+        } $c;
+        $loop++;
+        return $r->read (DataView->new (ArrayBuffer->new (100)));
+      })->then (sub {
+        my $v = $_[0];
+        test {
+          ok $v->{done};
+        } $c;
+        $loop++;
+      });
+      return Promise->all ([$r->closed, $p]);
+    })->then (sub {
+      test {
+        is $loop, 2;
+      } $c;
+      return $http->close_after_current_stream;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'streams body readable stream';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
+    "HTTP/1.1 203 ok"CRLF
+    "X-hoge: Foo bar"CRLF
+    CRLF
+    "abc"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $loop = 0;
+    return $http->ready->then (sub {
+      return $http->send_request ({
+        method => 'GET',
+        target => '/',
+      });
+    })->then (sub {
+      my $got = $_[0];
+      my $body = $got->{body};
+      $body->get_writer->close;
+      $got->{stream}->headers_received;
+    })->then (sub {
+      my $got = $_[0];
+      my $body = $got->{body};
+      my $r = $body->get_reader ('byob');
+      my $p = $r->read (DataView->new (ArrayBuffer->new (100)))->then (sub {
+        my $v = $_[0];
+        test {
+          is $v->{value}->manakai_to_string, 'abc';
+        } $c;
+        $loop++;
+        my $s = $r->read (DataView->new (ArrayBuffer->new (100)));
+        $r->cancel;
+        return $s;
+      })->then (sub {
+        my $v = $_[0];
+        test {
+          ok $v->{done};
+        } $c;
+        $loop++;
+      });
+      return Promise->all ([$r->closed, $p]);
+    })->then (sub {
+      test {
+        is $loop, 2;
+      } $c;
+      return $http->close_after_current_stream;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 3, name => 'streams body readable stream cancel';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+receive "GET", start capture
+receive CRLFCRLF, end capture
+"HTTP/1.1 101 OK"CRLF
+"Upgrade: websocket"CRLF
+"Sec-WebSocket-Accept: "
+ws-accept
+CRLF
+"Connection: Upgrade"CRLF
+CRLF
+ws-send-header opcode=2 length=3
+"xyz"
+close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $http = Web::Transport::HTTPStream->new ({parent => {
+      class => 'Web::Transport::TCPStream',
+      host => Web::Host->parse_string ($server->{addr}),
+      port => $server->{port},
+    }});
+    my $closing;
+    $http->ready->then (sub {
+      return $http->send_request ({method => 'GET', target => '/', ws => 1});
+    })->then (sub {
+      my $stream = $_[0]->{stream};
+      return $stream->headers_received->then (sub {
+        my $msgs = $_[0]->{messages}->get_reader;
+        $msgs->read->then (sub {
+          my $rs = $_[0]->{value}->{body};
+          my $r = $rs->get_reader ('byob');
+          $r->read (DataView->new (ArrayBuffer->new (100)))->then (sub {
+            my $v = $_[0];
+            test {
+              is $v->{value}->manakai_to_string, 'xyz';
+            } $c;
+            return $r->read (DataView->new (ArrayBuffer->new (100)));
+          })->then (sub {
+            my $v = $_[0];
+            test {
+              ok $v->{done};
+            } $c;
+          });
+        });
+        return $msgs->closed->then (sub {
+          return $stream->send_ws_close;
+        });
+      })->then (sub {
+        return $stream->closed;
+      });
+    })->then (sub{
+      return $http->close_after_current_stream;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 2, name => 'ws bytes readable stream';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

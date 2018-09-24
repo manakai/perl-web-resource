@@ -1831,9 +1831,18 @@ test {
 
           $api->note ("API note method");
 
+          my $url2 = Web::URL->parse_string ($server_url->scheme . "://" . $server_url->host->to_ascii . ":" . ($server_url->port + 1) . "/test");
           my $client = $api->client ($server_url);
+          my $client2 = $api->client ($server_url, {}, {key => 'b'});
+          my $client3 = $api->client ($url2, {}, {key => 'b'});
           test {
             isa_ok $client, 'Web::Transport::BasicClient';
+            is $api->client ($server_url, {}, {key => undef}), $client;
+            is $api->client ($server_url, {}, {key => ''}), $client;
+            isa_ok $client2, 'Web::Transport::BasicClient';
+            isnt $client2, $client, 'different keys';
+            is $api->client ($server_url, {}, {key => 'b'}), $client2;
+            isnt $client3, $client2, 'different origin';
           } $c;
 
           return $client->request (%{$args->{request}}, url => $server_url)->then (sub {
@@ -1887,7 +1896,7 @@ test {
       } $c;
     });
   });
-} n => 6, name => 'handle_request custom client fetch';
+} n => 12, name => 'handle_request custom client fetch';
 
 test {
   my $c = shift;
@@ -3825,8 +3834,16 @@ test {
           my $client = $api->client ($server_url, {
             server_connection => {url => $real_server_url},
           });
+          my $client2 = $api->client ($server_url, {
+            server_connection => {url => $real_server_url},
+          }, {key => 'b'});
+          my $client3 = $api->client ($real_server_url, {}, {});
+          my $client4 = $api->client ($real_server_url, {}, {key => 'b'});
           test {
             isa_ok $client, 'Web::Transport::BasicClient';
+            isnt $client2, $client, 'different keys';
+            isnt $client3, $client, 'different origin';
+            isnt $client4, $client2, 'different origin and key';
           } $c;
 
           return $client->request (%{$args->{request}}, url => $server_url)->then (sub {
@@ -3881,7 +3898,97 @@ test {
       } $c;
     });
   });
-} n => 6, name => 'handle_request custom client fetch with server_connection url';
+} n => 9, name => 'handle_request custom client fetch with server_connection url';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $server_url;
+  my $close_server;
+  my $exception_invoked = 0;
+  my ($r_2, $s_2) = promised_cv;
+  my $server_p = Promise->new (sub {
+    my ($ok) = @_;
+    my $server = tcp_server $host, $port, sub {
+      my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+        handle_request => sub {
+          my $args = $_[0];
+
+          my $api = $args->{api};
+          my $client = $api->client ($server_url, {}, {key => "[2]"});
+          $client->request (url => Web::URL->parse_string (q</2>, $server_url))->then (sub {
+            my $res = $_[0];
+            $s_2->($res->body_bytes);
+          });
+
+          $args->{request}->{url} = $server_url;
+          return $args;
+        },
+      });
+      promised_cleanup { $ok->() } $con->completed;
+      $con->onexception (sub {
+        $exception_invoked++;
+        warn $_[1];
+      });
+    };
+    $close_server = sub { undef $server };
+  });
+
+  my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+      ([{protocol => 'http', host => $host, port => $port}]);
+
+  promised_cleanup {
+    done $c; undef $c;
+  } promised_cleanup {
+    return $server_p;
+  } psgi_server (sub ($) {
+    my $env = $_[0];
+    return sub {
+      my $x = $_[0];
+      if ($env->{PATH_INFO} eq '/2') {
+        promised_sleep (2)->then (sub {
+          my $writer = $x->([202, []]);
+          $writer->write ('/2');
+          $writer->close;
+        });
+      } else {
+        my $writer = $x->([201, []]);
+        $writer->write ('200!');
+        $writer->close;
+      }
+    };
+  }, sub {
+    my ($origin, $close) = @_;
+    $server_url = Web::URL->parse_string (q</1>, $origin);
+    my $url = Web::URL->parse_string (q<http://hoge.fuga.test/agaeweeee>);
+    my $proxy_client = Web::Transport::BasicClient->new_from_url ($url, {
+      proxy_manager => $pm,
+    });
+    promised_cleanup {
+      $close->();
+    } promised_cleanup {
+      $close_server->();
+      undef $s_2;
+    } $proxy_client->request (url => $url)->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 201;
+        is $res->body_bytes, '200!';
+      } $c;
+      return $proxy_client->abort;
+    })->then (sub {
+      return $r_2;
+    })->then (sub {
+      my $got = $_[0];
+      test {
+        is $got, '/2';
+        is $exception_invoked, 0;
+      } $c;
+    });
+  });
+} n => 4, name => 'handle_request custom client fetch non-default client not discarded after stream closure';
 
 run_tests;
 

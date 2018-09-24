@@ -191,7 +191,7 @@ within handlers:
 
 =over 4
 
-=item $client = $api->client ($url, $client_options)
+=item $client = $api->client ($url, $client_options, $api_options)
 
 Return a client (L<Web::Transport::BasicClient>) that is ready to send
 a request.
@@ -199,12 +199,24 @@ a request.
 The first argument must be a URL (L<Web::URL> object) of the target of
 the request.
 
-The second argument must be a hash reference of additional client
-options (see L<Web::Transport::BasicClient/"CLIENT OPTIONS">) used to
-create a client.  By default a set of client options appropriate for
-the proxy server is used, taking the C<client> option of the proxy
-server's constructor argument into account, but this argument can be
-used to override them.
+The second argument, if specified, must be a hash reference of
+additional client options (see L<Web::Transport::BasicClient/"CLIENT
+OPTIONS">) used to create a client.  By default a set of client
+options appropriate for the proxy server is used, taking the C<client>
+option of the proxy server's constructor argument into account, but
+this argument can be used to override them.
+
+The third argument, if specified, must be a hash reference of
+additional options used to choose a client.  The C<key> option, if
+specified, sets the short identifier for the client.  When the
+C<client> method is invoked twice with same orign, client options, and
+C<key>, the same client is returned if possible.  When the method is
+invoked with different C<key>, different client is returned.  When the
+proxy itself fetches a resource, it uses the client whose key is the
+empty string, which is the default key.  The proxy discards the empty
+string keyed client after the process of the relevant request/response
+pairs.  If the handlers want to avoid the client discarded, they
+should use their own keys.
 
 This is effectively equivalent to invoking the C<new_from_url> method
 of the L<Web::Transport::BasicClient> module but this method first

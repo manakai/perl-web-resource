@@ -513,17 +513,22 @@ sub client ($$;$$) {
   # XXX connection pool
   my $key;
   if (defined $opts->{server_connection}) {
-    $key = 'server_connection' . $; . $opts->{server_connection}->{url}->get_origin->to_ascii;
+    $key = join $;,
+        'server_connection',
+        $opts->{server_connection}->{url}->get_origin->to_ascii,
+        defined $args->{key} ? $args->{key} : '';
   } else {
-    $key = $url->get_origin->to_ascii;
+    $key = join $;,
+        'origin',
+        $url->get_origin->to_ascii,
+        defined $args->{key} ? $args->{key} : '';
   }
-  $key .= $; . 'k=' . $args->{key} if defined $args->{key};
+  # XXX parent_id uniqueness is broken
+  $opts->{parent_id} .= $args->{key} if defined $args->{key};
   my $cons = $self->{clients}->{$key} ||= [];
 
   for (@$cons) {
-    unless ($_->is_active) {
-      return $_;
-    }
+    return $_;
   }
   push @$cons, Web::Transport::BasicClient->new_from_url ($url, $opts);
   return $cons->[-1];

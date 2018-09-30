@@ -417,6 +417,46 @@ There are following resolvers in this repository:
 L<Web::Transport::PlatformResolver>,
 L<Web::Transport::CachedResolver>.
 
+=head1 CERTIFICATE MANAGER
+
+A B<certificate manager> is an object from which TLS certifciates can
+be retrieved.
+
+It is expected to have following methods:
+
+=over 4
+
+=item $cm->prepare ($name => $value, ...)->then (sub { ... })
+
+Run preparation steps for the certificate manager.  The concrete steps
+are implementation specific.  The method must return a promise, which
+is fulfilled or rejected when the certificate manager is ready to
+return relevant certificates.
+
+It receives zero or more options as name/value pair arguments.  The
+C<server> option has a boolean value, representing server (true) or
+client (false).  If the C<server> value is true but the certificate
+manager is not ready to return the server certificates (including CA
+certificates), the method must reject the promise.
+
+=item {$name => $value, ...} = $cm->to_anyevent_tls_args_sync
+
+Return a hash reference containing zero or more arguments to the
+C<new> method of the L<AnyEvent::TLS> class.  It should only contain
+certificate-related options.
+
+If the certificate manager's C<prepare> method has been invoked with
+C<server> option set to true and its promise has been fulfilled, the
+hash reference must contain the server certificates and all other
+relevant options.  Otherwise, if the certificate manager's C<prepare>
+method has been invoked and its promise has been fulfilled, the hash
+reference must contain all relevant options.
+
+=back
+
+There is following module in this repository:
+L<Web::Transport::DefaultCertificateManager>.
+
 =head1 UNDERLYING PLATFORM INFORMATION OBJECT
 
 An B<underlying platform information object> represents the underlying
@@ -437,7 +477,7 @@ Return the appropriate value for the HTTP C<Accept-Language> header.
 
 =back
 
-There are following module in this repository:
+There is following module in this repository:
 L<Web::Transport::PlatformInfo>.
 
 =head1 ENVIRONMENT VARIABLES

@@ -1,0 +1,61 @@
+=head1 NAME
+
+Web::Transport::DefaultCertificateManager - Default certificate manager
+
+=head1 SYNOPSIS
+
+  use Web::Transport::DefaultCertificateManager;
+  $cm = Web::Transport::DefaultCertificateManager->new ({
+    ca_cert => $ca_cert,
+    cert => $cert,
+    key => $key,
+  });
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::DefaultCertifcateManger> module is a default
+certificate manager (see L<Web::Transport/"CERTIFICATE MANAGER">).
+
+=head1 METHOD
+
+Following methods are available:
+
+=over 4
+
+=item $cm = Web::Transport::DefaultCertificateManager->new ({$name => $value, ...})
+
+Create a certificate manager.
+
+The first argument must be a hash reference, which can contain zero or
+more name/value pairs of the options.
+
+If no option is specified, the platform (OpenSSL)'s default applies.
+
+Options C<ca_cert>, C<ca_file>, C<ca_path>, C<cert>, C<cert_file>,
+C<key>, and C<key_file> can be specified.  See L<AnyEvent::TLS> for
+their semantics and possible values.
+
+As described in L<AnyEvent::TLS>, environment variables
+C<PERL_ANYEVENT_CA_FILE> and C<PERL_ANYEVENT_CA_PATH> are also
+relevant.
+
+=item $cm->prepare ($name => $value, ...)->then (sub { ... })
+
+=item {$name => $value, ...} = $cm->to_anyevent_tls_args_sync
+
+See L<Web::Transport/"CERTIFICATE MANAGER">.
+
+=back
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

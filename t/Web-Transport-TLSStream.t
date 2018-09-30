@@ -13,6 +13,8 @@ use Promised::Flow;
 use AnyEvent::Socket qw(tcp_server);
 use Web::Transport::TCPStream;
 use Web::Transport::TLSStream;
+use Web::Transport::PKI::Generator;
+use Web::Transport::DefaultCertificateManager;
 use AbortController;
 
 sub dv ($) {
@@ -1303,6 +1305,558 @@ test {
     undef $c;
   });
 } n => 4, name => 'Bad |key|';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$host],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa) = @{$_[0]};
+
+    my $server = tcp_server undef, $port, sub {
+      Web::Transport::TLSStream->create ({
+        server => 1,
+          ca_cert => $ca_cert->to_pem,
+          cert => $cert->to_pem,
+          key => $rsa->to_pem,
+          parent => {
+            class => 'Web::Transport::TCPStream',
+            server => 1,
+            fh => $_[0],
+            host => Web::Host->parse_string ($_[1]),
+            port => $_[2],
+          },
+        })->then (sub {
+          my $info = $_[0];
+
+          my $w = $info->{writable}->get_writer;
+          my $r = $info->{readable}->get_reader ('byob');
+          return promised_until {
+            return $r->read (dv "x" x 10)->then (sub {
+              my $v = $_[0];
+              if ($v->{done}) {
+                $w->close;
+                return $info->{closed}->then (sub { return 1 });
+              } else {
+                $w->write ($v->{value});
+                return 0;
+              }
+            });
+          };
+        });
+    }; # $server
+
+    my @result;
+    return Web::Transport::TLSStream->create ({
+      host => $host,
+      ca_cert => $ca_cert->to_pem,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub {
+      my $info = $_[0];
+      my $w = $info->{writable}->get_writer;
+      my $r = $info->{readable}->get_reader ('byob');
+
+      $w->write (dv "abcdef");
+      $w->write (dv "foo bar 123");
+      $w->close;
+
+      return promised_until {
+        return $r->read (dv "x" x 10)->then (sub {
+          my $v = $_[0];
+          if ($v->{done}) {
+            return $info->{closed}->then (sub { return 1 });
+          } else {
+            push @result, $v->{value};
+            return 0;
+          }
+        });
+      };
+    })->then (sub {
+      my $result = join '', map {
+        $_->manakai_to_string;
+      } @result;
+      test {
+        is $result, "abcdeffoo bar 123";
+      } $c;
+      undef $server;
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'compat cert options';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return Promise->all ([
+    $gen->create_rsa_key,
+    $gen->create_rsa_key,
+  ])->then (sub {
+    my $ca_rsa = $_[0]->[0];
+    my $ca_rsa2 = $_[0]->[1];
+    return Promise->all ([
+      $gen->create_certificate (
+        rsa => $ca_rsa,
+        ca_rsa => $ca_rsa,
+        subject => {O => 'The Root CA'},
+        issuer => {O => 'The Root CA'},
+        not_before => time - 60,
+        not_after => time + 3600,
+        serial_number => 1,
+        ca => 1,
+      ),
+      $gen->create_certificate (
+        rsa => $ca_rsa2,
+        ca_rsa => $ca_rsa2,
+        subject => {O => 'The Root CA'},
+        issuer => {O => 'The Root CA'},
+        not_before => time - 60,
+        not_after => time + 3600,
+        serial_number => 1,
+        ca => 1,
+      ),
+    ])->then (sub {
+      my $ca_cert = $_[0]->[0];
+      my $ca_cert2 = $_[0]->[1];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$host],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa, $ca_cert2];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa, $ca_cert2) = @{$_[0]};
+
+    my @p;
+    my $server = tcp_server undef, $port, sub {
+      push @p, Web::Transport::TLSStream->create ({
+        server => 1,
+        ca_cert => $ca_cert->to_pem,
+        cert => $cert->to_pem,
+        key => $rsa->to_pem,
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          server => 1,
+          fh => $_[0],
+          host => Web::Host->parse_string ($_[1]),
+          port => $_[2],
+        },
+      })->then (sub {
+        my $info = $_[0];
+
+        my $w = $info->{writable}->get_writer;
+        my $r = $info->{readable}->get_reader ('byob');
+        return promised_until {
+          return $r->read (dv "x" x 10)->then (sub {
+            my $v = $_[0];
+            if ($v->{done}) {
+              $w->close;
+              return $info->{closed}->then (sub { return 1 });
+            } else {
+              $w->write ($v->{value});
+              return 0;
+            }
+          });
+        };
+      })->catch (sub { });
+    }; # $server
+
+    my @result;
+    return Web::Transport::TLSStream->create ({
+      host => $host,
+      ca_cert => $ca_cert2->to_pem,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub { test { ok 0 } $c }, sub {
+      my $e = $_[0];
+      test {
+        isa_ok $e, 'Web::Transport::ProtocolError';
+        is $e->name, 'Protocol error';
+        is $e->message, 'Certificate verification error 19 - self signed certificate in certificate chain';
+        is $e->file_name, __FILE__;
+        is $e->line_number, __LINE__+4;
+      } $c;
+      undef $server;
+      return Promise->all (\@p);
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'compat cert options, wrong client ca_cert';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$host],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa) = @{$_[0]};
+
+    my $server = tcp_server undef, $port, sub {
+      Web::Transport::TLSStream->create ({
+        server => 1,
+        ca_cert => $ca_cert,
+        cert => $cert,
+        key => $rsa,
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          server => 1,
+          fh => $_[0],
+          host => Web::Host->parse_string ($_[1]),
+          port => $_[2],
+        },
+      })->then (sub {
+        my $info = $_[0];
+
+        my $w = $info->{writable}->get_writer;
+        my $r = $info->{readable}->get_reader ('byob');
+        return promised_until {
+          return $r->read (dv "x" x 10)->then (sub {
+            my $v = $_[0];
+            if ($v->{done}) {
+              $w->close;
+              return $info->{closed}->then (sub { return 1 });
+            } else {
+              $w->write ($v->{value});
+              return 0;
+            }
+          });
+        };
+      });
+    }; # $server
+
+    my @result;
+    return Web::Transport::TLSStream->create ({
+      host => $host,
+      ca_cert => $ca_cert,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub {
+      my $info = $_[0];
+      my $w = $info->{writable}->get_writer;
+      my $r = $info->{readable}->get_reader ('byob');
+
+      $w->write (dv "abcdef");
+      $w->write (dv "foo bar 123");
+      $w->close;
+
+      return promised_until {
+        return $r->read (dv "x" x 10)->then (sub {
+          my $v = $_[0];
+          if ($v->{done}) {
+            return $info->{closed}->then (sub { return 1 });
+          } else {
+            push @result, $v->{value};
+            return 0;
+          }
+        });
+      };
+    })->then (sub {
+      my $result = join '', map {
+        $_->manakai_to_string;
+      } @result;
+      test {
+        is $result, "abcdeffoo bar 123";
+      } $c;
+      undef $server;
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'compat cert options, as objects';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$host],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa) = @{$_[0]};
+
+    my $cm1 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+      cert => $cert,
+      key => $rsa,
+    });
+
+    my $server = tcp_server undef, $port, sub {
+      Web::Transport::TLSStream->create ({
+        server => 1,
+        certificate_manager => $cm1,
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          server => 1,
+          fh => $_[0],
+          host => Web::Host->parse_string ($_[1]),
+          port => $_[2],
+        },
+      })->then (sub {
+        my $info = $_[0];
+
+        my $w = $info->{writable}->get_writer;
+        my $r = $info->{readable}->get_reader ('byob');
+        return promised_until {
+          return $r->read (dv "x" x 10)->then (sub {
+            my $v = $_[0];
+            if ($v->{done}) {
+              $w->close;
+              return $info->{closed}->then (sub { return 1 });
+            } else {
+              $w->write ($v->{value});
+              return 0;
+            }
+          });
+        };
+      });
+    }; # $server
+
+    my $cm2 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+    });
+
+    my @result;
+    return Web::Transport::TLSStream->create ({
+      host => $host,
+      certificate_manager => $cm2,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub {
+      my $info = $_[0];
+      my $w = $info->{writable}->get_writer;
+      my $r = $info->{readable}->get_reader ('byob');
+
+      $w->write (dv "abcdef");
+      $w->write (dv "foo bar 123");
+      $w->close;
+
+      return promised_until {
+        return $r->read (dv "x" x 10)->then (sub {
+          my $v = $_[0];
+          if ($v->{done}) {
+            return $info->{closed}->then (sub { return 1 });
+          } else {
+            push @result, $v->{value};
+            return 0;
+          }
+        });
+      };
+    })->then (sub {
+      my $result = join '', map {
+        $_->manakai_to_string;
+      } @result;
+      test {
+        is $result, "abcdeffoo bar 123";
+      } $c;
+      undef $server;
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'certificate_manager';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$host],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa) = @{$_[0]};
+
+    my $cm1 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+    });
+
+    Web::Transport::TLSStream->create ({
+      server => 1,
+      certificate_manager => $cm1,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        server => 1,
+        fh => {},
+        host => Web::Host->parse_string ($_[1]),
+        port => $_[2],
+      },
+    })->then (sub { test { ok 0 } $c }, sub {
+      my $e = $_[0];
+      test {
+        isa_ok $e, 'Web::Transport::TypeError';
+        is $e->name, 'TypeError';
+        is $e->message, 'Bad |cert|';
+        is $e->file_name, __FILE__;
+        is $e->line_number, __LINE__+2;
+      } $c;
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'certificate_manager, not for server';
 
 Test::Certificates->wait_create_cert;
 run_tests;

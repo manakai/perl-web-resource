@@ -23,6 +23,7 @@ push our @CARP_NOT, qw(
   Web::Transport::Error Web::Transport::TypeError Streams::IOError
   Web::Transport::NetSSLeayError Web::Transport::ProtocolError
   ReadableStream WritableStream
+  Web::Transport::DefaultCertificateManager
   Web::Transport::CustomStream
   Web::Transport::TCPStream
   Web::Transport::UnixStream
@@ -185,19 +186,14 @@ sub _pe ($) {
 ## parent : stream options : The options to create the underlying
 ## transport.  Required.
 ##
-## cert : bytes? : The PEM file content of the server certificate (and
-## all relevant CA certificates, if necessary).
+## certificate_manager : certificate manager : The certificate manager
+## used to set the server certificates and to verify peer
+## certificates.  Defaulted to the platform's default.  Required when
+## |server| is true.
 ##
-## cert_file : path? : The path to the PEM file of the server
-## certificate (and all relevant CA certificates, if necessary).
-## Either |cert| or |cert_file| is required when |server| is true.
-##
-## key : bytes? : The PEM file content of the server private key.
-##
-## key_file : path? : The path to the PEM file of the server private
-## key.  Either |key| or |key_file| is required when |server| is true.
-##
-## ca_file, ca_path, ca_cert : See AnyEvent::TLS.
+## cert, cert_file, key, key_file, ca_file, ca_path, ca_cert : Synonym
+## for specifying a default |certificate_manager| with these options,
+## kept only for backward compatibility.
 ##
 ## host : Web::Host? : The host of the server.  Required when |server|
 ## is false.
@@ -225,17 +221,19 @@ sub _pe ($) {
 sub create ($$) {
   my ($class, $args) = @_;
 
-  if ($args->{server}) {
-    return _tep "Bad |cert|" unless
-        defined $args->{cert} or defined $args->{cert_file};
-    return _tep "Bad |key|" unless
-        defined $args->{key} or defined $args->{key_file};
-  } else {
+  my $cm = $args->{certificate_manager};
+  unless (defined $cm) {
+    require Web::Transport::DefaultCertificateManager;
+    $cm = Web::Transport::DefaultCertificateManager->new ($args);
+  }
+
+  unless ($args->{server}) {
     $args->{si_host} = $args->{host} unless defined $args->{si_host};
     $args->{sni_host} = $args->{host} unless defined $args->{sni_host};
     return _tep "Bad |host|" unless defined $args->{si_host};
     return _tep "Bad |host|" unless defined $args->{sni_host};
   }
+
   return _tep "Bad |parent|"
       unless defined $args->{parent} and ref $args->{parent} eq 'HASH' and
              defined $args->{parent}->{class};
@@ -540,8 +538,17 @@ sub create ($$) {
   $parent->{debug} = $args->{debug}
       if $args->{debug} and not defined $parent->{debug};
   $signal = $parent->{signal} = $args->{signal}; # or undef
-  $parent->{class}->create ($parent)->then (sub {
-    $info->{parent} = $_[0];
+  my $cert_args;
+  Promise->resolve->then (sub {
+    return $cm->prepare (server => $args->{server});
+  })->then (sub {
+    return Promise->all ([
+      $cm->to_anyevent_tls_args_sync,
+      $parent->{class}->create ($parent),
+    ]);
+  })->then (sub {
+    $cert_args = $_[0]->[0];
+    $info->{parent} = $_[0]->[1];
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};
 
     $info->{id} = $info->{parent}->{id} . 's';
@@ -623,7 +630,16 @@ sub create ($$) {
           if $args->{verify_client_once};
     }
 
-    $tls_ctx = AnyEvent::TLS->new (%$args);
+    $tls_ctx = AnyEvent::TLS->new (
+      (map { $_ => $args->{$_} } grep { defined $args->{$_} } qw(
+        method sslv2 sslv3 tlsv1 tlsv1_1 tlsv1_2
+        verify verify_require_client_cert verify_peername verify_cb
+        verify_client_once
+        check_crl dh_file dh dh_single_use cipher_list session_ticket
+      )),
+      %$cert_args,
+      #prepare
+    );
     $tls = Net::SSLeay::new ($tls_ctx->ctx);
     $info->{openssl_version} = [
       Net::SSLeay::SSLeay_version (0),

@@ -39,9 +39,14 @@ As described in L<AnyEvent::TLS>, environment variables
 C<PERL_ANYEVENT_CA_FILE> and C<PERL_ANYEVENT_CA_PATH> are also
 relevant.
 
+The certificate manager has no host-specific certificates for
+SNI-based selection.
+
 =item $cm->prepare ($name => $value, ...)->then (sub { ... })
 
 =item {$name => $value, ...} = $cm->to_anyevent_tls_args_sync
+
+=item {$name => $value, ...} = $cm->to_anyevent_tls_args_for_host_sync
 
 See L<Web::Transport/"CERTIFICATE MANAGER">.
 

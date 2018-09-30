@@ -452,6 +452,19 @@ relevant options.  Otherwise, if the certificate manager's C<prepare>
 method has been invoked and its promise has been fulfilled, the hash
 reference must contain all relevant options.
 
+=item {$name => $value, ...} = $cm->to_anyevent_tls_args_for_host_sync ($host)
+
+Same as C<to_anyevent_tls_args_sync> but returns argument for a
+host-specific certificate.
+
+The method is invoked with an argument of type L<Web::Host>,
+representing the domain name given in the SNI extension's field
+received from the client.
+
+The method can return C<undef> if there is no host-specific
+certificate (such that the default certificate returned by
+C<to_anyevent_tls_args_sync> should be used instead).
+
 =back
 
 There is following module in this repository:

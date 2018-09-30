@@ -1839,8 +1839,8 @@ test {
         class => 'Web::Transport::TCPStream',
         server => 1,
         fh => {},
-        host => Web::Host->parse_string ($_[1]),
-        port => $_[2],
+        host => $host,
+        port => $port,
       },
     })->then (sub { test { ok 0 } $c }, sub {
       my $e = $_[0];
@@ -1857,6 +1857,714 @@ test {
     undef $c;
   });
 } n => 5, name => 'certificate_manager, not for server';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+  my $domain = Web::Host->parse_string ('foo.bar.test');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$domain],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa) = @{$_[0]};
+
+    my $cm1 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+      cert => $cert,
+      key => $rsa,
+    });
+
+    my $server = tcp_server undef, $port, sub {
+      Web::Transport::TLSStream->create ({
+        server => 1,
+        certificate_manager => $cm1,
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          server => 1,
+          fh => $_[0],
+          host => Web::Host->parse_string ($_[1]),
+          port => $_[2],
+        },
+      })->then (sub {
+        my $info = $_[0];
+
+        my $w = $info->{writable}->get_writer;
+        my $r = $info->{readable}->get_reader ('byob');
+        return promised_until {
+          return $r->read (dv "x" x 10)->then (sub {
+            my $v = $_[0];
+            if ($v->{done}) {
+              $w->close;
+              return $info->{closed}->then (sub { return 1 });
+            } else {
+              $w->write ($v->{value});
+              return 0;
+            }
+          });
+        };
+      });
+    }; # $server
+
+    my $cm2 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+    });
+
+    my @result;
+    return Web::Transport::TLSStream->create ({
+      host => $domain,
+      certificate_manager => $cm2,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub {
+      my $info = $_[0];
+      my $w = $info->{writable}->get_writer;
+      my $r = $info->{readable}->get_reader ('byob');
+
+      $w->write (dv "abcdef");
+      $w->write (dv "foo bar 123");
+      $w->close;
+
+      return promised_until {
+        return $r->read (dv "x" x 10)->then (sub {
+          my $v = $_[0];
+          if ($v->{done}) {
+            return $info->{closed}->then (sub { return 1 });
+          } else {
+            push @result, $v->{value};
+            return 0;
+          }
+        });
+      };
+    })->then (sub {
+      my $result = join '', map {
+        $_->manakai_to_string;
+      } @result;
+      test {
+        is $result, "abcdeffoo bar 123";
+      } $c;
+      undef $server;
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'certificate_manager, SNI domain name';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+  my $domain = Web::Host->parse_string ('foo.bar.test');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return Promise->all ([
+        $gen->create_rsa_key,
+        $gen->create_rsa_key,
+      ])->then (sub {
+        my $rsa = $_[0]->[0];
+        my $rsa2 = $_[0]->[1];
+        return Promise->all ([
+          $gen->create_certificate (
+            rsa => $rsa,
+            ca_rsa => $ca_rsa,
+            ca_cert => $ca_cert,
+            not_before => time - 30,
+            not_after => time + 3000,
+            serial_number => 2,
+            subject => {CN => 'server.test'},
+            san_hosts => [$host],
+            ee => 1,
+          ),
+          $gen->create_certificate (
+            rsa => $rsa2,
+            ca_rsa => $ca_rsa,
+            ca_cert => $ca_cert,
+            not_before => time - 30,
+            not_after => time + 3000,
+            serial_number => 2,
+            subject => {CN => 'server.test'},
+            san_hosts => [$domain],
+            ee => 1,
+          ),
+        ])->then (sub {
+          my $cert = $_[0]->[0];
+          my $cert2 = $_[0]->[1];
+          return [$ca_cert, $ca_rsa, $cert, $rsa, $cert2, $rsa2];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa, $cert2, $rsa2) = @{$_[0]};
+
+    {
+      package test::CM1;
+      push our @ISA, qw(Web::Transport::DefaultCertificateManager);
+      sub to_anyevent_tls_args_for_host_sync {
+        return $_[0]->{sni}->{$_[1]->to_ascii};
+      }
+    }
+
+    my $cm1 = test::CM1->new ({
+      ca_cert => $ca_cert,
+      cert => $cert,
+      key => $rsa,
+    });
+    $cm1->{sni} = {
+      $domain->to_ascii => {
+        cert => $cert2->to_pem,
+        key => $rsa2->to_pem,
+      },
+    };
+
+    my $server = tcp_server undef, $port, sub {
+      Web::Transport::TLSStream->create ({
+        server => 1,
+        certificate_manager => $cm1,
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          server => 1,
+          fh => $_[0],
+          host => Web::Host->parse_string ($_[1]),
+          port => $_[2],
+        },
+      })->then (sub {
+        my $info = $_[0];
+
+        my $w = $info->{writable}->get_writer;
+        my $r = $info->{readable}->get_reader ('byob');
+        return promised_until {
+          return $r->read (dv "x" x 10)->then (sub {
+            my $v = $_[0];
+            if ($v->{done}) {
+              $w->close;
+              return $info->{closed}->then (sub { return 1 });
+            } else {
+              $w->write ($v->{value});
+              return 0;
+            }
+          });
+        };
+      });
+    }; # $server
+
+    my $cm2 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+    });
+
+    my @result;
+    return Web::Transport::TLSStream->create ({
+      host => $domain,
+      certificate_manager => $cm2,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub {
+      my $info = $_[0];
+      my $w = $info->{writable}->get_writer;
+      my $r = $info->{readable}->get_reader ('byob');
+
+      $w->write (dv "abcdef");
+      $w->write (dv "foo bar 123");
+      $w->close;
+
+      return promised_until {
+        return $r->read (dv "x" x 10)->then (sub {
+          my $v = $_[0];
+          if ($v->{done}) {
+            return $info->{closed}->then (sub { return 1 });
+          } else {
+            push @result, $v->{value};
+            return 0;
+          }
+        });
+      };
+    })->then (sub {
+      my $result = join '', map {
+        $_->manakai_to_string;
+      } @result;
+      test {
+        is $result, "abcdeffoo bar 123";
+      } $c;
+      undef $server;
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'certificate_manager, SNI domain name certificate';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+  my $domain = Web::Host->parse_string ('foo.bar.test');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$host],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa) = @{$_[0]};
+
+    {
+      package test::CM3;
+      push our @ISA, qw(Web::Transport::DefaultCertificateManager);
+      sub to_anyevent_tls_args_sync {
+        return {};
+      }
+    }
+
+    my $cm1 = test::CM3->new ({
+      ca_cert => $ca_cert,
+      cert => $cert,
+      key => $rsa,
+    });
+
+    my @p;
+    my $server = tcp_server undef, $port, sub {
+      push @p, Web::Transport::TLSStream->create ({
+        server => 1,
+        certificate_manager => $cm1,
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          server => 1,
+          fh => $_[0],
+          host => Web::Host->parse_string ($_[1]),
+          port => $_[2],
+        },
+      })->then (sub { test { ok 0 } $c }, sub {
+        my $e = $_[0];
+        test {
+          isa_ok $e, 'Web::Transport::TypeError', $e;
+          is $e->name, 'TypeError';
+          is $e->message, 'Bad |cert|';
+          is $e->file_name, __FILE__;
+          is $e->line_number, __LINE__+2;
+        } $c;
+      });
+    };
+
+    my $cm2 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+    });
+
+    return Web::Transport::TLSStream->create ({
+      host => $domain,
+      certificate_manager => $cm2,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub { test { ok 0 } $c }, sub {
+      my $e = $_[0];
+      test {
+        isa_ok $e, 'Web::Transport::ProtocolError', $e;
+      } $c;
+      undef $server;
+      return Promise->all (\@p);
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'certificate_manager, no server certificate returned by certificate manager';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+  my $domain = Web::Host->parse_string ('foo.bar.test');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$host],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa) = @{$_[0]};
+
+    {
+      package test::CM2;
+      push our @ISA, qw(Web::Transport::DefaultCertificateManager);
+      sub to_anyevent_tls_args_for_host_sync {
+        return {};
+      }
+    }
+
+    my $cm1 = test::CM2->new ({
+      ca_cert => $ca_cert,
+      cert => $cert,
+      key => $rsa,
+    });
+
+    my @p;
+    my $server = tcp_server undef, $port, sub {
+      push @p, Web::Transport::TLSStream->create ({
+        server => 1,
+        certificate_manager => $cm1,
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          server => 1,
+          fh => $_[0],
+          host => Web::Host->parse_string ($_[1]),
+          port => $_[2],
+        },
+      })->then (sub { test { ok 0 } $c }, sub {
+        my $e = $_[0];
+        test {
+          isa_ok $e, 'Web::Transport::TypeError', $e;
+          is $e->name, 'TypeError';
+          is $e->message, 'Bad |cert|';
+          is $e->file_name, __FILE__;
+          is $e->line_number, __LINE__+2;
+        } $c;
+      });
+    };
+
+
+    my $cm2 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+    });
+
+    return Web::Transport::TLSStream->create ({
+      host => $domain,
+      certificate_manager => $cm2,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub { test { ok 0 } $c }, sub {
+      my $e = $_[0];
+      test {
+        isa_ok $e, 'Web::Transport::ProtocolError', $e;
+      } $c;
+      undef $server;
+      return Promise->all (\@p);
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'certificate_manager, no SNI server certificate';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+  my $domain = Web::Host->parse_string ('foo.bar.test');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$host],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa) = @{$_[0]};
+
+    {
+      package test::CM4;
+      push our @ISA, qw(Web::Transport::DefaultCertificateManager);
+      sub to_anyevent_tls_args_for_host_sync {
+        die "bhseheshse";
+      }
+    }
+
+    my $cm1 = test::CM4->new ({
+      ca_cert => $ca_cert,
+      cert => $cert,
+      key => $rsa,
+    });
+
+    my @p;
+    my $server = tcp_server undef, $port, sub {
+      push @p, Web::Transport::TLSStream->create ({
+        server => 1,
+        certificate_manager => $cm1,
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          server => 1,
+          fh => $_[0],
+          host => Web::Host->parse_string ($_[1]),
+          port => $_[2],
+        },
+      })->then (sub { test { ok 0 } $c }, sub {
+        my $e = $_[0];
+        test {
+          isa_ok $e, 'Web::Transport::Error', $e;
+          is $e->name, 'Error';
+          like $e->message, qr{^bhseheshse at \Q@{[__FILE__]}\E line \Q@{[__LINE__-27]}\E};
+          is $e->file_name, __FILE__;
+          is $e->line_number, __LINE__+2;
+        } $c;
+      });
+    };
+
+    my $cm2 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+    });
+
+    return Web::Transport::TLSStream->create ({
+      host => $domain,
+      certificate_manager => $cm2,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub { test { ok 0 } $c }, sub {
+      my $e = $_[0];
+      test {
+        isa_ok $e, 'Web::Transport::ProtocolError', $e;
+      } $c;
+      undef $server;
+      return Promise->all (\@p);
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 6, name => 'certificate_manager, throw by server certificate';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+  my $domain = Web::Host->parse_string ('foo.bar.test');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$host],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa) = @{$_[0]};
+
+    my $x = $test::CM5::X = Web::Transport::TypeError->new (rand);
+    {
+      package test::CM5;
+      push our @ISA, qw(Web::Transport::DefaultCertificateManager);
+      sub to_anyevent_tls_args_for_host_sync {
+        die $test::CM5::X;
+      }
+    }
+
+    my $cm1 = test::CM5->new ({
+      ca_cert => $ca_cert,
+      cert => $cert,
+      key => $rsa,
+    });
+
+    my @p;
+    my $server = tcp_server undef, $port, sub {
+      push @p, Web::Transport::TLSStream->create ({
+        server => 1,
+        certificate_manager => $cm1,
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          server => 1,
+          fh => $_[0],
+          host => Web::Host->parse_string ($_[1]),
+          port => $_[2],
+        },
+      })->then (sub { test { ok 0 } $c }, sub {
+        my $e = $_[0];
+        test {
+          is $e, $x;
+        } $c;
+      });
+    };
+
+    my $cm2 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+    });
+
+    return Web::Transport::TLSStream->create ({
+      host => $domain,
+      certificate_manager => $cm2,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub { test { ok 0 } $c }, sub {
+      my $e = $_[0];
+      test {
+        isa_ok $e, 'Web::Transport::ProtocolError', $e;
+      } $c;
+      undef $server;
+      return Promise->all (\@p);
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'certificate_manager, exception by server certificate';
 
 Test::Certificates->wait_create_cert;
 run_tests;

@@ -49,6 +49,10 @@ sub to_anyevent_tls_args_sync ($) {
   return $v;
 } # to_anyevent_tls_args_sync
 
+sub to_anyevent_tls_args_for_host_sync ($$) {
+  return undef;
+} # to_anyevent_tls_args_for_host_sync
+
 1;
 
 =head1 LICENSE

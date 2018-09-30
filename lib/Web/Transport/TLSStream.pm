@@ -1,7 +1,7 @@
 package Web::Transport::TLSStream;
 use strict;
 use warnings;
-our $VERSION = '3.0';
+our $VERSION = '4.0';
 use Streams::_Common;
 use Streams::IOError;
 use Web::Transport::Error;
@@ -13,6 +13,7 @@ use Streams::Devel;
 use AnyEvent;
 use Promise;
 use Promised::Flow;
+use Web::Host;
 use Net::SSLeay;
 use AnyEvent::TLS;
 use Web::Transport::NetSSLeayError;
@@ -203,7 +204,7 @@ sub _pe ($) {
 ## not be used by normal applications.
 ##
 ## sni_host : Web::Host? : The host of the server, used to send the
-## SNI extension field.  Defaulted to |host| value.  This option
+## SNI extension's field.  Defaulted to |host| value.  This option
 ## should not be used by normal applications.
 ##
 ## protocol_clock : clock : The clock, used to obtain timestamps.
@@ -630,15 +631,16 @@ sub create ($$) {
           if $args->{verify_client_once};
     }
 
+    my $tls_args = {map { $_ => $args->{$_} } grep { defined $args->{$_} } qw(
+      method sslv2 sslv3 tlsv1 tlsv1_1 tlsv1_2
+      verify verify_require_client_cert verify_peername verify_cb
+      verify_client_once
+      check_crl dh_file dh dh_single_use cipher_list session_ticket
+    )};
+    #prepare
     $tls_ctx = AnyEvent::TLS->new (
-      (map { $_ => $args->{$_} } grep { defined $args->{$_} } qw(
-        method sslv2 sslv3 tlsv1 tlsv1_1 tlsv1_2
-        verify verify_require_client_cert verify_peername verify_cb
-        verify_client_once
-        check_crl dh_file dh dh_single_use cipher_list session_ticket
-      )),
+      %$tls_args,
       %$cert_args,
-      #prepare
     );
     $tls = Net::SSLeay::new ($tls_ctx->ctx);
     $info->{openssl_version} = [
@@ -650,10 +652,29 @@ sub create ($$) {
     $info->{net_ssleay_version} = $Net::SSLeay::VERSION;
     $info->{net_ssleay_path} = $INC{"Net/SSLeay.pm"};
     if ($args->{server}) {
+      die Web::Transport::TypeError->new ("Bad |cert|") unless
+          defined $cert_args->{cert} or defined $cert_args->{cert_file};
+      die Web::Transport::TypeError->new ("Bad |key|") unless
+          defined $cert_args->{key} or defined $cert_args->{key_file};
+
       Net::SSLeay::set_accept_state ($tls);
       Net::SSLeay::CTX_set_tlsext_servername_callback ($tls_ctx->ctx, sub {
-        $info->{sni_host_name} = Net::SSLeay::get_servername ($_[0]);
-        # XXX hook for the application to choose a certificate
+        my $sn = Net::SSLeay::get_servername ($_[0]);
+        $info->{sni_host} = Web::Host->parse_string ($sn) if defined $sn;
+        if (defined $info->{sni_host}) {
+          my $ca = $cm->to_anyevent_tls_args_for_host_sync ($info->{sni_host});
+          if (defined $ca) {
+            die Web::Transport::TypeError->new ("Bad |cert|") unless
+                defined $ca->{cert} or defined $ca->{cert_file};
+            die Web::Transport::TypeError->new ("Bad |key|") unless
+                defined $ca->{key} or defined $ca->{key_file};
+
+            my $cx = AnyEvent::TLS->new (%$tls_args, %$ca);
+            Net::SSLeay::set_SSL_CTX ($tls, $cx->ctx);
+            undef $cx;
+            return;
+          }
+        }
         Net::SSLeay::set_SSL_CTX ($tls, $tls_ctx->ctx);
       });
       #$info->{tls_stapling} = undef;

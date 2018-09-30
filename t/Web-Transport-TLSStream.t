@@ -1253,6 +1253,57 @@ test {
   });
 } n => 5, name => 'abort connect after tcp connected';
 
+test {
+  my $c = shift;
+  Web::Transport::TLSStream->create ({
+    host => Web::Host->parse_string (Test::Certificates->cert_name),
+    ca_file => Test::Certificates->ca_path ('cert.pem'),
+    server => 1,
+    parent => {
+      class => 'Web::Transport::TCPStream',
+      server => 1,
+      fh => {},
+      host => Web::Host->parse_string ("a.invalid"), port => 123,
+    },
+  })->catch (sub {
+    my $e = $_[0];
+    test {
+      is $e->name, 'TypeError';
+      is $e->message, 'Bad |cert|';
+      is $e->file_name, __FILE__;
+      is $e->line_number, __LINE__+4;
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'Bad |cert|';
+
+test {
+  my $c = shift;
+  Web::Transport::TLSStream->create ({
+    host => Web::Host->parse_string (Test::Certificates->cert_name),
+    ca_file => Test::Certificates->ca_path ('cert.pem'),
+    server => 1,
+    cert => 'abc',
+    parent => {
+      class => 'Web::Transport::TCPStream',
+      server => 1,
+      fh => {},
+      host => Web::Host->parse_string ("a.invalid"), port => 123,
+    },
+  })->catch (sub {
+    my $e = $_[0];
+    test {
+      is $e->name, 'TypeError';
+      is $e->message, 'Bad |key|';
+      is $e->file_name, __FILE__;
+      is $e->line_number, __LINE__+4;
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 4, name => 'Bad |key|';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

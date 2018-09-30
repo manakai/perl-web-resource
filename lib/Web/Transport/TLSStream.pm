@@ -180,12 +180,57 @@ sub _pe ($) {
   return Web::Transport::ProtocolError->new ($_[0]);
 } # _pe
 
+## server : boolean : This end point is server (true) or client (false).
+##
+## parent : stream options : The options to create the underlying
+## transport.  Required.
+##
+## cert : bytes? : The PEM file content of the server certificate (and
+## all relevant CA certificates, if necessary).
+##
+## cert_file : path? : The path to the PEM file of the server
+## certificate (and all relevant CA certificates, if necessary).
+## Either |cert| or |cert_file| is required when |server| is true.
+##
+## key : bytes? : The PEM file content of the server private key.
+##
+## key_file : path? : The path to the PEM file of the server private
+## key.  Either |key| or |key_file| is required when |server| is true.
+##
+## ca_file, ca_path, ca_cert : See AnyEvent::TLS.
+##
+## host : Web::Host? : The host of the server.  Required when |server|
+## is false.
+##
+## si_host : Web::Host? : The host of the server, used to verify the
+## service identity.  Defaulted to |host| value.  This option should
+## not be used by normal applications.
+##
+## sni_host : Web::Host? : The host of the server, used to send the
+## SNI extension field.  Defaulted to |host| value.  This option
+## should not be used by normal applications.
+##
+## protocol_clock : clock : The clock, used to obtain timestamps.
+## Defaulted to the |Web::DateTime::Clock->realtime_clock|.  Note that
+## this option does not affect any OpenSSL's internal verification
+## process for, e.g., X.509 certificates.
+##
+## insecure : boolean : If true, the server protocol and certificate
+## verification steps are skipped.
+##
+## signal : AbortSignal? : The abort signal that could abort the
+## stream initialization steps.
+##
+## debug : debug option? : The debug option.
 sub create ($$) {
   my ($class, $args) = @_;
 
-  unless ($args->{server}) {
-    ## Options |si_host| and |sni_host| are supported for testing.
-    ## General-purpose application should only use |host| option.
+  if ($args->{server}) {
+    return _tep "Bad |cert|" unless
+        defined $args->{cert} or defined $args->{cert_file};
+    return _tep "Bad |key|" unless
+        defined $args->{key} or defined $args->{key_file};
+  } else {
     $args->{si_host} = $args->{host} unless defined $args->{si_host};
     $args->{sni_host} = $args->{host} unless defined $args->{sni_host};
     return _tep "Bad |host|" unless defined $args->{si_host};
@@ -195,8 +240,6 @@ sub create ($$) {
       unless defined $args->{parent} and ref $args->{parent} eq 'HASH' and
              defined $args->{parent}->{class};
 
-  ## Note that |protocol_clock| option does not affect any OpenSSL's
-  ## internal verification process for, e.g., X.509 certificates.
   $args->{protocol_clock} ||= do {
     require Web::DateTime::Clock;
     Web::DateTime::Clock->realtime_clock;

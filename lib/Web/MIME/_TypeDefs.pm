@@ -5633,8 +5633,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                               'iana_intended_usage' => 'common'
                                                                             },
                                             'vnd.renlearn.rlprint' => {
-                                                                        'iana' => 'permanent',
-                                                                        'iana_intended_usage' => 'common'
+                                                                        'iana' => 'permanent'
                                                                       },
                                             'vnd.restful+json' => {
                                                                     'iana' => 'permanent',

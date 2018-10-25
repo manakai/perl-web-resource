@@ -3205,6 +3205,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                             'iana' => 'permanent',
                                                                             'iana_intended_usage' => 'limited use'
                                                                           },
+                                            'vnd.exstream-package' => {
+                                                                        'iana' => 'permanent',
+                                                                        'iana_intended_usage' => 'limited use'
+                                                                      },
                                             'vnd.ezpix-album' => {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'limited use'

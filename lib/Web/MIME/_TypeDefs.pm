@@ -5447,6 +5447,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                   'iana' => 'permanent',
                                                                   'iana_intended_usage' => 'common'
                                                                 },
+                                            'vnd.patientecommsdoc' => {
+                                                                        'iana' => 'permanent'
+                                                                      },
                                             'vnd.pawaafile' => {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'common'

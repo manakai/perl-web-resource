@@ -1394,6 +1394,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'oda' => {
                                                        'iana' => 'permanent'
                                                      },
+                                            'odm+xml' => {
+                                                           'iana' => 'provisional'
+                                                         },
                                             'odx' => {
                                                        'iana' => 'permanent',
                                                        'iana_intended_usage' => 'common'

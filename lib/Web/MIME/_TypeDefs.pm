@@ -2248,6 +2248,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                                               'iana' => 'permanent',
                                                                               'iana_intended_usage' => 'common'
                                                                             },
+                                            'vnd.3gpp.mcdata-affiliation-command+xml' => {
+                                                                                           'iana' => 'permanent',
+                                                                                           'iana_intended_usage' => 'common'
+                                                                                         },
+                                            'vnd.3gpp.mcdata-info+xml' => {
+                                                                            'iana' => 'permanent',
+                                                                            'iana_intended_usage' => 'common'
+                                                                          },
                                             'vnd.3gpp.mcdata-payload' => {
                                                                            'iana' => 'permanent',
                                                                            'iana_intended_usage' => 'common'
@@ -2280,6 +2288,18 @@ $Web::MIME::_TypeDefs::Type = {
                                                                              'iana' => 'permanent',
                                                                              'iana_intended_usage' => 'common'
                                                                            },
+                                            'vnd.3gpp.mcptt-ue-config+xml' => {
+                                                                                'iana' => 'permanent',
+                                                                                'iana_intended_usage' => 'common'
+                                                                              },
+                                            'vnd.3gpp.mcptt-ue-init-config+xml' => {
+                                                                                     'iana' => 'permanent',
+                                                                                     'iana_intended_usage' => 'common'
+                                                                                   },
+                                            'vnd.3gpp.mcptt-user-profile+xml' => {
+                                                                                   'iana' => 'permanent',
+                                                                                   'iana_intended_usage' => 'common'
+                                                                                 },
                                             'vnd.3gpp.mid-call+xml' => {
                                                                          'iana' => 'permanent',
                                                                          'iana_intended_usage' => 'common'

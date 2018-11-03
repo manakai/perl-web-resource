@@ -540,6 +540,7 @@ sub create ($$) {
   $parent->{debug} = $args->{debug}
       if $args->{debug} and not defined $parent->{debug};
   $signal = $parent->{signal} = $args->{signal}; # or undef
+  my $certs = [];
   $parent->{class}->create ($parent)->then (sub {
     $info->{parent} = $_[0];
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};
@@ -647,14 +648,12 @@ sub create ($$) {
         Net::SSLeay::set_tlsext_host_name ($tls, $args->{sni_host}->stringify);
       }
 
-      my $parser = Web::Transport::PKI::Parser->new;
       ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_verify.html>
       Net::SSLeay::set_verify $tls, $vmode, sub {
         my ($preverify_ok, $x509_store_ctx) = @_;
         my $depth = Net::SSLeay::X509_STORE_CTX_get_error_depth ($x509_store_ctx);
         my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
-        $info->{tls_cert_chain}->[$depth]
-            = $parser->parse_pem (Net::SSLeay::PEM_get_string_X509 ($cert))->[0];
+        $certs->[$depth] = Net::SSLeay::PEM_get_string_X509 ($cert);
 
         if ($depth == 0) {
           if (defined $args->{si_host}) {
@@ -773,6 +772,12 @@ sub create ($$) {
     # XXX pass $info to application
 
     die $error;
+  })->finally (sub {
+    my $parser = Web::Transport::PKI::Parser->new;
+    for my $depth (0..$#$certs) {
+      $info->{tls_cert_chain}->[$depth] = $parser->parse_pem ($certs->[$depth])->[0]
+          if defined $certs->[$depth];
+    }
   });
 } # start
 

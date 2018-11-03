@@ -697,7 +697,7 @@ sub create ($$) {
           if (defined $args->{si_host}) {
             ## Delay the SI verification to keep verify callback's
             ## runtime minimum.
-            push @verify, Promise->resolve->then (sub {
+            Promise->resolve->then (sub {
               return if not defined $tls; # aborted
               # XXX If ipaddr
               my $ok = verify_hostname $cert, $args->{si_host}->stringify;

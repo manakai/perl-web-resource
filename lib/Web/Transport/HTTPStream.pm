@@ -2405,7 +2405,14 @@ sub _open_sending_stream ($$;%) {
       return Promise->resolve->then (sub {
         die Web::Transport::TypeError->new ("The argument is not an ArrayBufferView")
             unless UNIVERSAL::isa ($chunk, 'ArrayBufferView');
-
+        unless (defined $con->{writer}) {
+          if ($chunk->byte_length) {
+            die Web::Transport::TypeError->new
+                (sprintf "Closed before bytes (n = %d) are sent", $chunk->byte_length);
+          }
+          return;
+        }
+        
       my $wm = $con->{write_mode} || '';
       if ($wm eq 'chunked') {
         my $byte_length = $chunk->byte_length; # can throw

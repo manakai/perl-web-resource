@@ -1420,7 +1420,7 @@ test {
           my $error = $_[0];
           test {
             is $error->name, 'TypeError', $error;
-            is $error->message, 'Byte length 3 is greater than expected length 0';
+            is $error->message, 'Closed before bytes (n = 3) are sent';
             is $error->file_name, __FILE__;
             is $error->line_number, __LINE__+2;
           } $c;

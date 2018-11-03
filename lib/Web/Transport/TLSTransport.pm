@@ -133,7 +133,7 @@ sub start ($$;%) {
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
 
-  my $certs = [];
+  $self->{_certs} = [];
   my @verify;
   my $p = Promise->new (sub { $self->{starttls_done} = [$_[0], $_[1]] });
   $self->{transport}->start (sub {
@@ -232,7 +232,7 @@ sub start ($$;%) {
         my ($preverify_ok, $x509_store_ctx) = @_;
         my $depth = Net::SSLeay::X509_STORE_CTX_get_error_depth ($x509_store_ctx);
         my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
-        $certs->[$depth] = Net::SSLeay::PEM_get_string_X509 ($cert);
+        $self->{_certs}->[$depth] = Net::SSLeay::PEM_get_string_X509 ($cert);
 
         if ($depth == 0) {
           if (defined $args->{si_host}) {
@@ -308,12 +308,6 @@ sub start ($$;%) {
 
   return $p->then (sub {
     return Promise->all (\@verify);
-  })->finally (sub {
-    my $parser = Web::Transport::PKI::Parser->new;
-    for my $depth (0..$#$certs) {
-      $self->{starttls_data}->{tls_cert_chain}->[$depth] = $parser->parse_pem ($certs->[$depth])->[0]
-          if defined $certs->[$depth];
-    }
   })->then (sub {
     $self->{cb}->($self, 'open');
   })->catch (sub {
@@ -510,6 +504,11 @@ sub _tls ($) {
       $data->{tls_cipher} = Net::SSLeay::get_cipher ($self->{tls});
       $data->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($self->{tls});
 
+      my $parser = Web::Transport::PKI::Parser->new;
+      for my $depth (0..$#{$self->{_certs}}) {
+        $self->{starttls_data}->{tls_cert_chain}->[$depth] = $parser->parse_pem ($self->{_certs}->[$depth])->[0]
+            if defined $self->{_certs}->[$depth];
+      }
       ## Check must-staple flag
       if (not defined $data->{stapling_result} and
           defined $data->{tls_cert_chain}->[0] and

@@ -959,7 +959,7 @@ test {
         } else {
           #'error:14090086:SSL routines:SSL3_GET_SERVER_CERTIFICATE:certificate verify failed'
           #'error:14007086:SSL routines:CONNECT_CR_CERT:certificate verify failed'
-          like $res->network_error_message, qr{certificate verify failed};
+          like $res->network_error_message, qr{Service Identity verification error};
         }
       } $c;
     })->then (sub{

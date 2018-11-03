@@ -466,6 +466,76 @@ test {
   my $c = shift;
 
   my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_rsa_key->then (sub {
+    my $rsa = $_[0];
+    
+    my $p = $gen->create_certificate (
+      rsa => $rsa,
+      ca_rsa => $rsa,
+      version => 0,
+      serial_number => Math::BigInt->from_hex ('0f642344e44'),
+      not_before => Web::DateTime->new_from_components (2049, 12, 30, 23, 59, 59),
+      not_after => Web::DateTime->new_from_components (2049, 12, 31, 23, 59, 59),
+      issuer => Web::Transport::PKI::Name->create ({CN => 'hoge.foo'}),
+      subject => Web::Transport::PKI::Name->create ({O => "\x{5353}\x{50000}"}),
+    );
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+
+    return $p;
+  })->then (sub {
+    my $cert = $_[0];
+
+    test {
+      is $cert->not_before->to_global_date_and_time_string, '2049-12-30T23:59:59Z';
+      is $cert->not_after->to_global_date_and_time_string, '2049-12-31T23:59:59Z';
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'timestamp 2049';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  $gen->create_rsa_key->then (sub {
+    my $rsa = $_[0];
+    
+    my $p = $gen->create_certificate (
+      rsa => $rsa,
+      ca_rsa => $rsa,
+      version => 0,
+      serial_number => Math::BigInt->from_hex ('0f642344e44'),
+      not_before => Web::DateTime->new_from_components (2050, 12, 30, 23, 59, 59),
+      not_after => Web::DateTime->new_from_components (2050, 12, 31, 23, 59, 59),
+      issuer => Web::Transport::PKI::Name->create ({CN => 'hoge.foo'}),
+      subject => Web::Transport::PKI::Name->create ({O => "\x{5353}\x{50000}"}),
+    );
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+
+    return $p;
+  })->then (sub {
+    my $cert = $_[0];
+
+    test {
+      is $cert->not_before->to_global_date_and_time_string, '2050-12-30T23:59:59Z';
+      is $cert->not_after->to_global_date_and_time_string, '2050-12-31T23:59:59Z';
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'timestamp 2050';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
   Promise->all ([
     $gen->create_rsa_key,
     $gen->create_rsa_key,

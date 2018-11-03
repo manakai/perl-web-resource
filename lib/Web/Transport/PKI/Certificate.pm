@@ -603,6 +603,20 @@ sub openssl_text_dump ($) {
   });
 } # openssl_text_dump
 
+## For debugging.  Don't use in productions.
+sub openssl_asn1_text_dump ($) {
+  my $self = $_[0];
+  require Promised::Command;
+  my $cmd = Promised::Command->new (['openssl', 'asn1parse']);
+  $cmd->stdin (\($self->to_pem));
+  $cmd->stdout (\my $stdout);
+  return $cmd->run->then (sub {
+    return $cmd->wait;
+  })->then (sub {
+    return $stdout;
+  });
+} # openssl_asn1_text_dump
+
 sub DESTROY ($) {
   Net::SSLeay::X509_free ($_[0]->{net_ssleay_x509})
       if defined $_[0]->{net_ssleay_x509};

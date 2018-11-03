@@ -589,6 +589,20 @@ sub debug_info ($) {
   return join ' ', @r;
 } # debug_info
 
+## For debugging.  Don't use in productions.
+sub openssl_text_dump ($) {
+  my $self = $_[0];
+  require Promised::Command;
+  my $cmd = Promised::Command->new (['openssl', 'x509', '-text']);
+  $cmd->stdin (\($self->to_pem));
+  $cmd->stdout (\my $stdout);
+  return $cmd->run->then (sub {
+    return $cmd->wait;
+  })->then (sub {
+    return $stdout;
+  });
+} # openssl_text_dump
+
 sub DESTROY ($) {
   Net::SSLeay::X509_free ($_[0]->{net_ssleay_x509})
       if defined $_[0]->{net_ssleay_x509};

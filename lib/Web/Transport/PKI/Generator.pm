@@ -75,27 +75,38 @@ sub create_certificate ($%) {
       Net::SSLeay::P_ASN1_INTEGER_set_dec ($se, $n);
     }
 
-    {
-      my $n = Net::SSLeay::X509_get_notBefore ($cert)
-          or die Web::Transport::NetSSLeayError->new_current;
-      my $dt = $args{not_before} || 0;
+    for (
+      [
+        (Net::SSLeay::X509_get_notBefore ($cert)
+              || die Web::Transport::NetSSLeayError->new_current),
+        $args{not_before} || 0,
+      ],
+      [
+        (Net::SSLeay::X509_get_notAfter ($cert)
+              || die Web::Transport::NetSSLeayError->new_current),
+        $args{not_after} || 0,
+      ],
+    ) {
+      my ($n, $dt) = @$_;
       $dt = Web::DateTime->new_from_unix_time ($dt)
           unless UNIVERSAL::isa ($dt, 'Web::DateTime');
-      $dt = Web::DateTime->new_from_unix_time ($dt->to_unix_integer);
-      Net::SSLeay::P_ASN1_TIME_set_isotime
-          ($n, $dt->to_global_date_and_time_string)
+      my $dt_unix = $dt->to_unix_integer;
+      ## We do not support perls that do not support 64-bit integer
+      ## and platform whose time_t is only 32-bit.
+      if (-631152000 <= $dt_unix and $dt_unix < 2524608000) {
+        Net::SSLeay::ASN1_TIME_set ($n, $dt_unix)
               or die Web::Transport::NetSSLeayError->new_current;
-    }
-    {
-      my $n = Net::SSLeay::X509_get_notAfter ($cert)
-          or die Web::Transport::NetSSLeayError->new_current;
-      my $dt = $args{not_after} || 0;
-      $dt = Web::DateTime->new_from_unix_time ($dt)
-          unless UNIVERSAL::isa ($dt, 'Web::DateTime');
-      $dt = Web::DateTime->new_from_unix_time ($dt->to_unix_integer);
-      Net::SSLeay::P_ASN1_TIME_set_isotime
-          ($n, $dt->to_global_date_and_time_string)
+      } else {
+        ## Depending on OpenSSL and Net::SSLeay versions,
+        ## P_ASN1_TIME_set_isotime does not generate UTCTime (but does
+        ## generate GeneralizedTime) even where UTCTime should be used
+        ## according to the spec and client-side verification might
+        ## fail when UTCTime is given.
+        $dt = Web::DateTime->new_from_unix_time ($dt->to_unix_integer);
+        Net::SSLeay::P_ASN1_TIME_set_isotime
+              ($n, $dt->to_global_date_and_time_string)
               or die Web::Transport::NetSSLeayError->new_current;
+      }
     }
 
     {
@@ -378,6 +389,8 @@ sub create_certificate ($%) {
     
     Net::SSLeay::X509_free ($cert);
 
+    die new Web::Transport::TypeError ("Failed to generate a certificate")
+        unless defined $result->[0];
     return $result->[0];
   });
 } # create_certifciate

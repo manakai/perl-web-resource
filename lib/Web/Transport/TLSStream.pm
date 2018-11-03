@@ -657,8 +657,14 @@ sub create ($$) {
 
         if ($depth == 0) {
           if (defined $args->{si_host}) {
-            # XXX If ipaddr
-            return 0 unless verify_hostname $cert, $args->{si_host}->stringify;
+            ## Delay the SI verification to keep verify callback's
+            ## runtime minimum.
+            Promise->resolve->then (sub {
+              return if not defined $tls; # aborted
+              # XXX If ipaddr
+              my $ok = verify_hostname $cert, $args->{si_host}->stringify;
+              $abort->(_pe "Service Identity verification error") unless $ok;
+            });
           }
 
           # XXX hook to verify the client cert

@@ -540,6 +540,7 @@ sub create ($$) {
       if $args->{debug} and not defined $parent->{debug};
   $signal = $parent->{signal} = $args->{signal}; # or undef
   my $certs = [];
+  my @verify;
   my $cert_args;
   Promise->resolve->then (sub {
     return $cm->prepare (server => $args->{server});
@@ -696,7 +697,7 @@ sub create ($$) {
           if (defined $args->{si_host}) {
             ## Delay the SI verification to keep verify callback's
             ## runtime minimum.
-            Promise->resolve->then (sub {
+            push @verify, Promise->resolve->then (sub {
               return if not defined $tls; # aborted
               # XXX If ipaddr
               my $ok = verify_hostname $cert, $args->{si_host}->stringify;
@@ -758,6 +759,14 @@ sub create ($$) {
   })->catch ($abort);
 
   return $handshake->then (sub {
+    return Promise->all (\@verify);
+  })->finally (sub {
+    my $parser = Web::Transport::PKI::Parser->new;
+    for my $depth (0..$#$certs) {
+      $info->{tls_cert_chain}->[$depth] = $parser->parse_pem ($certs->[$depth])->[0]
+          if defined $certs->[$depth];
+    }
+  })->then (sub {
     $info->{tls_protocol} = Net::SSLeay::version ($tls);
     #XXX session_id
     $info->{tls_session_resumed} = Net::SSLeay::session_reused ($tls);
@@ -815,12 +824,6 @@ sub create ($$) {
     # XXX pass $info to application
 
     die $error;
-  })->finally (sub {
-    my $parser = Web::Transport::PKI::Parser->new;
-    for my $depth (0..$#$certs) {
-      $info->{tls_cert_chain}->[$depth] = $parser->parse_pem ($certs->[$depth])->[0]
-          if defined $certs->[$depth];
-    }
   });
 } # start
 

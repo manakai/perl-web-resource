@@ -3066,7 +3066,11 @@ ws-send-header opcode=8
           is $e->ws_status, 1005;
           is $e->ws_reason, '';
           ok $e->ws_cleanly;
-          is $error, undef;
+          if (defined $error) {
+            like ''.$error, qr{TypeError: Closed before bytes \(n = 2\) are sent};
+          } else {
+            is $error, undef;
+          }
         } $c;
       });
     })->then (sub{

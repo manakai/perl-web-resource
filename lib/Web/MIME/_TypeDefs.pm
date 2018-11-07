@@ -2284,6 +2284,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                       'iana' => 'permanent',
                                                                                       'iana_intended_usage' => 'common'
                                                                                     },
+                                            'vnd.3gpp.mcptt-service-config+xml' => {
+                                                                                     'iana' => 'permanent',
+                                                                                     'iana_intended_usage' => 'common'
+                                                                                   },
                                             'vnd.3gpp.mcptt-signed+xml' => {
                                                                              'iana' => 'permanent',
                                                                              'iana_intended_usage' => 'common'

@@ -1,6 +1,6 @@
 =head1 NAME
 
-Web::Transport::PKI::RSAKey - An EC key
+Web::Transport::PKI::ECKey - An EC key
 
 =head1 DESCRIPTION
 
@@ -12,7 +12,7 @@ There is following method:
 
 =over 4
 
-=item $string = $rsa->to_pem
+=item $string = $ec->to_pem
 
 Return the C<.pem> serialization of the EC private key.
 

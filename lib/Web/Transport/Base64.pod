@@ -38,6 +38,18 @@ string, C<undef> is returned instead.
 This function is an implementation of the "forgiving-base64 decode"
 operation of the Infra Standard.
 
+=item $string = encode_web_base64url $bytes
+
+Encode a byte string using base64url and return the result string
+(i.e. base64url-encoded ASCII string).  The argument must not be a
+utf8-flagged string.
+
+=item $bytes = decode_web_base64url $string
+
+Decode a byte or character string using base64url and return the
+result byte string.  If the input is not interpretable as a
+base64url-encoded string, C<undef> is returned instead.
+
 =back
 
 =head1 DEPENDENCY
@@ -45,9 +57,12 @@ operation of the Infra Standard.
 This module is a wrapper of L<MIME::Base64>, which is a core module of
 Perl.
 
-=head1 SPECIFICATION
+=head1 SPECIFICATIONS
 
 Infra Standard <https://infra.spec.whatwg.org/#forgiving-base64>.
+
+base64url
+<https://wiki.suikawiki.org/n/base64url$659#section-Base64-%E3%81%AE%E4%BB%95%E6%A7%98%E6%9B%B8%E3%81%A8%E3%83%90%E3%83%AA%E3%82%A8%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3%E2%80%A8URL-%E5%AE%89%E5%85%A8-Base64%E2%80%A8%E5%87%A6%E7%90%86>.
 
 =head1 AUTHOR
 
@@ -55,7 +70,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2018-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

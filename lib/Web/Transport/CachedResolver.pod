@@ -8,7 +8,7 @@ Web::Transport::CachedResolver - Resolve domain names, with caching
   use Web::Transport::CachedResolver;
   use Web::DateTime::Clock;
   $resolver = Web::Transport::CachedResolver->new_from_resolver
-      (Web::Transport::Resolver->new,
+      (Web::Transport::PlatformResolver->new,
        Web::DateTime::Clock->monotonic_clock);
   $resolver->resolve (Web::Host->parse_string ("example.com"))->then (sub {
     warn defined $_[0] && $_[0]->stringify;

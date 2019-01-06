@@ -5,7 +5,7 @@ Web::Transport::PlatformResolver - Resolve domain names using platform's resolve
 =head1 SYNOPSIS
 
   use Web::Transport::PlatformResolver;
-  $resolver = Web::Transport::Resolver->new;
+  $resolver = Web::Transport::PlatformResolver->new;
   $resolver->resolve (Web::Host->parse_string ("example.com"))->then (sub {
     warn defined $_[0] && $_[0]->stringify;
   });

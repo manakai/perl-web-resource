@@ -1,0 +1,86 @@
+=head1 NAME
+
+Web::Transport::HashrefResolver - Resolve domain names using a hash reference
+
+=head1 SYNOPSIS
+
+  use Web::Transport::HashrefResolver;
+  $resolver = Web::Transport::HashrefResolver->new_from_hashref ({
+    'example.com' => Web::Host->parse_string ('127.0.0.1'),
+  });
+  $resolver->resolve (Web::Host->parse_string ("example.com"))->then (sub {
+    warn defined $_[0] && $_[0]->stringify;
+  });
+
+=head1 DESCRIPTION
+
+The C<Web::Transport::HashrefResolver> module acts as a simple wrapper
+for a hash reference to implement the name resolution API.
+
+This module is a resolver (see L<Web::Transport/"RESOLVERS">).
+
+=head1 METHOD
+
+Following methods are available:
+
+=over 4
+
+=item $resolver = Web::Transport::HashrefResolver->new_from_hashref ($hashref)
+
+Create a resolver.
+
+=item $promise = $resolver->resolve ($host, $name => $value, ...)
+
+Resolve a domain.
+
+The first argument must be a host (L<Web::Host>) to resolve.
+
+Additionally, following named arguments can be specified:
+
+=over 4
+
+=item no_cache => $boolean
+
+Ignored by this resolver.
+
+=item signal => $signal
+
+Ignored by this resolver (for now, at least).
+
+=item debug => $debug
+
+Ignored by this resolver.
+
+=back
+
+The method returns a promise (L<Promise>), which is to be resolved
+with the result.  If the host is a domain and is successfully resolved
+into an IP address, or the host is an IP address, the promise is
+resolved with a host (L<Web::Host>) representing that IP address.
+Otherwise, it is resolved with C<undef>.
+
+That is, if the hash reference with which the resolver is created has
+a key/value pair whose key is the argument's C<to_ascii> method's
+return value and value is a C<Web::Host> object whose C<is_ip> method
+returns true, the argument is resolved into that value.  If the hash
+reference has no such pair and the argument's C<is_ip> method returns
+true, the argument is resolved into the argument itself.  In other
+words, IP addresses are resolved into theirselves by default but can
+be overridden by adding pairs into the hash reference.  If the hash
+reference has no such pair and the argument's C<is_ip> method returns
+false, the argument is resolved into C<undef>.
+
+=back
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 LICENSE
+
+Copyright 2016-2019 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

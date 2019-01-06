@@ -81,7 +81,7 @@ test {
 
 test {
   my $c = shift;
-  "ab cd" =~ /(.+)/;
+  "abcd" =~ /(.+)/;
   is decode_web_base64url $1, "\x69\xB7\x1D";
   done $c;
 } n => 1, name => 'decode url';

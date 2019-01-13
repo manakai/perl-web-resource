@@ -2104,7 +2104,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                          },
                                             'testfontstream' => {},
                                             'tetra_isi' => {
-                                                             'iana' => 'provisional'
+                                                             'iana' => 'permanent'
                                                            },
                                             'tex' => {},
                                             'texinfo' => {},

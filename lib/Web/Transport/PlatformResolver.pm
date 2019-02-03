@@ -2,13 +2,19 @@ package Web::Transport::PlatformResolver;
 use strict;
 use warnings;
 our $VERSION = '3.0';
+use AnyEvent;
 use Promise;
 use Web::Host;
 use AnyEvent::Util qw(fork_call);
+use Web::Transport::AbortError;
+
+our @CARP_NOT = qw(Web::Transport::AbortError Promise);
 
 sub new ($) {
   return bless {}, $_[0];
 } # new
+
+my $Timeout = 10;
 
 sub resolve ($$;%) {
   my (undef, $host, %args) = @_;
@@ -40,6 +46,14 @@ sub resolve ($$;%) {
       $time1 = $clock->();
       warn sprintf "%s: Resolving |%s|...\n", __PACKAGE__, $host->stringify;
     }
+    my $abort_error = Web::Transport::AbortError->new
+        ("PlatformResolver timeout ($Timeout)");
+    my $timer; $timer = AE::timer $Timeout, 0, sub {
+      warn sprintf "%s: Result: |%s| timeout (%ss)\n",
+          __PACKAGE__, $host->stringify, $Timeout;
+      $ng->($abort_error);
+      undef $timer;
+    };
     fork_call { scalar gethostbyname $_[0] } $host->stringify, sub {
       my $r = defined $_[0] ? Web::Host->new_from_packed_addr ($_[0]) : undef;
       $signal->manakai_onabort (undef) if defined $signal;
@@ -50,6 +64,7 @@ sub resolve ($$;%) {
       } else {
         $ok->([$r, undef, undef]);
       }
+      undef $timer;
     };
   })->then (sub {
     my $r = $_[0]->[0];

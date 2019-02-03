@@ -5,36 +5,36 @@ use lib glob path (__FILE__)->parent->parent->child ('t_deps/modules/*/lib')->st
 use lib glob path (__FILE__)->parent->parent->child ('t_deps/lib')->stringify;
 use Test::X1;
 use Test::More;
-use Web::Transport::TypeError;
+use Web::Transport::AbortError;
 
 test {
   my $c = shift;
-  ok $Web::DOM::Error::L1ObjectClass->{'Web::Transport::TypeError'};
+  ok $Web::DOM::Error::L1ObjectClass->{'Web::Transport::AbortError'};
   done $c;
 } n => 1, name => 'Perl Error Object Interface Level 1';
 
 test {
   my $c = shift;
-  my $e = Web::Transport::TypeError->new;
+  my $e = Web::Transport::AbortError->new;
   ok + Web::Transport::Error->is_error ($e);
   my $f = Web::Transport::Error->wrap ($e);
   is $f, $e;
-  isa_ok $f, 'Web::Transport::TypeError';
+  isa_ok $f, 'Web::Transport::AbortError';
   done $c;
 } n => 3, name => 'is_error true';
 
 test {
   my $c = shift;
 
-  my $error = new Web::Transport::TypeError ('Error message');
-  isa_ok $error, 'Web::Transport::TypeError';
+  my $error = new Web::Transport::AbortError ('Error message');
+  isa_ok $error, 'Web::Transport::AbortError';
   isa_ok $error, 'Web::Transport::Error';
 
-  is $error->name, 'TypeError';
+  is $error->name, 'AbortError';
   is $error->message, 'Error message';
   is $error->file_name, __FILE__;
   is $error->line_number, __LINE__-7;
-  is $error . '', "TypeError: Error message at ".$error->file_name." line ".$error->line_number.".\n";
+  is $error . '', "AbortError: Error message at ".$error->file_name." line ".$error->line_number.".\n";
 
   done $c;
 } name => 'with message', n => 7;
@@ -42,20 +42,20 @@ test {
 test {
   my $c = shift;
 
-  my $error = new Web::Transport::TypeError;
-  is $error->name, 'TypeError';
+  my $error = new Web::Transport::AbortError;
+  is $error->name, 'AbortError';
   is $error->message, '';
   is $error->file_name, __FILE__;
   is $error->line_number, __LINE__-4;
-  is $error . '', "TypeError at ".$error->file_name." line ".$error->line_number.".\n";
+  is $error . '', "AbortError at ".$error->file_name." line ".$error->line_number.".\n";
   is $error->stringify, $error . '';
   done $c;
 } name => 'without message', n => 6;
 
 test {
   my $c = shift;
-  my $error1 = new Web::Transport::TypeError ('hoge');
-  my $error2 = new Web::Transport::TypeError ('hoge');
+  my $error1 = new Web::Transport::AbortError ('hoge');
+  my $error2 = new Web::Transport::AbortError ('hoge');
 
   ok $error1 eq $error1;
   ok not $error1 ne $error1;

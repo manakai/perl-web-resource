@@ -413,6 +413,12 @@ This option is only applicable to C<http> and C<https> protocols.
 
 XXX
 
+The C<resolve> method is expected to return a promise.  XXX If
+aborted, or the resolver is unable to resolve (note that this is
+B<different> from the resolver is ready but the result is "not
+found"), the promise is expected to be rejected with the exception
+describing the failure.
+
 There are following resolvers in this repository:
 L<Web::Transport::PlatformResolver>,
 L<Web::Transport::CachedResolver>.
@@ -554,7 +560,7 @@ information.
 
 Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
 
-Copyright 2014-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2014-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

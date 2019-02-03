@@ -1,7 +1,7 @@
 package Web::Transport::PlatformResolver;
 use strict;
 use warnings;
-our $VERSION = '2.0';
+our $VERSION = '3.0';
 use Promise;
 use Web::Host;
 use AnyEvent::Util qw(fork_call);
@@ -42,23 +42,34 @@ sub resolve ($$;%) {
     }
     fork_call { scalar gethostbyname $_[0] } $host->stringify, sub {
       my $r = defined $_[0] ? Web::Host->new_from_packed_addr ($_[0]) : undef;
-      if ($args{debug}) {
-        if (defined $r) {
-          warn sprintf "%s: Result: |%s| (elapsed %.3f s)\n",
-              __PACKAGE__, $r->stringify, $clock->() - $time1;
-        } else {
-          warn sprintf "%s: Result: null (elapsed %.3f s)\n",
-              __PACKAGE__, $clock->() - $time1;
-        }
-      }
       $signal->manakai_onabort (undef) if defined $signal;
       undef $signal;
-      return if $aborted;
-      if (defined $r and $r->is_ipv4 and $r->text_addr =~ /^0\./) { # 0.0.0.0/8
-        $r = undef;
+      if ($args{debug}) {
+        my $time2 = $clock->();
+        $ok->([$r, $time1, $time2]);
+      } else {
+        $ok->([$r, undef, undef]);
       }
-      $ok->($r);
     };
+  })->then (sub {
+    my $r = $_[0]->[0];
+    if ($args{debug}) {
+      my $time1 = $_[0]->[1];
+      my $time2 = $_[0]->[2];
+      if (defined $r) {
+        warn sprintf "%s: Result: |%s| (elapsed %.3f s)\n",
+            __PACKAGE__, $r->stringify, $time2 - $time1;
+      } else {
+        warn sprintf "%s: Result: null (elapsed %.3f s)\n",
+            __PACKAGE__, $time2 - $time1;
+      }
+    } # debug
+    
+    if (defined $r and $r->is_ipv4 and $r->text_addr =~ /^0\./) { # 0.0.0.0/8
+      return undef;
+    }
+    
+    return $r;
   });
 } # resolve
 
@@ -66,7 +77,7 @@ sub resolve ($$;%) {
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

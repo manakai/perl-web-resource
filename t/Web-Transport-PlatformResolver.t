@@ -65,6 +65,26 @@ test {
 
 test {
   my $c = shift;
+  my $host = Web::Host->parse_string ('localhost');
+  my $resolver = Web::Transport::PlatformResolver->new;
+  my $p = $resolver->resolve ($host, debug => 1);
+  isa_ok $p, 'Promise';
+  $p->then (sub {
+    my $resolved = $_[0];
+    test {
+      ok $resolved->is_ip;
+      ok $resolved->stringify eq '127.0.0.1' ||
+         $resolved->stringify eq '[::1]';
+      ## In theory there can be a system where "localhost" can't be
+      ## resolved or can be resolved but not '127.0.0.1'.
+    } $c;
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'input is a domain, debug mode';
+
+test {
+  my $c = shift;
   my $host = Web::Host->parse_string (rand . '.foobar.com');
   my $resolver = Web::Transport::PlatformResolver->new;
   my $ac = AbortController->new;

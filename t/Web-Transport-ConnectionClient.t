@@ -1581,7 +1581,7 @@ test {
       my $res = $_[0];
       test {
         my $headers = $res->body_bytes;
-        like $headers, qr{GET /foo\?bar=0&bar=};
+        like $headers, qr{GET /foo\?bar=&bar=0&bar=};
       } $c;
     })->then (sub{
       return $client->close;

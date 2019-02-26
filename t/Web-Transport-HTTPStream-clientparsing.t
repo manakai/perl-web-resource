@@ -524,9 +524,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           return $http->close_after_current_stream;
         });
       })->catch (sub {
+        my $err = $_[0];
         test {
           ok 0, 'No exception';
-          is undef, $_[0], 'Exception';
+          is undef, $err, 'Exception';
         } $c;
       })->then (sub {
         done $c;

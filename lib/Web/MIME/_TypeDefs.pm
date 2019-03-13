@@ -164,6 +164,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'atsc-held+xml' => {
                                                                  'iana' => 'provisional'
                                                                },
+                                            'atsc-rsat+xml' => {
+                                                                 'iana' => 'provisional'
+                                                               },
                                             'attachment' => {},
                                             'atxml' => {
                                                          'iana' => 'permanent',
@@ -2145,6 +2148,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'toolbook' => {
                                                             'obsolete' => 1
                                                           },
+                                            'tracking-status+json' => {},
                                             'trickle-ice-sdpfrag' => {
                                                                        'iana' => 'permanent'
                                                                      },
@@ -9825,7 +9829,13 @@ $Web::MIME::_TypeDefs::Type = {
                                                            'iana' => 'permanent',
                                                            'iana_intended_usage' => 'common'
                                                          },
+                                      'hej2k' => {
+                                                   'iana' => 'provisional'
+                                                 },
                                       'hpgl' => {},
+                                      'hsj2' => {
+                                                  'iana' => 'provisional'
+                                                },
                                       'i-vrml' => {},
                                       'ico' => {},
                                       'icon' => {},
@@ -9871,6 +9881,12 @@ $Web::MIME::_TypeDefs::Type = {
                                       'jpeg2000' => {},
                                       'jpeg2000-image' => {},
                                       'jpg' => {},
+                                      'jph' => {
+                                                 'iana' => 'provisional'
+                                               },
+                                      'jphc' => {
+                                                  'iana' => 'provisional'
+                                                },
                                       'jpm' => {
                                                  'iana' => 'permanent',
                                                  'iana_intended_usage' => 'common'
@@ -9883,6 +9899,21 @@ $Web::MIME::_TypeDefs::Type = {
                                       'jxr' => {
                                                  'iana' => 'provisional'
                                                },
+                                      'jxra' => {
+                                                  'iana' => 'provisional'
+                                                },
+                                      'jxrs' => {
+                                                  'iana' => 'provisional'
+                                                },
+                                      'jxs' => {
+                                                 'iana' => 'provisional'
+                                               },
+                                      'jxsi' => {
+                                                  'iana' => 'provisional'
+                                                },
+                                      'jxss' => {
+                                                  'iana' => 'provisional'
+                                                },
                                       'ktx' => {
                                                  'iana' => 'permanent'
                                                },

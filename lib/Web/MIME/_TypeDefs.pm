@@ -159,13 +159,16 @@ $Web::MIME::_TypeDefs::Type = {
                                                                'iana_intended_usage' => 'common'
                                                              },
                                             'atsc-dwd+xml' => {
-                                                                'iana' => 'provisional'
+                                                                'iana' => 'permanent',
+                                                                'iana_intended_usage' => 'common'
                                                               },
                                             'atsc-held+xml' => {
-                                                                 'iana' => 'provisional'
+                                                                 'iana' => 'permanent',
+                                                                 'iana_intended_usage' => 'common'
                                                                },
                                             'atsc-rsat+xml' => {
-                                                                 'iana' => 'provisional'
+                                                                 'iana' => 'permanent',
+                                                                 'iana_intended_usage' => 'common'
                                                                },
                                             'attachment' => {},
                                             'atxml' => {
@@ -1192,7 +1195,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                        },
                                             'mime' => {},
                                             'mmt-aei+xml' => {
-                                                               'iana' => 'provisional'
+                                                               'iana' => 'permanent',
+                                                               'iana_intended_usage' => 'common'
                                                              },
                                             'mmt-usd+xml' => {
                                                                'iana' => 'permanent',
@@ -1433,6 +1437,10 @@ $Web::MIME::_TypeDefs::Type = {
                                             'opf' => {},
                                             'orchestrate-export+json' => {},
                                             'orchestrate-export-stream+json' => {},
+                                            'oscore' => {
+                                                          'iana' => 'permanent',
+                                                          'iana_intended_usage' => 'common'
+                                                        },
                                             'otf' => {},
                                             'other' => {},
                                             'ov-idraw' => {},
@@ -9897,7 +9905,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                },
                                       'jutvision' => {},
                                       'jxr' => {
-                                                 'iana' => 'provisional'
+                                                 'iana' => 'permanent',
+                                                 'iana_intended_usage' => 'common'
                                                },
                                       'jxra' => {
                                                   'iana' => 'provisional'
@@ -9908,6 +9917,9 @@ $Web::MIME::_TypeDefs::Type = {
                                       'jxs' => {
                                                  'iana' => 'provisional'
                                                },
+                                      'jxsc' => {
+                                                  'iana' => 'provisional'
+                                                },
                                       'jxsi' => {
                                                   'iana' => 'provisional'
                                                 },
@@ -11355,6 +11367,7 @@ $Web::MIME::_TypeDefs::Type = {
                                      'matlab' => {},
                                      'mcf' => {},
                                      'mdl' => {},
+                                     'mdx' => {},
                                      'microsoft-resx' => {},
                                      'mirc' => {},
                                      'mizar' => {

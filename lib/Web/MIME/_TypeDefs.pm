@@ -2653,6 +2653,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                          'iana' => 'permanent',
                                                                          'iana_intended_usage' => 'common'
                                                                        },
+                                            'vnd.bbf.usp.error' => {
+                                                                     'iana' => 'permanent',
+                                                                     'iana_intended_usage' => 'common'
+                                                                   },
                                             'vnd.bbf.usp.msg' => {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'common'

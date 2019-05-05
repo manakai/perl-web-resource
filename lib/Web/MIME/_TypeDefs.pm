@@ -4024,6 +4024,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                                'iana' => 'permanent',
                                                                                                'iana_intended_usage' => 'common'
                                                                                              },
+                                            'vnd.logipipe.circuit+zip' => {
+                                                                            'iana' => 'permanent',
+                                                                            'iana_intended_usage' => 'common'
+                                                                          },
                                             'vnd.lotus-1-2-3' => {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'common',
@@ -6274,6 +6278,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'iana' => 'permanent',
                                                                     'iana_intended_usage' => 'common'
                                                                   },
+                                            'vnd.ves.encrypted' => {
+                                                                     'iana' => 'permanent',
+                                                                     'iana_intended_usage' => 'common'
+                                                                   },
                                             'vnd.vidsoft.vidconference' => {
                                                                              'iana' => 'permanent',
                                                                              'iana_intended_usage' => 'common'

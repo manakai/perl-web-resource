@@ -31,15 +31,23 @@ Create and return a default platform information object.
 Create and return a default platform information object for mobile
 browsers.
 
+=item $info = Web::Transport::PlatformInfo->new_nonbrowser
+
+Create and return a default platform information object for
+"non-browser" browsers.  (In general this method should not be used.
+The C<new_default> method is more appropriate for most user agents,
+including non-browser user agents.)
+
 =item $info = Web::Transport::PlatformInfo->new_from_device_os_navigator ($device, $os, $navigator)
 
 Create and return a platform information object.
 
 The first argument is the device type, i.e. C<desktop> (desktop
-browsers), C<tablet> (tablet browsers), or C<mobile> (smartphone
-browsers).  The second argument is the OS, i.e. C<windows>, C<mac>,
-C<ios>, or C<linux>.  The third argument is the navigator
-compatibility mode, i.e. C<chrome>, C<webkit>, or C<gecko>.
+browsers), C<tablet> (tablet browsers), C<mobile> (smartphone
+browsers), or C<nonbrowser> (user agents incompatible with browsers).
+The second argument is the OS, i.e. C<windows>, C<mac>, C<ios>, or
+C<linux>.  The third argument is the navigator compatibility mode,
+i.e. C<chrome>, C<webkit>, or C<gecko>.
 
 If the arguments are invalid comabinations of values, an exception is
 thrown.
@@ -52,7 +60,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2018-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

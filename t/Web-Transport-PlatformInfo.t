@@ -33,6 +33,19 @@ test {
   done $c;
 } n => 2, name => 'new_mobile';
 
+test {
+  my $c = shift;
+
+  my $info0 = Web::Transport::PlatformInfo->new_from_device_os_navigator
+      ('nonbrowser', 'linux', 'chrome');
+
+  my $info = Web::Transport::PlatformInfo->new_nonbrowser;
+  isa_ok $info, 'Web::Transport::PlatformInfo';
+  is $info->user_agent, $info0->user_agent;
+
+  done $c;
+} n => 2, name => 'new_nonbrowser';
+
 for my $test (
   [qw(desktop windows chrome)],
   [qw(desktop mac chrome)],
@@ -80,7 +93,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2018-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

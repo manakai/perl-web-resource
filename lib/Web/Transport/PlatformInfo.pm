@@ -13,6 +13,10 @@ sub new_mobile ($) {
   return bless {ua_key => join $;, 'mobile', 'android', 'chrome'}, $_[0];
 } # new_mobile
 
+sub new_nonbrowser ($) {
+  return bless {ua_key => join $;, 'nonbrowser', 'linux', 'chrome'}, $_[0];
+} # new_nonbrowser
+
 sub new_from_device_os_navigator ($$$$) {
   croak "Bad device, os, navigator combination ($_[1], $_[2], $_[3])"
       unless defined $Web::Transport::_PlatformDefs->{ua}->{$_[1], $_[2], $_[3]};
@@ -32,7 +36,7 @@ sub accept_language ($) {
 
 =head1 LICENSE
 
-Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2018-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

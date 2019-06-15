@@ -3,10 +3,20 @@ use strict;
 use warnings;
 no warnings 'utf8';
 use warnings FATAL => 'recursion';
-our $VERSION = '3.0';
+our $VERSION = '4.0';
 use B;
 use Carp;
-use Encode ();
+
+BEGIN {
+  if (eval q{ use Web::Encoding (); 1 }) {
+    *_du = \&Web::Encoding::decode_web_utf8;
+    *_eu = \&Web::Encoding::encode_web_utf8;
+  } else {
+    require Encode;
+    *_du = sub { return scalar Encode::decode ('utf-8', $_[0]) };
+    *_eu = sub { return scalar Encode::encode ('utf-8', $_[0]) };
+  }
+}
 
 our @EXPORT;
 
@@ -26,10 +36,10 @@ our $OnError ||= sub {
 }; # $OnError
 
 my $_OnError = sub {
-  if (ref $_[0]) {
+  if (ref $_[0] eq 'HASH') {
     $OnError->($_[0]);
   } else {
-    $OnError->(type => $_[0]);
+    $OnError->({type => $_[0]});
   }
 }; # $_OnError
 
@@ -142,12 +152,12 @@ sub _decode ($) {
 push @EXPORT, qw(_UNUSED2);
 sub _UNUSED2 ($) {
   local $@;
-  if ($_[0] =~ /[^\x00-\xFF]/) {
+  if (utf8::is_utf8 ($_[0])) {
     my $value = scalar eval { _decode $_[0] };
     $_OnError->($@) if $@;
     return $value;
   } else {
-    my $value = scalar eval { _decode Encode::decode 'utf-8', $_[0] };
+    my $value = scalar eval { _decode _du $_[0] };
     $_OnError->($@) if $@;
     return $value;
   }
@@ -277,7 +287,7 @@ sub _encode_value ($$) {
 
 push @EXPORT, qw(_UNUSED1);
 sub _UNUSED1 ($) {
-  return scalar Encode::encode 'utf-8', join '', _encode_value $_[0], '';
+  return _eu join '', _encode_value $_[0], '';
 } # _UNUSED1
 
 push @EXPORT, qw(perl2json_chars);
@@ -288,7 +298,7 @@ sub perl2json_chars ($) {
 push @EXPORT, qw(_UNUSED1_for_record);
 sub _UNUSED1_for_record ($) {
   local $Symbols = $PrettySymbols;
-  return scalar Encode::encode 'utf-8', join '', _encode_value ($_[0], ''), "\x0A";
+  return _eu join '', _encode_value ($_[0], ''), "\x0A";
 } # _UNUSED1_for_record
 
 push @EXPORT, qw(perl2json_chars_for_record);
@@ -300,14 +310,14 @@ sub perl2json_chars_for_record ($) {
 ## Deprecated
 #push @EXPORT_OK, qw(_UNUSED3);
 sub _UNUSED3 ($) {
-  return json_chars2perl Encode::decode 'utf-8', scalar $_[0]->slurp;
+  return json_chars2perl _du scalar $_[0]->slurp;
 } # _UNUSED3
 
 1;
 
 =head1 LICENSE
 
-Copyright 2014-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2014-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

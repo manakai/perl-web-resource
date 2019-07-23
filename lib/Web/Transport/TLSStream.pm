@@ -640,6 +640,13 @@ sub create ($$) {
       check_crl dh_file dh dh_single_use cipher_list session_ticket
     )};
     #prepare
+
+    # XXX
+    ## AnyEvent (7.16 Fri Jul 19 18:00:21 CEST 2019) changed default
+    ## |dh| value from |schmorp1539| to |ffdhe3072| but some
+    ## environments we support do not have it :-<
+    $tls_args->{dh} //= 'schmorp1539';
+
     $tls_ctx = AnyEvent::TLS->new (
       %$tls_args,
       %$cert_args,

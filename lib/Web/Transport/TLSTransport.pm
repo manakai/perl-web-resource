@@ -201,6 +201,12 @@ sub start ($$;%) {
           if $args->{verify_client_once};
     }
 
+    # XXX
+    ## AnyEvent (7.16 Fri Jul 19 18:00:21 CEST 2019) changed default
+    ## |dh| value from |schmorp1539| to |ffdhe3072| but some
+    ## environments we support do not have it :-<
+    $args->{dh} //= 'schmorp1539';
+
     $self->{tls_ctx} = AnyEvent::TLS->new (%$args);
     my $tls = $self->{tls} = Net::SSLeay::new ($self->{tls_ctx}->ctx);
     $self->{starttls_data} = {

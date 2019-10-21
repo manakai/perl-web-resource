@@ -38,6 +38,9 @@ sub resolve ($$;%) {
       }
     }
 
+    ## Event loop's timer could be wrong value depending on what was
+    ## executed until now, which could break AE::timer.
+    AnyEvent->now_update;
     my $clock;
     my $time1;
     if ($args{debug}) {

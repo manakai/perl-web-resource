@@ -57,13 +57,18 @@ sub resolve ($$;%) {
         if $DEBUG > 1;
   } # $cached
 
-  my $p = $self->{resolver}->resolve ($host, signal => $args{signal}, debug => $args{debug})->then (sub {
+  my $p = Promise->resolve->then (sub {
+    return $self->{resolver}->resolve ($host, signal => $args{signal}, debug => $args{debug});
+  })->then (sub {
     my $now = $self->{clock}->();
     $self->{cache}->{$host->stringify} = [
       $_[0],
       $now,
     ];
     return $_[0];
+  }, sub {
+    delete $self->{cache}->{$host->stringify};
+    die $_[0];
   });
   $self->{cache}->{$host->stringify} = [undef, 0, $p];
   return $p;
@@ -73,7 +78,7 @@ sub resolve ($$;%) {
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

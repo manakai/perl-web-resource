@@ -246,11 +246,47 @@ test {
   });
 } n => 5, name => 'resolve abort';
 
+test {
+  my $c = shift;
+  {
+    package test::TestResolver1;
+    our $X = 0;
+    sub resolve ($$;%) {
+      die "test resolver error" unless $X++;
+      return Web::Host->parse_string ('1.2.3.4');
+    }
+  }
+  my $host = Web::Host->parse_string (rand . '.foobar.com');
+  my $r1 = bless {}, 'test::TestResolver1';
+  my $resolver = Web::Transport::CachedResolver->new_from_resolver_and_clock
+      ($r1, Web::DateTime::Clock->monotonic_clock);
+  return $resolver->resolve ($host)->then (sub {
+    my $resolved = $_[0];
+    test {
+      ok 0;
+    } $c;
+  }, sub {
+    my $e = $_[0];
+    test {
+      like $e, qr/^test resolver error/;
+    } $c;
+    return $resolver->resolve ($host);
+  })->then (sub {
+    my $resolved = $_[0];
+    test {
+      is $resolved->to_ascii, '1.2.3.4';
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'resolve abort';
+
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2019 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

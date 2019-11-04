@@ -328,10 +328,10 @@ sub _connect ($$$;%) {
   };
 } # _connect
 
-sub _request ($$$$$$$$$$$$) {
+sub _request ($$$$$$$$$$$$$) {
   my ($self, $method, $con_url_record, $url_record, $headers,
       $body_ref, $body_reader, $no_cache, $is_ws, $need_readable_stream,
-      $ws_protocols) = @_;
+      $ws_protocols, $body_reader_touched_ref) = @_;
   if ($self->{debug}) {
     warn "$self->{parent_id}: @{[__PACKAGE__]}: Request <@{[$url_record->stringify]}> @{[scalar gmtime]}\n";
   }
@@ -399,6 +399,7 @@ sub _request ($$$$$$$$$$$$) {
           my $writer = $reqbody->get_writer;
           # not return
           (promised_until {
+            $$body_reader_touched_ref = 1;
             return $body_reader->read (DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize)))->then (sub {
               return 'done' if $_[0]->{done};
               return $writer->write ($_[0]->{value})->then (sub {
@@ -571,17 +572,18 @@ sub request ($%) {
     my $con_url_record = ($self->{server_connection} || {url => $url_record})->{url};
 
     my $no_cache = $args{superreload};
+    my $br_touched = 0;
     return $self->_request (
       $method, $con_url_record, $url_record,
       $header_list, $body_ref, $body_reader,
-      $no_cache, $is_ws, $args{stream}, $ws_protos,
+      $no_cache, $is_ws, $args{stream}, $ws_protos, \$br_touched,
     )->catch (sub {
       return $self->_request (
         $method, $con_url_record, $url_record,
         $header_list, $body_ref, $body_reader,
-        $no_cache, $is_ws, $args{stream}, $ws_protos,
+        $no_cache, $is_ws, $args{stream}, $ws_protos, \$br_touched,
       ) if Web::Transport::ProtocolError->can_http_retry ($_[0]) and
-           not defined $body_reader;
+           (not defined $body_reader or not $br_touched);
       die $_[0];
     })->then (sub {
       my ($return, $wait) = @{$_[0]};

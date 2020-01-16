@@ -162,7 +162,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common'
                                                               },
+                                            'atsc-dynamic-event-message' => {
+                                                                              'iana' => 'provisional'
+                                                                            },
                                             'atsc-held+xml' => {
+                                                                 'iana' => 'permanent',
+                                                                 'iana_intended_usage' => 'common'
+                                                               },
+                                            'atsc-rdt+json' => {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'common'
                                                                },
@@ -239,6 +246,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'iana' => 'permanent',
                                                         'iana_intended_usage' => 'common'
                                                       },
+                                            'cbor-seq' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'common'
+                                                          },
                                             'cccex' => {
                                                          'iana' => 'permanent',
                                                          'iana_intended_usage' => 'common'
@@ -294,12 +305,19 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'iana' => 'permanent',
                                                               'iana_intended_usage' => 'common'
                                                             },
+                                            'cert-chain+cbor' => {
+                                                                   'iana' => 'provisional'
+                                                                 },
                                             'cfw' => {
                                                        'iana' => 'permanent',
                                                        'iana_intended_usage' => 'common'
                                                      },
                                             'chromepage' => {},
                                             'clariscad' => {},
+                                            'clue+xml' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'limited use'
+                                                          },
                                             'clue_info+xml' => {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'limited use'
@@ -483,6 +501,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                       }
                                                                         }
                                                           },
+                                            'dlmscosem' => {
+                                                             'iana' => 'provisional'
+                                                           },
                                             'dns' => {
                                                        'iana' => 'permanent',
                                                        'iana_intended_usage' => 'limited use'
@@ -668,6 +689,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                         'iana' => 'permanent',
                                                         'iana_intended_usage' => 'common'
                                                       },
+                                            'flexfec' => {
+                                                           'iana' => 'permanent'
+                                                         },
                                             'flv' => {},
                                             'font-cff' => {},
                                             'font-off' => {},
@@ -1194,6 +1218,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                          'iana' => 'permanent'
                                                        },
                                             'mime' => {},
+                                            'mipc' => {
+                                                        'iana' => 'permanent',
+                                                        'iana_intended_usage' => 'limited use'
+                                                      },
                                             'mmt-aei+xml' => {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'common'
@@ -1310,7 +1338,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana_intended_usage' => 'common'
                                                           },
                                             'multipart-core' => {
-                                                                  'iana' => 'provisional'
+                                                                  'iana' => 'permanent',
+                                                                  'iana_intended_usage' => 'common'
                                                                 },
                                             'mxf' => {
                                                        'iana' => 'permanent',
@@ -1577,6 +1606,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                        }
                                                                         }
                                                           },
+                                            'pkix-keyinfo' => {
+                                                                'iana' => 'provisional'
+                                                              },
                                             'pkix-pkipath' => {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common',
@@ -1962,6 +1994,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                          'iana' => 'permanent',
                                                          'iana_intended_usage' => 'common'
                                                        },
+                                            'signed-exchange' => {
+                                                                   'iana' => 'provisional'
+                                                                 },
                                             'simple-filter+xml' => {
                                                                      'iana' => 'permanent'
                                                                    },
@@ -1972,6 +2007,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                          'iana' => 'permanent',
                                                                          'iana_intended_usage' => 'common'
                                                                        },
+                                            'sipc' => {
+                                                        'iana' => 'permanent',
+                                                        'iana_intended_usage' => 'limited use'
+                                                      },
                                             'sit' => {},
                                             'sla' => {},
                                             'slate' => {
@@ -2060,6 +2099,10 @@ $Web::MIME::_TypeDefs::Type = {
                                             'stuffit' => {},
                                             'stuffitx' => {},
                                             'supercollider' => {},
+                                            'swid+xml' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'common'
+                                                          },
                                             't-time' => {},
                                             'tamp-apex-update' => {
                                                                     'iana' => 'permanent',
@@ -2110,6 +2153,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'iana' => 'permanent',
                                                               'iana_intended_usage' => 'common'
                                                             },
+                                            'td+json' => {
+                                                           'iana' => 'provisional'
+                                                         },
                                             'tei+xml' => {
                                                            'iana' => 'permanent'
                                                          },
@@ -2153,6 +2199,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'tnt' => {},
                                             'tntfile' => {},
                                             'toc' => {},
+                                            'toml' => {},
                                             'toolbook' => {
                                                             'obsolete' => 1
                                                           },
@@ -2353,8 +2400,13 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                           },
                                             'vnd.3gpp.mcvideo-affiliation-info+xml' => {
                                                                                          'iana' => 'permanent',
-                                                                                         'iana_intended_usage' => 'common'
+                                                                                         'iana_intended_usage' => 'obsolete',
+                                                                                         'obsolete' => 1
                                                                                        },
+                                            'vnd.3gpp.mcvideo-info+xml' => {
+                                                                             'iana' => 'permanent',
+                                                                             'iana_intended_usage' => 'common'
+                                                                           },
                                             'vnd.3gpp.mcvideo-location-info+xml' => {
                                                                                       'iana' => 'permanent',
                                                                                       'iana_intended_usage' => 'common'
@@ -2501,10 +2553,46 @@ $Web::MIME::_TypeDefs::Type = {
                                                                         'iana' => 'permanent',
                                                                         'iana_intended_usage' => 'limited use'
                                                                       },
+                                            'vnd.afpc.afplinedata-pagedef' => {
+                                                                                'iana' => 'permanent',
+                                                                                'iana_intended_usage' => 'limited use'
+                                                                              },
+                                            'vnd.afpc.foca-charset' => {
+                                                                         'iana' => 'permanent',
+                                                                         'iana_intended_usage' => 'limited use'
+                                                                       },
+                                            'vnd.afpc.foca-codedfont' => {
+                                                                           'iana' => 'permanent',
+                                                                           'iana_intended_usage' => 'limited use'
+                                                                         },
+                                            'vnd.afpc.foca-codepage' => {
+                                                                          'iana' => 'permanent',
+                                                                          'iana_intended_usage' => 'limited use'
+                                                                        },
                                             'vnd.afpc.modca' => {
                                                                   'iana' => 'permanent',
                                                                   'iana_intended_usage' => 'limited use'
                                                                 },
+                                            'vnd.afpc.modca-formdef' => {
+                                                                          'iana' => 'permanent',
+                                                                          'iana_intended_usage' => 'limited use'
+                                                                        },
+                                            'vnd.afpc.modca-mediummap' => {
+                                                                            'iana' => 'permanent',
+                                                                            'iana_intended_usage' => 'limited use'
+                                                                          },
+                                            'vnd.afpc.modca-objectcontainer' => {
+                                                                                  'iana' => 'permanent',
+                                                                                  'iana_intended_usage' => 'limited use'
+                                                                                },
+                                            'vnd.afpc.modca-overlay' => {
+                                                                          'iana' => 'permanent',
+                                                                          'iana_intended_usage' => 'limited use'
+                                                                        },
+                                            'vnd.afpc.modca-pagesegment' => {
+                                                                              'iana' => 'permanent',
+                                                                              'iana_intended_usage' => 'limited use'
+                                                                            },
                                             'vnd.ah-barcode' => {
                                                                   'iana' => 'permanent',
                                                                   'iana_intended_usage' => 'obsolete',
@@ -2548,6 +2636,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                          'iana' => 'permanent',
                                                                          'iana_intended_usage' => 'common'
                                                                        },
+                                            'vnd.android.ota' => {
+                                                                   'iana' => 'permanent',
+                                                                   'iana_intended_usage' => 'common'
+                                                                 },
                                             'vnd.android.package-archive' => {},
                                             'vnd.anki' => {
                                                             'iana' => 'permanent',
@@ -2578,6 +2670,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common'
                                                               },
+                                            'vnd.aplextor.warrp+json' => {
+                                                                           'iana' => 'permanent',
+                                                                           'iana_intended_usage' => 'common'
+                                                                         },
                                             'vnd.apothekende.reservation+json' => {
                                                                                     'iana' => 'permanent',
                                                                                     'iana_intended_usage' => 'common'
@@ -2697,6 +2793,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                            'iana' => 'permanent',
                                                            'iana_intended_usage' => 'common'
                                                          },
+                                            'vnd.bpf' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'limited use'
+                                                         },
+                                            'vnd.bpf3' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'limited use'
+                                                          },
                                             'vnd.businessobjects' => {
                                                                        'iana' => 'permanent'
                                                                      },
@@ -2744,6 +2848,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                             'iana_intended_usage' => 'common'
                                                                           },
                                             'vnd.chromium.remoting-viewer' => {},
+                                            'vnd.ciedi' => {
+                                                             'iana' => 'permanent',
+                                                             'iana_intended_usage' => 'common'
+                                                           },
                                             'vnd.cinderella' => {
                                                                   'iana' => 'permanent',
                                                                   'iana_intended_usage' => 'common'
@@ -2875,6 +2983,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                                            },
                                             'vnd.crossref-api-message+json' => {},
                                             'vnd.crossref.deposit+xml' => {},
+                                            'vnd.cryptii.pipe+json' => {
+                                                                         'iana' => 'permanent',
+                                                                         'iana_intended_usage' => 'limited use'
+                                                                       },
+                                            'vnd.crypto-shade-file' => {
+                                                                         'iana' => 'permanent',
+                                                                         'iana_intended_usage' => 'common'
+                                                                       },
                                             'vnd.ctc-posml' => {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'limited use'
@@ -3346,6 +3462,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                              'iana' => 'permanent',
                                                              'iana_intended_usage' => 'limited use'
                                                            },
+                                            'vnd.ficlab.flb+zip' => {
+                                                                      'iana' => 'permanent',
+                                                                      'iana_intended_usage' => 'limited use'
+                                                                    },
                                             'vnd.filmit.zfc' => {
                                                                   'iana' => 'permanent',
                                                                   'iana_intended_usage' => 'common'
@@ -3468,6 +3588,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                   'iana_intended_usage' => 'common'
                                                                 },
                                             'vnd.genomatix.tuxedo' => {
+                                                                        'iana' => 'permanent',
+                                                                        'iana_intended_usage' => 'limited use'
+                                                                      },
+                                            'vnd.gentics.grd+json' => {
                                                                         'iana' => 'permanent',
                                                                         'iana_intended_usage' => 'limited use'
                                                                       },
@@ -3891,6 +4015,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common'
                                                               },
+                                            'vnd.iso11783-10+zip' => {
+                                                                       'iana' => 'permanent',
+                                                                       'iana_intended_usage' => 'common'
+                                                                     },
                                             'vnd.jam' => {
                                                            'iana' => 'permanent',
                                                            'iana_intended_usage' => 'common'
@@ -3998,6 +4126,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                         'iana' => 'permanent',
                                                                         'iana_intended_usage' => 'common'
                                                                       },
+                                            'vnd.las' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'limited use'
+                                                         },
                                             'vnd.las.las+json' => {
                                                                     'iana' => 'permanent',
                                                                     'iana_intended_usage' => 'limited use'
@@ -4005,6 +4137,10 @@ $Web::MIME::_TypeDefs::Type = {
                                             'vnd.las.las+xml' => {
                                                                    'iana' => 'permanent'
                                                                  },
+                                            'vnd.laszip' => {
+                                                              'iana' => 'permanent',
+                                                              'iana_intended_usage' => 'limited use'
+                                                            },
                                             'vnd.leap+json' => {
                                                                  'iana' => 'permanent',
                                                                  'iana_intended_usage' => 'common'
@@ -4028,6 +4164,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                             'iana' => 'permanent',
                                                                             'iana_intended_usage' => 'common'
                                                                           },
+                                            'vnd.loom' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'common'
+                                                          },
                                             'vnd.lotus-1-2-3' => {
                                                                    'iana' => 'permanent',
                                                                    'iana_intended_usage' => 'common',
@@ -5872,6 +6012,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana' => 'permanent',
                                                             'iana_intended_usage' => 'common'
                                                           },
+                                            'vnd.shade-save-file' => {
+                                                                       'iana' => 'permanent',
+                                                                       'iana_intended_usage' => 'limited use'
+                                                                     },
                                             'vnd.shana.informed.formdata' => {
                                                                                'iana' => 'permanent'
                                                                              },
@@ -5888,6 +6032,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                        'iana' => 'permanent',
                                                                        'iana_intended_usage' => 'common'
                                                                      },
+                                            'vnd.shopkick+json' => {
+                                                                     'iana' => 'permanent',
+                                                                     'iana_intended_usage' => 'common'
+                                                                   },
                                             'vnd.sigrok.session' => {
                                                                       'iana' => 'permanent',
                                                                       'iana_intended_usage' => 'common'
@@ -6151,6 +6299,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                       'iana_intended_usage' => 'common'
                                                                     },
                                             'vnd.travis-ci.2+json' => {},
+                                            'vnd.travis-ci.2.1+json' => {},
                                             'vnd.tri.onesource' => {
                                                                      'iana' => 'permanent',
                                                                      'iana_intended_usage' => 'limited use'
@@ -6614,7 +6763,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                              },
                                             'vnd.youtube.yt' => {
                                                                   'iana' => 'permanent',
-                                                                  'iana_intended_usage' => 'common'
+                                                                  'iana_intended_usage' => 'obsolete',
+                                                                  'obsolete' => 1
                                                                 },
                                             'vnd.zul' => {
                                                            'iana' => 'permanent',
@@ -6651,6 +6801,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                  },
                                             'wbs.chart+xml' => {},
                                             'wcz' => {},
+                                            'webbundle' => {
+                                                             'iana' => 'provisional'
+                                                           },
                                             'webpush-options+json' => {
                                                                         'iana' => 'permanent',
                                                                         'iana_intended_usage' => 'limited use'
@@ -7411,6 +7564,7 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-kddi-video' => {},
                                             'x-kdelnk' => {},
                                             'x-kdevelop-project' => {},
+                                            'x-keepass2' => {},
                                             'x-kexi-connectiondata' => {},
                                             'x-kexiproject-shortcut' => {},
                                             'x-kexiproject-sqlite2' => {},
@@ -8781,6 +8935,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                      'iana_intended_usage' => 'limited use'
                                                    },
                                       'flac' => {},
+                                      'flexfec' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'fwdred' => {
                                                     'iana' => 'permanent',
                                                     'iana_intended_usage' => 'common'
@@ -9075,6 +9232,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                          'iana' => 'permanent',
                                                          'iana_intended_usage' => 'common'
                                                        },
+                                      'tetra_acelp_bb' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'common'
+                                                          },
                                       'tone' => {
                                                   'iana' => 'permanent',
                                                   'iana_intended_usage' => 'common'
@@ -9850,11 +10011,13 @@ $Web::MIME::_TypeDefs::Type = {
                                                            'iana_intended_usage' => 'common'
                                                          },
                                       'hej2k' => {
-                                                   'iana' => 'provisional'
+                                                   'iana' => 'permanent',
+                                                   'iana_intended_usage' => 'common'
                                                  },
                                       'hpgl' => {},
                                       'hsj2' => {
-                                                  'iana' => 'provisional'
+                                                  'iana' => 'permanent',
+                                                  'iana_intended_usage' => 'common'
                                                 },
                                       'i-vrml' => {},
                                       'ico' => {},
@@ -9902,10 +10065,12 @@ $Web::MIME::_TypeDefs::Type = {
                                       'jpeg2000-image' => {},
                                       'jpg' => {},
                                       'jph' => {
-                                                 'iana' => 'provisional'
+                                                 'iana' => 'permanent',
+                                                 'iana_intended_usage' => 'common'
                                                },
                                       'jphc' => {
-                                                  'iana' => 'provisional'
+                                                  'iana' => 'permanent',
+                                                  'iana_intended_usage' => 'common'
                                                 },
                                       'jpm' => {
                                                  'iana' => 'permanent',
@@ -9921,22 +10086,28 @@ $Web::MIME::_TypeDefs::Type = {
                                                  'iana_intended_usage' => 'common'
                                                },
                                       'jxra' => {
-                                                  'iana' => 'provisional'
+                                                  'iana' => 'permanent',
+                                                  'iana_intended_usage' => 'common'
                                                 },
                                       'jxrs' => {
-                                                  'iana' => 'provisional'
+                                                  'iana' => 'permanent',
+                                                  'iana_intended_usage' => 'common'
                                                 },
                                       'jxs' => {
-                                                 'iana' => 'provisional'
+                                                 'iana' => 'permanent',
+                                                 'iana_intended_usage' => 'common'
                                                },
                                       'jxsc' => {
-                                                  'iana' => 'provisional'
+                                                  'iana' => 'permanent',
+                                                  'iana_intended_usage' => 'common'
                                                 },
                                       'jxsi' => {
-                                                  'iana' => 'provisional'
+                                                  'iana' => 'permanent',
+                                                  'iana_intended_usage' => 'common'
                                                 },
                                       'jxss' => {
-                                                  'iana' => 'provisional'
+                                                  'iana' => 'permanent',
+                                                  'iana_intended_usage' => 'common'
                                                 },
                                       'ktx' => {
                                                  'iana' => 'permanent'
@@ -10028,9 +10199,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                      'text' => 1
                                                    },
                                       'svh' => {},
-                                      'swid+xml' => {
-                                                      'iana' => 'provisional'
-                                                    },
+                                      'swid+xml' => {},
                                       't38' => {
                                                  'iana' => 'permanent',
                                                  'iana_intended_usage' => 'common'
@@ -10216,6 +10385,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'iana' => 'permanent',
                                                               'iana_intended_usage' => 'common'
                                                             },
+                                      'vnd.ms-dds' => {},
                                       'vnd.ms-modi' => {
                                                          'iana' => 'permanent',
                                                          'iana_intended_usage' => 'common'
@@ -10794,6 +10964,12 @@ $Web::MIME::_TypeDefs::Type = {
                                       'mesh' => {
                                                   'iana' => 'permanent'
                                                 },
+                                      'mtl' => {
+                                                 'iana' => 'provisional'
+                                               },
+                                      'obj' => {
+                                                 'iana' => 'provisional'
+                                               },
                                       'stl' => {
                                                  'iana' => 'permanent',
                                                  'iana_intended_usage' => 'common'
@@ -11201,6 +11377,9 @@ $Web::MIME::_TypeDefs::Type = {
                                      'example' => {
                                                     'iana' => 'permanent',
                                                     'iana_intended_usage' => 'limited use'
+                                                  },
+                                     'flexfec' => {
+                                                    'iana' => 'permanent'
                                                   },
                                      'ftp-dir' => {},
                                      'ftp-dir-listing' => {},
@@ -11663,6 +11842,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                           'iana' => 'permanent',
                                                                           'iana_intended_usage' => 'limited use'
                                                                         },
+                                     'vnd.ficlab.flt' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'limited use'
+                                                         },
                                      'vnd.flatland.3dml' => {
                                                               'obsolete' => 1
                                                             },
@@ -11733,6 +11916,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana_intended_usage' => 'limited use',
                                                                 'obsolete' => 1
                                                               },
+                                     'vnd.sosi' => {
+                                                     'iana' => 'permanent',
+                                                     'iana_intended_usage' => 'common'
+                                                   },
                                      'vnd.sun.j2me.app-descriptor' => {
                                                                         'iana' => 'permanent',
                                                                         'iana_intended_usage' => 'limited use'
@@ -11761,10 +11948,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'iana_intended_usage' => 'common'
                                                             },
                                      'vnd.wordperfect' => {},
-                                     'vtt' => {},
+                                     'vtt' => {
+                                                'iana' => 'permanent',
+                                                'iana_intended_usage' => 'common'
+                                              },
                                      'webviewhtml' => {},
                                      'wiki' => {},
                                      'wml' => {},
+                                     'worker' => {},
                                      'wreq' => {},
                                      'x-abap' => {},
                                      'x-abc' => {},
@@ -12159,6 +12350,7 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                }
                                                                  },
                                      'x-pgsql' => {},
+                                     'x-phabricator-request' => {},
                                      'x-php' => {},
                                      'x-php-script' => {},
                                      'x-php-source' => {},
@@ -12250,7 +12442,9 @@ $Web::MIME::_TypeDefs::Type = {
                                      'x-script.tcl' => {},
                                      'x-script.tcsh' => {},
                                      'x-script.zsh' => {},
-                                     'x-scriptlet' => {},
+                                     'x-scriptlet' => {
+                                                        'obsolete' => 1
+                                                      },
                                      'x-scss' => {},
                                      'x-sed' => {},
                                      'x-serialization' => {},
@@ -12534,6 +12728,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                      'iana_intended_usage' => 'limited use'
                                                    },
                                       'flc' => {},
+                                      'flexfec' => {
+                                                     'iana' => 'permanent'
+                                                   },
                                       'fli' => {},
                                       'flv' => {},
                                       'gl' => {
@@ -12847,6 +13044,10 @@ $Web::MIME::_TypeDefs::Type = {
                                       'vnd.vivo' => {
                                                       'iana' => 'permanent'
                                                     },
+                                      'vnd.youtube.yt' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'limited use'
+                                                          },
                                       'vosaic' => {},
                                       'vp8' => {
                                                  'iana' => 'permanent',

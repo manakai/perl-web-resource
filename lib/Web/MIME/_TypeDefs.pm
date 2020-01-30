@@ -520,6 +520,9 @@ $Web::MIME::_TypeDefs::Type = {
                                             'docbook+xml' => {},
                                             'docuworks' => {},
                                             'dos-exe' => {},
+                                            'dots+cbor' => {
+                                                             'iana' => 'permanent'
+                                                           },
                                             'download' => {},
                                             'drafting' => {},
                                             'dskpp+xml' => {

@@ -5944,6 +5944,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                             'iana' => 'permanent',
                                                                             'iana_intended_usage' => 'limited use'
                                                                           },
+                                            'vnd.sar' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
+                                                         },
                                             'vnd.sbm.cid' => {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'limited use'

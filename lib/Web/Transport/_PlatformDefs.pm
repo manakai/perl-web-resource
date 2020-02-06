@@ -12,8 +12,8 @@ $Web::Transport::_PlatformDefs = $VAR1 = {
                     'mobileioswebkit' => 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Mobile/15E148 Safari/604.1',
                     'nonbrowserlinuxchrome' => 'User-Agent',
                     'tabletandroidchrome' => 'Mozilla/5.0 (Linux; Android 9; d-02K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.136 Safari/537.36',
-                    'tabletandroidgecko' => 'Mozilla/5.0 (Android 6.0.1; Tablet; rv:68.0) Gecko/68.0 Firefox/68.0',
-                    'tabletioswebkit' => 'Mozilla/5.0 (iPad; CPU OS 13_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.4 Mobile/15E148 Safari/604.1'
+                    'tabletandroidgecko' => 'Mozilla/5.0 (Android 9; Tablet; rv:68.4.2) Gecko/68.4.2 Firefox/68.4.2',
+                    'tabletioswebkit' => 'Mozilla/5.0 (iPad; CPU OS 13_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/79.0.3945.73 Mobile/15E148 Safari/604.1'
                   }
         };
 ;1;

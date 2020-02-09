@@ -3146,6 +3146,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                'iana' => 'permanent',
                                                                'iana_intended_usage' => 'common'
                                                              },
+                                            'vnd.dvb.dvbisl+xml' => {
+                                                                      'iana' => 'permanent',
+                                                                      'iana_intended_usage' => 'common'
+                                                                    },
                                             'vnd.dvb.dvbj' => {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common'

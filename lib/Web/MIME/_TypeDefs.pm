@@ -2157,7 +2157,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                               'iana_intended_usage' => 'common'
                                                             },
                                             'td+json' => {
-                                                           'iana' => 'provisional'
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
                                                          },
                                             'tei+xml' => {
                                                            'iana' => 'permanent'
@@ -10976,10 +10977,12 @@ $Web::MIME::_TypeDefs::Type = {
                                                   'iana' => 'permanent'
                                                 },
                                       'mtl' => {
-                                                 'iana' => 'provisional'
+                                                 'iana' => 'permanent',
+                                                 'iana_intended_usage' => 'common'
                                                },
                                       'obj' => {
-                                                 'iana' => 'provisional'
+                                                 'iana' => 'permanent',
+                                                 'iana_intended_usage' => 'common'
                                                },
                                       'stl' => {
                                                  'iana' => 'permanent',

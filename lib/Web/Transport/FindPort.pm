@@ -1,4 +1,4 @@
-package Net::TCP::FindPort;
+package Web::Transport::FindPort;
 use strict;
 use warnings;
 our $VERSION = '1.0';

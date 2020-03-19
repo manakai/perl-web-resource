@@ -1,16 +1,16 @@
 =head1 NAME
 
-Net::TCP::FindPort - Find a listenable TCP port
+Web::Transport::FindPort - Find a listenable TCP port
 
 =head1 SYNOPSIS
 
-  use Net::TCP::FindPort;
-  warn Net::TCP::FindPort->find_listenable_port;
+  use Web::Transport::FindPort;
+  warn Web::Transport::FindPort->find_listenable_port;
 
 =head1 DESCRIPTION
 
-The C<Net::TCP::FindPort> module provides methods to obtain a TCP port
-number that can be listened by a new server process.
+The C<Web::Transport::FindPort> module provides methods to obtain a
+TCP port number that can be listened by a new server process.
 
 =head1 METHODS
 
@@ -18,7 +18,7 @@ All methods are class methods.
 
 =over 4
 
-=item Net::TCP::FindPort->find_listenable_port
+=item Web::Transport::FindPort->find_listenable_port
 
 Returns a listenable TCP port number.  If no port is available, the
 method dies.
@@ -27,11 +27,11 @@ Note that the returned port might not be really available for
 listening by the server process, if the port is listened by another
 process after the testing of this method.
 
-=item Net::TCP::FindPort->is_listenable_port(PORT)
+=item Web::Transport::FindPort->is_listenable_port(PORT)
 
 Returns whether the given I<PORT> can be listened or not.
 
-=item Net::TCP::FindPort->clear_cache
+=item Web::Transport::FindPort->clear_cache
 
 Clears the cached list of known non-listenable ports.  The class
 caches the list of known non-listenable ports.  Any port returned by
@@ -44,13 +44,8 @@ protocol stack).
 
 =head1 HISTORY
 
-=over 4
-
-=item 1.0 (2010-08-05)
-
-First version.
-
-=back
+This module was originally released as L<Net::TCP::FindPort> version
+1.0 (2010-08-05).
 
 =head1 AUTHOR
 

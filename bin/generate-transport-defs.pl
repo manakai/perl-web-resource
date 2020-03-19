@@ -35,11 +35,20 @@ $Data::Dumper::Sortkeys = 1;
   print map { s/^\$VAR1/\$Web::Transport::_Defs::Headers/; $_ } Dumper $Data;
 }
 
+{
+  my $Input = json_bytes2perl path (__FILE__)->parent->parent->child ('local/url-schemes.json')->slurp;
+  my $bad_ports = [];
+  for (keys %{$Input->{https}->{bad_ports}}) {
+    $bad_ports->[$_] = 1;
+  }
+  print map { s/^\$VAR1/\$Web::Transport::_Defs::BadPorts/; $_ } Dumper $bad_ports;
+}
+
 print qq{1;};
 
 =head1 LICENSE
 
-Copyright 2012-2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2012-2020 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -57,9 +57,12 @@ local/mime-types.json:
 	$(WGET) -O $@ https://raw.github.com/manakai/data-web-defs/master/data/mime-types.json
 local/mime-sniffing.json:
 	$(WGET) -O $@ https://raw.github.com/manakai/data-web-defs/master/data/mime-sniffing.json
+local/url-schemes.json:
+	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/url-schemes.json
 
 lib/Web/Transport/_Defs.pm: bin/generate-transport-defs.pl \
-    local/http-status-codes.json local/headers.json
+    local/http-status-codes.json local/headers.json \
+    local/url-schemes.json
 	$(PERL) $< > $@
 local/http-status-codes.json:
 	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/http-status-codes.json

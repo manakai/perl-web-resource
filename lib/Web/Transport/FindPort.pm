@@ -4,6 +4,7 @@ use warnings;
 our $VERSION = '1.0';
 use Carp;
 use Socket;
+use Web::Transport::_Defs;
 
 our @EXPORT = qw(find_listenable_port);
 
@@ -21,12 +22,14 @@ sub import ($;@) {
 my $EphemeralStart = 1024;
 my $EphemeralEnd = 5000;
 
-my $UsedPorts = {};
+my $UsedPorts = [@{$Web::Transport::_Defs::BadPorts}];
+## Bad ports are excluded
+## <https://fetch.spec.whatwg.org/#port-blocking>.
 
 sub is_listenable_port ($) {
   my $port = shift;
     return 0 unless $port;
-    return 0 if $UsedPorts->{$port};
+    return 0 if $UsedPorts->[$port];
     
     my $proto = getprotobyname('tcp');
     socket(my $server, PF_INET, SOCK_STREAM, $proto) || die "socket: $!";
@@ -41,9 +44,9 @@ sub find_listenable_port () {
     
     for (1..10000) {
         my $port = int rand($EphemeralEnd - $EphemeralStart);
-        next if $UsedPorts->{$port};
+        next if $UsedPorts->[$port];
         if (is_listenable_port($port)) {
-            $UsedPorts->{$port} = 1;
+            $UsedPorts->[$port] = 1;
             return $port;
         }
     }

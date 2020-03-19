@@ -13,8 +13,11 @@ test {
 
     # A well-known port
     ok !Web::Transport::FindPort::is_listenable_port(70);
+
+    # bad port
+    ok !Web::Transport::FindPort::is_listenable_port(6667);
     done $c;
-} n => 2, name => 'is_listenable_port ng';
+} n => 3, name => 'is_listenable_port ng';
 
 test {
     my $c = shift;

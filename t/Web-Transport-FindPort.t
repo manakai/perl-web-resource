@@ -9,32 +9,51 @@ use Web::Transport::FindPort;
 
 test {
     my $c = shift;
-    ok !Web::Transport::FindPort->is_listenable_port(0);
+    ok !Web::Transport::FindPort::is_listenable_port(0);
 
     # A well-known port
-    ok !Web::Transport::FindPort->is_listenable_port(70);
+    ok !Web::Transport::FindPort::is_listenable_port(70);
     done $c;
 } n => 2, name => 'is_listenable_port ng';
 
 test {
     my $c = shift;
-    my $p1 = Web::Transport::FindPort->find_listenable_port;
-    ok !Web::Transport::FindPort->is_listenable_port($p1);
+    my $p1 = Web::Transport::FindPort::find_listenable_port;
+    ok !Web::Transport::FindPort::is_listenable_port($p1);
     done $c;
 } n => 1, name => 'is_listenable_port locked';
 
 test {
     my $c = shift;
-    my $p1 = Web::Transport::FindPort->find_listenable_port;
+    my $p1 = find_listenable_port;
     ok $p1;
     ok $p1 > 1023;
 
-    my $p2 = Web::Transport::FindPort->find_listenable_port;
+    my $p2 = find_listenable_port;
     ok $p2;
     ok $p2 > 1023;
     isnt $p2, $p1;
 
-    my $p3 = Web::Transport::FindPort->find_listenable_port;
+    my $p3 = find_listenable_port;
+    ok $p3;
+    ok $p3 > 1023;
+    isnt $p3, $p1;
+    isnt $p3, $p2;
+    done $c;
+} n => 9, name => 'find_listenable_port exported';
+
+test {
+    my $c = shift;
+    my $p1 = Web::Transport::FindPort::find_listenable_port;
+    ok $p1;
+    ok $p1 > 1023;
+
+    my $p2 = Web::Transport::FindPort::find_listenable_port;
+    ok $p2;
+    ok $p2 > 1023;
+    isnt $p2, $p1;
+
+    my $p3 = Web::Transport::FindPort::find_listenable_port;
     ok $p3;
     ok $p3 > 1023;
     isnt $p3, $p1;
@@ -43,3 +62,14 @@ test {
 } n => 9, name => 'find_listenable_port';
 
 run_tests;
+
+=head1 LICENSE
+
+Copyright 2010 Hatena <http://www.hatena.ne.jp/>
+
+Copyright 2020 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

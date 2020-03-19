@@ -69,6 +69,10 @@ A Base64 API.
 
 A C<data:> URL processor.
 
+=item L<Web::Transport::FindPort>
+
+Find TCP ports for testing.
+
 =back
 
 The module L<Web::Transport::ConnectionClient> is deprecated.
@@ -560,7 +564,7 @@ information.
 
 Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
 
-Copyright 2014-2019 Wakaba <wakaba@suikawiki.org>.
+Copyright 2014-2020 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

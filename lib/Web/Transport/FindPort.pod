@@ -5,40 +5,33 @@ Web::Transport::FindPort - Find a listenable TCP port
 =head1 SYNOPSIS
 
   use Web::Transport::FindPort;
-  warn Web::Transport::FindPort->find_listenable_port;
+  warn find_listenable_port;
 
 =head1 DESCRIPTION
 
 The C<Web::Transport::FindPort> module provides methods to obtain a
 TCP port number that can be listened by a new server process.
 
-=head1 METHODS
+This module is primary intended for use within test scripts where
+relevant servers need to be executed using random unused ports.
 
-All methods are class methods.
+=head1 FUNCTION
+
+A function is exported by default:
 
 =over 4
 
-=item Web::Transport::FindPort->find_listenable_port
+=item $port = find_listenable_port
+
+=item $port = Web::Transport::FindPort::find_listenable_port
 
 Returns a listenable TCP port number.  If no port is available, the
 method dies.
 
-Note that the returned port might not be really available for
-listening by the server process, if the port is listened by another
-process after the testing of this method.
-
-=item Web::Transport::FindPort->is_listenable_port(PORT)
-
-Returns whether the given I<PORT> can be listened or not.
-
-=item Web::Transport::FindPort->clear_cache
-
-Clears the cached list of known non-listenable ports.  The class
-caches the list of known non-listenable ports.  Any port returned by
-C<find_listenable_port> as "listenable" is also marked as
-non-listenable (although the port is still listenable until it is
-really listened by some process from the viewpoint of the TCP/IP
-protocol stack).
+Please note that use of this function is, strictly speaking, racy.
+The returned port might not be really available for listening by the
+server process, if the port is listened by another process after the
+testing of this method.
 
 =back
 
@@ -49,11 +42,13 @@ This module was originally released as L<Net::TCP::FindPort> version
 
 =head1 AUTHOR
 
-Wakaba (id:wakabatan) <wakabatan@hatena.ne.jp>
+Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
 Copyright 2010 Hatena <http://www.hatena.ne.jp/>
+
+Copyright 2020 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

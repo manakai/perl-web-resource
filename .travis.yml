@@ -1,16 +1,6 @@
 git:
   submodules: false
 language: perl
-os:
-  - linux
-  - osx
-perl:
-  - "5.28"
-  - "5.14"
-matrix:
-  exclude:
-  - perl: "5.14"
-    os: osx
 before_install: "true"
 install:
   - "make test-deps"
@@ -21,6 +11,12 @@ script:
   - "make test-main"
 jobs:
   include:
+    - perl: "5.30"
+      os: linux
+    - perl: "5.14"
+      os: linux
+    - perl: "5.30"
+      os: osx
     - stage: merge
       before_install: "true"
       install: "true"

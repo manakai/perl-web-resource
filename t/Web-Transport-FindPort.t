@@ -48,16 +48,16 @@ test {
 test {
     my $c = shift;
     my $p1 = Web::Transport::FindPort::find_listenable_port;
-    ok $p1;
+    ok $p1, $p1;
     ok $p1 > 1023;
 
     my $p2 = Web::Transport::FindPort::find_listenable_port;
-    ok $p2;
+    ok $p2, $p2;
     ok $p2 > 1023;
     isnt $p2, $p1;
 
     my $p3 = Web::Transport::FindPort::find_listenable_port;
-    ok $p3;
+    ok $p3, $p3;
     ok $p3 > 1023;
     isnt $p3, $p1;
     isnt $p3, $p2;

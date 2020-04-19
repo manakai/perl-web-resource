@@ -43,7 +43,7 @@ sub is_listenable_port ($) {
 sub find_listenable_port () {
     
     for (1..10000) {
-        my $port = int rand($EphemeralEnd - $EphemeralStart);
+      my $port = $EphemeralStart + int rand($EphemeralEnd - $EphemeralStart);
         next if $UsedPorts->[$port];
         if (is_listenable_port($port)) {
             $UsedPorts->[$port] = 1;

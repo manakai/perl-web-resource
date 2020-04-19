@@ -109,6 +109,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                                               'iana' => 'permanent',
                                                                               'iana_intended_usage' => 'common'
                                                                             },
+                                            'alto-updatestreamcontrol+json' => {
+                                                                                 'iana' => 'permanent',
+                                                                                 'iana_intended_usage' => 'common'
+                                                                               },
+                                            'alto-updatestreamparams+json' => {
+                                                                                'iana' => 'permanent',
+                                                                                'iana_intended_usage' => 'common'
+                                                                              },
                                             'aml' => {
                                                        'iana' => 'permanent',
                                                        'iana_intended_usage' => 'common'
@@ -163,7 +171,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana_intended_usage' => 'common'
                                                               },
                                             'atsc-dynamic-event-message' => {
-                                                                              'iana' => 'provisional'
+                                                                              'iana' => 'permanent',
+                                                                              'iana_intended_usage' => 'common'
                                                                             },
                                             'atsc-held+xml' => {
                                                                  'iana' => 'permanent',
@@ -242,6 +251,10 @@ $Web::MIME::_TypeDefs::Type = {
                                             'cals1840' => {
                                                             'obsolete' => 1
                                                           },
+                                            'cap+xml' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'limited use'
+                                                         },
                                             'cbor' => {
                                                         'iana' => 'permanent',
                                                         'iana_intended_usage' => 'common'
@@ -1057,6 +1070,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                                        }
                                                                         }
                                                           },
+                                            'lpf+zip' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
+                                                         },
                                             'lwp' => {
                                                        'params' => {
                                                                      'version' => {
@@ -1707,6 +1724,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                             'iana_intended_usage' => 'limited use'
                                                           },
                                             'ptg-file' => {},
+                                            'pvd+json' => {
+                                                            'iana' => 'permanent',
+                                                            'iana_intended_usage' => 'common'
+                                                          },
                                             'qif' => {},
                                             'qsig' => {
                                                         'iana' => 'permanent'
@@ -1865,6 +1886,10 @@ $Web::MIME::_TypeDefs::Type = {
                                             'sas' => {},
                                             'save' => {},
                                             'save-as' => {},
+                                            'sbe' => {
+                                                       'iana' => 'permanent',
+                                                       'iana_intended_usage' => 'common'
+                                                     },
                                             'sbml+xml' => {
                                                             'iana' => 'permanent',
                                                             'iana_intended_usage' => 'limited use'
@@ -1913,6 +1938,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                              'iana' => 'permanent',
                                                              'iana_intended_usage' => 'common'
                                                            },
+                                            'senml-etch+cbor' => {
+                                                                   'iana' => 'permanent',
+                                                                   'iana_intended_usage' => 'common'
+                                                                 },
+                                            'senml-etch+json' => {
+                                                                   'iana' => 'permanent',
+                                                                   'iana_intended_usage' => 'common'
+                                                                 },
                                             'senml-exi' => {
                                                              'iana' => 'permanent',
                                                              'iana_intended_usage' => 'common'
@@ -3057,6 +3090,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                          'iana' => 'permanent',
                                                                          'iana_intended_usage' => 'common'
                                                                        },
+                                            'vnd.dbf' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
+                                                         },
                                             'vnd.debian.binary-package' => {
                                                                              'iana' => 'permanent',
                                                                              'iana_intended_usage' => 'common'
@@ -5029,6 +5066,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 'iana' => 'permanent',
                                                                 'iana_intended_usage' => 'common'
                                                               },
+                                            'vnd.oci.image.manifest.v1+json' => {
+                                                                                  'iana' => 'permanent',
+                                                                                  'iana_intended_usage' => 'common'
+                                                                                },
                                             'vnd.oftn.l10n+json' => {
                                                                       'iana' => 'permanent',
                                                                       'iana_intended_usage' => 'common'
@@ -6048,6 +6089,14 @@ $Web::MIME::_TypeDefs::Type = {
                                                                      'iana' => 'permanent',
                                                                      'iana_intended_usage' => 'common'
                                                                    },
+                                            'vnd.shp' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
+                                                         },
+                                            'vnd.shx' => {
+                                                           'iana' => 'permanent',
+                                                           'iana_intended_usage' => 'common'
+                                                         },
                                             'vnd.sigrok.session' => {
                                                                       'iana' => 'permanent',
                                                                       'iana_intended_usage' => 'common'
@@ -6074,6 +6123,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                                      'iana_intended_usage' => 'common'
                                                                    },
                                             'vnd.snap-ci.com.v1+json' => {},
+                                            'vnd.snesdev-page-table' => {
+                                                                          'iana' => 'permanent',
+                                                                          'iana_intended_usage' => 'limited use'
+                                                                        },
                                             'vnd.soa.v71+json' => {},
                                             'vnd.soa.v71+xml' => {},
                                             'vnd.soa.v72+json' => {},
@@ -7944,7 +7997,10 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-pkcs7-crl' => {},
                                             'x-pkcs7-mime' => {},
                                             'x-pkcs7-signature' => {},
-                                            'x-pki-message' => {},
+                                            'x-pki-message' => {
+                                                                 'iana' => 'permanent',
+                                                                 'iana_intended_usage' => 'limited use'
+                                                               },
                                             'x-pkix-pkipath' => {},
                                             'x-plain' => {},
                                             'x-planperfect' => {},
@@ -8447,9 +8503,20 @@ $Web::MIME::_TypeDefs::Type = {
                                             'x-www-pgm-reply' => {},
                                             'x-www-pgm-request' => {},
                                             'x-x400-bp' => {},
-                                            'x-x509-ca-cert' => {},
+                                            'x-x509-ca-cert' => {
+                                                                  'iana' => 'permanent',
+                                                                  'iana_intended_usage' => 'limited use'
+                                                                },
+                                            'x-x509-ca-ra-cert' => {
+                                                                     'iana' => 'permanent',
+                                                                     'iana_intended_usage' => 'limited use'
+                                                                   },
                                             'x-x509-crl' => {},
                                             'x-x509-email-cert' => {},
+                                            'x-x509-next-ca-cert' => {
+                                                                       'iana' => 'permanent',
+                                                                       'iana_intended_usage' => 'limited use'
+                                                                     },
                                             'x-x509-server-cert' => {},
                                             'x-x509-user-cert' => {},
                                             'x-xaml+xml' => {},
@@ -9080,6 +9147,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                      'iana' => 'permanent',
                                                      'iana_intended_usage' => 'common'
                                                    },
+                                      'mhas' => {
+                                                  'iana' => 'permanent',
+                                                  'iana_intended_usage' => 'common'
+                                                },
                                       'mid' => {},
                                       'midi' => {},
                                       'mobile-xmf' => {
@@ -9217,6 +9288,9 @@ $Web::MIME::_TypeDefs::Type = {
                                       'smv0' => {
                                                   'iana' => 'permanent',
                                                   'iana_intended_usage' => 'common'
+                                                },
+                                      'sofa' => {
+                                                  'iana' => 'provisional'
                                                 },
                                       'songsafe' => {},
                                       'soundtrack' => {},
@@ -11744,6 +11818,9 @@ $Web::MIME::_TypeDefs::Type = {
                                      'smil-basic' => {},
                                      'smil-basic-layout' => {},
                                      'sms' => {},
+                                     'spdx' => {
+                                                 'iana' => 'provisional'
+                                               },
                                      'spice' => {},
                                      'spreadsheet' => {},
                                      'sql' => {

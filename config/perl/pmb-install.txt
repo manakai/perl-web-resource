@@ -1,8 +1,7 @@
 Algorithm::Diff~1.1903
 AnyEvent~7.17
-AnyEvent::HTTP~2.24
+AnyEvent::HTTP~2.25
 AnyEvent::HTTPD~0.93
-AnyEvent::Handle
 Canary::Stability~2013
 Capture::Tiny~0.48
 Carp~1.50
@@ -14,7 +13,7 @@ Math::BigInt~1.999818
 Net::SSLeay~1.88
 Object::Event~1.23
 Path::Class~0.37
-Path::Tiny~0.112
+Path::Tiny~0.114
 Scalar::Util~1.55
 Socket~2.029
 Term::ANSIColor~5.01

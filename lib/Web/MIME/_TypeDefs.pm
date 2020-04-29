@@ -1883,6 +1883,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                                     'iana' => 'permanent',
                                                                     'iana_intended_usage' => 'common'
                                                                   },
+                                            'sarif+json' => {
+                                                              'iana' => 'provisional'
+                                                            },
                                             'sas' => {},
                                             'save' => {},
                                             'save-as' => {},

@@ -3560,11 +3560,13 @@ $Web::MIME::_TypeDefs::Type = {
                                                                 },
                                             'vnd.frogans.fnc' => {
                                                                    'iana' => 'permanent',
-                                                                   'iana_intended_usage' => 'common'
+                                                                   'iana_intended_usage' => 'obsolete',
+                                                                   'obsolete' => 1
                                                                  },
                                             'vnd.frogans.ltf' => {
                                                                    'iana' => 'permanent',
-                                                                   'iana_intended_usage' => 'common'
+                                                                   'iana_intended_usage' => 'obsolete',
+                                                                   'obsolete' => 1
                                                                  },
                                             'vnd.fsc.weblauch' => {},
                                             'vnd.fsc.weblaunch' => {
@@ -11822,7 +11824,8 @@ $Web::MIME::_TypeDefs::Type = {
                                      'smil-basic-layout' => {},
                                      'sms' => {},
                                      'spdx' => {
-                                                 'iana' => 'provisional'
+                                                 'iana' => 'permanent',
+                                                 'iana_intended_usage' => 'common'
                                                },
                                      'spice' => {},
                                      'spreadsheet' => {},

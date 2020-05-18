@@ -10121,6 +10121,9 @@ $Web::MIME::_TypeDefs::Type = {
                                       'imagn' => {},
                                       'iw44' => {},
                                       'j2c' => {},
+                                      'j2is' => {
+                                                  'iana' => 'provisional'
+                                                },
                                       'j2k' => {},
                                       'jb2' => {},
                                       'jbig' => {},
@@ -10878,6 +10881,11 @@ $Web::MIME::_TypeDefs::Type = {
                                                  'sentient-life-form' => {}
                                                }
                                 },
+          'mce-no' => {
+                        'subtype' => {
+                                       'type' => {}
+                                     }
+                      },
           'mce-text' => {
                           'subtype' => {
                                          'javascript' => {}

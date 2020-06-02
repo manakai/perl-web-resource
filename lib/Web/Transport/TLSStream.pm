@@ -562,6 +562,14 @@ sub create ($$) {
       } else {
         warn "$info->{id}: $info->{type}: $action\n";
       }
+      if (defined $cert_args->{ca_cert}) {
+        warn "$info->{id}: $info->{type}: CAfile: (custom)\n";
+      } elsif (defined $cert_args->{ca_file}) {
+        warn "$info->{id}: $info->{type}: CAfile: |$cert_args->{ca_file}|\n";
+      }
+      if (defined $cert_args->{ca_path}) {
+        warn "$info->{id}: $info->{type}: CApath: |$cert_args->{ca_path}|\n";
+      }
     }
 
     (delete $info->{parent}->{closed})->then ($s_parent_closed);

@@ -569,4 +569,10 @@ Copyright 2014-2020 Wakaba <wakaba@suikawiki.org>.
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
 
+The license of the C<tls-certs.pem> file is:
+
+  This Source Code Form is subject to the terms of the Mozilla Public
+  License, v. 2.0. If a copy of the MPL was not distributed with this
+  file, You can obtain one at <http://mozilla.org/MPL/2.0/>.
+
 =cut

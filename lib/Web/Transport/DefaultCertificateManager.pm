@@ -1,9 +1,13 @@
 package Web::Transport::DefaultCertificateManager;
 use strict;
 use warnings;
-our $VERSION = '1.0';
+our $VERSION = '2.0';
+use Path::Tiny;
 use Promise;
 use Web::Transport::TypeError;
+
+my $CertsPath = path (__FILE__)->parent->parent->parent->parent->child
+    ('data/tls-certs.pem');
 
 push our @CARP_NOT, qw(
   Promise
@@ -46,6 +50,14 @@ sub to_anyevent_tls_args_sync ($) {
     }
   }
 
+  # XXX should SSL_CERT_FILE and SSL_CERT_DIR environment variables be
+  # supported?
+
+  if (not defined $v->{ca_cert} and
+      not defined $v->{ca_file}) {
+    $v->{ca_file} = $CertsPath;
+  }
+
   return $v;
 } # to_anyevent_tls_args_sync
 
@@ -57,7 +69,7 @@ sub to_anyevent_tls_args_for_host_sync ($$) {
 
 =head1 LICENSE
 
-Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2018-2020 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

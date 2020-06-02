@@ -16,6 +16,7 @@ clean:
 	rm -fr intermediate/parsing-errors.json
 	rm -fr lib/Web/Transport/_Defs.pm
 	rm -fr lib/Web/Transport/_PlatformDefs.pm
+	rm -fr data/tls-certs.pem
 
 ## ------ Setup ------
 
@@ -48,7 +49,7 @@ build-deps: deps
 
 build-main: lib/Web/MIME/_TypeDefs.pm lib/Web/Transport/_Defs.pm \
     lib/Web/Transport/JSON.pm intermediate/parsing-errors.json \
-    lib/Web/Transport/_PlatformDefs.pm
+    lib/Web/Transport/_PlatformDefs.pm data/tls-certs.pem
 
 lib/Web/MIME/_TypeDefs.pm: bin/generate-list.pl local/mime-types.json \
     local/mime-sniffing.json
@@ -87,6 +88,9 @@ lib/Web/Transport/_PlatformDefs.pm: bin/generate-platform-defs.pl \
 	$(PERL) -c $@
 local/browsers.json:
 	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/browsers.json
+
+data/tls-certs.pem:
+	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/tls-certs.pem
 
 ## ------ Tests ------
 

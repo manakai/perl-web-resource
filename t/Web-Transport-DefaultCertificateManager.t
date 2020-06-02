@@ -22,12 +22,14 @@ test {
   })->then (sub {
     my $args = $_[0];
     test {
+      my $path = delete $args->{ca_file};
+      like $path->slurp, qr{-----BEGIN CERTIFICATE-----};
       is_deeply $args, {};
     } $c;
     done $c;
     undef $c;
   });
-} n => 3, name => 'empty client';
+} n => 4, name => 'empty client';
 
 test {
   my $c = shift;
@@ -42,18 +44,20 @@ test {
       is $e->name, 'TypeError';
       is $e->message, 'Bad |cert|';
       is $e->file_name, __FILE__;
-      is $e->line_number, __LINE__+10;
+      is $e->line_number, __LINE__+12;
     } $c;
     return $cm->to_anyevent_tls_args_sync;
   })->then (sub {
     my $args = $_[0];
     test {
+      my $path = delete $args->{ca_file};
+      like $path->slurp, qr{-----BEGIN CERTIFICATE-----};
       is_deeply $args, {};
     } $c;
     done $c;
     undef $c;
   });
-} n => 7, name => 'empty server';
+} n => 8, name => 'empty server';
 
 test {
   my $c = shift;
@@ -135,7 +139,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2018-2020 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

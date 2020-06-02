@@ -29,15 +29,25 @@ Create a certificate manager.
 The first argument must be a hash reference, which can contain zero or
 more name/value pairs of the options.
 
-If no option is specified, the platform (OpenSSL)'s default applies.
+The TLS implementation accepts two options for root CA certificates:
+I<CAfile> (which is a path to certificate bundle file) and I<CApath>
+(which is a path to certificate collection directory).
 
-Options C<ca_cert>, C<ca_file>, C<ca_path>, C<cert>, C<cert_file>,
-C<key>, and C<key_file> can be specified.  See L<AnyEvent::TLS> for
-their semantics and possible values.
+The C<ca_cert> option value must be a bundle of root CA certificates
+in the PEM file format, as a string, or a
+L<Web::Transport::PKI::Certificate> object.  The value, if specified,
+is used as a on-the-fly generated I<CAfile> file's content.
 
-As described in L<AnyEvent::TLS>, environment variables
-C<PERL_ANYEVENT_CA_FILE> and C<PERL_ANYEVENT_CA_PATH> are also
-relevant.
+The C<ca_file> option value must be a B<path> to the root CA
+certificates in the PEM file format.  The value, if specified, is used
+a I<CAfile>.
+
+If none of C<ca_cert> and C<ca_file> is specified, the root CA
+certificates maintained by Mozilla is used as I<CAfile>.
+
+Options C<cert>, C<cert_file>, C<key>, and C<key_file> can be
+specified.  See L<AnyEvent::TLS> for their semantics and possible
+values.
 
 The certificate manager has no host-specific certificates for
 SNI-based selection.
@@ -58,7 +68,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2018-2020 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

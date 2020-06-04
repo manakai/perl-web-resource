@@ -534,7 +534,8 @@ $Web::MIME::_TypeDefs::Type = {
                                             'docuworks' => {},
                                             'dos-exe' => {},
                                             'dots+cbor' => {
-                                                             'iana' => 'permanent'
+                                                             'iana' => 'permanent',
+                                                             'iana_intended_usage' => 'common'
                                                            },
                                             'download' => {},
                                             'drafting' => {},
@@ -10175,6 +10176,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                  'iana_intended_usage' => 'common'
                                                },
                                       'jutvision' => {},
+                                      'jxl' => {
+                                                 'iana' => 'provisional'
+                                               },
                                       'jxr' => {
                                                  'iana' => 'permanent',
                                                  'iana_intended_usage' => 'common'

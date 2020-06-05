@@ -1,7 +1,7 @@
 package Web::Transport::TLSTransport;
 use strict;
 use warnings;
-our $VERSION = '2.0';
+our $VERSION = '3.0';
 use Carp qw(croak carp);
 use AnyEvent;
 use Promise;
@@ -133,11 +133,25 @@ sub start ($$;%) {
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
 
+  my $cm = $args->{certificate_manager};
+  unless (defined $cm) {
+    require Web::Transport::DefaultCertificateManager;
+    $cm = Web::Transport::DefaultCertificateManager->new ($args);
+  }
+  
   $self->{_certs} = [];
   my @verify;
   my $p = Promise->new (sub { $self->{starttls_done} = [$_[0], $_[1]] });
-  $self->{transport}->start (sub {
-    my $type = $_[1];
+
+  my $cert_args;
+  Promise->resolve->then (sub {
+    return $cm->prepare (server => $args->{server});
+  })->then (sub {
+    return $cm->to_anyevent_tls_args_sync;
+  })->then (sub {
+    $cert_args = $_[0];
+    $self->{transport}->start (sub {
+      my $type = $_[1];
     if ($type eq 'readdata') {
       Net::SSLeay::BIO_write ($self->{_rbio}, ${$_[2]});
       $self->_tls;
@@ -200,6 +214,14 @@ sub start ($$;%) {
       $vmode |= Net::SSLeay::VERIFY_CLIENT_ONCE ()
           if $args->{verify_client_once};
     }
+    
+    my $tls_args = {map { $_ => $args->{$_} } grep { defined $args->{$_} } qw(
+      method sslv2 sslv3 tlsv1 tlsv1_1 tlsv1_2
+      verify verify_require_client_cert verify_peername verify_cb
+      verify_client_once
+      check_crl dh_file dh dh_single_use cipher_list session_ticket
+    )};
+    #prepare
 
     # XXX
     ## AnyEvent (7.16 Fri Jul 19 18:00:21 CEST 2019) changed default
@@ -207,7 +229,10 @@ sub start ($$;%) {
     ## environments we support do not have it :-<
     $args->{dh} //= 'schmorp1539';
 
-    $self->{tls_ctx} = AnyEvent::TLS->new (%$args);
+    $self->{tls_ctx} = AnyEvent::TLS->new (
+      %$tls_args,
+      %$cert_args,
+    );
     my $tls = $self->{tls} = Net::SSLeay::new ($self->{tls_ctx}->ctx);
     $self->{starttls_data} = {
       openssl_version => [
@@ -302,14 +327,16 @@ sub start ($$;%) {
 
     Net::SSLeay::set_bio ($tls, $self->{_rbio}, $self->{_wbio});
 
-    $self->{wq} = [];
-    $self->_tls;
-  })->catch (sub {
-    if (defined $self->{starttls_done}) {
-      (delete $self->{starttls_done})->[1]->($_[0]);
-    } else {
-      #warn $_[0];
-    }
+      $self->{wq} = [];
+      $self->_tls;
+    })->catch (sub { # start
+      if (defined $self->{starttls_done}) {
+        (delete $self->{starttls_done})->[1]->($_[0]);
+      } else {
+        #warn $_[0];
+      }
+    }); # start
+    return undef;
   });
 
   return $p->then (sub {

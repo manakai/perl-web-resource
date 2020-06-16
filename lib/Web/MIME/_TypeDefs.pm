@@ -11041,6 +11041,9 @@ $Web::MIME::_TypeDefs::Type = {
                                                  'iana' => 'permanent',
                                                  'iana_intended_usage' => 'common'
                                                },
+                                      'e57' => {
+                                                 'iana' => 'provisional'
+                                               },
                                       'example' => {
                                                      'iana' => 'permanent',
                                                      'iana_intended_usage' => 'limited use'

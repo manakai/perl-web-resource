@@ -9296,7 +9296,8 @@ $Web::MIME::_TypeDefs::Type = {
                                                   'iana_intended_usage' => 'common'
                                                 },
                                       'sofa' => {
-                                                  'iana' => 'provisional'
+                                                  'iana' => 'permanent',
+                                                  'iana_intended_usage' => 'common'
                                                 },
                                       'songsafe' => {},
                                       'soundtrack' => {},

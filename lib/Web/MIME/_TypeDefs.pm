@@ -9335,6 +9335,10 @@ $Web::MIME::_TypeDefs::Type = {
                                                 },
                                       'tsp-audio' => {},
                                       'tsplayer' => {},
+                                      'tsvcis' => {
+                                                    'iana' => 'permanent',
+                                                    'iana_intended_usage' => 'common'
+                                                  },
                                       'uemclip' => {
                                                      'iana' => 'permanent',
                                                      'iana_intended_usage' => 'common'

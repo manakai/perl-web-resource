@@ -630,8 +630,10 @@ sub create ($$) {
     }
 
     my $vmode;
+    my $insecure;
     if ($args->{insecure} and not $args->{verify}) {
       $vmode = Net::SSLeay::VERIFY_NONE ();
+      $insecure = 1;
     } else {
       $args->{verify} = 1 unless defined $args->{verify};
       $vmode = Net::SSLeay::VERIFY_PEER ();
@@ -725,19 +727,21 @@ sub create ($$) {
         return $preverify_ok;
       };
 
-      Net::SSLeay::set_tlsext_status_type
-          $tls, Net::SSLeay::TLSEXT_STATUSTYPE_ocsp ();
-      Net::SSLeay::CTX_set_tlsext_status_cb $tls_ctx->ctx, sub {
-        my ($tls, $response) = @_;
-        my $result = Web::Transport::OCSP->check_ssleay_ocsp_response
-            ($tls, $response, $args->{protocol_clock});
+      unless ($insecure) {
+        Net::SSLeay::set_tlsext_status_type
+            $tls, Net::SSLeay::TLSEXT_STATUSTYPE_ocsp ();
+        Net::SSLeay::CTX_set_tlsext_status_cb $tls_ctx->ctx, sub {
+          my ($tls, $response) = @_;
+          my $result = Web::Transport::OCSP->check_ssleay_ocsp_response
+              ($tls, $response, $args->{protocol_clock});
 
-        return 1 unless defined $result; # no OCSP response
+          return 1 unless defined $result; # no OCSP response
 
-        $info->{tls_stapling} = $result;
-        $result->{error} = _pe $result->{error} if defined $result->{error};
-        return ! $result->{fatal};
-      };
+          $info->{tls_stapling} = $result;
+          $result->{error} = _pe $result->{error} if defined $result->{error};
+          return ! $result->{fatal};
+        };
+      } # !insecure
 
       ## XXX As Net::SSLeay does not export OpenSSL's
       ## |SSL_CTX_set_client_cert_cb| function, it's not possible to

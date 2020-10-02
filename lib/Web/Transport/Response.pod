@@ -67,6 +67,25 @@ Whether the WebSocket connection has been closed cleanly or not.  This
 method can be used when the response does not represent a WebSocket
 connection close event (e.g. network error).
 
+=item $value_bytes = $res->header ($name_bytes)
+
+Returns the header value for the header name specified in the
+argument, as byte strings.  If there are multiple headers with that
+name, their values are concatenated with C<, > (0x2C 0x20).  If there
+is no such header, C<undef> is returned instead.
+
+This method is appropriate for most headers.
+
+=item [$value_bytes, ...] = $res->header_all ($name_bytes)
+
+Returns the header value for the header name specified in the
+argument, as an array reference of header values as byte strings,
+preserving the order in the headers.  If there is no such header, an
+empty array reference is returned.
+
+This method is appropriate for limited kinds of headers, such as
+C<Set-Cookie>.
+
 =item $bytes = $res->body_bytes
 
 The response body, as a string of bytes, if any.
@@ -107,7 +126,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2020 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

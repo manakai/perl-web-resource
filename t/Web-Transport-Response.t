@@ -20,19 +20,27 @@ test {
   is $res->header ('hoge'), 'abc, zzz';
   is $res->header ('hoGE'), 'abc, zzz';
   is $res->header ('hoge'), 'abc, zzz';
+  is_deeply $res->header_all ('HOGE'), ['abc', 'zzz'];
+  is_deeply $res->header_all ('hoGE'), ['abc', 'zzz'];
+  is_deeply $res->header_all ('hoge'), ['abc', 'zzz'];
   is $res->header ('foO'), 'X';
+  is_deeply $res->header_all ('foO'), ['X'];
   is $res->header ('bac'), '';
+  is_deeply $res->header_all ('bac'), [''];
   is $res->header ('xyz'), ', 0';
+  is_deeply $res->header_all ('xyz'), ['', '0'];
   is $res->header ('foo2'), undef;
+  is_deeply $res->header_all ('foo2'), [];
   is $res->header (':'), undef;
+  is_deeply $res->header_all (':'), [];
   done $c;
-} n => 8, name => 'header';
+} n => 16, name => 'header';
 
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2020 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

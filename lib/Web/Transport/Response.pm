@@ -122,9 +122,8 @@ sub ws_close ($;$$) {
   return (delete $_[0]->{ws_close})->($_[1], $_[2]);
 } # ws_close
 
-# XXX need header API
+# XXX need header name list API
 
-## HTTP::Response compatibility
 sub header ($$) {
   my $name = $_[1];
   $name =~ tr/A-Z/a-z/; ## ASCII case-insensitive
@@ -137,6 +136,12 @@ sub header ($$) {
   return join ', ', @value if @value;
   return undef;
 } # header
+
+sub header_all ($$) {
+  my $name = $_[1];
+  $name =~ tr/A-Z/a-z/; ## ASCII case-insensitive
+  return [map { $_->[1] } grep { $_->[2] eq $name } @{$_[0]->{headers}}];
+} # header_all
 
 sub body_stream ($) {
   die Web::Transport::TypeError->new ("|body_stream| is not available")
@@ -203,7 +208,7 @@ sub stringify ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2020 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

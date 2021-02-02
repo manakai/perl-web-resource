@@ -2,7 +2,7 @@ Algorithm::Diff~1.201
 AnyEvent~7.17
 AnyEvent::HTTP~2.25
 AnyEvent::HTTPD~0.93
-AnyEvent::Util
+AnyEvent::Handle
 Canary::Stability~2013
 Capture::Tiny~0.48
 Carp~1.50
@@ -18,10 +18,10 @@ Path::Tiny~0.116
 Scalar::Util~1.55
 Socket~2.031
 Term::ANSIColor~5.01
+Test::Builder~1.302183
 Test::Differences~0.67
-Test::More~1.302183
 Text::Diff~1.45
 Time::HiRes~1.9764
 Types::Serialiser~1.01
-URI~5.06
+URI~5.07
 common::sense~3.75

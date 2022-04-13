@@ -2829,6 +2829,48 @@ test {
         unlike $request, qr{\x0AContent-Type: multipart/form-data\x0D\x0A};
         like $request, qr{\x0AContent-Type: multipart/form-data; boundary=\w+\x0D\x0A};
         like $request, qr{\x0D\x0A--};
+        like $request, qr{\x0AContent-Disposition: form-data; name="\xD4\x85%00"\x0D\x0A\x0D\x0A\x00\x0D\xD4\xB3\x0D\x0A--.+\x0D\x0AContent-Disposition: form-data; name="\xD4\x85%00"\x0D\x0A\x0D\x0A\x0D\x0A--.+\x0D\x0AContent-Type: application/octet-stream\x0D\x0AContent-Disposition: form-data; name="\xC2\x81\xC2\x91"; filename="file.dat"\x0D\x0A\x0D\x0Aab \x01\x02\x0D\x0A--};
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 5, name => 'request - multipart/form-data (missing filename)';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    return $client->request (path => ['foo', 'ab ce'], params => {
+      "\x{505}\x00" => ["\x00\x0D\x{533}", ''],
+    }, files => {
+      "\x81\x91" => {body_ref => \"ab \x01\x02", mime_filename => ''},
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        my $request = $res->body_bytes;
+        $request =~ s/GET$//;
+        like $request, qr{GET /foo/ab%20ce HTTP};
+        unlike $request, qr{\x0AContent-Type: multipart/form-data\x0D\x0A};
+        like $request, qr{\x0AContent-Type: multipart/form-data; boundary=\w+\x0D\x0A};
+        like $request, qr{\x0D\x0A--};
         like $request, qr{\x0AContent-Disposition: form-data; name="\xD4\x85%00"\x0D\x0A\x0D\x0A\x00\x0D\xD4\xB3\x0D\x0A--.+\x0D\x0AContent-Disposition: form-data; name="\xD4\x85%00"\x0D\x0A\x0D\x0A\x0D\x0A--.+\x0D\x0AContent-Type: application/octet-stream\x0D\x0AContent-Disposition: form-data; name="\xC2\x81\xC2\x91"; filename=""\x0D\x0A\x0D\x0Aab \x01\x02\x0D\x0A--};
       } $c;
     })->then (sub{
@@ -2838,7 +2880,7 @@ test {
       undef $c;
     });
   });
-} n => 5, name => 'request - multipart/form-data';
+} n => 5, name => 'request - multipart/form-data (empty filename)';
 
 test {
   my $c = shift;
@@ -4113,7 +4155,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2022 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

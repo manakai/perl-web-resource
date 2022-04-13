@@ -123,7 +123,7 @@ sub create ($$) {
                          ? @{$args->{files}->{$key}}
                          : ($args->{files}->{$key})) {
         my $mime = defined $value->{mime_type} ? $value->{mime_type} : 'application/octet-stream';
-        my $file_name = defined $value->{mime_filename} ? $value->{mime_filename} : '';
+        my $file_name = defined $value->{mime_filename} ? $value->{mime_filename} : 'file.dat';
         return {failed => 1, message => "File's |body_ref|'s value is utf8-flagged"}
             if utf8::is_utf8 (${$value->{body_ref}});
         push @part, 
@@ -441,7 +441,7 @@ The module partially derived from L<Web::UserAgent::Functions> from
 
 Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
 
-Copyright 2014-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2014-2022 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

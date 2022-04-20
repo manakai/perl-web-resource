@@ -43,6 +43,7 @@ sub is_reset_error ($) {
 } # is_reset_error
 
 sub network_error_message ($) {
+  return undef unless $_[0]->is_network_error;
   return defined $_[0]->{error} ? $_[0]->{error}->message : $_[0]->{message} // '(unknown network error)';
 } # network_error_message
 

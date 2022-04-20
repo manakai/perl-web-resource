@@ -3222,7 +3222,7 @@ test {
       is $closed->name, 'WebSocket Close';
       is $closed->message, '(5678 abc) WebSocket closed cleanly';
       is $closed->file_name, __FILE__;
-      is $closed->line_number, 171; # constructor
+      is $closed->line_number, 143; # constructor
       is $closed->ws_status, 5678;
       is $closed->ws_reason, 'abc';
       ok $closed->ws_cleanly;
@@ -3292,7 +3292,7 @@ test {
       is $closed->name, 'WebSocket Close';
       is $closed->message, '(1005 ) WebSocket closed cleanly';
       is $closed->file_name, __FILE__;
-      is $closed->line_number, 171; # constructor
+      is $closed->line_number, 143; # constructor
       is $closed->ws_status, 1005;
       is $closed->ws_reason, '';
       ok $closed->ws_cleanly;
@@ -3360,7 +3360,7 @@ test {
       is $closed->name, 'WebSocket Close';
       is $closed->message, '(1006 ) Connection truncated';
       is $closed->file_name, __FILE__;
-      is $closed->line_number, 171; # constructor
+      is $closed->line_number, 143; # constructor
       is $closed->ws_status, 1006;
       is $closed->ws_reason, '';
       ok ! $closed->ws_cleanly;
@@ -3450,7 +3450,7 @@ test {
       is $closed->name, 'HTTP parse error';
       is $closed->message, 'HTTP stream closed (non-fatal)';
       is $closed->file_name, __FILE__;
-      is $closed->line_number, 171; # constructor
+      is $closed->line_number, 143; # constructor
       ok ! $closed->http_fatal;
       ok ! $closed->http_can_retry;
     } $c;

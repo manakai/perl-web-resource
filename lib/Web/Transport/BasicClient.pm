@@ -95,6 +95,14 @@ sub origin ($) {
   return $_[0]->{origin};
 } # origin
 
+#for backcompat
+sub last_resort_timeout ($;$) {
+  if (@_ > 1) {
+    $_[0]->{last_resort_timeout} = $_[1] || $LastResortTimeout;
+  }
+  return $_[0]->{last_resort_timeout};
+} # last_resort_timeout
+
 my $proxy_to_transport = sub {
   ## create a transport for a proxy configuration
   my ($tid, $proxy, $url_record, $resolver, $clock, $no_cache, $signal, $debug) = @_;

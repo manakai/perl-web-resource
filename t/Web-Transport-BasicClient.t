@@ -3429,8 +3429,9 @@ test {
   });
 } n => 2, name => 'special ipaddr ICANN_NAME_COLLISION';
 
+#0.0.0.1 - platform dependent
 for my $addr (qw(
-  0.0.0.1 224.0.10.1 255.255.255.255
+  224.0.10.1 255.255.255.255
 )) {
   test {
     my $c = shift;

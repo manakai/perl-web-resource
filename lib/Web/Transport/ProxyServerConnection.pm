@@ -336,7 +336,7 @@ sub _handle_stream ($$$) {
         $result->{unused_request_body_stream}->cancel ($error);
       }
 
-      my $status = 504;
+      my $status = 500;
       if ($error->name eq 'Protocol error' or
           $error->name eq 'Perl I/O error') {
         $status = 504;
@@ -386,7 +386,7 @@ sub _handle_stream ($$$) {
       warn $_[0];
     });
 
-    my $status = 504;
+    my $status = 500;
     if ($error->name eq 'Protocol error' or
         $error->name eq 'Perl I/O error') {
       $status = 504;

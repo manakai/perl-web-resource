@@ -46,23 +46,18 @@ test {
 } n => 9, name => 'find_listenable_port exported';
 
 test {
-    my $c = shift;
-    my $p1 = Web::Transport::FindPort::find_listenable_port;
-    ok $p1, $p1;
-    ok $p1 > 1023;
+  my $c = shift;
+  my $got = {};
 
-    my $p2 = Web::Transport::FindPort::find_listenable_port;
-    ok $p2, $p2;
-    ok $p2 > 1023;
-    isnt $p2, $p1;
+  for (1..100) {
+    my $p = Web::Transport::FindPort::find_listenable_port;
+    ok $p, $p;
+    ok $p > 1023;
+    ok not $got->{$p}++;
+  }
 
-    my $p3 = Web::Transport::FindPort::find_listenable_port;
-    ok $p3, $p3;
-    ok $p3 > 1023;
-    isnt $p3, $p1;
-    isnt $p3, $p2;
-    done $c;
-} n => 9, name => 'find_listenable_port';
+  done $c;
+} n => 3*100, name => 'find_listenable_port';
 
 run_tests;
 

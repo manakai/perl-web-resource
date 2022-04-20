@@ -17,6 +17,7 @@ use Web::Transport::ConstProxyManager;
 use Web::Transport::PSGIServerConnection;
 use Time::Local qw(timegm_nocheck);
 use ReadableStream;
+use Web::Transport::FindPort;
 
 {
   package test::resolver1;
@@ -25,36 +26,6 @@ use ReadableStream;
     warn "test::resolver1: Resolving |$host|...\n" if ($ENV{WEBUA_DEBUG} || 0) > 1;
     return Promise->resolve (Web::Host->parse_string ($_[0]->{$host}));
   }
-}
-
-
-{
-  use Socket;
-  my $EphemeralStart = 1024;
-  my $EphemeralEnd = 5000;
-
-  sub is_listenable_port ($) {
-    my $port = $_[0];
-    return 0 unless $port;
-    
-    my $proto = getprotobyname('tcp');
-    socket(my $server, PF_INET, SOCK_STREAM, $proto) || die "socket: $!";
-    setsockopt($server, SOL_SOCKET, SO_REUSEADDR, pack("l", 1)) || die "setsockopt: $!";
-    bind($server, sockaddr_in($port, INADDR_ANY)) || return 0;
-    listen($server, SOMAXCONN) || return 0;
-    close($server);
-    return 1;
-  } # is_listenable_port
-
-  my $using = {};
-  sub find_listenable_port () {
-    for (1..10000) {
-      my $port = int rand($EphemeralEnd - $EphemeralStart);
-      next if $using->{$port}++;
-      return $port if is_listenable_port $port;
-    }
-    die "Listenable port not found";
-  } # find_listenable_port
 }
 
 sub psgi_server ($$;$%) {
@@ -68,6 +39,7 @@ sub psgi_server ($$;$%) {
     $cv->begin;
     my $host = '127.0.0.1';
     my $port = find_listenable_port;
+    warn "TEST: Port(psgi_server): $port\n";
     my $con;
     my $server = tcp_server $host, $port, sub {
       $cv->begin;
@@ -116,7 +88,9 @@ sub _server_as_cv ($$$$) {
 } # _server_as_cv
 
 sub server_as_cv ($) {
-  return _server_as_cv ('localhost', '127.0.0.1', find_listenable_port, $_[0]);
+  my $port = find_listenable_port;
+  warn "TEST: Port(server): $port\n";
+  return _server_as_cv ('localhost', '127.0.0.1', $port, $_[0]);
 } # server_as_cv
 
 my $test_path = path (__FILE__)->parent->parent->child ('local/test')->absolute;

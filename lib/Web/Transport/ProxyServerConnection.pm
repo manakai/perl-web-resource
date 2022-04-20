@@ -257,7 +257,6 @@ sub _handle_stream ($$$) {
       stream => 1,
     )->then (sub {
       my $res = $_[0];
-
       if ($res->status == 407) {
         return {
           unused_request_body_stream => $res->body_stream,
@@ -388,6 +387,14 @@ sub _handle_stream ($$$) {
     });
 
     my $status = 500;
+    if ($error->name eq 'Protocol error' or
+        $error->name eq 'Perl I/O error') {
+      $status = 504;
+      ## e.g.
+      ## Web::Transport::ProxyServerConnection: HTTP parse error: Connection closed without response
+    } elsif ($error->name eq 'HTTP parse error') {
+      $status = 502;
+    }
     return [{
       status => $status,
       headers => [['content-type' => 'text/plain;charset=utf-8']],

@@ -19,8 +19,8 @@ sub import ($;@) {
   }
 } # import
 
-my $EphemeralStart = 1024;
-my $EphemeralEnd = 5000;
+my $EphemeralStart = 1025;
+my $EphemeralEnd = 61000;
 
 my $UsedPorts = [@{$Web::Transport::_Defs::BadPorts}];
 ## Bad ports are excluded
@@ -28,17 +28,20 @@ my $UsedPorts = [@{$Web::Transport::_Defs::BadPorts}];
 
 sub is_listenable_port ($) {
   my $port = shift;
-    return 0 unless $port;
-    return 0 if $UsedPorts->[$port];
-    
-    my $proto = getprotobyname('tcp');
-    socket(my $server, PF_INET, SOCK_STREAM, $proto) || die "socket: $!";
-    setsockopt($server, SOL_SOCKET, SO_REUSEADDR, pack("l", 1)) || die "setsockopt: $!";
-    bind($server, sockaddr_in($port, INADDR_ANY)) || return 0;
-    listen($server, SOMAXCONN) || return 0;
-    close($server);
-    return 1;
-}
+  return 0 unless $port;
+  return 0 if $port < $EphemeralStart;
+  return 0 if $EphemeralEnd < $port;
+  return 0 if $UsedPorts->[$port];
+  
+  my $proto = getprotobyname('tcp');
+  socket(my $server, PF_INET, SOCK_STREAM, $proto) || die "socket: $!";
+  setsockopt($server, SOL_SOCKET, SO_REUSEADDR, pack("l", 1)) || die "setsockopt: $!";
+  bind($server, sockaddr_in($port, INADDR_ANY)) || return 0;
+  listen($server, SOMAXCONN) || return 0;
+  close($server);
+  
+  return 1;
+} # is_listenable_port
 
 sub find_listenable_port () {
     
@@ -60,7 +63,7 @@ sub find_listenable_port () {
 
 Copyright 2010 Hatena <http://www.hatena.ne.jp/>
 
-Copyright 2020 Wakaba <wakaba@suikawiki.org>.
+Copyright 2020-2022 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -22,38 +22,10 @@ use Web::Transport::ConnectionClient;
 use Web::Transport::WSClient;
 use DataView;
 use ArrayBuffer;
+use Web::Transport::FindPort;
 
 $Web::Transport::HTTPStream::ServerConnection::ReadTimeout = 3;
 my $GlobalCV = AE::cv;
-
-{
-  use Socket;
-  my $EphemeralStart = 1024;
-  my $EphemeralEnd = 5000;
-
-  sub is_listenable_port ($) {
-    my $port = $_[0];
-    return 0 unless $port;
-    
-    my $proto = getprotobyname('tcp');
-    socket(my $server, PF_INET, SOCK_STREAM, $proto) || die "socket: $!";
-    setsockopt($server, SOL_SOCKET, SO_REUSEADDR, pack("l", 1)) || die "setsockopt: $!";
-    bind($server, sockaddr_in($port, INADDR_ANY)) || return 0;
-    listen($server, SOMAXCONN) || return 0;
-    close($server);
-    return 1;
-  } # is_listenable_port
-
-  my $using = {};
-  sub find_listenable_port () {
-    for (1..10000) {
-      my $port = int rand($EphemeralEnd - $EphemeralStart);
-      next if $using->{$port}++;
-      return $port if is_listenable_port $port;
-    }
-    die "Listenable port not found";
-  } # find_listenable_port
-}
 
 sub rsread_cb ($$) {
   my $rs = shift;
@@ -3250,7 +3222,7 @@ test {
       is $closed->name, 'WebSocket Close';
       is $closed->message, '(5678 abc) WebSocket closed cleanly';
       is $closed->file_name, __FILE__;
-      is $closed->line_number, 171; # constructor
+      is $closed->line_number, 143; # constructor
       is $closed->ws_status, 5678;
       is $closed->ws_reason, 'abc';
       ok $closed->ws_cleanly;
@@ -3320,7 +3292,7 @@ test {
       is $closed->name, 'WebSocket Close';
       is $closed->message, '(1005 ) WebSocket closed cleanly';
       is $closed->file_name, __FILE__;
-      is $closed->line_number, 171; # constructor
+      is $closed->line_number, 143; # constructor
       is $closed->ws_status, 1005;
       is $closed->ws_reason, '';
       ok $closed->ws_cleanly;
@@ -3388,7 +3360,7 @@ test {
       is $closed->name, 'WebSocket Close';
       is $closed->message, '(1006 ) Connection truncated';
       is $closed->file_name, __FILE__;
-      is $closed->line_number, 171; # constructor
+      is $closed->line_number, 143; # constructor
       is $closed->ws_status, 1006;
       is $closed->ws_reason, '';
       ok ! $closed->ws_cleanly;
@@ -3478,7 +3450,7 @@ test {
       is $closed->name, 'HTTP parse error';
       is $closed->message, 'HTTP stream closed (non-fatal)';
       is $closed->file_name, __FILE__;
-      is $closed->line_number, 171; # constructor
+      is $closed->line_number, 143; # constructor
       ok ! $closed->http_fatal;
       ok ! $closed->http_can_retry;
     } $c;

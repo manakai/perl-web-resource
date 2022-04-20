@@ -19,6 +19,7 @@ use Promised::Flow;
 use AnyEvent::Util qw(run_cmd);
 use ArrayBuffer;
 use DataView;
+use Web::Transport::FindPort;
 
 sub d ($) {
   return DataView->new (ArrayBuffer->new_from_scalarref (\($_[0])));
@@ -59,35 +60,6 @@ sub read_rbs ($) {
   }; # $run
   return $run->()->then (sub { undef $run; return $result }, sub { undef $run; die $_[0] });
 } # read_rbs
-
-{
-  use Socket;
-  my $EphemeralStart = 1024;
-  my $EphemeralEnd = 5000;
-
-  sub is_listenable_port ($) {
-    my $port = $_[0];
-    return 0 unless $port;
-    
-    my $proto = getprotobyname('tcp');
-    socket(my $server, PF_INET, SOCK_STREAM, $proto) || die "socket: $!";
-    setsockopt($server, SOL_SOCKET, SO_REUSEADDR, pack("l", 1)) || die "setsockopt: $!";
-    bind($server, sockaddr_in($port, INADDR_ANY)) || return 0;
-    listen($server, SOMAXCONN) || return 0;
-    close($server);
-    return 1;
-  } # is_listenable_port
-
-  my $using = {};
-  sub find_listenable_port () {
-    for (1..10000) {
-      my $port = int rand($EphemeralEnd - $EphemeralStart);
-      next if $using->{$port}++;
-      return $port if is_listenable_port $port;
-    }
-    die "Listenable port not found";
-  } # find_listenable_port
-}
 
 my $server_pids = {};
 END { kill 'KILL', $_ for keys %$server_pids }

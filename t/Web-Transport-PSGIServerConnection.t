@@ -14,35 +14,7 @@ use Web::Transport::ConnectionClient;
 use Web::Transport::WSClient;
 use Web::Transport::PSGIServerConnection;
 use Web::Transport::TCPTransport;
-
-{
-  use Socket;
-  my $EphemeralStart = 1024;
-  my $EphemeralEnd = 5000;
-
-  sub is_listenable_port ($) {
-    my $port = $_[0];
-    return 0 unless $port;
-    
-    my $proto = getprotobyname('tcp');
-    socket(my $server, PF_INET, SOCK_STREAM, $proto) || die "socket: $!";
-    setsockopt($server, SOL_SOCKET, SO_REUSEADDR, pack("l", 1)) || die "setsockopt: $!";
-    bind($server, sockaddr_in($port, INADDR_ANY)) || return 0;
-    listen($server, SOMAXCONN) || return 0;
-    close($server);
-    return 1;
-  } # is_listenable_port
-
-  my $using = {};
-  sub find_listenable_port () {
-    for (1..10000) {
-      my $port = int rand($EphemeralEnd - $EphemeralStart);
-      next if $using->{$port}++;
-      return $port if is_listenable_port $port;
-    }
-    die "Listenable port not found";
-  } # find_listenable_port
-}
+use Web::Transport::FindPort;
 
 sub server ($$;$%) {
   my $app = shift;
@@ -1013,7 +985,7 @@ test {
     my $error = $_[1];
     test {
       $error_invoked++;
-      like $error, qr{^TypeError: The argument is a utf8-flaged string at \Q@{[__FILE__]}\E line 6[1-4]}, $error;
+      like $error, qr{^TypeError: The argument is a utf8-flaged string at \Q@{[__FILE__]}\E line 3[1-9]}, $error;
     } $c;
   });
 } n => 5, name => 'Bad body 1';
@@ -1159,7 +1131,7 @@ test {
     test {
       $error_invoked++;
       if (ref $error) {
-        like $error, qr{^Error: \Q$hoge\E at \Q@{[__FILE__]}\E line 6[1-4]}, $error;
+        like $error, qr{^Error: \Q$hoge\E at \Q@{[__FILE__]}\E line 3[1-9]}, $error;
       }
     } $c;
   });

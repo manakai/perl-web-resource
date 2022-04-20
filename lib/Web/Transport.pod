@@ -174,8 +174,9 @@ file content.
 A file hash reference can also contain C<mime_type> key, whose value
 is a MIME type string (C<Content-Type:> header value) and
 C<mime_filename> key, whose value is a file name string
-(C<Content-Disposition:> header's C<filename> parameter value).  Their
-defaults, used when the key is omitted or the value is C<undef>, are
+(C<Content-Disposition:> header's C<filename> parameter value;
+defaulted to a string C<file.dat> if missing).  Their defaults, used
+when the key is omitted or the value is C<undef>, are
 C<application/octet-stream> and the empty string, respectively.
 
 They are encoded in the C<multipart/form-data> format in UTF-8.
@@ -564,7 +565,7 @@ information.
 
 Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
 
-Copyright 2014-2020 Wakaba <wakaba@suikawiki.org>.
+Copyright 2014-2022 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

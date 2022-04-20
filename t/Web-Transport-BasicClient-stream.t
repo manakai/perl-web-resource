@@ -68,6 +68,7 @@ sub psgi_server ($$;$%) {
     $cv->begin;
     my $host = '127.0.0.1';
     my $port = find_listenable_port;
+    warn "TEST: Port(psgi_server): $port\n";
     my $con;
     my $server = tcp_server $host, $port, sub {
       $cv->begin;
@@ -116,7 +117,9 @@ sub _server_as_cv ($$$$) {
 } # _server_as_cv
 
 sub server_as_cv ($) {
-  return _server_as_cv ('localhost', '127.0.0.1', find_listenable_port, $_[0]);
+  my $port = find_listenable_port;
+  warn "TEST: Port(server): $port\n";
+  return _server_as_cv ('localhost', '127.0.0.1', $port, $_[0]);
 } # server_as_cv
 
 my $test_path = path (__FILE__)->parent->parent->child ('local/test')->absolute;

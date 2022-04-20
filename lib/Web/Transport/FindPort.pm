@@ -19,8 +19,8 @@ sub import ($;@) {
   }
 } # import
 
-my $EphemeralStart = 1024;
-my $EphemeralEnd = 5000;
+my $EphemeralStart = 1025;
+my $EphemeralEnd = 61000;
 
 my $UsedPorts = [@{$Web::Transport::_Defs::BadPorts}];
 ## Bad ports are excluded

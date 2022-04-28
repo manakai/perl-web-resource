@@ -778,7 +778,7 @@ sub _check_send_request ($) {
     return Promise->reject
         (Web::Transport::TypeError->new ("Connection is not ready"));
   } elsif ($con->{to_be_closed}) {
-    return Promise->reject (Web::Transport::TypeError->new ("Connection is closed"));
+    return Promise->reject ($con->{exit} || Web::Transport::TypeError->new ("Connection is closed"));
   } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
     return Promise->reject (Web::Transport::TypeError->new ("Connection is busy"));
   }
@@ -2788,7 +2788,7 @@ sub _send_request ($$) {
     return Promise->reject
         (Web::Transport::TypeError->new ("Connection is not ready"));
   } elsif ($con->{to_be_closed}) {
-    return Promise->reject (Web::Transport::TypeError->new ("Connection is closed"));
+    return Promise->reject ($con->{exit} || Web::Transport::TypeError->new ("Connection is closed"));
   } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
     return Promise->reject (Web::Transport::TypeError->new ("Connection is busy"));
   }

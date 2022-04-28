@@ -1033,7 +1033,6 @@ sub _both_done ($) {
   delete $con->{send_done};
   delete $con->{receive_done};
   delete $con->{write_mode};
-  delete $con->{exit};
   $con->{aborter}->signal->manakai_onabort (undef) if defined $con->{aborter};
   delete $con->{aborter};
 
@@ -1062,9 +1061,10 @@ sub _both_done ($) {
         };
       }
     });
-    $con->{state} = 'stopped';
-  } else { # not to be closed
-    $con->{timer} = AE::timer $Web::Transport::HTTPStream::ServerConnection::ReadTimeout, 0, sub { $con->_timeout };
+      $con->{state} = 'stopped';
+    } else { # not to be closed
+      delete $con->{exit};
+      $con->{timer} = AE::timer $Web::Transport::HTTPStream::ServerConnection::ReadTimeout, 0, sub { $con->_timeout };
 
     if ($con->{rbuf} =~ /[^\x0D\x0A]/) {
       $con->{state} = 'before request-line';
@@ -1082,7 +1082,6 @@ sub _both_done ($) {
   delete $con->{receive_done};
   delete $con->{response};
   delete $con->{write_mode};
-  delete $con->{exit};
   $con->{aborter}->signal->manakai_onabort (undef) if defined $con->{aborter};
   delete $con->{aborter};
 
@@ -1111,6 +1110,7 @@ sub _both_done ($) {
     });
     $con->{state} = 'stopped';
   } else {
+    delete $con->{exit};
     $con->{state} = 'waiting';
     $con->{response_received} = 0;
   }

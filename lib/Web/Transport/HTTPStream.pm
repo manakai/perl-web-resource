@@ -778,11 +778,7 @@ sub _check_send_request ($) {
     return Promise->reject
         (Web::Transport::TypeError->new ("Connection is not ready"));
   } elsif ($con->{to_be_closed}) {
-    if (Web::Transport::ProtocolError->is_error ($con->{exit})) {
-      return Promise->reject ($con->{exit});
-    } else {
-      return Promise->reject (Web::Transport::TypeError->new ("Connection is closed"));
-    }
+    return Promise->reject ($con->{exit} || Web::Transport::TypeError->new ("Connection is closed"));
   } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
     return Promise->reject (Web::Transport::TypeError->new ("Connection is busy"));
   }
@@ -1040,8 +1036,10 @@ sub _both_done ($) {
   $con->{aborter}->signal->manakai_onabort (undef) if defined $con->{aborter};
   delete $con->{aborter};
 
-  delete $con->{disable_timer};
-  if ($con->{to_be_closed}) {
+    delete $con->{disable_timer};
+    if ($con->{to_be_closed}) {
+      delete $con->{exit}
+          if UNIVERSAL::isa ($con->{exit}, 'Web::Transport::ProtocolError');
     my ($r_written, $s_written) = promised_cv;
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
@@ -1090,6 +1088,8 @@ sub _both_done ($) {
   delete $con->{aborter};
 
   if ($con->{to_be_closed}) {
+    delete $con->{exit}
+        if UNIVERSAL::isa ($con->{exit}, 'Web::Transport::ProtocolError');
     my ($r_written, $s_written) = promised_cv;
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
@@ -2792,11 +2792,7 @@ sub _send_request ($$) {
     return Promise->reject
         (Web::Transport::TypeError->new ("Connection is not ready"));
   } elsif ($con->{to_be_closed}) {
-    if (Web::Transport::ProtocolError->is_error ($con->{exit})) {
-      return Promise->reject ($con->{exit});
-    } else {
-      return Promise->reject (Web::Transport::TypeError->new ("Connection is closed"));
-    }
+    return Promise->reject ($con->{exit} || Web::Transport::TypeError->new ("Connection is closed"));
   } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
     return Promise->reject (Web::Transport::TypeError->new ("Connection is busy"));
   }

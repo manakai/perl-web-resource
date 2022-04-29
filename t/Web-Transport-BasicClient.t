@@ -1074,6 +1074,37 @@ test {
   my $c = shift;
   server_as_cv (q{
     receive "GET"
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    $client->last_resort_timeout (0.5);
+    my $p = $client->request (url => $url);
+    test {
+      isa_ok $p, 'Promise';
+    } $c;
+    return $p->catch (sub {
+      my $res = $_[0];
+      test {
+        isa_ok $res, 'Web::Transport::Response';
+        ok $res->is_network_error;
+        is $res->network_error_message, 'Last-resort timeout (0.5)';
+        is $res->body_bytes, undef;
+        ok ! $res->incomplete;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 6, name => 'timeout (backcompat method syntax)';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET"
     "HTTP/1.0 200 OK"CRLF
     CRLF
     "hoge"

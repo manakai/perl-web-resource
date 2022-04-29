@@ -95,6 +95,14 @@ sub origin ($) {
   return $_[0]->{origin};
 } # origin
 
+#for backcompat
+sub last_resort_timeout ($;$) {
+  if (@_ > 1) {
+    $_[0]->{last_resort_timeout} = $_[1] || $LastResortTimeout;
+  }
+  return $_[0]->{last_resort_timeout};
+} # last_resort_timeout
+
 my $proxy_to_transport = sub {
   ## create a transport for a proxy configuration
   my ($tid, $proxy, $url_record, $resolver, $clock, $no_cache, $signal, $debug) = @_;
@@ -372,13 +380,18 @@ sub _request ($$$$$$$$$$$$$) {
       };
     }
 
-    return promised_cleanup { undef $timer } $http->send_request ({
-      method => $method,
-      target => encode_web_utf8 ($target),
-      headers => $headers,
-      ws => $is_ws,
-      ws_protocols => $ws_protocols,
-      length => $length,
+    return $http->_check_send_request->catch (sub {
+      my $e = $_[0];
+      die Web::Transport::ProtocolError::HTTPParseError->_new_retry ("Existing connection is broken", 1);
+    })->then (sub {
+      return $http->send_request ({
+        method => $method,
+        target => encode_web_utf8 ($target),
+        headers => $headers,
+        ws => $is_ws,
+        ws_protocols => $ws_protocols,
+        length => $length,
+      });
     })->then (sub {
       my $stream = $_[0]->{stream};
 
@@ -528,6 +541,8 @@ sub _request ($$$$$$$$$$$$$) {
 
         return [$response, $stream->closed];
       });
+    })->finally (sub {
+      undef $timer;
     });
   });
 } # _request
@@ -655,7 +670,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2022 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

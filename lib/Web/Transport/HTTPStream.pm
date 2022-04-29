@@ -770,6 +770,29 @@ sub _ws_received ($) {
 
 # XXX can_create_stream is_active && (if h1: no current request)
 
+sub _check_send_request ($) {
+  my $con = $_[0];
+
+  ## See also: |_send_request|
+  if (not defined $con->{state}) {
+    return Promise->reject
+        (Web::Transport::TypeError->new ("Connection is not ready"));
+  } elsif ($con->{to_be_closed}) {
+    return Promise->reject ($con->{exit} || Web::Transport::TypeError->new ("Connection is closed"));
+  } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
+    return Promise->reject (Web::Transport::TypeError->new ("Connection is busy"));
+  }
+  
+  return $con->{writer}->write
+      (DataView->new (ArrayBuffer->new_from_scalarref (\'')))->catch (sub {
+    my $e = $_[0];
+    if ($con->{DEBUG}) {
+      warn "$con->{id}: Write error @{[scalar gmtime]}: @{[_e4d $e]}\n";
+    }
+    die $e;
+  });
+} # _check_send_request
+
 ## Send a request.  The argument must be a hash reference of following
 ## key/value pairs:
 ##
@@ -806,7 +829,7 @@ sub send_request ($$;%) {
       parent => $con->{info},
     },
     connection => $con,
-  },'Web::Transport::HTTPStream::Stream';
+  }, 'Web::Transport::HTTPStream::Stream';
   return $stream->_send_request ($req, @_);
 } # send_request
 
@@ -1010,12 +1033,13 @@ sub _both_done ($) {
   delete $con->{send_done};
   delete $con->{receive_done};
   delete $con->{write_mode};
-  delete $con->{exit};
   $con->{aborter}->signal->manakai_onabort (undef) if defined $con->{aborter};
   delete $con->{aborter};
 
-  delete $con->{disable_timer};
-  if ($con->{to_be_closed}) {
+    delete $con->{disable_timer};
+    if ($con->{to_be_closed}) {
+      delete $con->{exit}
+          if UNIVERSAL::isa ($con->{exit}, 'Web::Transport::ProtocolError');
     my ($r_written, $s_written) = promised_cv;
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
@@ -1039,9 +1063,10 @@ sub _both_done ($) {
         };
       }
     });
-    $con->{state} = 'stopped';
-  } else { # not to be closed
-    $con->{timer} = AE::timer $Web::Transport::HTTPStream::ServerConnection::ReadTimeout, 0, sub { $con->_timeout };
+      $con->{state} = 'stopped';
+    } else { # not to be closed
+      delete $con->{exit};
+      $con->{timer} = AE::timer $Web::Transport::HTTPStream::ServerConnection::ReadTimeout, 0, sub { $con->_timeout };
 
     if ($con->{rbuf} =~ /[^\x0D\x0A]/) {
       $con->{state} = 'before request-line';
@@ -1059,11 +1084,12 @@ sub _both_done ($) {
   delete $con->{receive_done};
   delete $con->{response};
   delete $con->{write_mode};
-  delete $con->{exit};
   $con->{aborter}->signal->manakai_onabort (undef) if defined $con->{aborter};
   delete $con->{aborter};
 
   if ($con->{to_be_closed}) {
+    delete $con->{exit}
+        if UNIVERSAL::isa ($con->{exit}, 'Web::Transport::ProtocolError');
     my ($r_written, $s_written) = promised_cv;
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
@@ -1088,6 +1114,7 @@ sub _both_done ($) {
     });
     $con->{state} = 'stopped';
   } else {
+    delete $con->{exit};
     $con->{state} = 'waiting';
     $con->{response_received} = 0;
   }
@@ -2759,11 +2786,13 @@ sub _send_request ($$) {
   }
 
   my $con = $stream->{connection};
+  
+  ## See also: |_check_send_request|
   if (not defined $con->{state}) {
     return Promise->reject
         (Web::Transport::TypeError->new ("Connection is not ready"));
   } elsif ($con->{to_be_closed}) {
-    return Promise->reject (Web::Transport::TypeError->new ("Connection is closed"));
+    return Promise->reject ($con->{exit} || Web::Transport::TypeError->new ("Connection is closed"));
   } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
     return Promise->reject (Web::Transport::TypeError->new ("Connection is busy"));
   }
@@ -3193,7 +3222,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2022 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

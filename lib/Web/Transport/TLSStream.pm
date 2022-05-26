@@ -676,6 +676,9 @@ sub create ($$) {
       die Web::Transport::TypeError->new ("Bad |key|") unless
           defined $cert_args->{key} or defined $cert_args->{key_file};
 
+      ## Disable TLS 1.3 for now, for backcompat
+      Net::SSLeay::set_max_proto_version ($tls, Net::SSLeay::TLS1_2_VERSION ());
+      
       Net::SSLeay::set_accept_state ($tls);
       Net::SSLeay::CTX_set_tlsext_servername_callback ($tls_ctx->ctx, sub {
         my $sn = Net::SSLeay::get_servername ($_[0]);

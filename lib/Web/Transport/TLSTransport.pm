@@ -245,6 +245,9 @@ sub start ($$;%) {
       net_ssleay_path => $INC{"Net/SSLeay.pm"},
     };
     if ($self->{server}) {
+      ## Disable TLS 1.3 for now, for backcompat
+      Net::SSLeay::set_max_proto_version ($tls, Net::SSLeay::TLS1_2_VERSION ());
+      
       Net::SSLeay::set_accept_state ($tls);
       Net::SSLeay::CTX_set_tlsext_servername_callback ($self->{tls_ctx}->ctx, sub {
         $self->{starttls_data}->{sni_host_name} = Net::SSLeay::get_servername ($_[0]);

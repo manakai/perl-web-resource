@@ -62,6 +62,7 @@ sub SSL_CB_READ () { 0x04 }
 sub SSL_CB_ALERT () { 0x4000 }
 use constant ERROR_SYSCALL => Net::SSLeay::ERROR_SYSCALL ();
 use constant ERROR_WANT_READ => Net::SSLeay::ERROR_WANT_READ ();
+use constant ERROR_WANT_WRITE => Net::SSLeay::ERROR_WANT_WRITE ();
 
 sub match_cn($$$) {
    my ($name, $cn, $type) = @_;
@@ -424,7 +425,9 @@ sub _tls ($) {
       my $r = Net::SSLeay::write ($self->{tls}, substr ${$w->[0]}, $w->[2], $w->[1]);
       if ($r <= 0) {
         $r = Net::SSLeay::get_error ($self->{tls}, $r);
-        if ($r != ERROR_WANT_READ and $r != ERROR_SYSCALL) {
+        if ($r != ERROR_WANT_READ and
+            $r != ERROR_WANT_WRITE and
+            $r != ERROR_SYSCALL) {
           my $data = {failed => 1};
           if ($r == ERROR_SYSCALL) {
             $data->{errno} = 0+$!;
@@ -485,7 +488,9 @@ sub _tls ($) {
   }
   {
     my $r = Net::SSLeay::get_error ($self->{tls}, -1); # -1 is not neccessarily correct, but Net::SSLeay doesn't tell us
-    if ($r != ERROR_WANT_READ and $r != ERROR_SYSCALL) {
+    if ($r != ERROR_WANT_READ and
+        $r != ERROR_WANT_WRITE and
+        $r != ERROR_SYSCALL) {
       my $data = {failed => 1};
       if ($r == ERROR_SYSCALL) {
         $data->{errno} = 0+$!;

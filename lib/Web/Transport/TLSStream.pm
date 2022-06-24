@@ -48,6 +48,7 @@ sub SSL_CB_READ () { 0x04 }
 sub SSL_CB_ALERT () { 0x4000 }
 use constant ERROR_SYSCALL => Net::SSLeay::ERROR_SYSCALL ();
 use constant ERROR_WANT_READ => Net::SSLeay::ERROR_WANT_READ ();
+use constant ERROR_WANT_WRITE => Net::SSLeay::ERROR_WANT_WRITE ();
 
 sub match_cn($$$) {
    my ($name, $cn, $type) = @_;
@@ -352,7 +353,9 @@ sub create ($$) {
         $r = Net::SSLeay::get_error ($tls, $r);
         if ($r == ERROR_SYSCALL) {
           return $abort->(Streams::IOError->new ($!));
-        } elsif ($r != ERROR_WANT_READ and $r != ERROR_SYSCALL) {
+        } elsif ($r != ERROR_WANT_READ and
+                 $r != ERROR_WANT_WRITE and
+                 $r != ERROR_SYSCALL) {
           return $abort->(Web::Transport::NetSSLeayError->new_current);
         } else {
           $retry = 1;
@@ -407,7 +410,9 @@ sub create ($$) {
         my $r = Net::SSLeay::get_error ($tls, -1); # -1 is not neccessarily correct, but Net::SSLeay doesn't tell us
         if ($r == ERROR_SYSCALL) {
           return $abort->(Streams::IOError->new ($!));
-        } elsif ($r != ERROR_WANT_READ and $r != ERROR_SYSCALL) {
+        } elsif ($r != ERROR_WANT_READ and
+                 $r != ERROR_WANT_WRITE and
+                 $r != ERROR_SYSCALL) {
           return $abort->(Web::Transport::NetSSLeayError->new_current);
         }
         last;

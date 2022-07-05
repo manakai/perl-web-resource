@@ -1,11 +1,20 @@
 package Web::Transport::OAuth1;
 use strict;
 use warnings;
-our $VERSION = '3.0';
+our $VERSION = '4.0';
 use Carp qw(croak);
 use Digest::SHA;
-use Web::URL::Encoding qw(oauth1_percent_encode_c oauth1_percent_encode_b);
+use Web::URL;
+use Web::URL::Encoding qw(oauth1_percent_encode_c oauth1_percent_encode_b
+                          percent_decode_c
+                          serialize_form_urlencoded);
+use Web::DateTime::Clock;
 use Web::Transport::Base64;
+use Web::Transport::BasicClient;
+use Promise;
+
+## Methods of this module is invoked from other modules.  They should
+## not be invoked directly by applications.
 
 sub create_request_params ($$$$) {
   my ($query, $header, $bodyref, $params) = @_;
@@ -173,9 +182,7 @@ sub authenticate ($%) {
   return $result;
 } # authenticate
 
-1;
-
-__END__
+=pod
 
 Input parameters MUST be byte strings, conforming to HTTP and/or OAuth
 (RFC 5849) specifications.
@@ -199,12 +206,219 @@ warn "Request URL: " . $url->stringify . "\n";
 warn "Authorization: " . ($result->{http_authorization} // '') . "\n";
 warn "Body appended: " . $result->{body_appended} . "\n";
 
-The module partially derived from L<Web::UserAgent::OAuth> from
+=cut
+
+
+## <https://tools.ietf.org/html/rfc5849#section-2.2>
+sub _get_auth_url (%) {
+  my %args = @_;
+
+  if (not defined $args{url}) {
+    $args{url} = ($args{url_scheme} || 'https') . '://' . $args{host} . $args{pathquery};
+  }
+
+  $args{url} =~ s/\#.*//s;
+  $args{url} .= $args{url} =~ /\?/ ? '&' : '?';
+
+  my $token = $args{temp_token};
+  croak '|temp_token| is not specified' unless defined $token;
+  $token =~ s/([^0-9A-Za-z._~-])/sprintf '%%%02X', ord $1/ge;
+
+  $args{url} .= 'oauth_token=' . $token;
+
+  return Web::URL->parse_string ($args{url});
+} # _get_auth_url
+
+## <https://tools.ietf.org/html/rfc5849#section-2.1>.
+sub request_temp_credentials ($%) {
+  my ($class, %args) = @_;
+
+  my $scheme = $args{url_scheme} || 'https';
+  my $cb = $args{oauth_callback};
+  $cb = 'oob' unless defined $cb;
+
+  my $clock = $args{protocol_clock} || Web::DateTime::Clock->realtime_clock;
+
+  my $u = $scheme . '://' . $args{host} . $args{pathquery};
+  my $url = Web::URL->parse_string ($u)
+      // return Promise->reject ("Bad request URL |$u|");
+  my $body = serialize_form_urlencoded ($args{params});
+
+  my $result = $class->authenticate (
+    clock => $clock,
+    request_method => 'POST',
+    url => $url,
+    body_ref => \$body,
+    oauth_callback => $cb,
+    oauth_consumer_key => $args{oauth_consumer_key},
+    client_shared_secret => $args{client_shared_secret},
+    oauth_token => undef,
+    token_shared_secret => '',
+    container => 'authorization',
+  );
+
+  my ($temp_token, $temp_token_secret, $auth_url);
+  my $client = Web::Transport::BasicClient->new_from_url ($url);
+  return $client->request (
+    method => 'POST',
+    url => $url,
+    headers => {
+      authorization => $result->{http_authorization},
+      'content-type' => 'application/x-www-form-urlencoded',
+    },
+    body => $body,
+    last_resort_timeout => $args{timeout},
+  )->then (sub {
+    my $res = $_[0];
+    die $res unless $res->status == 200;
+    
+    ## Don't check Content-Type for interoperability...
+    my %param = map { tr/+/ /; s/%([0-9A-Fa-f]{2})/pack 'C', hex $1/ge; $_ }
+                map { (split /=/, $_, 2) } split /&/, $res->body_bytes, -1;
+    #unless ($param{oauth_callback_confirmed} eq 'true') {
+    #  warn "<@{[$req->uri]}>: |oauth_callback_confirmed| is not |true|\n";
+    #}
+    die "No |oauth_token| in OAuth1 temporary credentials response"
+        unless defined $param{oauth_token};
+    die "No |oauth_token_secret| in OAuth1 temporary credentials response"
+        unless defined $param{oauth_token_secret};
+    my $temp_token = $param{oauth_token};
+    my $temp_token_secret = $param{oauth_token_secret};
+    my $auth_url = _get_auth_url
+        url_scheme => $args{auth}->{url_scheme} // $args{url_scheme},
+        host => $args{auth}->{host} // $args{host},
+        url => $args{auth}->{url},
+        pathquery => $args{auth}->{pathquery},
+        temp_token => $temp_token;
+    return {
+      temp_token => $temp_token,
+      temp_token_secret => $temp_token_secret,
+      auth_url => $auth_url,
+    };
+  })->finally (sub {
+    return $client->close;
+  });
+} # request_temp_credentials
+
+## <https://tools.ietf.org/html/rfc5849#section-2.3>.
+sub request_token ($%) {
+  my ($class, %args) = @_;
+
+  my $clock = $args{protocol_clock} || Web::DateTime::Clock->realtime_clock;
+  
+  my $scheme = $args{url_scheme} || 'https';
+  my $u = $scheme . '://' . $args{host} . $args{pathquery};
+  my $url = Web::URL->parse_string ($u);
+  my $client = defined $url ? Web::Transport::BasicClient->new_from_url ($url) : undef;
+
+  return Promise->resolve->then (sub {
+    die "Bad request URL |$u|" unless defined $url;
+    
+    die "|temp_token| is not specified" unless defined $args{temp_token};
+    if (defined $args{oauth_verifier}) {
+      if (defined $args{current_request_oauth_token} and
+          $args{current_request_oauth_token} ne $args{temp_token}) {
+        die "|current_request_oauth_token| is not equal to |temp_token|";
+      }
+    } else {
+      die "Neither |oauth_verifier| or |current_request_url| is specified"
+          unless defined $args{current_request_url};
+      my $url = $args{current_request_url};
+      $url =~ s/\#.*//s;
+      if ($url =~ /\?(.+)/s) {
+        my %param = map { tr/+/ /; s/%([0-9A-Fa-f]{2})/pack 'C', hex $1/ge; $_ }
+                    map { (split /=/, $_, 2) } split /&/, $1, -1;
+        if (not defined $param{oauth_token}) {
+          die "|current_request_url| does not have |oauth_token|";
+        }
+        if ($param{oauth_token} ne $args{temp_token}) {
+          die "|current_request_url|'s |oauth_token| is not equal to |temp_token|";
+        }
+        if (not defined $param{oauth_verifier}) {
+          die "|current_request_url| does not have |oauth_verifier|";
+        }
+        $args{oauth_verifier} = $param{oauth_verifier};
+      } else {
+        die "|current_request_url| does not have |oauth_token| and |oauth_verifier|";
+      }
+    }
+    
+    my $result = $class->authenticate (
+      clock => $clock,
+      url => $url,
+      request_method => 'POST',
+      oauth_consumer_key => $args{oauth_consumer_key},
+      client_shared_secret => $args{client_shared_secret},
+      oauth_token => $args{temp_token},
+      token_shared_secret => $args{temp_token_secret},
+      oauth_verifier => $args{oauth_verifier},
+      container => 'authorization',
+    );
+
+    return $client->request (
+      method => 'POST',
+      url => $url,
+      headers => {
+        authorization => $result->{http_authorization},
+      },
+      bytes => '',
+      last_resort_timeout => $args{timeout},
+    );
+  })->then (sub {
+    my $res = $_[0];
+    die $res unless $res->status == 200;
+    
+    ## Don't check Content-Type for interoperability...
+    my %param = map { tr/+/ /; percent_decode_c $_ }
+                map { (split /=/, $_, 2) } split /&/, $res->body_bytes, -1;
+    die "No |oauth_token| in OAuth1 token response"
+        unless defined $param{oauth_token};
+    die "No |oauth_token_secret| in OAuth1 token response"
+        unless defined $param{oauth_token_secret};
+    my $token = delete $param{oauth_token};
+    my $token_secret = delete $param{oauth_token_secret};
+    return {
+      token => $token,
+      token_secret => $token_secret,
+      params => \%param,
+    };
+  })->finally (sub {
+    return $client->close;
+  });
+} # request_token
+
+1;
+
+## Unfortunately this module has no dedicated tests, but there are:
+##
+##   |t/Web-Transport-BasicClient.t| and
+##   |t/Web-Transport-ConnectionClient.t|, which test the |oauth1|
+##   request parameter.
+##
+##   |sketch/oauth-auth-hatena.pl| and |sketch/oauth-auth-twitter.pl|,
+##   which manually invoke methods of this module.
+##
+##   <https://github.com/wakaba/accounts>, which invoke methods of
+##   this module and there are tests for integration with OAuth1
+##   servers.
+
+=head1 AUTHOR
+
+Wakaba <wakaba@suikawiki.org>.
+
+=head1 HISTORY
+
+This module partially derived from L<Web::UserAgent::OAuth> and
+L<Web::UserAgent::Functions::OAuth> in the repository
 <https://github.com/wakaba/perl-web-useragent-functions>.
+
+=head1 LICENSE
 
 Copyright 2009-2013 Hatena <https://www.hatena.ne.jp/>.
 
-Copyright 2014-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2013-2022 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
+
+=cut

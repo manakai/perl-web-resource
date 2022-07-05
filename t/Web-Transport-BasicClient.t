@@ -2004,6 +2004,214 @@ test {
   });
 } n => 1, name => 'request - path';
 
+for (
+  [q<>, "",
+   q</>],
+  [q<>, "/",
+   q</>],
+  [q<>, "abc",
+   q</abc>],
+  [q<>, "/abc",
+   q</abc>],
+  [q</>, "abc",
+   q</abc>],
+  [q</>, "/abc",
+   q</abc>],
+  [q</foo?bar#baz>, "/ac/0//\x{533}ab/\xFE",
+   q</foo/ac/0//%D4%B3ab/%C3%BE>],
+  [q</foo?bar#baz>, "\xFE",
+   q</foo/%C3%BE>],
+  [q</foo?bar#baz>, "/\xFE",
+   q</foo/%C3%BE>],
+  [q</foo?bar#baz>, "//\xFE",
+   q</foo//%C3%BE>],
+  [q</foo?bar#baz>, "///\xFE",
+   q</foo///%C3%BE>],
+  [q</foo?bar#baz>, "/\x5C\xFE%20%",
+   q</foo//%C3%BE%20%>],
+  [q</foo?bar#baz>, "",
+   q</foo/>],
+  [q</foo?bar#baz>, "/",
+   q</foo/>],
+) {
+  my ($Prefix, $Path, $ReqURL) = @$_;
+  
+  test {
+    my $c = shift;
+    server_as_cv (q{
+      receive "GET", start capture
+      "HTTP/1.1 203 Hoe"CRLF
+      "content-length: 0"CRLF
+      CRLF
+      receive "GET", end capture
+      "HTTP/1.1 200 OK"CRLF
+      CRLF
+      sendcaptured
+      close
+    })->cb (sub {
+      my $server = $_[0]->recv;
+      my $url = Web::URL->parse_string
+          (qq{http://$server->{host}:$server->{port}$Prefix});
+      my $client = Web::Transport::BasicClient->new_from_url ($url);
+      return $client->request (
+        path_string => $Path,
+      )->then (sub {
+        return $client->request (url => $url);
+      })->then (sub {
+        my $res = $_[0];
+        test {
+          my $request = $res->body_bytes;
+          $request =~ s/GET$//;
+          like $request, qr{^GET $ReqURL HTTP};
+        } $c;
+      })->then (sub{
+        return $client->close;
+      })->then (sub {
+        done $c;
+        undef $c;
+      });
+    });
+  } n => 1, name => ['request - path_string', $ReqURL];
+}
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo?bar#baz});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    return $client->request (
+      path => [],
+      path_string => "//\xFE",
+    )->then (sub {
+      test {
+        ok 0;
+      } $c;
+    }, sub {
+      my $res = $_[0];
+      test {
+        isa_ok $res, 'Web::Transport::Response';
+        ok $res->is_network_error;
+        is $res->network_error_message, "Both |path| and |path_string| are specified";
+      } $c;
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'request - path and path_string';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo?bar#baz});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    return $client->request (
+      url => $url,
+      path_string => "//\xFE",
+    )->then (sub {
+      test {
+        ok 0;
+      } $c;
+    }, sub {
+      my $res = $_[0];
+      test {
+        isa_ok $res, 'Web::Transport::Response';
+        ok $res->is_network_error;
+        is $res->network_error_message, "Both |url| and |path_string| are specified";
+      } $c;
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'request - url and path_string';
+
+test {
+  my $c = shift;
+  server_as_cv (q{
+    receive "GET", start capture
+    "HTTP/1.1 203 Hoe"CRLF
+    "content-length: 0"CRLF
+    CRLF
+    receive "GET", end capture
+    "HTTP/1.1 200 OK"CRLF
+    CRLF
+    sendcaptured
+    close
+  })->cb (sub {
+    my $server = $_[0]->recv;
+    my $url = Web::URL->parse_string (qq{http://$server->{host}:$server->{port}/foo?bar#baz});
+    my $client = Web::Transport::BasicClient->new_from_url ($url);
+    return $client->request (
+      url => $url,
+      path => ["//\xFE"],
+    )->then (sub {
+      test {
+        ok 0;
+      } $c;
+    }, sub {
+      my $res = $_[0];
+      test {
+        isa_ok $res, 'Web::Transport::Response';
+        ok $res->is_network_error;
+        is $res->network_error_message, "Both |url| and |path| are specified";
+      } $c;
+    })->then (sub {
+      return $client->request (url => $url);
+    })->then (sub {
+      my $res = $_[0];
+      test {
+        is $res->status, 203;
+      } $c;
+    })->then (sub{
+      return $client->close;
+    })->then (sub {
+      done $c;
+      undef $c;
+    });
+  });
+} n => 4, name => 'request - url and path';
+
 test {
   my $c = shift;
   server_as_cv (q{

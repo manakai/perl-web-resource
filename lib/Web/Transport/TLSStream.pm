@@ -48,6 +48,7 @@ sub SSL_CB_READ () { 0x04 }
 sub SSL_CB_ALERT () { 0x4000 }
 use constant ERROR_SYSCALL => Net::SSLeay::ERROR_SYSCALL ();
 use constant ERROR_WANT_READ => Net::SSLeay::ERROR_WANT_READ ();
+use constant ERROR_WANT_WRITE => Net::SSLeay::ERROR_WANT_WRITE ();
 
 sub match_cn($$$) {
    my ($name, $cn, $type) = @_;
@@ -352,7 +353,9 @@ sub create ($$) {
         $r = Net::SSLeay::get_error ($tls, $r);
         if ($r == ERROR_SYSCALL) {
           return $abort->(Streams::IOError->new ($!));
-        } elsif ($r != ERROR_WANT_READ and $r != ERROR_SYSCALL) {
+        } elsif ($r != ERROR_WANT_READ and
+                 $r != ERROR_WANT_WRITE and
+                 $r != ERROR_SYSCALL) {
           return $abort->(Web::Transport::NetSSLeayError->new_current);
         } else {
           $retry = 1;
@@ -407,7 +410,9 @@ sub create ($$) {
         my $r = Net::SSLeay::get_error ($tls, -1); # -1 is not neccessarily correct, but Net::SSLeay doesn't tell us
         if ($r == ERROR_SYSCALL) {
           return $abort->(Streams::IOError->new ($!));
-        } elsif ($r != ERROR_WANT_READ and $r != ERROR_SYSCALL) {
+        } elsif ($r != ERROR_WANT_READ and
+                 $r != ERROR_WANT_WRITE and
+                 $r != ERROR_SYSCALL) {
           return $abort->(Web::Transport::NetSSLeayError->new_current);
         }
         last;
@@ -651,12 +656,6 @@ sub create ($$) {
     )};
     #prepare
 
-    # XXX
-    ## AnyEvent (7.16 Fri Jul 19 18:00:21 CEST 2019) changed default
-    ## |dh| value from |schmorp1539| to |ffdhe3072| but some
-    ## environments we support do not have it :-<
-    $tls_args->{dh} //= 'schmorp1539';
-
     $tls_ctx = AnyEvent::TLS->new (
       %$tls_args,
       %$cert_args,
@@ -676,6 +675,9 @@ sub create ($$) {
       die Web::Transport::TypeError->new ("Bad |key|") unless
           defined $cert_args->{key} or defined $cert_args->{key_file};
 
+      ## Disable TLS 1.3 for now, for backcompat
+      Net::SSLeay::set_max_proto_version ($tls, Net::SSLeay::TLS1_2_VERSION ());
+      
       Net::SSLeay::set_accept_state ($tls);
       Net::SSLeay::CTX_set_tlsext_servername_callback ($tls_ctx->ctx, sub {
         my $sn = Net::SSLeay::get_servername ($_[0]);

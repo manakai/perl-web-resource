@@ -408,7 +408,8 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             }
 
             if ($error_expected) {
-              ok 1, 'response version (skipped)';
+              ok 1, 'response version (skipped) ' .
+                  ($result->{response}->{version} // '');
             } else {
               is $result->{response}->{version},
                  $test->{version} ? $test->{version}->[1]->[0] : '1.1',
@@ -416,8 +417,10 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             }
 
             if ($error_expected) {
-              ok 1, 'response status (skipped)';
-              ok 1, 'response status text (skipped)';
+              ok 1, 'response status (skipped) ' .
+                  ($result->{response}->{status} // '');
+              ok 1, 'response status text (skipped) ' .
+                  ($result->{response}->{status_text} // '');
             } elsif ($test_type eq 'ws') {
               my $actual_status = 1006;
               my $actual_reason = '';

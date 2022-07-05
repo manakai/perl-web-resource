@@ -35,9 +35,13 @@ sub create ($$) {
 
   my $url_record;
   if (defined $args->{url}) {
+    return {failed => 1, message => "Both |url| and |path| are specified"}
+        if defined $args->{path};
+    return {failed => 1, message => "Both |url| and |path_string| are specified"}
+        if defined $args->{path_string};
     $url_record = $args->{url};
   } elsif (defined $args->{base_url}) {
-    if (defined $args->{path}) {
+    if (defined $args->{path} or defined $args->{path_string}) {
       require Web::URL;
       my $prefix = '/';
       if (defined $args->{path_prefix}) {
@@ -49,9 +53,16 @@ sub create ($$) {
           return {failed => 1, message => "Bad |path_prefix|: |$args->{path_prefix}|"};
         }
       }
+      my $ps = $args->{path_string};
+      if (defined $args->{path}) {
+        return {failed => 1, message => "Both |path| and |path_string| are specified"}
+            if defined $args->{path_string};
+        $ps = join '/', map { percent_encode_c $_ } @{$args->{path}};
+      } else {
+        $ps =~ s{^/}{};
+      }
       $url_record = Web::URL->parse_string
-          (($prefix . join '/', map { percent_encode_c $_ } @{$args->{path}}),
-           $args->{base_url});
+          (($prefix . $ps), $args->{base_url});
     }
   }
   return {failed => 1, message => "No |url| argument"}

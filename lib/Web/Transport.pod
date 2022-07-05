@@ -95,7 +95,8 @@ or C<wss>.
 
 Any username, password, or fragment of the URL is ignored.
 
-Either C<url> or C<path> option must be specified.
+Exactly one of C<url>, C<path>, and C<path_string> options must be
+specified.
 
 =item path => [$seg1, $seg2, ...]
 
@@ -106,7 +107,20 @@ are encoded in UTF-8 and then concatenated with C</>.
 If a "prefix" is defined by the context, the path segments given by
 this option is appended to the prefix.
 
-When the C<url> option is specified, this option is ignored.
+Exactly one of C<url>, C<path>, and C<path_string> options must be
+specified.
+
+=item path_string => $string
+
+Specify the path of the request URL.  If specified, the value must be
+a character string.  It is encoded in UTF-8.  If the first character
+is not C</>, a leading C</> is prepended.
+
+If a "prefix" is defined by the context, the path segments given by
+this option is appended to the prefix.
+
+Exactly one of C<url>, C<path>, and C<path_string> options must be
+specified.
 
 =item method => $string
 

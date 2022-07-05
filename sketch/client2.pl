@@ -28,6 +28,9 @@ GetOptions (
     my ($name, $value) = split /:/, (decode_web_utf8 $_[1]), 2;
     $RequestOptions->{basic_auth} = [$name, $value];
   },
+  'aws4=s' => sub {
+    $RequestOptions->{aws4} = [split /:/, (decode_web_utf8 $_[1]), 4];
+  },
   'oauth1=s' => sub {
     my (@key) = split / /, (decode_web_utf8 $_[1]), 4;
     $RequestOptions->{oauth1} = \@key;
@@ -42,6 +45,9 @@ GetOptions (
         defined $value ? $value : '';
   },
   'body=s' => \($RequestOptions->{body}),
+  'insecure' => sub {
+    $ClientOptions->{tls_options}->{insecure} = 1;
+  },
 ) or exit 1;
 
 die "No input URL" unless defined $RequestOptions->{url};

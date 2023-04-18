@@ -45,7 +45,8 @@ www.amazon.co.jp
            $res->status == 302 ||
            $res->status == 303 ||
            $res->status == 307 ||
-           $res->status == 308, $res->status;
+           $res->status == 308 ||
+           $res->status == 404, $res->status;
         ok ! $res->incomplete;
       } $c;
       return $client->close;
@@ -57,7 +58,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2023 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

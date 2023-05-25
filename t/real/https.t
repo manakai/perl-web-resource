@@ -27,6 +27,7 @@ roomhub.jp
 www.realtokyoestate.co.jp
 www.amazon.co.jp
 toolbelt.herokuapp.com
+vod.bs11.jp
 )) {
   my $url = qq<https://$host>;
   test {

@@ -4,10 +4,11 @@ Web::MIME::Type - MIME type object
 
 =head1 SYNOPSIS
 
-  use Web::MIME::Type;
+  use Web::MIME::Type::Parser;
   
-  my $type = Web::MIME::Type->parse_web_mime_type
-      ('text/CSS; charset="US-ASCII"');
+  my $parser = Web::MIME::Type::Parser->new;
+  $parser->onerror (sub { ... });
+  my $type = $parser->parse_string ('text/CSS; charset="US-ASCII"');
   
   is $type->type, 'text';
   is $type->subtype, 'css';
@@ -33,19 +34,14 @@ that cannot be serialized into a valid MIME type (e.g. a MIME type
 whose subtype is the empty string).  Such MIME types are referred to
 as I<ill-formed> in this documentation.
 
+A L<Web::MIME::Type> object can be created from a MIME type string
+using the L<Web::MIME::Type::Parser>.
+
 =head1 METHODS
 
 Following methods are available:
 
 =over 4
-
-=item I<$t> = Web::MIME::Type->new_from_type_and_subtype (I<$type>, I<$subtype>)
-
-Returns a new object whose type is I<$type> (string) and subtype is
-I<$subtype> (string).  I<$type> and I<$subtype> are ASCII
-case-insensitive.
-
-Please note that the result object might be I<invalid>.
 
 =item I<$type> = I<$t>->type ([I<$type>])
 
@@ -169,6 +165,8 @@ report errors on required parameters.
 
 =back
 
+Deprecated method: C<parse_web_mime_type>.
+
 =head1 SEE ALSO
 
 L<Web::MIME::Type::Parser>.
@@ -222,7 +220,7 @@ Wakaba <wakaba@suikawiki.org>.
 
 =head1 LICENSE
 
-Copyright 2007-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2007-2024 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

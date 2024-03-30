@@ -130,7 +130,7 @@ sub verify_hostname($$) {
 
 sub start ($$;%) {
   my $self = $_[0];
-  croak "Bad state" if not defined $self->{args};
+  croak "Bad state (TLSTransport::start)" if not defined $self->{args};
   $self->{cb} = $_[1];
   my $args = delete $self->{args};
 
@@ -377,7 +377,7 @@ sub write_to_be_closed ($) { return $_[0]->{write_closed} || $_[0]->{write_shutd
 
 sub push_write ($$;$$) {
   my ($self, $ref, $offset, $length) = @_;
-  croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
+  croak "Bad state (TLSTransport::push_write)" if not defined $self->{wq} or $self->{write_shutdown};
   croak "Data is utf8-flagged" if utf8::is_utf8 $$ref;
   $offset = 0 unless defined $offset;
   croak "Bad offset" if $offset > length $$ref;
@@ -390,7 +390,7 @@ sub push_write ($$;$$) {
 
 sub push_promise ($) {
   my $self = $_[0];
-  croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
+  croak "Bad state (TLSTransport::push_promise)" if not defined $self->{wq} or $self->{write_shutdown};
   my ($ok, $ng);
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
   push @{$self->{wq}}, [$ok, $ng];
@@ -400,7 +400,7 @@ sub push_promise ($) {
 
 sub push_shutdown ($) {
   my $self = $_[0];
-  croak "Bad state" if not defined $self->{wq} or $self->{write_shutdown};
+  croak "Bad state (TLSTransport::push_shutdown)" if not defined $self->{wq} or $self->{write_shutdown};
   my ($ok, $ng);
   my $p = Promise->new (sub { ($ok, $ng) = @_ });
   push @{$self->{wq}}, [sub {

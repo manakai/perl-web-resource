@@ -101,9 +101,9 @@ sub generate_certs ($$) {
   my $server_subj = '/CN='.(defined $cert_args->{cn} ? $cert_args->{cn} : $subject_name);
   $server_subj .= '/CN=' . $cert_args->{cn2} if defined $cert_args->{cn2};
   if ($RSA) {
-    x "openssl req -newkey rsa:2048 -days 1 -nodes -keyout \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E -sha256";# -config \Q$config_path\E $no_san ? '' : -reqexts san";
+    x "openssl req -newkey rsa:2048 -x509 -days 1 -nodes -keyout \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E -sha256";# -config \Q$config_path\E $no_san ? '' : -reqexts san";
   } else {
-    x "openssl req -days 1 -new -nodes -key \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E -sha256";# -config \Q$config_path\E $cert_args->{no_san} ? '' : -reqexts san";
+    x "openssl req -x509 -days 1 -new -nodes -key \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E -sha256";# -config \Q$config_path\E $cert_args->{no_san} ? '' : -reqexts san";
   }
 
   if ($RSA) {
@@ -242,3 +242,12 @@ sub ocsp_response ($$;%) {
 } # ocsp_response
 
 1;
+
+=head1 LICENSE
+
+Copyright 2007-2024 Wakaba <wakaba@suikawiki.org>.
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

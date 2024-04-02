@@ -315,7 +315,8 @@ sub create_certificate ($%) {
       );
       'DER:' . join '', map { sprintf '%02X', ord $_ } split //, $der;
     } if @{$args{crl_urls} or []};
-    push @arg, &Net::SSLeay::NID_authority_key_identifier => 'keyid';
+    push @arg, &Net::SSLeay::NID_authority_key_identifier => 'keyid'
+        unless $is_root;
     if (($args{ca} and not $is_root) or $args{ee}) {
       push @arg, &Net::SSLeay::NID_ext_key_usage => 'serverAuth,clientAuth';
     }

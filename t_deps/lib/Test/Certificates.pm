@@ -54,7 +54,7 @@ sub generate_ca_cert_p ($) {
   unless ($ca_key_path->is_file) {
     my $ca_cert_path = $class->ca_path ('cert.pem');
     my $gen = Web::Transport::PKI::Generator->new;
-    ($RSA ? $gen->create_rsa_key->then (sub { [rsa => $_[0]] }) : $gen->create_ec_key->then (sub { [ec => $_[0]] }))->then (sub {
+    my $p = ($RSA ? $gen->create_rsa_key->then (sub { [rsa => $_[0]] }) : $gen->create_ec_key->then (sub { [ec => $_[0]] }))->then (sub {
       my ($type, $key) = @{$_[0]};
       my $ca_name = {CN => "ca.test"};
       $ca_key_path->spew ($key->to_pem);
@@ -72,6 +72,7 @@ sub generate_ca_cert_p ($) {
       my $cert = $_[0];
       $ca_cert_path->spew ($cert->to_pem);
     });
+    return $p;
   }
   return Promise->resolve;
 } # generate_ca_cert_p
@@ -115,7 +116,7 @@ sub generate_certs ($$) {
       ee => ! $cert_args->{intermediate},
       must_staple => $cert_args->{must_staple},
       not_before => time - 3600,
-      not_after => time + 3600,
+      not_after => time + 3600*24*100,
       serial_number => int rand 10000000,
       'ca_' . $type => $parser->parse_pem ($ica_key_path->slurp)->[0],
       ca_cert => $parser->parse_pem ($ica_cert_path->slurp)->[0],

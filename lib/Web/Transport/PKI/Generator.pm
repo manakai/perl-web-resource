@@ -28,8 +28,13 @@ sub create_rsa_key ($;%) {
   my ($self, %args) = @_;
   return Promise->resolve->then (sub {
     my $rsa = Net::SSLeay::RSA_generate_key ($args{bits} || 2048, 65537)
-        or Web::Transport::NetSSLeayError->new_current;
-    return Web::Transport::PKI::RSAKey->_new ($rsa);
+        or die Web::Transport::NetSSLeayError->new_current;
+
+    my $key = Web::Transport::PKI::RSAKey->_new ($rsa);
+    die new Web::Transport::TypeError "Bad bit length |$args{bits}|"
+        unless $key->to_pem;
+
+    return $key;
   });
 } # create_rsa_key
 
@@ -44,7 +49,7 @@ sub create_ec_key ($;%) {
     die new Web::Transport::TypeError "Bad curve |$args{curve}|"
         unless defined $curve;
     my $ec = Net::SSLeay::EC_KEY_generate_key ($curve)
-        or Web::Transport::NetSSLeayError->new_current;
+        or die Web::Transport::NetSSLeayError->new_current;
     return Web::Transport::PKI::ECKey->_new ($ec);
   });
 } # create_ec_key

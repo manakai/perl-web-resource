@@ -35,7 +35,7 @@ test {
   my $c = shift;
 
   my $gen = Web::Transport::PKI::Generator->new;
-  my $p = $gen->create_rsa_key (bits => 256);
+  my $p = $gen->create_rsa_key (bits => 512);
   isa_ok $p, 'Promise';
 
   $p->then (sub {
@@ -49,7 +49,52 @@ test {
     done $c;
     undef $c;
   });
-} n => 3, name => 'create_rsa_key bits => 256';
+} n => 3, name => 'create_rsa_key bits => 512';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  my $p = $gen->create_rsa_key (bits => 4096);
+  isa_ok $p, 'Promise';
+
+  $p->then (sub {
+    my $rsa = $_[0];
+
+    test {
+      isa_ok $rsa, 'Web::Transport::PKI::RSAKey';
+      like $rsa->to_pem, qr{^-----BEGIN PRIVATE KEY-----\x0D?\x0A[A-Za-z0-9/+=\x0D\x0A]+\x0D?\x0A-----END PRIVATE KEY-----\x0D?\x0A$};
+    } $c;
+
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'create_rsa_key bits => 4096';
+
+test {
+  my $c = shift;
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  my $p = $gen->create_rsa_key (bits => 256);
+  isa_ok $p, 'Promise';
+
+  $p->then (sub {
+    test {
+      ok 0;
+    } $c;
+  }, sub {
+    my $e = $_[0];
+    test {
+      is $e->name, 'TypeError';
+      is $e->message, "Bad bit length |256|";
+      is $e->file_name, __FILE__;
+      is $e->line_number, __LINE__-13;
+    } $c;
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'create_rsa_key bits => 256';
 
 test {
   my $c = shift;
@@ -883,7 +928,12 @@ for my $test (
           like $cert->debug_info, qr{sig=SHA-256/RSA};
         }
       } $c;
-      
+    })->catch (sub {
+      my $e = $_[0];
+      test {
+        is $e, undef;
+      } $c;
+    })->then (sub {
       done $c;
       undef $c;
     });

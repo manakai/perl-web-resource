@@ -20,9 +20,9 @@ sub to_net_ssleay_pkey ($) {
 
   unless (defined $self->{pkey}) {
     $self->{pkey} = Net::SSLeay::EVP_PKEY_new ()
-        or Web::Transport::NetSSLeayError->new_current;
+        or die Web::Transport::NetSSLeayError->new_current;
     Net::SSLeay::EVP_PKEY_assign_RSA ($self->{pkey}, $self->{rsa})
-        or Web::Transport::NetSSLeayError->new_current;
+        or die Web::Transport::NetSSLeayError->new_current;
   }
 
   return $self->{pkey};

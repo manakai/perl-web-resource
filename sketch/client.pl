@@ -7,6 +7,7 @@ use Web::URL;
 use Web::Encoding;
 
 my $RequestOptions = {};
+my $tls_options = {};
 GetOptions (
   'url=s' => sub {
     $RequestOptions->{url} = Web::URL->parse_string (decode_web_utf8 $_[1]);
@@ -38,6 +39,13 @@ GetOptions (
         defined $value ? $value : '';
   },
   'body=s' => \($RequestOptions->{body}),
+  'insecure' => sub {
+    $tls_options->{insecure} = 1;
+  },
+  'ca-file=s' => sub {
+    use Path::Tiny;
+    $tls_options->{ca_cert} = path ($_[1])->slurp;
+  },
 ) or exit 1;
 
 die "No input URL" unless defined $RequestOptions->{url};
@@ -46,7 +54,7 @@ my $client = Web::Transport::ConnectionClient->new_from_url
     ($RequestOptions->{url});
 delete $RequestOptions->{url} if defined $RequestOptions->{path};
 #$client->max_size ($size);
-#$client->tls_options ($tls_options);
+$client->tls_options ($tls_options);
 $client->request (%$RequestOptions)->then (sub {
   warn $_[0]->network_error_message;
   print $_[0]->body_bytes;
@@ -56,3 +64,5 @@ $client->request (%$RequestOptions)->then (sub {
   return $client->close;
 })->to_cv->recv;
 warn "done";
+
+## License: Public Domain.

@@ -430,6 +430,11 @@ sub _debug_handshake_done ($$) {
       }
       $i++;
     }
+    if (defined $info->{ca_cert}) {
+      warn "$id:   + Root certs: (custom)\n";
+    } elsif (defined $info->{ca_file}) {
+      warn "$id:   + Root certs: file |$info->{ca_file}|\n";
+    }
     if (defined (my $result = $info->{stapling_result})) {
       if ($result->{failed}) {
         warn "$id:   + OCSP stapling: NG - $result->{message}\n";

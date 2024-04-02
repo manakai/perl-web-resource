@@ -239,6 +239,8 @@ sub start ($$;%) {
       net_ssleay_version => $Net::SSLeay::VERSION,
       net_ssleay_path => $INC{"Net/SSLeay.pm"},
     };
+    $self->{starttls_data}->{ca_file} = $cert_args->{ca_file};
+    $self->{starttls_data}->{ca_cert} = $cert_args->{ca_cert};
     if ($self->{server}) {
       ## Disable TLS 1.3 for now, for backcompat
       Net::SSLeay::set_max_proto_version ($tls, Net::SSLeay::TLS1_2_VERSION ());
@@ -262,7 +264,7 @@ sub start ($$;%) {
         my $depth = Net::SSLeay::X509_STORE_CTX_get_error_depth ($x509_store_ctx);
         my $cert = Net::SSLeay::X509_STORE_CTX_get_current_cert ($x509_store_ctx);
         $self->{_certs}->[$depth] = Net::SSLeay::PEM_get_string_X509 ($cert);
-
+        
         if ($depth == 0) {
           if (defined $args->{si_host}) {
             # XXX If ipaddr
@@ -324,6 +326,7 @@ sub start ($$;%) {
     $self->{_wbio} = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
 
     Net::SSLeay::set_bio ($tls, $self->{_rbio}, $self->{_wbio});
+    ($Web::Transport::TLSTransport::debug_set_io || sub { })->($self->{_rbio}, $self->{_wbio}, $self->{id});
 
       $self->{wq} = [];
       $self->_tls;
@@ -524,6 +527,7 @@ sub _tls ($) {
       my $read = Net::SSLeay::BIO_read ($self->{_wbio});
       if (defined $read and length $read) {
         $self->{transport}->push_write (\$read);
+        ($Web::Transport::TLSTransport::debug_read || sub { })->($self->{_wbio}, $read);
       } else {
         last;
       }
@@ -624,7 +628,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2024 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

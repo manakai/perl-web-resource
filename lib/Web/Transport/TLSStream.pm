@@ -567,14 +567,6 @@ sub create ($$) {
       } else {
         warn "$info->{id}: $info->{type}: $action\n";
       }
-      if (defined $cert_args->{ca_cert}) {
-        warn "$info->{id}: $info->{type}: CAfile: (custom)\n";
-      } elsif (defined $cert_args->{ca_file}) {
-        warn "$info->{id}: $info->{type}: CAfile: |$cert_args->{ca_file}|\n";
-      }
-      if (defined $cert_args->{ca_path}) {
-        warn "$info->{id}: $info->{type}: CApath: |$cert_args->{ca_path}|\n";
-      }
     }
 
     (delete $info->{parent}->{closed})->then ($s_parent_closed);
@@ -618,7 +610,6 @@ sub create ($$) {
         });
       };
     }; # $t_read
-    $t_read->()->catch ($abort);
     $t_r->closed->catch ($abort)->then (sub { undef $t_read });
     $t_w->closed->catch ($abort);
 
@@ -647,7 +638,21 @@ sub create ($$) {
       $vmode |= Net::SSLeay::VERIFY_CLIENT_ONCE ()
           if $args->{verify_client_once};
     }
-
+    if ($args->{debug}) {
+      if ($insecure) {
+        warn "$info->{id}: $info->{type}: Insecure: 1\n";
+      } else {
+        if (defined $cert_args->{ca_cert}) {
+          warn "$info->{id}: $info->{type}: Root certs: (custom)\n";
+        } elsif (defined $cert_args->{ca_file}) {
+          warn "$info->{id}: $info->{type}: Root certs: file |$cert_args->{ca_file}|\n";
+        }
+        if (defined $cert_args->{ca_path}) {
+          warn "$info->{id}: $info->{type}: Root certs: path |$cert_args->{ca_path}|\n";
+        }
+      }
+    }
+    
     my $tls_args = {map { $_ => $args->{$_} } grep { defined $args->{$_} } qw(
       method sslv2 sslv3 tlsv1 tlsv1_1 tlsv1_2
       verify verify_require_client_cert verify_peername verify_cb
@@ -674,6 +679,18 @@ sub create ($$) {
           defined $cert_args->{cert} or defined $cert_args->{cert_file};
       die Web::Transport::TypeError->new ("Bad |key|") unless
           defined $cert_args->{key} or defined $cert_args->{key_file};
+      if ($args->{debug}) {
+        if (defined $cert_args->{cert}) {
+          warn "$info->{id}: $info->{type}: Cert: (custom)\n";
+        } elsif (defined $cert_args->{cert_file}) {
+          warn "$info->{id}: $info->{type}: Cert: |$cert_args->{cert_file}|\n";
+        }
+        if (defined $cert_args->{key}) {
+          warn "$info->{id}: $info->{type}: Key: (custom)\n";
+        } elsif (defined $cert_args->{key_file}) {
+          warn "$info->{id}: $info->{type}: Key: |$cert_args->{key_file}|\n";
+        }
+      }
 
       ## Disable TLS 1.3 for now, for backcompat
       Net::SSLeay::set_max_proto_version ($tls, Net::SSLeay::TLS1_2_VERSION ());
@@ -713,7 +730,7 @@ sub create ($$) {
         $certs->[$depth] = Net::SSLeay::PEM_get_string_X509 ($cert);
 
         if ($depth == 0) {
-          if (defined $args->{si_host}) {
+          if (defined $args->{si_host}) { # XXX and not $insecure) {
             ## Delay the SI verification to keep verify callback's
             ## runtime minimum.
             push @verify, Promise->resolve->then (sub {
@@ -721,11 +738,14 @@ sub create ($$) {
               # XXX If ipaddr
               my $ok = verify_hostname $cert, $args->{si_host}->stringify;
               $abort->(_pe "Service Identity verification error") unless $ok;
+
+              # XXX mark TLS session invalid
             });
           }
 
           # XXX hook to verify the client cert
         }
+
         return $preverify_ok;
       };
 
@@ -775,6 +795,7 @@ sub create ($$) {
 
     Net::SSLeay::set_bio ($tls, $rbio, $wbio);
 
+    $t_read->()->catch ($abort);
     $process_tls->();
 
   })->catch ($abort);
@@ -858,7 +879,7 @@ sub create ($$) {
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2024 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

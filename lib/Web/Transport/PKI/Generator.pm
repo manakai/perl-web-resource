@@ -27,11 +27,13 @@ sub new ($) {
 sub create_rsa_key ($;%) {
   my ($self, %args) = @_;
   return Promise->resolve->then (sub {
-    my $rsa = Net::SSLeay::RSA_generate_key ($args{bits} || 2048, 65537)
+    my $bits = $args{bits} || 2048;
+    die new Web::Transport::TypeError "Bad bit length |$bits|" if $bits < 512;
+    my $rsa = Net::SSLeay::RSA_generate_key ($bits, 65537)
         or die Web::Transport::NetSSLeayError->new_current;
 
     my $key = Web::Transport::PKI::RSAKey->_new ($rsa);
-    die new Web::Transport::TypeError "Bad bit length |$args{bits}|"
+    die new Web::Transport::TypeError "Bad bit length |$bits|"
         unless $key->to_pem;
 
     return $key;

@@ -1502,7 +1502,9 @@ test {
       test {
         isa_ok $e, 'Web::Transport::ProtocolError';
         is $e->name, 'Protocol error';
-        is $e->message, 'Certificate verification error 19 - self signed certificate in certificate chain';
+        my $m = $e->message;
+        $m =~ s/self-signed/self signed/;
+        is $m, 'Certificate verification error 19 - self signed certificate in certificate chain';
         is $e->file_name, __FILE__;
         is $e->line_number, __LINE__+4;
       } $c;

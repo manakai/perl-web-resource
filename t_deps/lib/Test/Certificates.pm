@@ -2,6 +2,7 @@ package Test::Certificates;
 use strict;
 use warnings;
 use Path::Tiny;
+use Promise;
 use Web::DateTime::Parser;
 use Web::Transport::OCSP;
 use Web::Transport::PKI::Generator;
@@ -44,6 +45,10 @@ sub x ($) {
 } # x
 
 sub generate_ca_cert ($) {
+  return shift->generate_ca_cert_p->to_cv->recv;
+}
+
+sub generate_ca_cert_p ($) {
   my $class = $_[0];
   my $ca_key_path = $class->ca_path ('key.pem');
   unless ($ca_key_path->is_file) {
@@ -66,9 +71,10 @@ sub generate_ca_cert ($) {
     })->then (sub {
       my $cert = $_[0];
       $ca_cert_path->spew ($cert->to_pem);
-    })->to_cv->recv;
+    });
   }
-} # generate_ca_cert
+  return Promise->resolve;
+} # generate_ca_cert_p
 
 sub generate_certs ($$) {
   my ($class, $cert_args) = @_;
@@ -80,11 +86,11 @@ sub generate_certs ($$) {
   warn "======================\n";
   warn "$$: @{[scalar gmtime]}: Generating certificate (@{[$class->cert_path ('', $cert_args)]})...\n";
   
-  $class->generate_ca_cert;
-  my $ica_key_path = $cert_args->{intermediate} ? $class->ca_path ('key.pem') : $class->cert_path ('key.pem', {host => 'intermediate'});
-  my $ca_cert_path = $class->ca_path ('cert.pem');
-  my $ica_cert_path = $cert_args->{intermediate} ? $ca_cert_path : $class->cert_path ('cert.pem', {host => 'intermediate'});
-  my $chained_ca_cert_path = $cert_args->{intermediate} ? $ca_cert_path : $class->cert_path ('cert-chained.pem', {host => 'intermediate'});
+  return $class->generate_ca_cert_p->then (sub {
+    my $ica_key_path = $cert_args->{intermediate} ? $class->ca_path ('key.pem') : $class->cert_path ('key.pem', {host => 'intermediate'});
+    my $ca_cert_path = $class->ca_path ('cert.pem');
+    my $ica_cert_path = $cert_args->{intermediate} ? $ca_cert_path : $class->cert_path ('cert.pem', {host => 'intermediate'});
+    my $chained_ca_cert_path = $cert_args->{intermediate} ? $ca_cert_path : $class->cert_path ('cert-chained.pem', {host => 'intermediate'});
 
   my $ca_name = {CN => "ca.test"};
   my $ica_subj = $cert_args->{intermediate} ? {CN => 'intermediate'} : $ca_name;
@@ -92,16 +98,16 @@ sub generate_certs ($$) {
   my $server_subj = {CN => (defined $cert_args->{cn} ? $cert_args->{cn} : $subject_name)};
   $server_subj->{"2.5.4.3"} = $cert_args->{cn2} if defined $cert_args->{cn2};
 
-  my $gen = Web::Transport::PKI::Generator->new;
-  my $parser = Web::Transport::PKI::Parser->new;
-  my $server_cert_path = $_[0]->cert_path ('cert.pem', $cert_args);
-  my $chained_cert_path = $_[0]->cert_path ('cert-chained.pem', $cert_args);
-
-  my $server_key_path = $_[0]->cert_path ('key.pem', $cert_args);
-    ($RSA ? $gen->create_rsa_key->then (sub { [rsa => $_[0]] }) : $gen->create_ec_key->then (sub { [ec => $_[0]] }))->then (sub {
-    my ($type, $key) = @{$_[0]};
-    $server_key_path->spew ($key->to_pem);
-    return $gen->create_certificate (
+    my $gen = Web::Transport::PKI::Generator->new;
+    my $parser = Web::Transport::PKI::Parser->new;
+    my $server_cert_path = $class->cert_path ('cert.pem', $cert_args);
+    my $chained_cert_path = $class->cert_path ('cert-chained.pem', $cert_args);
+    
+    my $server_key_path = $class->cert_path ('key.pem', $cert_args);
+    my $p = ($RSA ? $gen->create_rsa_key->then (sub { [rsa => $_[0]] }) : $gen->create_ec_key->then (sub { [ec => $_[0]] }))->then (sub {
+      my ($type, $key) = @{$_[0]};
+      $server_key_path->spew ($key->to_pem);
+      return $gen->create_certificate (
       #issuer => $ica_subj,
       subject => $server_subj,
       ($cert_args->{no_san} ? () : (san_hosts => [$subject_name])),
@@ -120,14 +126,20 @@ sub generate_certs ($$) {
     $server_cert_path->spew ($cert->to_pem);
     x "cat \Q$server_cert_path\E \Q$ica_cert_path\E > \Q$chained_cert_path\E";
     x "cat \Q$ca_cert_path\E >> \Q$chained_cert_path\E";
-  })->to_cv->recv;
+    });
+    return $p;
+  })->then (sub {
+    warn "$$: @{[scalar gmtime]}: Certificate generation done\n";
 
-  warn "$$: @{[scalar gmtime]}: Certificate generation done\n";
-
-  undef $lock;
+    undef $lock;
+  });
 } # generate_certs
 
 sub wait_create_cert ($$) {
+  return shift->wait_create_cert_p (@_)->to_cv->recv;
+}
+
+sub wait_create_cert_p ($$) {
   my ($class, $cert_args) = @_;
   if ($ENV{RECREATE_CERTS} or
       ($_[0]->ca_path ('cert.pem')->is_file and
@@ -135,15 +147,19 @@ sub wait_create_cert ($$) {
     warn "Recreate certificates...\n";
     x "rm \Q$cert_path\E/*.pem || true";
   }
-  my $cert_pem_path = $_[0]->cert_path ('cert.pem', $cert_args);
-  unless ($cert_pem_path->is_file) {
-    $class->generate_certs ({host => 'intermediate', intermediate => 1})
-        unless $_[0]->cert_path ('cert.pem', {host => 'intermediate'})->is_file;
-    $class->generate_certs ($cert_args);
-  }
-
-  require Net::SSLeay;
-  require Web::DateTime::Parser;
+  my $cert_pem_path = $class->cert_path ('cert.pem', $cert_args);
+  return Promise->resolve->then (sub {
+    unless ($cert_pem_path->is_file) {
+      return Promise->resolve->then (sub {
+        return $class->generate_certs ({host => 'intermediate', intermediate => 1})
+            unless $class->cert_path ('cert.pem', {host => 'intermediate'})->is_file;
+      })->then (sub {
+        return $class->generate_certs ($cert_args);
+      });
+    }
+  })->then (sub {
+    require Net::SSLeay;
+    require Web::DateTime::Parser;
 
   my $bio = Net::SSLeay::BIO_new (Net::SSLeay::BIO_s_mem ());
   my $rv = Net::SSLeay::BIO_write ($bio, $cert_pem_path->slurp);
@@ -162,8 +178,9 @@ sub wait_create_cert ($$) {
     warn "Wait $delta seconds...\n";
     sleep $delta;
   }
-  Net::SSLeay::X509_free($x509);
-} # wait_create_cert
+    Net::SSLeay::X509_free($x509);
+  });
+} # wait_create_cert_p
 
 sub ocsp_response ($$;%) {
   my ($class, $cert_args, %args) = @_;

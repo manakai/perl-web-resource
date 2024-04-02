@@ -772,7 +772,7 @@ sub run_commands ($$$$) {
       }
       $args->{cn} = ($ENV{SERVER_HOST_NAME} || 'hoge.test')
           if defined $args->{cn} and $args->{cn} eq '##HOST##';
-      Test::Certificates->wait_create_cert ($args);
+      my $p = Test::Certificates->wait_create_cert_p ($args);
       $states->{starttls_waiting} = 1;
       $hdl->on_starttls (sub {
         delete $states->{starttls_waiting};
@@ -828,6 +828,7 @@ sub run_commands ($$$$) {
         return $session;
       };
 
+      $p->then (sub {
       local $CurrentID = $states->{id};
       my $server_cert_path = Test::Certificates->cert_path ('cert-chained.pem', $args);
       warn "[$states->{id}] TLS server certificate: |$server_cert_path|\n" if $DUMP;
@@ -912,6 +913,7 @@ sub run_commands ($$$$) {
           });
         },
       });
+      }); # $p
       unshift @{$states->{commands}}, 'waitstarttls';
       return;
     } elsif ($command =~ /^tlsreneg(| cert\??| nocert)$/) {

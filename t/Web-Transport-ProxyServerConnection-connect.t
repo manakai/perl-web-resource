@@ -991,16 +991,18 @@ test {
               isnt $s, $con;
               if ($exception_invoked == 0) {
                 is $x->name, 'Protocol error', $x;
-                is $x->message, "Certificate verification error 19 - self signed certificate in certificate chain";
+                my $m = $x->message;
+                $m =~ s/self-signed/self signed/g;
+                is $m, "Certificate verification error 19 - self signed certificate in certificate chain";
                 is $x->file_name, __FILE__;
-                is $x->line_number, __LINE__-9;
+                is $x->line_number, __LINE__-11;
               } else {
                 ## Downstream connection is closed by propagation of
                 ## failure of upstream connection.
                 is $x->name, 'TypeError', $x;
                 is $x->message, "Response is not allowed";
                 is $x->file_name, __FILE__;
-                is $x->line_number, __LINE__-16;
+                is $x->line_number, __LINE__-18;
               }
             } $c;
             $exception_invoked++;

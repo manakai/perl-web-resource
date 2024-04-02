@@ -548,7 +548,7 @@ sub debug_info ($) {
       '2.5.29.35' => 'AKI',
     }->{$_->[0]};
     if (defined $n) {
-      push @r, $n;
+      push @r, $n . '=' . join ':', map { sprintf '%02X', ord $_ } split //, $_->[2];
     } elsif (not defined $ExtDefs->{$_->[0]}) {
       push @r, $_->[0];
     }

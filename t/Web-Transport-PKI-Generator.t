@@ -695,7 +695,7 @@ for my $test (
           is $cert->key_usage ($_), $expected->{$_};
         }
         is !! ($cert->debug_info =~ m{\bSKI\b}), !!$expected->{SKI};
-        is !! ($cert->debug_info =~ m{\bAKI\b}), 1;
+        is !! ($cert->debug_info =~ m{\bAKI\b}), !!$expected->{AKI};
         is_deeply $cert->crl_distribution_urls, $expected->{crl_urls} || [];
         is !! $cert->extended_key_usage ('serverAuth'), !! $expected->{serverAuth};
         is !! $cert->extended_key_usage ('clientAuth'), !! $expected->{clientAuth};

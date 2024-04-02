@@ -438,7 +438,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
             if ($is_error) {
               ok 1;
             } else {
-              is $error, undef, 'no error';
+              is perl2json_bytes $error, undef, 'no error';
             }
             ok 1, 'headers (skipped)';
             is '(close)', $test->{body}->[0], 'body';

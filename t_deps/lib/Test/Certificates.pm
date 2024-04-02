@@ -4,12 +4,14 @@ use warnings;
 use Path::Tiny;
 use Web::DateTime::Parser;
 use Web::Transport::OCSP;
+use Web::Transport::PKI::Generator;
+use Web::Transport::PKI::Parser;
 
 my $root_path = path (__FILE__)->parent->parent->parent->parent->absolute;
 my $cert_path = $root_path->child ('local/cert');
 my $cn = $ENV{SERVER_HOST_NAME} || 'hoge.test';
 $cert_path->mkpath;
-my $DUMP = $ENV{DUMP};
+my $DUMP = $ENV{DUMP} || $ENV{PROMISED_COMMAND_DEBUG};
 my $RSA = 1;
 
 sub ca_path ($$) {
@@ -44,19 +46,27 @@ sub x ($) {
 sub generate_ca_cert ($) {
   my $class = $_[0];
   my $ca_key_path = $class->ca_path ('key.pem');
-  my $ca_cert_path = $class->ca_path ('cert.pem');
-  my $ca_name = "/CN=ca.test";
-  my $ecname = 'prime256v1';
   unless ($ca_key_path->is_file) {
-    my $ca_subj = $ca_name;
-    if ($RSA) {
-      x "openssl genrsa -out \Q$ca_key_path\E 2048";
-      x "openssl req -new -x509 -nodes -days 1 -key \Q$ca_key_path\E -out \Q$ca_cert_path\E -subj \Q$ca_subj\E -sha256 -set_serial @{[time]}";
-    } else {
-      x "openssl ecparam -name $ecname -out \Q$ca_key_path\E -genkey";
-      x "openssl req -new -x509 -nodes -days 1 -key \Q$ca_key_path\E -out \Q$ca_cert_path\E -subj \Q$ca_subj\E -sha256 -set_serial @{[time]}";
-    }
-    sleep 1;
+    my $ca_cert_path = $class->ca_path ('cert.pem');
+    my $gen = Web::Transport::PKI::Generator->new;
+    ($RSA ? $gen->create_rsa_key->then (sub { [rsa => $_[0]] }) : $gen->create_ec_key->then (sub { [ec => $_[0]] }))->then (sub {
+      my ($type, $key) = @{$_[0]};
+      my $ca_name = {CN => "ca.test"};
+      $ca_key_path->spew ($key->to_pem);
+      return $gen->create_certificate (
+        subject => $ca_name,
+        issuer => $ca_name,
+        ca => 1,
+        not_before => time - 3600,
+        not_after => time + 3600*24*366*100,
+        serial_number => 1,
+        $type => $key,
+        "ca_" . $type => $key,
+      );
+    })->then (sub {
+      my $cert = $_[0];
+      $ca_cert_path->spew ($cert->to_pem);
+    })->to_cv->recv;
   }
 } # generate_ca_cert
 
@@ -66,62 +76,51 @@ sub generate_certs ($$) {
   my $lock_path = $cert_args->{intermediate} ? $class->ca_path ('lock') : $class->cert_path ('lock', {host => 'intermediate'});
   my $lock = $lock_path->openw ({locked => 1});
 
-  warn "$$: @{[scalar gmtime]}: Generating certificate...\n";
-  x "openssl version -a";
-
+  warn "\n\n";
+  warn "======================\n";
+  warn "$$: @{[scalar gmtime]}: Generating certificate (@{[$class->cert_path ('', $cert_args)]})...\n";
+  
   $class->generate_ca_cert;
   my $ica_key_path = $cert_args->{intermediate} ? $class->ca_path ('key.pem') : $class->cert_path ('key.pem', {host => 'intermediate'});
-  my $ica_cert_path = $cert_args->{intermediate} ? $class->ca_path ('cert.pem') : $class->cert_path ('cert.pem', {host => 'intermediate'});
-  my $chained_ca_cert_path = $cert_args->{intermediate} ? $class->ca_path ('cert.pem') : $class->cert_path ('cert-chained.pem', {host => 'intermediate'});
-  my $ecname = 'prime256v1';
+  my $ca_cert_path = $class->ca_path ('cert.pem');
+  my $ica_cert_path = $cert_args->{intermediate} ? $ca_cert_path : $class->cert_path ('cert.pem', {host => 'intermediate'});
+  my $chained_ca_cert_path = $cert_args->{intermediate} ? $ca_cert_path : $class->cert_path ('cert-chained.pem', {host => 'intermediate'});
 
+  my $ca_name = {CN => "ca.test"};
+  my $ica_subj = $cert_args->{intermediate} ? {CN => 'intermediate'} : $ca_name;
   my $subject_name = $cert_args->{host} || $cn;
-  my $subject_type = 'DNS';
-  if ($subject_name =~ s/^IPv4://) {
-    $subject_type = 'IP';
-  } elsif ($subject_name =~ s/^mailto://) {
-    $subject_type = 'email';
-  }
+  my $server_subj = {CN => (defined $cert_args->{cn} ? $cert_args->{cn} : $subject_name)};
+  $server_subj->{"2.5.4.3"} = $cert_args->{cn2} if defined $cert_args->{cn2};
 
-  my $server_key_path = $_[0]->cert_path ('key.pem', $cert_args);
-  x "openssl ecparam -name $ecname -out \Q$server_key_path\E -genkey";
-
-  my $server_req_path = $_[0]->cert_path ('req.pem', $cert_args);
-  my $config_path = $_[0]->cert_path ('openssl.cnf', $cert_args);
-  my @conf = q{[exts]};
-  push @conf, qq{subjectAltName=$subject_type:$subject_name} unless $cert_args->{no_san};
-  if ($cert_args->{must_staple}) {
-    push @conf,
-        q{1.3.6.1.5.5.7.1.24 = DER:3003020105};
-        #q{tlsfeature = status_request};
-  }
-  push @conf, q{nsCertType = sslCA} if $cert_args->{intermediate};
-  $config_path->spew (join "\n", @conf);
-  #my $server_subj = '/';
-  #my $server_subj = '/subjectAltName=DNS.1='.$subject_name;
-  my $server_subj = '/CN='.(defined $cert_args->{cn} ? $cert_args->{cn} : $subject_name);
-  $server_subj .= '/CN=' . $cert_args->{cn2} if defined $cert_args->{cn2};
-  if ($RSA) {
-    x "openssl req -newkey rsa:2048 -x509 -days 1 -nodes -keyout \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E -sha256";# -config \Q$config_path\E $no_san ? '' : -reqexts san";
-  } else {
-    x "openssl req -x509 -days 1 -new -nodes -key \Q$server_key_path\E -out \Q$server_req_path\E -subj \Q$server_subj\E -sha256";# -config \Q$config_path\E $cert_args->{no_san} ? '' : -reqexts san";
-  }
-
-  if ($RSA) {
-    my $server_key1_path = $_[0]->cert_path ('key-pkcs1.pem', $cert_args);
-    x "openssl rsa -in \Q$server_key_path\E -out \Q$server_key1_path\E";
-  }
-
+  my $gen = Web::Transport::PKI::Generator->new;
+  my $parser = Web::Transport::PKI::Parser->new;
   my $server_cert_path = $_[0]->cert_path ('cert.pem', $cert_args);
   my $chained_cert_path = $_[0]->cert_path ('cert-chained.pem', $cert_args);
-  x "openssl x509 -in \Q$server_req_path\E -days 1 -CA \Q$chained_ca_cert_path\E -CAkey \Q$ica_key_path\E -sha256 -out \Q$server_cert_path\E -set_serial @{[time]} -extfile \Q$config_path\E -extensions exts";
 
-  my $server_p12_path = $_[0]->cert_path ('keys.p12', $cert_args);
-  x "openssl pkcs12 -export -passout pass: -CAfile \Q$chained_cert_path\E -in \Q$server_cert_path\E -inkey \Q$server_key_path\E -out \Q$server_p12_path\E";
-
-  x "cat \Q$server_cert_path\E \Q$ica_cert_path\E > \Q$chained_cert_path\E";
-  my $ca_cert_path = $class->ca_path ('cert.pem');
-  x "cat \Q$ca_cert_path\E >> \Q$chained_cert_path\E";
+  my $server_key_path = $_[0]->cert_path ('key.pem', $cert_args);
+    ($RSA ? $gen->create_rsa_key->then (sub { [rsa => $_[0]] }) : $gen->create_ec_key->then (sub { [ec => $_[0]] }))->then (sub {
+    my ($type, $key) = @{$_[0]};
+    $server_key_path->spew ($key->to_pem);
+    return $gen->create_certificate (
+      #issuer => $ica_subj,
+      subject => $server_subj,
+      ($cert_args->{no_san} ? () : (san_hosts => [$subject_name])),
+      ca => $cert_args->{intermediate},
+      ee => ! $cert_args->{intermediate},
+      must_staple => $cert_args->{must_staple},
+      not_before => time - 3600,
+      not_after => time + 3600,
+      serial_number => int rand 10000000,
+      'ca_' . $type => $parser->parse_pem ($ica_key_path->slurp)->[0],
+      ca_cert => $parser->parse_pem ($ica_cert_path->slurp)->[0],
+      $type => $key,
+    );
+  })->then (sub {
+    my $cert = $_[0];
+    $server_cert_path->spew ($cert->to_pem);
+    x "cat \Q$server_cert_path\E \Q$ica_cert_path\E > \Q$chained_cert_path\E";
+    x "cat \Q$ca_cert_path\E >> \Q$chained_cert_path\E";
+  })->to_cv->recv;
 
   warn "$$: @{[scalar gmtime]}: Certificate generation done\n";
 
@@ -133,7 +132,8 @@ sub wait_create_cert ($$) {
   if ($ENV{RECREATE_CERTS} or
       ($_[0]->ca_path ('cert.pem')->is_file and
        $_[0]->ca_path ('cert.pem')->stat->mtime + 60*60*24 < time)) {
-    system "rm \Q$cert_path\E/*.pem";
+    warn "Recreate certificates...\n";
+    x "rm \Q$cert_path\E/*.pem || true";
   }
   my $cert_pem_path = $_[0]->cert_path ('cert.pem', $cert_args);
   unless ($cert_pem_path->is_file) {

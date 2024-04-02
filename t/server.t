@@ -96,13 +96,14 @@ my $HandleRequestHeaders = {};
   Test::Certificates->wait_create_cert ($cert_args);
   our $tls_server = tcp_server $host, $tls_port, sub {
     my $tcp = Web::Transport::TCPTransport->new
-        (fh => $_[0],
+        (fh => $_[0], server => 1,
          host => Web::Host->parse_string ($_[1]), port => $_[2]);
     my $tls = Web::Transport::TLSTransport->new
         (server => 1, transport => $tcp,
          ca_file => Test::Certificates->ca_path ('cert.pem'),
          cert_file => Test::Certificates->cert_path ('cert-chained.pem', $cert_args),
-         key_file => Test::Certificates->cert_path ('key.pem', $cert_args));
+         key_file => Test::Certificates->cert_path ('key.pem', $cert_args),
+        );
     my $con = Web::Transport::HTTPServerConnection->new
         (transport => $tls, cb => $con_cb);
     $GlobalCV->begin;
@@ -4207,7 +4208,7 @@ test {
         if ($type eq 'readdata') {
           $data .= ${$_[2]};
         } elsif ($type eq 'readeof') {
-          $tcp->push_shutdown;
+          Promise->resolve->then (sub { $tcp->push_shutdown });
         } elsif ($type eq 'close') {
           $ok->($data);
         }
@@ -4254,7 +4255,7 @@ test {
         if ($type eq 'readdata') {
           $data .= ${$_[2]};
         } elsif ($type eq 'readeof') {
-          $tcp->push_shutdown;
+          Promise->resolve->then (sub { $tcp->push_shutdown });
         } elsif ($type eq 'close') {
           $ok->($data);
         }
@@ -4891,7 +4892,6 @@ test {
   });
 } n => 2, name => 'send_response_headers after close';
 
-Test::Certificates->wait_create_cert;
 $GlobalCV->begin;
 run_tests;
 $GlobalCV->end;
@@ -4900,7 +4900,7 @@ $HandleRequestHeaders = {};
 
 =head1 LICENSE
 
-Copyright 2016 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2024 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

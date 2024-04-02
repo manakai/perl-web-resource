@@ -1449,10 +1449,9 @@ test {
         )->then (sub {
           my $cert = $_[0];
 
-          # XXX debug
-          warn "CA: ", $ca_cert->debug_info;
-          warn "ee: ", $cert->debug_info;
-          warn "CA2: ", $ca_cert2->debug_info;
+          #warn "CA: ", $ca_cert->debug_info;
+          #warn "ee: ", $cert->debug_info;
+          #warn "CA2: ", $ca_cert2->debug_info;
 
           return [$ca_cert, $ca_rsa, $cert, $rsa, $ca_cert2];
         });
@@ -1511,7 +1510,8 @@ test {
         is $e->name, 'Protocol error';
         my $m = $e->message;
         $m =~ s/self-signed/self signed/;
-        is $m, 'Certificate verification error 19 - self signed certificate in certificate chain';
+        #is $m, 'Certificate verification error 19 - self signed certificate in certificate chain'; # other error might be emitted depending on OpenSSL version
+        like $m, qr{Certificate verification error};
         is $e->file_name, __FILE__;
         is $e->line_number, __LINE__+4;
       } $c;

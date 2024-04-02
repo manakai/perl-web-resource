@@ -594,9 +594,10 @@ test {
     test {
       is $destroyed, 4;
     } $c;
+    undef $server;
+  })->then (sub {
     done $c;
     undef $c;
-    undef $server;
   });
 } n => 2, name => 'an echo server (default)';
 
@@ -1447,6 +1448,12 @@ test {
           ee => 1,
         )->then (sub {
           my $cert = $_[0];
+
+          # XXX debug
+          warn "CA: ", $ca_cert->debug_info;
+          warn "ee: ", $cert->debug_info;
+          warn "CA2: ", $ca_cert2->debug_info;
+
           return [$ca_cert, $ca_rsa, $cert, $rsa, $ca_cert2];
         });
       });
@@ -2545,7 +2552,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2024 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

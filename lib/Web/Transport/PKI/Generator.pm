@@ -398,6 +398,13 @@ sub create_certificate ($%) {
         unless defined $result->[0];
     return $result->[0];
   });
+
+  ## failure during X509V3_EXT_conf_nid() for nid=90
+  ## 80BB96A5E77F0000:error:1100007B:X509 V3 routines:v2i_AUTHORITY_KEYID:unable to get issuer keyid:../crypto/x509/v3_akid.c:177:
+  ## OpenSSL error: error:00000000:lib(0)::reason(0)
+  ##
+  ## This OpenSSL error can be emitted when the |ca_cert| is not
+  ## created with |ca => 1|.
 } # create_certifciate
 
 1;

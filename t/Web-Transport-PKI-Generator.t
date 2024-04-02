@@ -592,6 +592,7 @@ test {
       rsa => $ca_rsa,
       ca_rsa => $ca_rsa,
       subject => {O => 'The Root CA'},
+      ca => 1,
     )->then (sub {
       $ca_cert = $_[0];
       return $gen->create_certificate (
@@ -628,6 +629,7 @@ test {
       rsa => $ca_rsa,
       ca_rsa => $ca_rsa,
       subject => {O => 'The Root CA'},
+      ca => 1,
     )->then (sub {
       $ca_cert = $_[0];
       return $gen->create_certificate (
@@ -876,6 +878,7 @@ for my $test (
         rsa => $ca_rsa,
         ca_rsa => $ca_rsa,
         subject => {O => 'The Root CA'},
+        ca => 1,
       )->then (sub {
         $ca_cert = $_[0];
         return $gen->create_certificate (
@@ -944,7 +947,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2018-2024 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

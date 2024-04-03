@@ -548,14 +548,6 @@ sub _tls ($) {
         $self->{starttls_data}->{tls_cert_chain}->[$depth] = $parser->parse_pem ($self->{_certs}->[$depth])->[0]
             if defined $self->{_certs}->[$depth];
       }
-      ## Check must-staple flag
-      if (not defined $data->{stapling_result} and
-          defined $data->{tls_cert_chain}->[0] and
-          $data->{tls_cert_chain}->[0]->must_staple) {
-        (delete $self->{starttls_done})->[1]->({failed => 1, message => "There is no stapled OCSP response, which is required by the certificate"});
-        $self->abort (message => 'TLS error');
-        return;
-      }
 
       delete $self->{starttls_data};
       $self->{started} = 1;

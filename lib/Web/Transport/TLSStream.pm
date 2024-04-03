@@ -815,15 +815,6 @@ sub create ($$) {
     $info->{tls_cipher} = Net::SSLeay::get_cipher ($tls);
     $info->{tls_cipher_usekeysize} = Net::SSLeay::get_cipher_bits ($tls);
 
-    ## Check must-staple flag
-    if (not defined $info->{tls_stapling} and
-        defined $info->{tls_cert_chain}->[0] and
-        $info->{tls_cert_chain}->[0]->must_staple) {
-      my $error = _pe "There is no stapled OCSP response, which is required by the certificate";
-      $abort->($error);
-      die $error;
-    }
-
     if ($args->{debug}) {
       warn "$info->{id}: $info->{type}: ready\n";
       _debug_info $info, $args->{debug};

@@ -710,6 +710,215 @@ test {
 
   my $remote_host = Web::Host->parse_string (rand . '.test');
   my $remote_port = 3533;
+  my $remote_host2 = Web::Host->parse_string (rand . '.test');
+  ca_cert->then (sub {
+    my ($ca_cert, $ca_rsa) = @{$_[0]};
+    return ee_cert ($_[0], $remote_host)->then (sub {
+      my ($ee_cert, $ee_rsa) = @{$_[0]};
+      my $close_server;
+      my $server_name = rand;
+      my $exception_invoked = 0;
+      my $server_p = Promise->new (sub {
+        my ($ok) = @_;
+        my $server = tcp_server $host, $port, sub {
+          my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+            server_header => $server_name,
+            handle_request => sub {
+              my $args = $_[0];
+              if ($args->{request}->{method} eq 'CONNECT') {
+                $args->{upstream}->{type} = 'mitm';
+                $args->{upstream}->{tls} = {
+                  ca_cert => $ca_cert->to_pem,
+                  cert => $ee_cert->to_pem,
+                  key => $ee_rsa->to_pem,
+                };
+                return $args;
+              }
+
+              $args->{request}->{url} = Web::URL->parse_string (q<http://>.$remote_host2->to_ascii.q</>);
+              return $args;
+            },
+          });
+          $con->onexception (sub {
+            my ($s, $x) = @_;
+            test {
+              isnt $s, $con;
+              if ($exception_invoked == 0) {
+                is $x->name, 'Protocol error', $x;
+                is $x->message, "Target URL scheme is not |https|";
+                is $x->file_name, __FILE__;
+                is $x->line_number, __LINE__-9;
+              } else {
+                ## Downstream connection is closed by propagation of
+                ## failure of upstream connection.
+                is $x->name, 'TypeError', $x;
+                is $x->message, "Response is not allowed";
+                is $x->file_name, __FILE__;
+                is $x->line_number, __LINE__-16;
+              }
+            } $c;
+            $exception_invoked++;
+            undef $con;
+          });
+          promised_cleanup { $ok->() } $con->completed;
+        };
+        $close_server = sub { undef $server };
+      });
+
+      my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+          ([{protocol => 'http', host => $host, port => $port}]);
+      my $url = Web::URL->parse_string (qq{https://@{[$remote_host->to_ascii]}:$remote_port/} . rand);
+      my $client = Web::Transport::BasicClient->new_from_url ($url, {
+        proxy_manager => $pm,
+        tls_options => {
+          ca_cert => $ca_cert->to_pem,
+        },
+      });
+
+      my $body = rand;
+      promised_cleanup {
+        done $c; undef $c;
+      } promised_cleanup {
+        return $server_p;
+      } promised_cleanup {
+        $close_server->();
+      } promised_cleanup {
+        return $client->close;
+      } $client->request (
+        url => $url,
+        method => 'POST',
+        body => $body,
+      )->then (sub { test { ok 0 } $c }, sub {
+        my $res = $_[0];
+        test {
+          ok $res->is_network_error;
+          is $res->network_error_message, 'Connection closed without response';
+          is $exception_invoked, 2;
+        } $c;
+      });
+    });
+  });
+} n => 13, name => 'mitm upstream server is http, not allowed';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+
+  my $host2;
+  my $port2;
+
+  my $remote_host = Web::Host->parse_string (rand . '.test');
+  my $remote_port = 3533;
+
+  my $server;
+  rawserver (q{
+    receive "POST"
+    "HTTP/1.1 245 ok"CRLF
+    "server: foo"CRLF
+    CRLF
+    "efg"
+    close
+  })->then (sub {
+    $server = $_[0];
+    $host2 = $server->{host};
+    $port2 = $server->{port};
+    return ca_cert;
+  })->then (sub {
+    my ($ca_cert, $ca_rsa) = @{$_[0]};
+    return ee_cert ($_[0], $remote_host)->then (sub {
+      my ($ee_cert, $ee_rsa) = @{$_[0]};
+      my $close_server;
+      my $server_name = rand;
+      my $exception_invoked = 0;
+      my $server_p = Promise->new (sub {
+        my ($ok) = @_;
+        my $server = tcp_server $host, $port, sub {
+          my $con = Web::Transport::ProxyServerConnection->new_from_aeargs_and_opts ([@_], {
+            server_header => $server_name,
+            handle_request => sub {
+              my $args = $_[0];
+              if ($args->{request}->{method} eq 'CONNECT') {
+                $args->{upstream}->{type} = 'mitm';
+                $args->{upstream}->{tls} = {
+                  ca_cert => $ca_cert->to_pem,
+                  cert => $ee_cert->to_pem,
+                  key => $ee_rsa->to_pem,
+                };
+                $args->{upstream}->{allow_downgrade} = 1;
+                return $args;
+              }
+
+              $args->{request}->{url} = Web::URL->parse_string (q<http://>.$host2.":".$port2.q</>);
+              return $args;
+            },
+          });
+          $con->onexception (sub {
+            my ($s, $x) = @_;
+            test {
+              isnt $s, $con;
+              ok 0, $x;
+            } $c;
+            $exception_invoked++;
+            undef $con;
+          });
+          $con->completed->finally (sub {
+            $ok->();
+            undef $con;
+          });
+        };
+        $close_server = sub { undef $server };
+      });
+
+      my $pm = Web::Transport::ConstProxyManager->new_from_arrayref
+          ([{protocol => 'http', host => $host, port => $port}]);
+      my $url = Web::URL->parse_string (qq{https://@{[$remote_host->to_ascii]}:$remote_port/} . rand);
+      my $client = Web::Transport::BasicClient->new_from_url ($url, {
+        proxy_manager => $pm,
+        tls_options => {
+          ca_cert => $ca_cert->to_pem,
+        },
+      });
+
+      my $body = rand;
+      promised_cleanup {
+        done $c; undef $c;
+      } promised_cleanup {
+        return $server_p;
+      } promised_cleanup {
+        $close_server->();
+      } promised_cleanup {
+        return $client->close;
+      } $client->request (
+        url => $url,
+        method => 'POST',
+        body => $body,
+      )->then (sub {
+        my $res = $_[0];
+        test {
+          is $res->status, 245, $res;
+          is $res->body_bytes, q{efg};
+          ok ! $res->incomplete;
+        } $c;
+      }, sub {
+        my $res = $_[0];
+        test {
+          is undef, $res;
+        } $c;
+      });
+    });
+  });
+} n => 3, name => 'mitm upstream server is http, allowed';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+
+  my $remote_host = Web::Host->parse_string (rand . '.test');
+  my $remote_port = 3533;
   ca_cert->then (sub {
     my ($ca_cert, $ca_rsa) = @{$_[0]};
     return ee_cert ($_[0], $remote_host)->then (sub {
@@ -1089,7 +1298,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2024 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -204,6 +204,12 @@ sub _handle_stream ($$$) {
     ##        request to the MITM HTTPS server is handled in the
     ##        normal ways (e.g. the |handle_request| handler is
     ##        invoked).
+    ##
+    ##        By default, the upstream server transport must be HTTPS
+    ##        (i.e. |request|'s |url|'s scheme returned by the
+    ##        following |handle_request| handler invocations must be
+    ##        |https|).  If |upstream|'s |allow_downgrade| is true,
+    ##        plain HTTP (|http|) is also allowed.
     if ($request->{method} eq 'CONNECT') {
       if (defined $result->{upstream}) {
         my $type = $result->{upstream}->{type} || '';
@@ -243,11 +249,11 @@ sub _handle_stream ($$$) {
         error => _te "No |url| argument",
       };
     }
-    my $allowed = $opts->{_allowed_scheme} || 'http';
-    unless ($url->scheme eq $allowed) {
+    my $allowed = $opts->{_allowed_schemes} || {'http' => 1};
+    unless ($allowed->{$url->scheme}) {
       return {
         unused_request_body_stream => $request->{body_stream}, # or undef
-        error => _pe "Target URL scheme is not |$allowed|",
+        error => _pe "Target URL scheme is not @{[join ', ', map { qq{|$_|} } grep { $allowed->{$_} } keys %$allowed]}",
       };
     }
 
@@ -425,7 +431,10 @@ sub _handle_stream ($$$) {
             %$opts,
             parent_id => undef,
             tls => $result->{upstream}->{tls} || {},
-            _allowed_scheme => 'https',
+            _allowed_schemes => {
+              'https' => 1,
+              'http' => $result->{upstream}->{allow_downgrade},
+            },
           });
           $con->onexception ($server->onexception);
           return $con->completed;
@@ -597,7 +606,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2024 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

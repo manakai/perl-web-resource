@@ -2547,6 +2547,217 @@ test {
   });
 } n => 2, name => 'certificate_manager, exception by server certificate';
 
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+  my $domain = Web::Host->parse_string ('foo.bar.test');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$host],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa) = @{$_[0]};
+
+    my $x = $test::CM6::X = Web::Transport::TypeError->new (rand);
+    {
+      package test::CM6;
+      push our @ISA, qw(Web::Transport::DefaultCertificateManager);
+      sub prepare {
+        die $test::CM6::X;
+      }
+    }
+
+    my $cm1 = test::CM6->new ({
+      ca_cert => $ca_cert,
+      cert => $cert,
+      key => $rsa,
+    });
+
+    my @p;
+    my $server = tcp_server undef, $port, sub {
+      push @p, Web::Transport::TLSStream->create ({
+        server => 1,
+        certificate_manager => $cm1,
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          server => 1,
+          fh => $_[0],
+          host => Web::Host->parse_string ($_[1]),
+          port => $_[2],
+        },
+      })->then (sub { test { ok 0 } $c }, sub {
+        my $e = $_[0];
+        test {
+          is $e, $x, "server create exception ($e)";
+        } $c;
+      });
+    };
+
+    my $cm2 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+    });
+
+    return Web::Transport::TLSStream->create ({
+      host => $domain,
+      certificate_manager => $cm2,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub { test { ok 0 } $c }, sub {
+      my $e = $_[0];
+      test {
+        if (UNIVERSAL::isa ($e, 'Streams::IOError')) {
+          isa_ok $e, 'Streams::IOError', $e;
+        } else {
+          isa_ok $e, 'Web::Transport::ProtocolError', $e;
+        }
+      } $c;
+      undef $server;
+      return Promise->all (\@p);
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'certificate_manager, exception in server CM prepare, 1';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+  my $domain = Web::Host->parse_string ('foo.bar.test');
+
+  my $gen = Web::Transport::PKI::Generator->new;
+  return $gen->create_rsa_key->then (sub {
+    my $ca_rsa = $_[0];
+    return $gen->create_certificate (
+      rsa => $ca_rsa,
+      ca_rsa => $ca_rsa,
+      subject => {O => 'The Root CA'},
+      issuer => {O => 'The Root CA'},
+      not_before => time - 60,
+      not_after => time + 3600,
+      serial_number => 1,
+      ca => 1,
+    )->then (sub {
+      my $ca_cert = $_[0];
+      return $gen->create_rsa_key->then (sub {
+        my $rsa = $_[0];
+        return $gen->create_certificate (
+          rsa => $rsa,
+          ca_rsa => $ca_rsa,
+          ca_cert => $ca_cert,
+          not_before => time - 30,
+          not_after => time + 3000,
+          serial_number => 2,
+          subject => {CN => 'server.test'},
+          san_hosts => [$host],
+          ee => 1,
+        )->then (sub {
+          my $cert = $_[0];
+          return [$ca_cert, $ca_rsa, $cert, $rsa];
+        });
+      });
+    });
+  })->then (sub {
+    my ($ca_cert, $ca_rsa, $cert, $rsa) = @{$_[0]};
+
+    my $x = $test::CM7::X = Web::Transport::TypeError->new (rand);
+    {
+      package test::CM7;
+      push our @ISA, qw(Web::Transport::DefaultCertificateManager);
+      sub prepare {
+        die $test::CM7::X;
+      }
+    }
+
+    my $cm1 = test::CM7->new ({
+      ca_cert => $ca_cert,
+      cert => $cert,
+      key => $rsa,
+    });
+
+    my @p;
+    my $fh;
+    my $server = tcp_server undef, $port, sub {
+      push @p, Web::Transport::TLSStream->create ({
+        server => 1,
+        certificate_manager => $cm1,
+        parent => {
+          class => 'Web::Transport::TCPStream',
+          server => 1,
+          fh => $fh = $_[0],
+          host => Web::Host->parse_string ($_[1]),
+          port => $_[2],
+        },
+      })->then (sub { test { ok 0 } $c }, sub {
+        my $e = $_[0];
+        test {
+          is $e, $x, "server create exception ($e)";
+        } $c;
+      });
+    };
+
+    my $cm2 = Web::Transport::DefaultCertificateManager->new ({
+      ca_cert => $ca_cert,
+    });
+
+    return Web::Transport::TLSStream->create ({
+      host => $domain,
+      certificate_manager => $cm2,
+      parent => {
+        class => 'Web::Transport::TCPStream',
+        host => $host,
+        port => $port,
+      },
+    })->then (sub { test { ok 0 } $c }, sub {
+      my $e = $_[0];
+      test {
+        isa_ok $e, 'Web::Transport::ProtocolError', $e;
+      } $c;
+      undef $server;
+      return Promise->all (\@p);
+    });
+  })->then (sub {
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'certificate_manager, exception in server CM prepare, 2';
+
 Test::Certificates->wait_create_cert;
 run_tests;
 

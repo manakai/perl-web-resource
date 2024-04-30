@@ -1230,6 +1230,8 @@ test {
 
 test {
   my $c = shift;
+
+  socket my $sock, Socket::PF_INET, Socket::SOCK_STREAM, 0;
   Web::Transport::TLSStream->create ({
     host => Web::Host->parse_string (Test::Certificates->cert_name),
     ca_file => Test::Certificates->ca_path ('cert.pem'),
@@ -1237,8 +1239,8 @@ test {
     parent => {
       class => 'Web::Transport::TCPStream',
       server => 1,
-      fh => {},
-      host => Web::Host->parse_string ("a.invalid"), port => 123,
+      fh => $sock,
+      host => Web::Host->parse_string ("127.0.0.1"), port => 123,
     },
   })->catch (sub {
     my $e = $_[0];
@@ -1255,6 +1257,8 @@ test {
 
 test {
   my $c = shift;
+
+  socket my $sock, Socket::PF_INET, Socket::SOCK_STREAM, 0;
   Web::Transport::TLSStream->create ({
     host => Web::Host->parse_string (Test::Certificates->cert_name),
     ca_file => Test::Certificates->ca_path ('cert.pem'),
@@ -1263,8 +1267,8 @@ test {
     parent => {
       class => 'Web::Transport::TCPStream',
       server => 1,
-      fh => {},
-      host => Web::Host->parse_string ("a.invalid"), port => 123,
+      fh => $sock,
+      host => Web::Host->parse_string ("127.0.0.1"), port => 123,
     },
   })->catch (sub {
     my $e = $_[0];
@@ -1813,13 +1817,14 @@ test {
       ca_cert => $ca_cert,
     });
 
+    socket my $sock, Socket::PF_INET, Socket::SOCK_STREAM, 0;
     Web::Transport::TLSStream->create ({
       server => 1,
       certificate_manager => $cm1,
       parent => {
         class => 'Web::Transport::TCPStream',
         server => 1,
-        fh => {},
+        fh => $sock,
         host => $host,
         port => $port,
       },

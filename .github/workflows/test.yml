@@ -86,6 +86,7 @@
          "continue-on-error" : "${{ matrix.experimental }}",
          "env" : {
             "CIRCLE_ARTIFACTS" : "/tmp/circle-artifacts/test",
+            "PMBP_OPENSSL_TYPE" : "${{ matrix.env_PMBP_OPENSSL_TYPE }}",
             "PMBP_PERL_VERSION" : "${{ matrix.perl_version }}"
          },
          "runs-on" : "${{ matrix.os }}",
@@ -118,21 +119,49 @@
             "matrix" : {
                "include" : [
                   {
+                     "env_PMBP_OPENSSL_TYPE" : "openssl",
                      "experimental" : false,
                      "os" : "ubuntu-latest",
                      "perl_version" : "latest"
                   },
                   {
+                     "env_PMBP_OPENSSL_TYPE" : "libressl",
+                     "experimental" : false,
+                     "os" : "ubuntu-latest",
+                     "perl_version" : "latest"
+                  },
+                  {
+                     "env_PMBP_OPENSSL_TYPE" : "openssl",
                      "experimental" : false,
                      "os" : "macos-latest",
                      "perl_version" : "latest"
                   },
                   {
+                     "env_PMBP_OPENSSL_TYPE" : "libressl",
+                     "experimental" : false,
+                     "os" : "macos-latest",
+                     "perl_version" : "latest"
+                  },
+                  {
+                     "env_PMBP_OPENSSL_TYPE" : "openssl",
                      "experimental" : false,
                      "os" : "ubuntu-latest",
                      "perl_version" : "5.14.2"
                   },
                   {
+                     "env_PMBP_OPENSSL_TYPE" : "libressl",
+                     "experimental" : false,
+                     "os" : "ubuntu-latest",
+                     "perl_version" : "5.14.2"
+                  },
+                  {
+                     "env_PMBP_OPENSSL_TYPE" : "openssl",
+                     "experimental" : false,
+                     "os" : "macos-latest",
+                     "perl_version" : "5.14.2"
+                  },
+                  {
+                     "env_PMBP_OPENSSL_TYPE" : "libressl",
                      "experimental" : false,
                      "os" : "macos-latest",
                      "perl_version" : "5.14.2"

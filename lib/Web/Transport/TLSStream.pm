@@ -547,15 +547,25 @@ sub create ($$) {
   my $certs = [];
   my @verify;
   my $cert_args;
-  Promise->resolve->then (sub {
-    return $cm->prepare (server => $args->{server});
-  })->then (sub {
-    return Promise->all ([
-      $cm->to_anyevent_tls_args_sync,
-      $parent->{class}->create ($parent),
-    ]);
-  })->then (sub {
-    $cert_args = $_[0]->[0];
+  #no return
+  Promise->all ([
+    Promise->resolve->then (sub {
+      return $cm->prepare (server => $args->{server});
+    })->then (sub {
+      return $cm->to_anyevent_tls_args_sync;
+    })->then (sub {
+      return [$_[0], undef, 1];
+    }, sub {
+      my $e = $_[0];
+      if ($args->{server}) {
+        return [undef, $e, 0];
+      } else {
+        die $e;
+      }
+    }),
+    $parent->{class}->create ($parent),
+  ])->then (sub {
+    $cert_args = $_[0]->[0]->[0];
     $info->{parent} = $_[0]->[1];
     $info->{layered_type} .= '/' . $info->{parent}->{layered_type};
 
@@ -572,6 +582,25 @@ sub create ($$) {
     (delete $info->{parent}->{closed})->then ($s_parent_closed);
     $t_r = (delete $info->{parent}->{readable})->get_reader ('byob');
     $t_w = (delete $info->{parent}->{writable})->get_writer;
+    $t_r->closed->catch ($abort)->then (sub { undef $t_read });
+    $t_w->closed->catch ($abort);
+
+    if (defined $signal) {
+      if ($signal->aborted) {
+        my $error = $signal->manakai_error;
+        $abort->($error);
+        die $error;
+      } else {
+        $signal->manakai_onabort (sub {
+          $abort->($signal->manakai_error);
+        });
+      }
+    }
+
+    unless ($_[0]->[0]->[2]) { # CM failed
+      die $_[0]->[0]->[1];
+    }
+    
     $t_read = sub {
       return promised_until {
         if ($t_read_pausing) {
@@ -610,20 +639,6 @@ sub create ($$) {
         });
       };
     }; # $t_read
-    $t_r->closed->catch ($abort)->then (sub { undef $t_read });
-    $t_w->closed->catch ($abort);
-
-    if (defined $signal) {
-      if ($signal->aborted) {
-        my $error = $signal->manakai_error;
-        $abort->($error);
-        die $error;
-      } else {
-        $signal->manakai_onabort (sub {
-          $abort->($signal->manakai_error);
-        });
-      }
-    }
 
     my $vmode;
     my $insecure;

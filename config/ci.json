@@ -2,6 +2,12 @@
   "github": {
     "pmbp": "5.14+",
     "macos": true,
+    "env_matrix": {
+      "PMBP_OPENSSL_TYPE": [
+        "openssl",
+        "libressl"
+      ]
+    },
     "merger": true,
     "gaa": true
   }

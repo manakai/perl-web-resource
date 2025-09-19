@@ -19,7 +19,7 @@ httpd.apache.org
 soulsphere.org
 whatwg.org
 dom.spec.whatwg.org
-www.facebook.com
+facebook.com
 helloworld.letsencrypt.org
 www.hatena.ne.jp
 hatena.g.hatena.ne.jp

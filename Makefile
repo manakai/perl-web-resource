@@ -30,7 +30,7 @@ PMBP_OPTIONS =
 
 local/bin/pmbp.pl:
 	mkdir -p local/bin
-	$(WGET) -O $@ https://raw.github.com/wakaba/perl-setupenv/master/bin/pmbp.pl
+	$(WGET) -O $@ https://raw.githubusercontent.com/wakaba/perl-setupenv/master/bin/pmbp.pl
 pmbp-upgrade: local/bin/pmbp.pl
 	perl local/bin/pmbp.pl $(PMBP_OPTIONS) --update-pmbp-pl
 pmbp-update: git-submodules pmbp-upgrade
@@ -56,9 +56,9 @@ lib/Web/MIME/_TypeDefs.pm: bin/generate-list.pl local/mime-types.json \
     local/mime-sniffing.json
 	$(PERL) $< > $@
 local/mime-types.json:
-	$(WGET) -O $@ https://raw.github.com/manakai/data-web-defs/master/data/mime-types.json
+	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/mime-types.json
 local/mime-sniffing.json:
-	$(WGET) -O $@ https://raw.github.com/manakai/data-web-defs/master/data/mime-sniffing.json
+	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/mime-sniffing.json
 local/url-schemes.json:
 	$(WGET) -O $@ https://raw.githubusercontent.com/manakai/data-web-defs/master/data/url-schemes.json
 

@@ -1660,7 +1660,7 @@ test {
       my $res = $_[0];
       test {
         is $res->status, 413;
-        is $res->status_text, 'Payload Too Large';
+        like $res->status_text, qr{^(?:Payload|Content) Too Large$};
         is $res->body_bytes, '413';
       } $c;
     });

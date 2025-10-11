@@ -2612,6 +2612,12 @@ sub _headers_received ($;%) {
     $return->{messages} = $read_message_stream;
     $stream->{closing} = _pcap;
     $return->{closing} = $stream->{closing}->[0];
+    ## This promise is not catched or exported anywhere, such that we
+    ## need to catch here to not let its rejected promise warnings
+    ## exposed.  Any error would be reported to the application
+    ## through other promises anyway.  (Then what is the value of this
+    ## promise in the first place?)
+    $stream->{closing}->[0]->catch (sub { });
   } else { # not is_ws
     my $read_stream = ReadableStream->new ({
       type => 'bytes',

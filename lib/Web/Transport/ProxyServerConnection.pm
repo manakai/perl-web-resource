@@ -63,6 +63,11 @@ sub _handle_stream ($$$) {
       url => $req->{target_url},
       headers => $req_headers,
       length => $req->{length}, # or undef
+
+      # XXX tentative experimental interface for WS support; not sure
+      # whether this API is kept in future.
+      messages => $req->{messages}, # or undef
+      
       body_stream => (defined $req->{length} ? $req->{body} : undef),
       forwarding => 1,
     };
@@ -451,8 +456,13 @@ sub _handle_stream ($$$) {
           });
         }
       } else { # non-CONNECT response
-        $writer = $_[0]->{body}->get_writer;
+        ## No writer if WS
+        $writer = $_[0]->{body}->get_writer if defined $_[0]->{body};
       }
+
+      # XXX tentative experimental interface for WS support; not sure
+      # whether this API is kept in future.
+      return $response->{done} if not defined $writer;
 
       if (defined $reader) {
         # XXX pipeTo

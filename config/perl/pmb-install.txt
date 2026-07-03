@@ -20,9 +20,9 @@ Socket~2.041
 Term::ANSIColor~5.01
 Term::Table~0.028
 Test::Differences~0.72
-Test::More~1.302219
+Test::More~1.302222
 Text::Diff~1.45
 Time::HiRes~1.9764
 Types::Serialiser~1.01
-URI~5.34
+URI~5.35
 common::sense~3.75

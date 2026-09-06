@@ -845,13 +845,18 @@ sub closed ($) {
 ## connection AFTER any ongoing stream has been completed.  If the
 ## HTTP connection is not ready yet, any ongoing connection attempt is
 ## aborted.  It returns the |closed| promise anyway.
-sub close_after_current_stream ($) {
-  my $con = $_[0];
+sub close_after_current_stream ($;%) {
+  my ($con, %args) = @_;
 
   my $error = _pw 'Close by |close_after_current_stream|';
   return $con->abort ($error) unless defined $con->{state};
 
   $con->{to_be_closed} = 1;
+  if ($args{wait_for_first_request} and $con->{is_server} and
+      $con->{next_stream_id} == 1 and
+      ($con->{state} eq 'initial' or $con->{state} eq 'before request-line')) {
+    return $con->{closed}->[0];
+  }
   if ($con->{state} eq 'initial' or
       $con->{state} eq 'before request-line' or # XXXspec
       $con->{state} eq 'waiting') {

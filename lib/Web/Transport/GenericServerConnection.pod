@@ -1,3 +1,5 @@
+=encoding utf-8
+
 =head1 NAME
 
 Web::Transport::GenericServerConnection - Common API for HTTP server connection
@@ -155,6 +157,18 @@ Schedule to close the connection as soon as possible.
 If the connection is not used at the moment, it is immediately closed.
 Otherwise, the connection is closed after the response to the
 currently processed request is sent.
+
+C<wait_for_first_request> オプションは、既に受け付けた新規の
+HTTP サーバー接続について、最初の1要求とその応答の完了まで待つ
+ことを指定します。既定値は偽で、未使用接続を直ちに閉じる従来の
+動作を維持します。真の場合も C<timeout> が正のときだけ有効です。
+HTTP 接続が ready で、まだ最初の要求行を読み終えていない接続が
+対象です。再利用待ちの接続、新規接続の受付、確立中の TLS 接続を
+待ち続ける指定ではありません。同じ接続の2要求目は処理しません。
+
+無送信の新規接続は指定した終了期限まで残る可能性があります。
+C<timeout> を省略した場合は既定の10秒を使い、0または負のときは
+このオプションによる最初の要求待ちは行いません。
 
 The C<timeout> option can be specified as a key/value pair.  The
 option specifies the seconds of the timeout, whose default is C<10>

@@ -143,7 +143,9 @@ sub close_after_current_response ($;%) {
   my ($self, %args) = @_;
   my $timeout = $args{timeout};
   $timeout = 10 unless defined $timeout;
-  $self->{connection}->close_after_current_stream;
+  $self->{connection}->close_after_current_stream (
+    wait_for_first_request => $args{wait_for_first_request} && $timeout > 0,
+  );
   my $timer;
   if ($timeout > 0) {
     $timer = AE::timer $timeout, 0, sub {

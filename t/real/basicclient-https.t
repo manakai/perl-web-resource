@@ -41,6 +41,7 @@ www.amazon.co.jp
       test {
         ok ! $res->is_network_error;
         ok $res->status == 200 ||
+           $res->status == 202 ||
            $res->status == 301 ||
            $res->status == 302 ||
            $res->status == 303 ||
@@ -58,7 +59,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2016-2023 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This program is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

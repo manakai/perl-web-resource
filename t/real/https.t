@@ -21,7 +21,6 @@ whatwg.org
 dom.spec.whatwg.org
 facebook.com
 helloworld.letsencrypt.org
-www.hatena.ne.jp
 hatena.g.hatena.ne.jp
 roomhub.jp
 www.realtokyoestate.co.jp

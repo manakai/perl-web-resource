@@ -529,6 +529,102 @@ test {
   my $origin = Web::URL->parse_string ("http://$host:$port");
 
   my $con;
+  my $dispatched = 0;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }});
+    $con ||= $x;
+    my $r = $x->streams->get_reader;
+    $x->ready->then (sub {
+      $x->close_after_current_stream;
+      return $r->read->then (sub {
+        $dispatched++ unless $_[0]->{done};
+      });
+    });
+  }; # $server
+
+  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
+  $http->request (path => [])->then (sub {
+    my $res = $_[0];
+    test {
+      ok $res->is_network_error;
+    } $c;
+    return promised_sleep (0.3);
+  })->then (sub {
+    test {
+      is $dispatched, 0;
+    } $c;
+    return $http->close;
+  })->then (sub {
+    return $con->abort;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 2, name => 'no new request dispatch on unused connection after close_after_current_stream';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $con;
+  my $dispatched = 0;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }});
+    $con ||= $x;
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      $dispatched++ unless $_[0]->{done};
+    });
+  }; # $server
+
+  my $tcp = Web::Transport::TCPTransport->new (host => $origin->host, port => $origin->port);
+  $tcp->start (sub {})->then (sub {
+    return $tcp->push_write (\ "POST /pr");
+  })->then (sub {
+    return promised_wait_until {
+      !! $con and $con->{state} eq 'before request-line' and defined $con->{rbuf} and length $con->{rbuf};
+    } timeout => 5;
+  })->then (sub {
+    $con->close_after_current_stream;
+    return $tcp->push_write (\ " HTTP/1.1\x0D\x0AHost: localhost\x0D\x0A\x0D\x0A");
+  })->then (sub {
+    return promised_sleep (0.3);
+  })->then (sub {
+    test {
+      is $dispatched, 0;
+    } $c;
+    return Promise->all ([$con->abort, $tcp->abort]);
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 1, name => 'no new request dispatch (partial request-line) after close_after_current_stream';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $con;
   my $server = tcp_server $host, $port, sub {
     my $x = Web::Transport::HTTPStream->new
         ({server => 1, parent => {
@@ -816,7 +912,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

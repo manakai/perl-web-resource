@@ -22,6 +22,7 @@ clean:
 ## ------ Setup ------
 
 deps: git-submodules pmbp-install
+deps-main: pmbp-install
 
 git-submodules:
 	$(GIT) submodule update --init
@@ -100,6 +101,7 @@ PROVE = ./prove
 test: test-deps test-main test-real-main
 
 test-deps: deps
+test-deps-main: deps-main
 
 test-main: test-main-main test-main-server
 

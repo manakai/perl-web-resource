@@ -852,6 +852,7 @@ sub close_after_current_stream ($) {
   return $con->abort ($error) unless defined $con->{state};
 
   $con->{to_be_closed} = 1;
+  $con->{no_new_requests} = 1;
   if ($con->{state} eq 'initial' or
       $con->{state} eq 'before request-line' or # XXXspec
       $con->{state} eq 'waiting') {
@@ -886,6 +887,7 @@ sub abort ($;$%) {
   $con->{exit} = $error;
 
   (delete $con->{aborter})->abort ($error) if defined $con->{aborter};
+  $con->{no_new_requests} = 1;
   if (not defined $con->{state}) {
     return $con->{closed}->[0];
   }
@@ -1871,6 +1873,7 @@ sub _ondata ($$) {
   my $stream = $con->{stream}; # or undef
   my $inref = defined $in ? \($in->manakai_to_string) : \'';
   while (1) {
+    return if $con->{no_new_requests} and not defined $con->{stream};
     #warn "[$con->{state}] |$con->{rbuf}|";
     if ($con->{state} eq 'initial') {
       $con->{rbuf} .= $$inref;
@@ -2116,7 +2119,7 @@ sub _oneof ($$) {
     # $con->{state} eq 'before request-line'
     # $con->{state} eq 'waiting'
     if (defined $error or not $con->{state} eq 'waiting') {
-      if (defined $con->{writer}) {
+      if (not $con->{no_new_requests} and defined $con->{writer}) {
         my $stream = $con->_new_stream;
         $stream->{request}->{version} = '0.9';
         $stream->{request}->{method} = 'GET';
@@ -3228,7 +3231,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2022 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

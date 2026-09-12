@@ -770,8 +770,8 @@ sub _ws_received ($) {
 
 # XXX can_create_stream is_active && (if h1: no current request)
 
-sub _check_send_request ($) {
-  my $con = $_[0];
+sub _check_send_request ($;%) {
+  my ($con, %args) = @_;
 
   ## See also: |_send_request|
   if (not defined $con->{state}) {
@@ -781,6 +781,15 @@ sub _check_send_request ($) {
     return Promise->reject ($con->{exit} || Web::Transport::TypeError->new ("Connection is closed"));
   } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
     return Promise->reject (Web::Transport::TypeError->new ("Connection is busy"));
+  }
+
+  if ($args{check_idle_eof} and !$con->{is_server} and
+      $con->{state} eq 'waiting') {
+    my $check = $con->{info}->{parent}->{read_eof_pending};
+    if (defined $check and $check->()) {
+      my $error = Web::Transport::TypeError->new ('Peer closed the idle connection');
+      return $con->abort ($error)->then (sub { die $error });
+    }
   }
   
   return $con->{writer}->write
@@ -2798,11 +2807,27 @@ sub _send_request ($$) {
     return Promise->reject
         (Web::Transport::TypeError->new ("Connection is not ready"));
   } elsif ($con->{to_be_closed}) {
+    return Promise->reject
+        (Web::Transport::ProtocolError::HTTPParseError->_new_retry
+          ('Connection closed before request dispatch', 1))
+        if $req->{check_idle_eof};
     return Promise->reject ($con->{exit} || Web::Transport::TypeError->new ("Connection is closed"));
   } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
     return Promise->reject (Web::Transport::TypeError->new ("Connection is busy"));
   }
 
+  if ($req->{check_idle_eof} and $con->{state} eq 'waiting') {
+    my $check = $con->{info}->{parent}->{read_eof_pending};
+    if (defined $check and $check->()) {
+      my $error = Web::Transport::ProtocolError::HTTPParseError->_new_retry
+          ('Peer closed before request dispatch', 1);
+      return $con->abort ($error)->then (sub { die $error });
+    }
+  }
+
+  my $written_bytes = $req->{check_idle_eof} && $con->{state} eq 'waiting'
+      ? $con->{info}->{parent}->{written_bytes} : undef;
+  my $before_write = defined $written_bytes ? $written_bytes->() : undef;
   $stream->{info}->{id} = $stream->{id} = $con->{id} . '.' . $con->{next_stream_id}++;
   if ($con->{DEBUG}) {
     warn "$con->{id}: ========== @{[ref $con]}\n";
@@ -2842,6 +2867,16 @@ sub _send_request ($$) {
   $con->_read;
   return $sent->then (sub {
     return {stream => $stream, body => $ws};
+  }, sub {
+    my $error = $_[0];
+    die $error unless defined $before_write and
+                      UNIVERSAL::isa ($error, 'Streams::IOError');
+    return $con->abort ($error)->then (sub {
+      die Web::Transport::ProtocolError::HTTPParseError->_new_retry
+          ('Connection failed without writing request bytes', 1)
+          if $written_bytes->() == $before_write;
+      die $error;
+    });
   }); ## could be rejected when connection aborted
 } # _send_request
 

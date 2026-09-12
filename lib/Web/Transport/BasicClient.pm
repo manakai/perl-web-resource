@@ -79,6 +79,11 @@ sub new_from_url ($$;$) {
     debug => (defined $opts->{debug} ? $opts->{debug} : ($ENV{WEBUA_DEBUG} || 0)),
     last_resort_timeout => (defined $opts->{last_resort_timeout}
         ? $opts->{last_resort_timeout} : $LastResortTimeout),
+    max_idle_time => $opts->{max_idle_time} || 0,
+    idle_clock => do {
+      require Web::DateTime::Clock;
+      Web::DateTime::Clock->monotonic_clock;
+    },
     aborter => AbortController->new,
   }, $_[0];
 } # new_from_url
@@ -252,6 +257,14 @@ sub _connect ($$$;%) {
   return Promise->reject ($self->{aborted}) if defined $self->{aborted};
 
   if ($self->{http} and $self->{http}->is_active) {
+    if ($self->{max_idle_time} > 0 and defined $self->{idle_since} and
+        $self->{idle_clock}->() - $self->{idle_since} >= $self->{max_idle_time}) {
+      delete $self->{idle_since};
+      return $self->{http}->close_after_current_stream->then (sub {
+        return $self->_connect ($con_url_record, $url_record, %args);
+      });
+    }
+    delete $self->{idle_since};
     return Promise->resolve;
   }
 
@@ -380,12 +393,15 @@ sub _request ($$$$$$$$$$$$$) {
       };
     }
 
-    return $http->_check_send_request->catch (sub {
+    return $http->_check_send_request (
+      check_idle_eof => 1,
+    )->catch (sub {
       my $e = $_[0];
       die Web::Transport::ProtocolError::HTTPParseError->_new_retry ("Existing connection is broken", 1);
     })->then (sub {
       return $http->send_request ({
         method => $method,
+        check_idle_eof => 1,
         target => encode_web_utf8 ($target),
         headers => $headers,
         ws => $is_ws,
@@ -602,6 +618,12 @@ sub request ($%) {
       die $_[0];
     })->then (sub {
       my ($return, $wait) = @{$_[0]};
+      if ($self->{max_idle_time} > 0) {
+        $wait = Promise->resolve ($wait)->then (sub {
+          $self->{idle_since} = $self->{idle_clock}->();
+          return undef;
+        });
+      }
       $s_queue->($wait);
       die $return if defined $return->{ws} and $return->{ws} == 2;
       return $return;

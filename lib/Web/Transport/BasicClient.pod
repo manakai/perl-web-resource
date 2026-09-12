@@ -220,6 +220,16 @@ L<Web::Transport/"ENVIRONMENT VARIABLES"> for available mode values.
 A short string that identifies the "parent" context in which the
 client appears, which will be used in debug outputs.
 
+=encoding utf8
+
+=item max_idle_time => $seconds
+
+応答完了後の接続を再利用できるアイドル時間の上限です。正の秒数を指定した
+場合、次のリクエストの直前に単調増加時計で判定し、期限を超えていれば
+接続を閉じて新しく接続します。読み取り途中の応答を中断するタイマーでは
+ありません。省略時および 0 ではこの制限を無効にします。
+送信済みリクエストの再送を許可するオプションではありません。
+
 =item last_resort_timeout => $seconds
 
 The last-resort timeout value, in seconds.  Most applications do not

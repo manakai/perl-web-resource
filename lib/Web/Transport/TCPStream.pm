@@ -3,7 +3,9 @@ use strict;
 use warnings;
 our $VERSION = '3.0';
 use Carp;
-use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE);
+use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE MSG_PEEK);
+use Errno qw(ECONNRESET);
+use Scalar::Util qw(weaken);
 use AnyEvent::Socket qw(tcp_connect);
 use AbortController;
 use Promise;
@@ -148,8 +150,23 @@ sub create ($$) {
     setsockopt $fh, SOL_SOCKET, SO_KEEPALIVE, 1;
     # XXX KA options
 
+    my $written_bytes = 0;
     ($info->{readable}, $info->{writable}, $info->{closed})
-        = Streams::Filehandle::fh_to_streams $fh, 1, 1;
+        = Streams::Filehandle::fh_to_streams $fh, 1, 1,
+            on_write => sub { $written_bytes += $_[0] };
+
+    if ($info->{type} eq 'TCP') {
+      $info->{written_bytes} = sub { $written_bytes };
+      my $peek_fh = $fh;
+      weaken $peek_fh;
+      $info->{read_eof_pending} = sub {
+        return 1 unless defined $peek_fh and defined fileno $peek_fh;
+        local $!;
+        my $peer = recv $peek_fh, my $bytes, 1, MSG_PEEK;
+        return 1 if !defined $peer && $! == ECONNRESET;
+        return defined $peer && length $bytes == 0;
+      };
+    }
 
     if ($args->{debug}) {
       if (defined $info->{local_host}) {

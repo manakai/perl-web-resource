@@ -1445,6 +1445,7 @@ test {
   my $host = Web::Host->parse_string ('127.0.0.1');
 
   my $hpd;
+  my $server_info;
   my $server = tcp_server undef, $port, sub {
     Web::Transport::TCPStream->create ({
       server => 1,
@@ -1453,6 +1454,7 @@ test {
       port => $_[2],
     })->then (sub {
       my $info = $_[0];
+      $server_info = $info;
       $hpd = $info->{has_pending_data};
       test {
         ok defined $hpd, 'has_pending_data is defined';
@@ -1483,7 +1485,12 @@ test {
     } $c;
     return $info->{readable}->cancel;
   })->then (sub {
+    return $server_info->{readable}->cancel if $server_info;
+    return undef;
+  })->then (sub {
     undef $server;
+    undef $hpd;
+    undef $server_info;
     done $c;
     undef $c;
   });

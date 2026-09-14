@@ -582,6 +582,12 @@ sub create ($$) {
     (delete $info->{parent}->{closed})->then ($s_parent_closed);
     $t_r = (delete $info->{parent}->{readable})->get_reader ('byob');
     $t_w = (delete $info->{parent}->{writable})->get_writer;
+    ## The TLS layer does not keep decrypted data in a pending buffer
+    ## (it hands what it has decrypted off to the upper layer
+    ## synchronously in |pull|), so whether the connection has pending
+    ## data depends solely on the underlying transport.  (Should the
+    ## use of |Net::SSLeay::SSL_pending| be considered in future.)
+    $info->{has_pending_data} = delete $info->{parent}->{has_pending_data};
     $t_r->closed->catch ($abort)->then (sub { undef $t_read });
     $t_w->closed->catch ($abort);
 
@@ -885,7 +891,7 @@ sub create ($$) {
 
 =head1 LICENSE
 
-Copyright 2016-2024 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

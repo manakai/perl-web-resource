@@ -601,13 +601,16 @@ test {
       !! $con and $con->{state} eq 'before request-line' and defined $con->{rbuf} and length $con->{rbuf};
     } timeout => 5;
   })->then (sub {
+    test {
+      ok $con->has_pending_data;
+    } $c;
     $con->close_after_current_stream;
     return $tcp->push_write (\ " HTTP/1.1\x0D\x0AHost: localhost\x0D\x0A\x0D\x0A");
   })->then (sub {
-    return promised_sleep (0.3);
+    return promised_wait_until { $dispatched } timeout => 5;
   })->then (sub {
     test {
-      is $dispatched, 0;
+      is $dispatched, 1;
     } $c;
     return Promise->all ([$con->abort, $tcp->abort]);
   })->then (sub {
@@ -615,7 +618,7 @@ test {
     done $c;
     undef $c;
   });
-} n => 1, name => 'no new request dispatch (partial request-line) after close_after_current_stream';
+} n => 2, name => 'partial request-line accepted after close_after_current_stream';
 
 test {
   my $c = shift;

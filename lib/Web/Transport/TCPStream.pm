@@ -28,6 +28,23 @@ sub _tep ($) {
   return Promise->reject (Web::Transport::TypeError->new ($_[0]));
 } # _tep
 
+## Return whether the file handle is ready to be read, i.e. reading
+## from it is likely to return some data, or not.  It does not perform
+## any I/O.  It returns |0| if the file handle is not readable, or if
+## it is not valid.  If the file handle has been closed by the peer
+## (i.e. an EOF is readable), it can return a true value depending on
+## the platform.
+sub _is_readable ($) {
+  my $fh = $_[0];
+  return 0 unless defined $fh;
+  my $fd = fileno $fh;
+  return 0 unless defined $fd;
+  my $rin = '';
+  vec ($rin, $fd, 1) = 1;
+  my $n = select ($rin, undef, undef, 0);
+  return $n > 0;
+} # _is_readable
+
 sub create ($$) {
   my ($class, $args) = @_;
 
@@ -150,6 +167,9 @@ sub create ($$) {
 
     ($info->{readable}, $info->{writable}, $info->{closed})
         = Streams::Filehandle::fh_to_streams $fh, 1, 1;
+    $info->{has_pending_data} = sub {
+      return _is_readable ($fh);
+    };
 
     if ($args->{debug}) {
       if (defined $info->{local_host}) {
@@ -192,7 +212,7 @@ sub name ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2017 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

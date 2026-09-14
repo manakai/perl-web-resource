@@ -13,6 +13,7 @@ use TypedArray;
 use AbortController;
 use Promised::Flow;
 use Streams;
+use Carp;
 use Web::Transport::Error;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
@@ -150,6 +151,8 @@ sub new ($$) {
       warn "$con->{id}: H1: DEBUG mode |$con->{DEBUG}|\n" unless $con->{DEBUG} eq '1';
     }
 
+    $con->{has_pending_data} = delete $info->{has_pending_data};
+    $con->{info}->{has_pending_data} = sub { $con->has_pending_data };
     $con->{reader} = (delete $info->{readable})->get_reader ('byob');
     $con->{writer} = (delete $info->{writable})->get_writer;
     $con->{state} = 'initial';
@@ -845,6 +848,11 @@ sub closed ($) {
 ## connection AFTER any ongoing stream has been completed.  If the
 ## HTTP connection is not ready yet, any ongoing connection attempt is
 ## aborted.  It returns the |closed| promise anyway.
+##
+## A request that has already been received, in whole or in part, or
+## that has been already sent by the peer (i.e. its data is pending in
+## the transport), is treated as an ongoing stream and is completed.
+## The connection is closed without accepting any new request.
 sub close_after_current_stream ($) {
   my $con = $_[0];
 
@@ -852,17 +860,36 @@ sub close_after_current_stream ($) {
   return $con->abort ($error) unless defined $con->{state};
 
   $con->{to_be_closed} = 1;
-  $con->{no_new_requests} = 1;
   if ($con->{state} eq 'initial' or
       $con->{state} eq 'before request-line' or # XXXspec
       $con->{state} eq 'waiting') {
-    $con->{exit} = $error;
-    $con->_send_done (close => 1);
+    if (not $con->has_pending_data) {
+      $con->{no_new_requests} = 1;
+      $con->{exit} = $error;
+      $con->_send_done (close => 1);
+    } else {
+      $con->{exit} = $error;
+    }
     $con->_read;
   }
 
   return $con->{closed}->[0];
 } # close_after_current_stream
+
+## Return whether the HTTP connection has, or is about to receive,
+## any data that can be read by the HTTP parser, i.e. the connection
+## is not idle.  The return value is always a boolean.  It is used by
+## the |close_after_current_stream| method to determine whether a new
+## request (which has not been received but is pending in the
+## transport) should be accepted.
+sub has_pending_data ($) {
+  my $con = $_[0];
+  return 1 if defined $con->{rbuf} and $con->{rbuf} ne '';
+  my $h = $con->{has_pending_data};
+  croak "Underlying transport does not implement |has_pending_data|"
+      unless defined $h;
+  return $h->();
+} # has_pending_data
 
 ## Return whether the HTTP connection is ready and accepting new
 ## requests or not.

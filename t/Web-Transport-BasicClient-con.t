@@ -44,7 +44,7 @@ test {
   my $c = shift;
 
   my $port = find_listenable_port;
-  my $host = Web::Host->parse_string ('255.0.0.1');
+  my $host = Web::Host->parse_string ('192.0.2.1'); # TEST-NET-1
 
   my $url1 = Web::URL->parse_string ("http://".$host->to_ascii.":$port/");
   my $client = Web::Transport::BasicClient->new_from_url ($url1);
@@ -361,7 +361,7 @@ run_tests;
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

@@ -99,6 +99,7 @@ sub create ($$) {
         if ($res->{status} == 200) {
           $info->{writable} = $res->{writable};
           $info->{readable} = $res->{readable};
+          $info->{has_pending_data} = sub { $http->has_pending_data };
 
           if ($args->{debug}) {
             warn "$info->{id}: $info->{type}: ready\n";
@@ -140,7 +141,7 @@ sub create ($$) {
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

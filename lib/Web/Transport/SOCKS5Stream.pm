@@ -173,6 +173,7 @@ sub create ($$) {
       $t_w->release_lock;
       $info->{readable} = $readable;
       $info->{writable} = $writable;
+      $info->{has_pending_data} = delete $info->{parent}->{has_pending_data};
       $info->{closed} = delete $info->{parent}->{closed};
       
       return $info;
@@ -188,7 +189,7 @@ sub create ($$) {
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

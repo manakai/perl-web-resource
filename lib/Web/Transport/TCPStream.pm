@@ -45,6 +45,18 @@ sub _is_readable ($) {
   return $n > 0;
 } # _is_readable
 
+## Create a closure which returns whether the file handle is ready to
+## be read, or not.  It captures only the file handle (not any other
+## lexical variable in the scope where |create| is called), so that the
+## closure does not keep other values alive on Perl versions whose
+## anonymous subroutines capture the entire scope (such as Perl 5.14).
+sub _make_pending_data_checker ($) {
+  my $fh = $_[0];
+  return sub {
+    return _is_readable ($fh);
+  };
+} # _make_pending_data_checker
+
 sub create ($$) {
   my ($class, $args) = @_;
 
@@ -167,9 +179,7 @@ sub create ($$) {
 
     ($info->{readable}, $info->{writable}, $info->{closed})
         = Streams::Filehandle::fh_to_streams $fh, 1, 1;
-    $info->{has_pending_data} = sub {
-      return _is_readable ($fh);
-    };
+    $info->{has_pending_data} = _make_pending_data_checker ($fh);
 
     if ($args->{debug}) {
       if (defined $info->{local_host}) {

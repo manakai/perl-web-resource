@@ -7,6 +7,7 @@ Digest::SHA
 MIME::Base64
 Net::SSLeay
 Socket
+Scalar::Util
 
 # (Perl)
 Carp

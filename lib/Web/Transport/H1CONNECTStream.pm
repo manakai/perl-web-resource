@@ -5,6 +5,7 @@ our $VERSION = '2.0';
 use AnyEvent;
 use Promise;
 use Promised::Flow;
+use Scalar::Util qw(weaken);
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
 use Web::Transport::PlatformInfo;
@@ -18,6 +19,22 @@ push our @CARP_NOT, qw(
 sub _tep ($) {
   return Promise->reject (Web::Transport::TypeError->new ($_[0]));
 } # _tep
+
+## Create the closure exposed as |$info->{has_pending_data}| which
+## forwards to the HTTP connection's |has_pending_data| method.  The
+## HTTP connection is captured weakly (and the closure is created in
+## its own subroutine scope), so that the closure does not keep the
+## HTTP connection alive and does not capture the |$info| variable of
+## the |create| method (which would create a reference cycle on Perl
+## versions whose anonymous subroutines capture the entire scope, such
+## as Perl 5.14).
+sub _make_http_has_pending_data ($) {
+  my $http = $_[0];
+  weaken $http;
+  return sub {
+    return defined $http ? $http->has_pending_data : 0;
+  };
+} # _make_http_has_pending_data
 
 ##   parent - The hash reference used as the argument to the
 ##   Web::Transport::HTTPStream->new method.
@@ -99,7 +116,7 @@ sub create ($$) {
         if ($res->{status} == 200) {
           $info->{writable} = $res->{writable};
           $info->{readable} = $res->{readable};
-          $info->{has_pending_data} = sub { $http->has_pending_data };
+          $info->{has_pending_data} = _make_http_has_pending_data ($http);
 
           if ($args->{debug}) {
             warn "$info->{id}: $info->{type}: ready\n";

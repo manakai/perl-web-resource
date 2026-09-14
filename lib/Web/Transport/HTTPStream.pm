@@ -14,6 +14,7 @@ use AbortController;
 use Promised::Flow;
 use Streams;
 use Carp;
+use Scalar::Util qw(weaken);
 use Web::Transport::Error;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
@@ -68,6 +69,20 @@ sub _pe ($) {
 sub _pw ($) {
   return Web::Transport::ProtocolError::HTTPParseError->_new_non_fatal ($_[0]);
 } # _pw
+
+## Create the closure exposed as |$con->{info}->{has_pending_data}|
+## which forwards to the connection's |has_pending_data| method.  The
+## connection is captured weakly (and the closure is created in its own
+## subroutine scope), so that the closure does not keep the connection
+## alive and does not create a reference cycle with the connection on
+## any Perl version.
+sub _make_h1_has_pending_data ($) {
+  my $con = $_[0];
+  weaken $con;
+  return sub {
+    return defined $con ? $con->has_pending_data : 0;
+  };
+} # _make_h1_has_pending_data
 
 ## This class, with its two subclasses, represents an HTTP connection.
 
@@ -152,7 +167,7 @@ sub new ($$) {
     }
 
     $con->{has_pending_data} = delete $info->{has_pending_data};
-    $con->{info}->{has_pending_data} = sub { $con->has_pending_data };
+    $con->{info}->{has_pending_data} = _make_h1_has_pending_data ($con);
     $con->{reader} = (delete $info->{readable})->get_reader ('byob');
     $con->{writer} = (delete $info->{writable})->get_writer;
     $con->{state} = 'initial';
@@ -251,6 +266,8 @@ sub new ($$) {
     (delete $con->{ready}->[1])->(undef), delete $con->{ready}->[2];
     return Promise->all ([$p1, $p2, delete $info->{closed}])->then (sub {
       $con->{streams_done}->();
+      delete $con->{has_pending_data};
+      delete $con->{info}->{has_pending_data} if defined $con->{info};
       (delete $con->{closed}->[1])->(undef), delete $con->{closed}->[2];
     });
   })->catch (sub {
@@ -267,6 +284,8 @@ sub new ($$) {
     (delete $con->{ready}->[2])->($error), delete $con->{ready}->[1]
         if defined $con->{ready}->[1];
     $con->{streams_done}->();
+    delete $con->{has_pending_data};
+    delete $con->{info}->{has_pending_data} if defined $con->{info};
     (delete $con->{closed}->[1])->(undef), delete $con->{closed}->[2];
   });
 

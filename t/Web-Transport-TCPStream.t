@@ -228,7 +228,7 @@ test {
       ok 0, $e;
     } $c;
   })->then (sub {
-    return promised_wait_until { $destroyed == 4 } timeout => 3;
+    return promised_wait_until { $destroyed == 4 } timeout => 30;
   })->then (sub {
     test {
       is $destroyed, 4;

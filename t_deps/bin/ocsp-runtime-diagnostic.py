@@ -36,7 +36,7 @@ sub event {
   return;
 }
 sub install {
-  event('bootstrap', $0, 'hooks=' . $ENV{OCSP_RUNTIME_HOOKS});
+  event('bootstrap', $0, 'perl=' . $^X, 'hooks=' . $ENV{OCSP_RUNTIME_HOOKS});
   return unless $ENV{OCSP_RUNTIME_HOOKS} eq 'on';
   require Net::SSLeay;
   require DynaLoader;
@@ -192,31 +192,36 @@ def main():
     if any(directory.iterdir()):
         parser.error('output must be empty; use a different --output')
     result = {'phase': 'preflight', 'exit_code': 2}
-    original = None
+    originals = {}
     try:
-        source = TEST.read_bytes()
-        selected = select_test(source.decode()).encode()
+        server = Path('t_deps/server.pl')
+        sources = {path: path.read_bytes() for path in (TEST, server)}
+        bootstrap = 'BEGIN { require $ENV{OCSP_RUNTIME_PROBE}; }\n'
+        selected = {
+            TEST: (bootstrap + select_test(sources[TEST].decode())).encode(),
+            server: bootstrap.encode() + sources[server],
+        }
         support = directory / 'support'
         support.mkdir()
         (support / 'OcspRuntimeProbe.pm').write_text(PROBE)
         environment = dict(os.environ)
         if 'OcspDiagnosticBootstrap' in environment.get('PERL5OPT', ''):
             raise ValueError('Remove the XS diagnostic PERL5OPT before running this independent probe')
-        environment['PERL5LIB'] = os.pathsep.join(
-            [str(support.resolve()), str(Path('t_deps/lib').resolve()),
-             environment.get('PERL5LIB', '')]).rstrip(os.pathsep)
-        environment['PERL5OPT'] = (environment.get('PERL5OPT', '') + ' -MOcspRuntimeProbe').strip()
+        environment['OCSP_RUNTIME_PROBE'] = str((support / 'OcspRuntimeProbe.pm').resolve())
         environment['OCSP_RUNTIME_HOOKS'] = args.hooks
         capture(['git', 'rev-parse', 'HEAD'], directory / 'commit.txt')
-        result['exit_code'] = capture(['./perl', '-e', 'print "probe ready\\n";'],
+        result['exit_code'] = capture(['./perl', '-e', bootstrap + 'print "probe ready\\n";'],
                                      directory / 'probe-load.txt', environment, 30)
         if result['exit_code']:
             return result['exit_code']
-        (directory / 'test-selection.patch').write_text(''.join(difflib.unified_diff(
-            source.decode().splitlines(True), selected.decode().splitlines(True),
-            'a/' + str(TEST), 'b/' + str(TEST))))
-        original = source
-        TEST.write_bytes(selected)
+        (directory / 'test-selection.patch').write_text(''.join(
+            ''.join(difflib.unified_diff(sources[path].decode().splitlines(True),
+                                        selected[path].decode().splitlines(True),
+                                        'a/' + str(path), 'b/' + str(path)))
+            for path in sources))
+        originals = sources
+        for path, content in selected.items():
+            path.write_bytes(content)
         result['phase'] = 'syntax'
         result['exit_code'] = capture(['./perl', '-Ilib', '-It_deps/lib', '-c', str(TEST)],
                                      directory / 'syntax.txt', environment, 30)
@@ -231,8 +236,8 @@ def main():
         (directory / 'error.txt').write_text(str(error) + '\n')
         return 2
     finally:
-        if original is not None:
-            TEST.write_bytes(original)
+        for path, content in originals.items():
+            path.write_bytes(content)
         (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         print('OCSP runtime phase=%s exit_code=%s' %
               (result['phase'], result['exit_code']), file=sys.stderr)

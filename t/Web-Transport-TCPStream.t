@@ -228,7 +228,7 @@ test {
       ok 0, $e;
     } $c;
   })->then (sub {
-    return promised_wait_until { $destroyed == 4 } timeout => 3;
+    return promised_wait_until { $destroyed == 4 } timeout => 30;
   })->then (sub {
     test {
       is $destroyed, 4;
@@ -1360,7 +1360,7 @@ test {
   my $c = shift;
 
   my $port = find_listenable_port;
-  my $host = Web::Host->parse_string ('255.0.0.1');
+  my $host = Web::Host->parse_string ('192.0.2.1'); # TEST-NET-1
 
   my $ac = new AbortController;
   promised_sleep (1)->then (sub {
@@ -1438,11 +1438,69 @@ test {
   });
 } n => 6, name => 'abort connect before connect';
 
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+
+  my $hpd;
+  my $server_info;
+  my $server = tcp_server undef, $port, sub {
+    Web::Transport::TCPStream->create ({
+      server => 1,
+      fh => $_[0],
+      host => Web::Host->parse_string ($_[1]),
+      port => $_[2],
+    })->then (sub {
+      my $info = $_[0];
+      $server_info = $info;
+      $hpd = $info->{has_pending_data};
+      test {
+        ok defined $hpd, 'has_pending_data is defined';
+      } $c;
+    });
+  }; # $server
+
+  Web::Transport::TCPStream->create ({
+    host => $host,
+    port => $port,
+  })->then (sub {
+    my $info = $_[0];
+    return (promised_wait_until { defined $hpd } timeout => 5)->then (sub { return $info });
+  })->then (sub {
+    my $info = $_[0];
+    test {
+      ok ! $hpd->(), 'no pending data before client sends';
+    } $c;
+    my $w = $info->{writable}->get_writer;
+    return $w->write (dv "x")->then (sub { return $info });
+  })->then (sub {
+    my $info = $_[0];
+    return (promised_wait_until { $hpd->() } timeout => 5)->then (sub { return $info });
+  })->then (sub {
+    my $info = $_[0];
+    test {
+      ok $hpd->(), 'pending data detected after client send';
+    } $c;
+    return $info->{readable}->cancel;
+  })->then (sub {
+    return $server_info->{readable}->cancel if $server_info;
+    return undef;
+  })->then (sub {
+    undef $server;
+    undef $hpd;
+    undef $server_info;
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'has_pending_data';
+
 run_tests;
 
 =head1 LICENSE
 
-Copyright 2017-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2017-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

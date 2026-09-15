@@ -13,6 +13,8 @@ use TypedArray;
 use AbortController;
 use Promised::Flow;
 use Streams;
+use Carp;
+use Scalar::Util qw(weaken);
 use Web::Transport::Error;
 use Web::Transport::TypeError;
 use Web::Transport::ProtocolError;
@@ -67,6 +69,20 @@ sub _pe ($) {
 sub _pw ($) {
   return Web::Transport::ProtocolError::HTTPParseError->_new_non_fatal ($_[0]);
 } # _pw
+
+## Create the closure exposed as |$con->{info}->{has_pending_data}|
+## which forwards to the connection's |has_pending_data| method.  The
+## connection is captured weakly (and the closure is created in its own
+## subroutine scope), so that the closure does not keep the connection
+## alive and does not create a reference cycle with the connection on
+## any Perl version.
+sub _make_h1_has_pending_data ($) {
+  my $con = $_[0];
+  weaken $con;
+  return sub {
+    return defined $con ? $con->has_pending_data : 0;
+  };
+} # _make_h1_has_pending_data
 
 ## This class, with its two subclasses, represents an HTTP connection.
 
@@ -150,6 +166,8 @@ sub new ($$) {
       warn "$con->{id}: H1: DEBUG mode |$con->{DEBUG}|\n" unless $con->{DEBUG} eq '1';
     }
 
+    $con->{has_pending_data} = delete $info->{has_pending_data};
+    $con->{info}->{has_pending_data} = _make_h1_has_pending_data ($con);
     $con->{reader} = (delete $info->{readable})->get_reader ('byob');
     $con->{writer} = (delete $info->{writable})->get_writer;
     $con->{state} = 'initial';
@@ -248,6 +266,8 @@ sub new ($$) {
     (delete $con->{ready}->[1])->(undef), delete $con->{ready}->[2];
     return Promise->all ([$p1, $p2, delete $info->{closed}])->then (sub {
       $con->{streams_done}->();
+      delete $con->{has_pending_data};
+      delete $con->{info}->{has_pending_data} if defined $con->{info};
       (delete $con->{closed}->[1])->(undef), delete $con->{closed}->[2];
     });
   })->catch (sub {
@@ -264,6 +284,8 @@ sub new ($$) {
     (delete $con->{ready}->[2])->($error), delete $con->{ready}->[1]
         if defined $con->{ready}->[1];
     $con->{streams_done}->();
+    delete $con->{has_pending_data};
+    delete $con->{info}->{has_pending_data} if defined $con->{info};
     (delete $con->{closed}->[1])->(undef), delete $con->{closed}->[2];
   });
 
@@ -845,6 +867,11 @@ sub closed ($) {
 ## connection AFTER any ongoing stream has been completed.  If the
 ## HTTP connection is not ready yet, any ongoing connection attempt is
 ## aborted.  It returns the |closed| promise anyway.
+##
+## A request that has already been received, in whole or in part, or
+## that has been already sent by the peer (i.e. its data is pending in
+## the transport), is treated as an ongoing stream and is completed.
+## The connection is closed without accepting any new request.
 sub close_after_current_stream ($) {
   my $con = $_[0];
 
@@ -855,13 +882,33 @@ sub close_after_current_stream ($) {
   if ($con->{state} eq 'initial' or
       $con->{state} eq 'before request-line' or # XXXspec
       $con->{state} eq 'waiting') {
-    $con->{exit} = $error;
-    $con->_send_done (close => 1);
+    if (not $con->has_pending_data) {
+      $con->{no_new_requests} = 1;
+      $con->{exit} = $error;
+      $con->_send_done (close => 1);
+    } else {
+      $con->{exit} = $error;
+    }
     $con->_read;
   }
 
   return $con->{closed}->[0];
 } # close_after_current_stream
+
+## Return whether the HTTP connection has, or is about to receive,
+## any data that can be read by the HTTP parser, i.e. the connection
+## is not idle.  The return value is always a boolean.  It is used by
+## the |close_after_current_stream| method to determine whether a new
+## request (which has not been received but is pending in the
+## transport) should be accepted.
+sub has_pending_data ($) {
+  my $con = $_[0];
+  return 1 if defined $con->{rbuf} and $con->{rbuf} ne '';
+  my $h = $con->{has_pending_data};
+  croak "Underlying transport does not implement |has_pending_data|"
+      unless defined $h;
+  return $h->();
+} # has_pending_data
 
 ## Return whether the HTTP connection is ready and accepting new
 ## requests or not.
@@ -886,6 +933,7 @@ sub abort ($;$%) {
   $con->{exit} = $error;
 
   (delete $con->{aborter})->abort ($error) if defined $con->{aborter};
+  $con->{no_new_requests} = 1;
   if (not defined $con->{state}) {
     return $con->{closed}->[0];
   }
@@ -1871,6 +1919,7 @@ sub _ondata ($$) {
   my $stream = $con->{stream}; # or undef
   my $inref = defined $in ? \($in->manakai_to_string) : \'';
   while (1) {
+    return if $con->{no_new_requests} and not defined $con->{stream};
     #warn "[$con->{state}] |$con->{rbuf}|";
     if ($con->{state} eq 'initial') {
       $con->{rbuf} .= $$inref;
@@ -2116,7 +2165,7 @@ sub _oneof ($$) {
     # $con->{state} eq 'before request-line'
     # $con->{state} eq 'waiting'
     if (defined $error or not $con->{state} eq 'waiting') {
-      if (defined $con->{writer}) {
+      if (not $con->{no_new_requests} and defined $con->{writer}) {
         my $stream = $con->_new_stream;
         $stream->{request}->{version} = '0.9';
         $stream->{request}->{method} = 'GET';
@@ -3228,7 +3277,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2022 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

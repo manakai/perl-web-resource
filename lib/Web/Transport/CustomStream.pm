@@ -30,6 +30,8 @@ sub create ($$) {
 
     readable => $args->{readable},
     writable => $args->{writable},
+    has_pending_data => defined $args->{has_pending_data}
+        ? $args->{has_pending_data} : sub { return 0 },
     closed => $args->{closed},
   };
 
@@ -44,7 +46,7 @@ sub create ($$) {
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

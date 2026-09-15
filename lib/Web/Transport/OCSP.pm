@@ -237,7 +237,13 @@ sub check_cert_id_with_response_ssleay ($$$$) {
 sub check_ssleay_ocsp_response ($$$$) {
   my ($class, $tls, $response, $protocol_clock) = @_;
 
-  return undef unless $response;
+  unless ($response) {
+    if (Net::SSLeay::ERR_peek_error ()) {
+      return {error => "Stapled OCSP response cannot be decoded",
+              fatal => 1};
+    }
+    return undef;
+  }
 
   my $status = Net::SSLeay::OCSP_response_status ($response);
   if ($status != Net::SSLeay::OCSP_RESPONSE_STATUS_SUCCESSFUL ()) {
@@ -269,7 +275,7 @@ sub check_ssleay_ocsp_response ($$$$) {
 
 =head1 LICENSE
 
-Copyright 2016-2018 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

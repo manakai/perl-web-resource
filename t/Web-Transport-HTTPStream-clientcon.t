@@ -17,7 +17,7 @@ test {
   my $c = shift;
 
   my $port = find_listenable_port;
-  my $host = Web::Host->parse_string ('255.0.0.1');
+  my $host = Web::Host->parse_string ('192.0.2.1'); # TEST-NET-1
 
   my $http = Web::Transport::HTTPStream->new ({
     parent => {

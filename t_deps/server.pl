@@ -894,7 +894,7 @@ sub run_commands ($$$$) {
 
             my $res;
             if ($args->{stapling} eq 'broken') {
-              $res = join '', map { pack 'C', rand 256 } 1..1 + int rand 1024;
+              $res = "\xFF\x00\xFF\x00\xFF";
               warn "[$states->{id}] OCSP staple = broken\n" if $DUMP;
             } else {
               warn "[$states->{id}] OCSP staple = response...\n" if $DUMP;

@@ -104,7 +104,22 @@
                "run" : "make test-deps"
             },
             {
+               "if" : "${{ !(matrix.os == 'macos-latest' && matrix.env_PMBP_OPENSSL_TYPE == 'openssl') }}",
                "run" : "make test"
+            },
+            {
+               "if" : "${{ matrix.os == 'macos-latest' && matrix.env_PMBP_OPENSSL_TYPE == 'openssl' }}",
+               "run" : "python3 t_deps/bin/ocsp-xs-diagnostic.py",
+               "timeout-minutes" : 20
+            },
+            {
+               "if" : "${{ always () && matrix.os == 'macos-latest' && matrix.env_PMBP_OPENSSL_TYPE == 'openssl' }}",
+               "uses" : "actions/upload-artifact@v4",
+               "with" : {
+                  "if-no-files-found" : "error",
+                  "name" : "ocsp-xs-${{ matrix.os }}-${{ matrix.env_PMBP_OPENSSL_TYPE }}-${{ matrix.perl_version }}",
+                  "path" : "local/ocsp-xs-diagnostic/"
+               }
             },
             {
                "if" : "${{ always () }}",

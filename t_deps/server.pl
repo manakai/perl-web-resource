@@ -778,6 +778,8 @@ sub run_commands ($$$$) {
       my $p = Test::Certificates->wait_create_cert_p ($args);
       $states->{starttls_waiting} = 1;
       $hdl->on_starttls (sub {
+        Test::TLSDiagnostic::event('server.starttls.result',
+                                  $states->{id}, $_[1], $_[2]);
         delete $states->{starttls_waiting};
         $_[0]->on_starttls (undef);
         run_commands ($context, $_[0], $states, $then);

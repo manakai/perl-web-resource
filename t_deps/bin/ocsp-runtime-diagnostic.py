@@ -1,6 +1,8 @@
 import argparse
+import base64
 from collections import deque
 import difflib
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -9,6 +11,7 @@ import signal
 import subprocess
 import sys
 import time
+import zipfile
 
 TEST = Path('t/Web-Transport-HTTPStream-clientparsing.t')
 PROBE = r'''package OcspRuntimeProbe;
@@ -176,6 +179,26 @@ def supervise(command, directory, environment, sample_after, timeout):
             process.wait(timeout=10)
 
 
+def save_text_archive(directory):
+    archive = directory / 'diagnostic.zip'
+    encoded = directory / 'diagnostic.zip.b64.txt'
+    checksum = directory / 'diagnostic.zip.sha256.txt'
+    excluded = {archive, encoded, checksum}
+    files = sorted(path for path in directory.rglob('*')
+                   if path not in excluded and path.is_file() and not path.is_symlink())
+    with zipfile.ZipFile(archive, 'w', compression=zipfile.ZIP_DEFLATED) as bundle:
+        for path in files:
+            bundle.write(path, path.relative_to(directory).as_posix())
+    with archive.open('rb') as source, encoded.open('wb') as output:
+        base64.encode(source, output)
+    digest = hashlib.sha256()
+    with archive.open('rb') as source:
+        for chunk in iter(lambda: source.read(65536), b''):
+            digest.update(chunk)
+    checksum.write_text(digest.hexdigest() + '  diagnostic.zip\n')
+    print('Base64 artifact: ' + str(encoded), file=sys.stderr)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--hooks', choices=['on', 'off'], default='on')
@@ -247,6 +270,10 @@ def main():
                 with path.open(errors='replace') as logfile:
                     print(''.join(deque(logfile, maxlen=100)), file=sys.stderr)
                 break
+        try:
+            save_text_archive(directory)
+        except (OSError, ValueError, zipfile.BadZipFile) as error:
+            print('Base64 artifact failed: ' + str(error), file=sys.stderr)
         print('Artifacts: ' + str(directory), file=sys.stderr)
 
 

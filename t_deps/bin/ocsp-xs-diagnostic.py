@@ -11,6 +11,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tarfile
 import time
 
 MARKER = 'ocsp-xs-diag-20260915-v1'
@@ -216,12 +217,131 @@ def relative_path(value):
     return path
 
 
+def report_candidates(directory):
+    paths = sorted(Path('local').rglob('SSLeay.xs'))
+    configured = sorted({path.parent.resolve() for path in paths
+                         if (path.parent / 'Makefile').is_file()})
+    archives = sorted(Path('local').rglob('Net-SSLeay-1.96.tar.gz'))
+    report = ['configured=%d sources=%d archives=%d' %
+              (len(configured), len(paths), len(archives))]
+    report += ['configured: ' + str(path) for path in configured]
+    report += ['source: ' + str(path) for path in paths]
+    report += ['archive: ' + str(path) for path in archives]
+    text = '\n'.join(report) + '\n'
+    (directory / 'build-candidates.txt').write_text(text)
+    print(text, file=sys.stderr)
+    return configured, archives
+
+
+def extract_source(archive, destination):
+    if archive.stat().st_size > 64 * 1024 * 1024:
+        raise ValueError('Source archive exceeds 64 MiB')
+    with tarfile.open(archive, 'r:gz') as package:
+        members = package.getmembers()
+        if sum(member.size for member in members) > 128 * 1024 * 1024:
+            raise ValueError('Expanded source exceeds 128 MiB')
+        targets = set()
+        for member in members:
+            path = Path(member.name)
+            if (path.is_absolute() or '..' in path.parts
+                    or not (member.isdir() or member.isfile())
+                    or path in targets):
+                raise ValueError('Unsafe or duplicate archive member: ' + member.name)
+            targets.add(path)
+        destination.mkdir()
+        for member in members:
+            target = destination / member.name
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with package.extractfile(member) as source, target.open('wb') as output:
+                    shutil.copyfileobj(source, output)
+                target.chmod(0o755 if member.mode & 0o111 else 0o644)
+    roots = [path.parent for path in destination.rglob('SSLeay.xs')
+             if (path.parent / 'Makefile.PL').is_file()]
+    if len(roots) != 1:
+        raise ValueError('Archive must contain exactly one Net-SSLeay source tree')
+    source = roots[0]
+    version_file = source / 'lib/Net/SSLeay.pm'
+    if not re.search(r"\$VERSION\s*=\s*['\"]1\.96['\"]", version_file.read_text()):
+        raise ValueError('Archive does not declare Net::SSLeay 1.96')
+    instrument_xs((source / 'SSLeay.xs').read_text())
+    return source
+
+
+def fetch_source(directory):
+    url = 'https://codeload.github.com/radiator-software/p5-net-ssleay/tar.gz/refs/tags/1.96'
+    archive = directory / 'Net-SSLeay-1.96.tar.gz'
+    status = capture(['curl', '--fail', '--location', '--silent', '--show-error',
+                      '--proto', '=https', '--proto-redir', '=https',
+                      '--connect-timeout', '15', '--max-time', '90',
+                      '--max-filesize', str(64 * 1024 * 1024),
+                      '--output', str(archive), url], directory / 'download.log', timeout=100)
+    if status:
+        raise ValueError('Source download failed; see download.log or pass --source-archive')
+    (directory / 'source-url.txt').write_text(url + '\n')
+    return archive
+
+
+def prepare_build(args, directory, archives, environment, ssl_version):
+    prefix = args.openssl_prefix.resolve()
+    if not ((prefix / 'include/openssl/ssl.h').is_file()
+            and (prefix / 'bin/openssl').is_file()
+            and any((prefix / name).is_dir() for name in ('lib', 'lib64'))):
+        raise ValueError('Missing existing TLS installation at %s; specify --openssl-prefix. '
+                         'No OpenSSL installation or upgrade is performed.' % args.openssl_prefix)
+    status = capture([str(prefix / 'bin/openssl'), 'version'],
+                     directory / 'prefix-version.txt', env=environment)
+    if status or (directory / 'prefix-version.txt').read_text().strip() != ssl_version:
+        raise ValueError('TLS prefix version differs from loaded Net::SSLeay; see prefix-version.txt and baseline.txt')
+    archive = args.source_archive
+    if archive is None and archives:
+        hashes = {hashlib.sha256(path.read_bytes()).hexdigest() for path in archives}
+        if len(hashes) != 1:
+            raise ValueError('Multiple different cached archives; specify --source-archive')
+        archive = archives[0]
+    if archive is None:
+        if not args.fetch_source:
+            raise ValueError('No cached source archive; use --fetch-source or --source-archive')
+        archive = fetch_source(directory)
+    (directory / 'archive-sha256.txt').write_text(
+        hashlib.sha256(archive.read_bytes()).hexdigest() + '  ' + str(archive) + '\n')
+    build = extract_source(archive, directory / 'source')
+    executable = directory / 'perl-executable.txt'
+    status = capture(['./perl', '-MCwd=abs_path', '-e', 'print abs_path($^X), "\\n";'],
+                     executable, env=environment)
+    perl = executable.read_text().strip()
+    if status or not Path(perl).is_absolute() or not Path(perl).is_file():
+        raise ValueError('Cannot identify original Perl executable; see perl-executable.txt')
+    configure_environment = dict(environment)
+    configure_environment['OPENSSL_PREFIX'] = str(prefix)
+    configure_environment['PERL_MM_USE_DEFAULT'] = '1'
+    (directory / 'prepare-config.json').write_text(json.dumps(
+        {'perl': perl, 'OPENSSL_PREFIX': str(prefix), 'archive': str(archive),
+         'build': str(build)}, indent=2) + '\n')
+    status = supervise([perl, 'Makefile.PL'], directory, configure_environment,
+                       120, 'configure.log', cwd=build)
+    if status or not (build / 'Makefile').is_file():
+        raise ValueError('Makefile.PL failed or produced no Makefile; see configure.log')
+    print('Prepared diagnostic build: ' + str(build), file=sys.stderr)
+    return build
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ssleay-build', type=relative_path)
+    parser.add_argument('--prepare-build', action='store_true')
+    parser.add_argument('--fetch-source', action='store_true')
+    parser.add_argument('--source-archive', type=relative_path)
+    parser.add_argument('--openssl-prefix', type=relative_path, default=Path('local/common'))
     parser.add_argument('--output', type=relative_path, default=Path('local/ocsp-xs-diagnostic'))
     parser.add_argument('--timeout', type=int, default=180)
     args = parser.parse_args()
+    if args.ssleay_build and args.prepare_build:
+        parser.error('--ssleay-build and --prepare-build are mutually exclusive')
+    if (args.fetch_source or args.source_archive) and not args.prepare_build:
+        parser.error('--fetch-source and --source-archive require --prepare-build')
     if args.timeout <= 0:
         parser.error('--timeout must be positive')
     directory = args.output.resolve()
@@ -231,13 +351,24 @@ def main():
     result = {'phase': 'preflight', 'exit_code': 2}
     originals = {}
     try:
+        candidates, archives = report_candidates(directory)
+        environment = dict(os.environ)
+        environment.pop('PERL5OPT', None)
+        baseline = directory / 'baseline.txt'
+        status = capture(['./perl', '-MNet::SSLeay', '-e',
+                          'print "$Net::SSLeay::VERSION\\n", Net::SSLeay::SSLeay_version(0), "\\n";'],
+                         baseline, env=environment)
+        lines = baseline.read_text(errors='replace').splitlines()
+        if status or len(lines) != 2 or lines[0] != '1.96':
+            raise ValueError('Baseline must load Net::SSLeay 1.96; see baseline.txt')
         build = args.ssleay_build
-        if build is None:
-            candidates = [path.parent for path in Path('local').rglob('SSLeay.xs')
-                          if (path.parent / 'Makefile').is_file()]
-            (directory / 'build-candidates.txt').write_text('\n'.join(map(str, candidates)))
+        if args.prepare_build:
+            result['phase'] = 'prepare-build'
+            build = prepare_build(args, directory, archives, environment, lines[1])
+        elif build is None:
             if len(candidates) != 1:
-                raise ValueError('Specify --ssleay-build: need exactly one configured Net-SSLeay build; see build-candidates.txt')
+                raise ValueError('Found %d configured build(s). Choose --ssleay-build, or '
+                                 'run with --prepare-build --fetch-source in a fresh --output.' % len(candidates))
             build = candidates[0]
         build = build.resolve()
         if not (build / 'Makefile').is_file():
@@ -252,15 +383,6 @@ def main():
                                         'a/' + path.name, 'b/' + path.name)) for path in sources))
         (directory / 'source-hashes.json').write_text(json.dumps(
             {str(path): hashlib.sha256(data).hexdigest() for path, data in sources.items()}, indent=2))
-        environment = dict(os.environ)
-        environment.pop('PERL5OPT', None)
-        baseline = directory / 'baseline.txt'
-        status = capture(['./perl', '-MNet::SSLeay', '-e',
-                          'print "$Net::SSLeay::VERSION\\n", Net::SSLeay::SSLeay_version(0), "\\n";'],
-                         baseline, env=environment)
-        lines = baseline.read_text(errors='replace').splitlines()
-        if status or len(lines) != 2 or lines[0] != '1.96':
-            raise ValueError('Baseline must load Net::SSLeay 1.96; see baseline.txt')
         capture(['git', 'rev-parse', 'HEAD'], directory / 'commit.txt')
         capture(['./perl', '-V'], directory / 'perl-config.txt')
         originals = sources
@@ -320,7 +442,7 @@ def main():
         (directory / 'result.json').write_text(json.dumps(result, indent=2) + '\n')
         print('OCSP diagnostic phase=%s exit_code=%s' %
               (result['phase'], result['exit_code']), file=sys.stderr)
-        for name in ('test.log', 'loaded-xs.txt', 'build.log', 'error.txt'):
+        for name in ('error.txt', 'test.log', 'syntax.txt', 'loaded-xs.txt', 'build.log', 'configure.log', 'download.log'):
             path = directory / name
             if path.is_file():
                 with path.open(errors='replace') as logfile:

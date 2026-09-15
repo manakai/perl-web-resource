@@ -109,7 +109,7 @@
             },
             {
                "if" : "${{ matrix.os == 'macos-latest' && matrix.env_PMBP_OPENSSL_TYPE == 'openssl' }}",
-               "run" : "python3 t_deps/bin/ocsp-xs-diagnostic.py",
+               "run" : "python3 t_deps/bin/ocsp-xs-diagnostic.py --prepare-build --fetch-source",
                "timeout-minutes" : 20
             },
             {

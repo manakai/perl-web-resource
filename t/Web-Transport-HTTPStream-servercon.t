@@ -530,6 +530,8 @@ test {
 
   my $con;
   my $dispatched = 0;
+  my $entered_close_resolver;
+  my $entered_close = Promise->new (sub { $entered_close_resolver = $_[0] });
   my $server = tcp_server $host, $port, sub {
     my $x = Web::Transport::HTTPStream->new
         ({server => 1, parent => {
@@ -542,32 +544,35 @@ test {
     my $r = $x->streams->get_reader;
     $x->ready->then (sub {
       $x->close_after_current_stream;
+      $entered_close_resolver->();
       return $r->read->then (sub {
         $dispatched++ unless $_[0]->{done};
       });
     });
   }; # $server
 
-  my $http = Web::Transport::ConnectionClient->new_from_url ($origin);
-  $http->request (path => [])->then (sub {
-    my $res = $_[0];
+  my $tcp = Web::Transport::TCPTransport->new (host => $origin->host, port => $origin->port);
+  $tcp->start (sub {})->then (sub {
+    return $entered_close;
+  })->then (sub {
     test {
-      ok $res->is_network_error;
+      ok ! $con->is_active, 'connection inactive after close_after_current_stream';
+      ok ! $con->has_pending_data, 'no pending data after close';
     } $c;
+    return $tcp->push_write (\ "GET / HTTP/1.1\x0D\x0AHost: localhost\x0D\x0A\x0D\x0A");
+  })->then (sub {
     return promised_sleep (0.3);
   })->then (sub {
     test {
       is $dispatched, 0;
     } $c;
-    return $http->close;
-  })->then (sub {
     return $con->abort;
   })->then (sub {
     undef $server;
     done $c;
     undef $c;
   });
-} n => 2, name => 'no new request dispatch on unused connection after close_after_current_stream';
+} n => 3, name => 'no new request dispatch on unused connection after close_after_current_stream';
 
 test {
   my $c = shift;

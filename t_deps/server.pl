@@ -13,6 +13,8 @@ use AnyEvent::Handle;
 use Digest::SHA qw(sha1);
 use MIME::Base64 qw(encode_base64);
 use Test::Certificates;
+use Test::TLSDiagnostic;
+Test::TLSDiagnostic::environment ();
 use Test::OpenSSL;
 
 my $host = shift;
@@ -333,6 +335,7 @@ sub run_commands ($$$$) {
 
   while (@{$states->{commands}}) {
     my $command = shift @{$states->{commands}};
+    Test::TLSDiagnostic::event('server.command', $states->{id}, $command);
     $command =~ s/^\s+//;
     $command =~ s/\s+$//;
     if ($command =~ /^#/) {
@@ -789,6 +792,7 @@ sub run_commands ($$$$) {
 
         Net::SSLeay::set_info_callback ($session, sub {
           my ($tls, $where, $ret) = @_;
+          Test::TLSDiagnostic::event('server.tls.info', $where, $ret);
 
           #if ($where & SSL_ST_CONNECT) {
           #}
@@ -886,6 +890,7 @@ sub run_commands ($$$$) {
 
           Net::SSLeay::CTX_set_tlsext_status_cb ($ctx, sub {
             my ($tls, $response) = @_;
+            Test::TLSDiagnostic::event('server.ocsp.enter', $args->{stapling});
 
             unless ($args->{stapling}) {
               warn "[$states->{id}] No OCSP stapling\n" if $DUMP;
@@ -905,8 +910,10 @@ sub run_commands ($$$$) {
                    no_next => $args->{stapling_no_next});
               warn "[$states->{id}] OK\n" if $DUMP;
             }
+            Test::TLSDiagnostic::event('server.ocsp.set', length $res);
             Test::OpenSSL::p_SSL_set_tlsext_status_ocsp_resp_data
                 ($tls, $res, length $res);
+            Test::TLSDiagnostic::event('server.ocsp.set.returned');
             warn "[$states->{id}] OCSP stapled!\n" if $DUMP;
 
             return 0; # SSL_TLSEXT_ERR_OK

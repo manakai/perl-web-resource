@@ -15,6 +15,7 @@ use Promise;
 use Promised::Flow;
 use Web::Host;
 use Net::SSLeay;
+use Test::TLSDiagnostic;
 use AnyEvent::TLS;
 use Web::Transport::NetSSLeayError;
 use Web::Transport::OCSP;
@@ -222,6 +223,7 @@ sub _pe ($) {
 ## debug : debug option? : The debug option.
 sub create ($$) {
   my ($class, $args) = @_;
+  Test::TLSDiagnostic::event('tls.create');
 
   my $cm = $args->{certificate_manager};
   unless (defined $cm) {
@@ -290,12 +292,14 @@ sub create ($$) {
     undef $rbio;
     undef $wbio;
     undef $tls_ctx;
+    Test::TLSDiagnostic::event('tls.closed');
     $s_closed->();
     $close = sub { };
   }; # $close
 
   my $signal;
   my $abort = sub {
+    Test::TLSDiagnostic::event('tls.abort', ref $_[0]);
     if (defined $signal) {
       $signal->manakai_onabort (undef);
       undef $signal;
@@ -351,6 +355,7 @@ sub create ($$) {
       }
       if ($r <= 0) {
         $r = Net::SSLeay::get_error ($tls, $r);
+        Test::TLSDiagnostic::event('tls.write.error', $r, 0+$!);
         if ($r == ERROR_SYSCALL) {
           return $abort->(Streams::IOError->new ($!));
         } elsif ($r != ERROR_WANT_READ and
@@ -376,6 +381,7 @@ sub create ($$) {
 
     my $received_eof;
     while (1) {
+      Test::TLSDiagnostic::event('tls.read.enter');
       my $req = defined $rc ? $rc->byob_request : undef;
       my $read;
       if (defined $req) {
@@ -408,6 +414,7 @@ sub create ($$) {
         last;
       } else { # error
         my $r = Net::SSLeay::get_error ($tls, -1); # -1 is not neccessarily correct, but Net::SSLeay doesn't tell us
+        Test::TLSDiagnostic::event('tls.read.error', $r, 0+$!);
         if ($r == ERROR_SYSCALL) {
           return $abort->(Streams::IOError->new ($!));
         } elsif ($r != ERROR_WANT_READ and
@@ -426,6 +433,7 @@ sub create ($$) {
         if (defined $t_w) {
           my $ab = ArrayBuffer->new_from_scalarref (\$read);
           $ab->manakai_label ('TLS underlying transport writer');
+          Test::TLSDiagnostic::event('tcp.write', length $read);
           my $p = $t_w->write (DataView->new ($ab));
           if (not defined $t_w->desired_size or $t_w->desired_size <= 0) {
             $p->then ($process_tls);
@@ -440,6 +448,7 @@ sub create ($$) {
 
     if (defined $handshake_ok and
         Net::SSLeay::state ($tls) == Net::SSLeay::ST_OK ()) {
+      Test::TLSDiagnostic::event('tls.handshake.ok');
       $handshake_ok->();
       $handshake_ok = $handshake_ng = undef;
     }
@@ -615,8 +624,10 @@ sub create ($$) {
         }
         my $view = DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize));
         $view->buffer->manakai_label ('TLS underlying transport reader');
+        Test::TLSDiagnostic::event('tcp.read.wait');
         return $t_r->read ($view)->then (sub {
           my $v = $_[0];
+          Test::TLSDiagnostic::event('tcp.read.result', $v->{done} ? 'eof' : $v->{value}->byte_length);
           if ($v->{done}) {
             $process_tls->();
 
@@ -775,8 +786,10 @@ sub create ($$) {
             $tls, Net::SSLeay::TLSEXT_STATUSTYPE_ocsp ();
         Net::SSLeay::CTX_set_tlsext_status_cb $tls_ctx->ctx, sub {
           my ($tls, $response) = @_;
+          Test::TLSDiagnostic::event('client.ocsp.enter', $response ? 1 : 0);
           my $result = Web::Transport::OCSP->check_ssleay_ocsp_response
               ($tls, $response, $args->{protocol_clock});
+          Test::TLSDiagnostic::event('client.ocsp.result', defined $result ? ($result->{fatal} ? 'fatal' : 'nonfatal') : 'absent');
 
           return 1 unless defined $result; # no OCSP response
 
@@ -798,6 +811,7 @@ sub create ($$) {
     ## <https://www.openssl.org/docs/manmaster/ssl/SSL_CTX_set_info_callback.html>
     Net::SSLeay::set_info_callback ($tls, sub {
       my ($tls, $where, $ret) = @_;
+      Test::TLSDiagnostic::event('client.tls.info', $where, $ret);
       if ($where & SSL_CB_ALERT and $where & SSL_CB_READ) {
         ## <https://www.openssl.org/docs/manmaster/ssl/SSL_alert_type_string.html>
         my $level = Net::SSLeay::alert_type_string ($ret); # W F U
@@ -822,6 +836,7 @@ sub create ($$) {
   })->catch ($abort);
 
   return $handshake->then (sub {
+    Test::TLSDiagnostic::event('tls.verify.wait');
     return Promise->all (\@verify);
   })->finally (sub {
     my $parser = Web::Transport::PKI::Parser->new;
@@ -844,6 +859,7 @@ sub create ($$) {
       });
     }
 
+    Test::TLSDiagnostic::event('tls.create.resolved');
     return $info;
   })->catch (sub {
     if (not defined $info->{tls_protocol} and $tls) {
@@ -877,6 +893,7 @@ sub create ($$) {
 
     # XXX pass $info to application
 
+    Test::TLSDiagnostic::event('tls.create.rejected');
     die $error;
   });
 } # start

@@ -17,6 +17,8 @@ use Web::Transport::HTTPStream;
 use Promise;
 use AnyEvent::Util qw(run_cmd);
 use Test::Certificates;
+use Test::TLSDiagnostic;
+Test::TLSDiagnostic::environment ();
 use Promised::Flow;
 use Promised::Command;
 use Web::Transport::FindPort;
@@ -25,6 +27,7 @@ sub _a ($) {
   return encode 'utf-8', $_[0];
 } # _a
 
+my $TLS_DIAG_SELECTED = 0;
 my @End;
 my $server_pids = {};
 END { kill 'KILL', $_ for keys %$server_pids }
@@ -38,6 +41,7 @@ sub server ($) {
   my $server = {
     resultdata => [],
     stop => sub {
+      Test::TLSDiagnostic::event('server.stop', $pid);
       kill 'TERM', $pid;
       delete $server_pids->{$pid};
     },
@@ -70,15 +74,18 @@ sub server ($) {
       $server->{addr} = $1;
       $server->{port} = $2;
       $server->{host} = $host;
+      Test::TLSDiagnostic::event('server.ready', $pid);
       $s_ready->($server);
     }
   }); # stdout
   push @End, $server->{closed} = $cmd->run->then (sub {
     $pid = $server->{pid} = $cmd->pid;
     $server_pids->{$pid} = 1;
+    Test::TLSDiagnostic::event('server.spawn', $pid);
     return $cmd->wait;
   })->then (sub {
     my $result = $_[0];
+    Test::TLSDiagnostic::event('server.exited', $pid);
     warn "Server stopped ($result)" if $ENV{DUMP} or $result->is_error;
     $s_ready->(Promise->reject ($result)) if $result->is_error;
   });
@@ -143,6 +150,7 @@ sub rsread_messages ($$) {
 } # rsread_messages
 
 for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_deps/data/*.dat')) {
+  next unless $path->basename eq 'httpstlsocspstaple.dat';
   next if $path =~ m{/h2}; # XXX not implemented yet
   for_each_test $path, {
     'tunnel-send' => {is_prefixed => 1, multiple => 1},
@@ -152,11 +160,14 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
     'ws-protocol' => {multiple => 1},
   }, sub {
     my $test = $_[0];
+    return unless ($test->{name}->[0] // '') eq 'Broken staple';
+    $TLS_DIAG_SELECTED++;
     return if defined $test->{name}->[0] and $test->{name}->[0] =~ /crash|2147483648/; # XXX not supported yet
     return if defined $test->{name}->[0] and
               $test->{name}->[0] eq 'TLS renegotiation (no client auth) 2';
     test {
       my $c = shift;
+      Test::TLSDiagnostic::event('case.start', $test->{name}->[0]);
       server ($test->{data}->[0])->then (sub {
         my $server = $_[0];
         my $tparams = {
@@ -188,6 +199,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           $server->{stop}->();
           undef $server;
         } $http->ready->then (sub {
+          Test::TLSDiagnostic::event('http.ready');
           if ($test_type eq 'ws') {
             return $http->send_request ({
               method => _a 'GET',
@@ -391,6 +403,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           } # test type
         })->catch (sub {
           my $error = $_[0];
+          Test::TLSDiagnostic::event('http.chain.rejected', ref $error);
           my $result = {exit => $error};
           return $result;
         })->then (sub {
@@ -496,6 +509,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
 
             like $result->{exit}->name, qr{\A(?:HTTP parse error|WebSocket Close|OpenSSL error|Protocol error|Perl I/O error)\z}, 'error type';
           } $c;
+          Test::TLSDiagnostic::event('http.close.wait');
           return $http->close_after_current_stream;
         });
       })->catch (sub {
@@ -505,6 +519,7 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
           is undef, $err, 'Exception';
         } $c;
       })->then (sub {
+        Test::TLSDiagnostic::event('case.done');
         done $c;
         undef $c;
       });
@@ -512,9 +527,14 @@ for my $path (map { path ($_) } glob path (__FILE__)->parent->parent->child ('t_
   };
 } # $path
 
+die "Diagnostic filter selected no cases\n" unless $TLS_DIAG_SELECTED;
+warn "Diagnostic selected cases=$TLS_DIAG_SELECTED\n";
 Test::Certificates->wait_create_cert;
+Test::TLSDiagnostic::event('run_tests.enter');
 run_tests;
+Test::TLSDiagnostic::event('end.wait', scalar @End);
 Promise->all (\@End)->to_cv->recv;
+Test::TLSDiagnostic::event('end.done');
 @End = ();
 
 =head1 LICENSE

@@ -106,7 +106,7 @@ test-deps-main: deps-main
 test-main: test-main-main test-main-server
 
 test-main-main:
-	$(PROVE) t/*.t
+	WEB_TRANSPORT_TLS_DIAG=1 $(PROVE) t/*.t
 
 test-main-server:
 	$(PERL) t_deps/bin/rawserver.pl &

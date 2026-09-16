@@ -3,8 +3,10 @@ use strict;
 use warnings;
 our $VERSION = '3.0';
 use Carp;
-use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE);
+use Errno qw(EAGAIN EWOULDBLOCK EINTR);
+use Socket qw(IPPROTO_TCP TCP_NODELAY SOL_SOCKET SO_KEEPALIVE SO_OOBINLINE MSG_PEEK);
 use AnyEvent::Socket qw(tcp_connect);
+use AnyEvent::Util qw(WSAEWOULDBLOCK);
 use AbortController;
 use Promise;
 use Streams::IOError;
@@ -45,17 +47,69 @@ sub _is_readable ($) {
   return $n > 0;
 } # _is_readable
 
-## Create a closure which returns whether the file handle is ready to
-## be read, or not.  It captures only the file handle (not any other
+## Return the state of the input side of the file handle, without
+## consuming any data, as one of the following strings.
+##
+##  - |data|:  Some data is available to be read.
+##  - |eof|:   The peer has closed the input side (EOF), with no data
+##            remaining to be read.
+##  - |empty|: No data and no EOF are available (i.e. the socket is
+##            currently idle, as far as the input side is concerned).
+##  - |error|: An error has occurred on the input side (such as a
+##            TCP reset).
+##  - |closed|: The file handle is not valid anymore.
+##
+## It does not perform any blocking I/O: it checks readability first
+## and, when readable, performs a non-blocking |recv| with |MSG_PEEK|,
+## which returns immediately for data, EOF and errors.  Note that
+## |recv| uses the file handle's buffer to report the number of bytes
+## that are pending: the bytes are placed in the buffer by |recv| and
+## the value returned by |recv| is not a byte count.
+sub _recv_peek_state ($) {
+  my $fh = $_[0];
+  return 'closed' unless defined $fh and defined (fileno $fh);
+  return 'empty' unless _is_readable ($fh);
+  my $buf = '';
+  my $r = recv ($fh, $buf, 1, MSG_PEEK);
+  if (not defined $r) {
+    my $errno = 0 + $!;
+    if ($errno == EAGAIN or $errno == EWOULDBLOCK or
+        $errno == WSAEWOULDBLOCK or $errno == EINTR) {
+      return 'empty';
+    }
+    return 'error';
+  }
+  return length ($buf) ? 'data' : 'eof';
+} # _recv_peek_state
+
+## Create a closure which returns whether data is pending on the file
+## handle, i.e. whether reading it is likely to return some data, or
+## not.  It returns a true value if and only if at least one byte is
+## available to be read.  An EOF or an error does not make it return a
+## true value (unlike checking whether the file handle is simply
+## ready-to-read).  It captures only the file handle (not any other
 ## lexical variable in the scope where |create| is called), so that the
 ## closure does not keep other values alive on Perl versions whose
 ## anonymous subroutines capture the entire scope (such as Perl 5.14).
 sub _make_pending_data_checker ($) {
   my $fh = $_[0];
   return sub {
-    return _is_readable ($fh);
+    return _recv_peek_state ($fh) eq 'data';
   };
 } # _make_pending_data_checker
+
+## Create a closure which returns whether the input side of the file
+## handle has been closed by the peer or has become unusable, or not.
+## It returns a true value if the peer has sent EOF or an error (such
+## as a TCP reset) has occurred, or if the file handle is not valid.
+## It captures only the file handle, for the same reason as above.
+sub _make_peer_closed_checker ($) {
+  my $fh = $_[0];
+  return sub {
+    my $state = _recv_peek_state ($fh);
+    return ($state eq 'eof' or $state eq 'error' or $state eq 'closed');
+  };
+} # _make_peer_closed_checker
 
 sub create ($$) {
   my ($class, $args) = @_;
@@ -180,6 +234,7 @@ sub create ($$) {
     ($info->{readable}, $info->{writable}, $info->{closed})
         = Streams::Filehandle::fh_to_streams $fh, 1, 1;
     $info->{has_pending_data} = _make_pending_data_checker ($fh);
+    $info->{peer_closed} = _make_peer_closed_checker ($fh);
 
     if ($args->{debug}) {
       if (defined $info->{local_host}) {

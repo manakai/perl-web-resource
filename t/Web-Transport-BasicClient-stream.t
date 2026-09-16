@@ -807,20 +807,27 @@ test {
     } promised_cleanup {
       return $client->close;
     } $client->request (url => $url)->then (sub {
+      ## The server sends a FIN after the first response, so the peer
+      ## closure makes the connection unsuitable for reuse
+      ## (|peer_closed|); the second request is sent on a fresh
+      ## connection.  The request body stream is therefore delivered
+      ## on the new connection, and the request succeeds (instead of
+      ## producing a network error as it did before the reuse-liveness
+      ## checks were introduced).
       return $client->request (
         url => $url,
         body_stream => $rs, length => length $data,
       );
-    })->catch (sub {
+    })->then (sub {
       my $res = $_[0];
       test {
-        ok $res->is_network_error, $res;
-        is $res->network_error_message, 'Connection closed without response (can retry)';
-        ok $rs->locked;
+        isa_ok $res, 'Web::Transport::Response';
+        ok ! $res->is_network_error, $res;
+        is $res->status, 201;
       } $c;
     });
   });
-} n => 3, name => 'request body (ReadableStream) can_retry';
+} n => 3, name => 'request body (ReadableStream) recovered on new connection';
 
 test {
   my $c = shift;

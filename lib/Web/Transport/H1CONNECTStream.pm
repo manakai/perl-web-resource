@@ -36,6 +36,18 @@ sub _make_http_has_pending_data ($) {
   };
 } # _make_http_has_pending_data
 
+## Return whether the underlying HTTP connection is closed by the peer
+## (or has become unusable), or not, by delegating to the
+## Web::Transport::HTTPStream object.  It is captured weakly for the same
+## reason as above.
+sub _make_http_peer_closed ($) {
+  my $http = $_[0];
+  weaken $http;
+  return sub {
+    return defined $http ? $http->peer_closed : 0;
+  };
+} # _make_http_peer_closed
+
 ##   parent - The hash reference used as the argument to the
 ##   Web::Transport::HTTPStream->new method.
 ##
@@ -117,6 +129,7 @@ sub create ($$) {
           $info->{writable} = $res->{writable};
           $info->{readable} = $res->{readable};
           $info->{has_pending_data} = _make_http_has_pending_data ($http);
+          $info->{peer_closed} = _make_http_peer_closed ($http);
 
           if ($args->{debug}) {
             warn "$info->{id}: $info->{type}: ready\n";

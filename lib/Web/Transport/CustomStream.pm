@@ -32,6 +32,8 @@ sub create ($$) {
     writable => $args->{writable},
     has_pending_data => defined $args->{has_pending_data}
         ? $args->{has_pending_data} : sub { return 0 },
+    peer_closed => defined $args->{peer_closed}
+        ? $args->{peer_closed} : sub { return 0 },
     closed => $args->{closed},
   };
 

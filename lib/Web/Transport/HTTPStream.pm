@@ -84,6 +84,17 @@ sub _make_h1_has_pending_data ($) {
   };
 } # _make_h1_has_pending_data
 
+## Create the closure exposed as |$con->{info}->{peer_closed}|
+## which forwards to the connection's |peer_closed| method.  The
+## connection is captured weakly for the same reason as above.
+sub _make_h1_peer_closed ($) {
+  my $con = $_[0];
+  weaken $con;
+  return sub {
+    return defined $con ? $con->peer_closed : 0;
+  };
+} # _make_h1_peer_closed
+
 ## This class, with its two subclasses, represents an HTTP connection.
 
 ## Create and return a new HTTP connection.
@@ -168,6 +179,8 @@ sub new ($$) {
 
     $con->{has_pending_data} = delete $info->{has_pending_data};
     $con->{info}->{has_pending_data} = _make_h1_has_pending_data ($con);
+    $con->{peer_closed} = delete $info->{peer_closed};
+    $con->{info}->{peer_closed} = _make_h1_peer_closed ($con);
     $con->{reader} = (delete $info->{readable})->get_reader ('byob');
     $con->{writer} = (delete $info->{writable})->get_writer;
     $con->{state} = 'initial';
@@ -268,6 +281,8 @@ sub new ($$) {
       $con->{streams_done}->();
       delete $con->{has_pending_data};
       delete $con->{info}->{has_pending_data} if defined $con->{info};
+      delete $con->{peer_closed};
+      delete $con->{info}->{peer_closed} if defined $con->{info};
       (delete $con->{closed}->[1])->(undef), delete $con->{closed}->[2];
     });
   })->catch (sub {
@@ -286,6 +301,8 @@ sub new ($$) {
     $con->{streams_done}->();
     delete $con->{has_pending_data};
     delete $con->{info}->{has_pending_data} if defined $con->{info};
+    delete $con->{peer_closed};
+    delete $con->{info}->{peer_closed} if defined $con->{info};
     (delete $con->{closed}->[1])->(undef), delete $con->{closed}->[2];
   });
 
@@ -803,6 +820,18 @@ sub _check_send_request ($) {
     return Promise->reject ($con->{exit} || Web::Transport::TypeError->new ("Connection is closed"));
   } elsif (not ($con->{state} eq 'initial' or $con->{state} eq 'waiting')) {
     return Promise->reject (Web::Transport::TypeError->new ("Connection is busy"));
+  } elsif ($con->{state} eq 'waiting' and ($con->has_pending_data or $con->peer_closed)) {
+    ## The connection has already served a request and is about to be
+    ## reused, but it has unread data or has been closed by the peer
+    ## since the last exchange.  Do not write a new request onto such a
+    ## connection (Chromium / Firefox reject the reuse of a connection
+    ## with unexpected pending data).  A fresh connection (state
+    ## 'initial') is not checked here: a response arriving before the
+    ## request is written is not a fatal condition and is processed
+    ## normally.
+    $con->{to_be_closed} = 1;
+    return Promise->reject
+        (Web::Transport::TypeError->new ("Existing connection is broken"));
   }
   
   return $con->{writer}->write
@@ -909,6 +938,21 @@ sub has_pending_data ($) {
       unless defined $h;
   return $h->();
 } # has_pending_data
+
+## Return whether the peer has closed the connection or an error has
+## occurred on the underlying transport, i.e. the connection can no
+## longer be reused for new requests.  It does not consider |rbuf|:
+## even if there is data pending in the parser, the connection is
+## closed once the underlying transport signals EOF or an error.  It
+## returns a false value if the underlying transport does not
+## implement |peer_closed| (in which case the traditional behavior of
+## the HTTP connection is preserved).
+sub peer_closed ($) {
+  my $con = $_[0];
+  my $h = $con->{peer_closed};
+  return 0 unless defined $h;
+  return $h->();
+} # peer_closed
 
 ## Return whether the HTTP connection is ready and accepting new
 ## requests or not.

@@ -251,7 +251,11 @@ sub _connect ($$$;%) {
   my ($self, $con_url_record, $url_record, %args) = @_;
   return Promise->reject ($self->{aborted}) if defined $self->{aborted};
 
-  if ($self->{http} and $self->{http}->is_active) {
+  $self->{reused_connection} = 0;
+  if ($self->{http} and $self->{http}->is_active and
+      not $self->{http}->has_pending_data and
+      not $self->{http}->peer_closed) {
+    $self->{reused_connection} = 1;
     return Promise->resolve;
   }
 
@@ -392,6 +396,22 @@ sub _request ($$$$$$$$$$$$$) {
         ws_protocols => $ws_protocols,
         length => $length,
       });
+    })->catch (sub {
+      my $e = $_[0];
+      ## This request is using a reused connection, and it was not
+      ## possible to write the request to it.  Problems on a reused
+      ## connection are often not detected by the liveness checks in
+      ## |_connect| (a successful check does not guarantee a successful
+      ## write).  Abort the connection and send the request once more
+      ## on a fresh connection, via the retry in |request|.  Note that
+      ## retrying a request does not provide an exactly-once guarantee:
+      ## RFC 9110 §9.2.2 implies that the absence of a response does
+      ## not prove that the request was not processed by the server.
+      die $e unless $self->{reused_connection} and
+          UNIVERSAL::isa ($e, 'Streams::IOError');
+      $http->abort;
+      die Web::Transport::ProtocolError::HTTPParseError->_new_retry
+          ("Broken connection during send", 1);
     })->then (sub {
       my $stream = $_[0]->{stream};
 
@@ -670,7 +690,7 @@ sub DESTROY ($) {
 
 =head1 LICENSE
 
-Copyright 2016-2022 Wakaba <wakaba@suikawiki.org>.
+Copyright 2016-2026 Wakaba <wakaba@suikawiki.org>.
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

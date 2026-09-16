@@ -149,14 +149,22 @@ sub wait_create_cert_p ($$) {
     x "rm \Q$cert_path\E/*.pem || true";
   }
   my $cert_pem_path = $class->cert_path ('cert.pem', $cert_args);
+  my $chained_cert_pem_path = $class->cert_path ('cert-chained.pem', $cert_args);
   return Promise->resolve->then (sub {
-    unless ($cert_pem_path->is_file) {
-      return Promise->resolve->then (sub {
-        return $class->generate_certs ({host => 'intermediate', intermediate => 1})
-            unless $class->cert_path ('cert.pem', {host => 'intermediate'})->is_file;
-      })->then (sub {
-        return $class->generate_certs ($cert_args);
-      });
+    unless ($cert_pem_path->is_file and $chained_cert_pem_path->is_file) {
+      my $lock_path = $cert_args->{intermediate}
+          ? $class->ca_path ('lock')
+          : $class->cert_path ('lock', {host => 'intermediate'});
+      my $lock = $lock_path->openw ({locked => 1});
+      undef $lock;
+      unless ($cert_pem_path->is_file and $chained_cert_pem_path->is_file) {
+        return Promise->resolve->then (sub {
+          return $class->generate_certs ({host => 'intermediate', intermediate => 1})
+              unless $class->cert_path ('cert.pem', {host => 'intermediate'})->is_file;
+        })->then (sub {
+          return $class->generate_certs ($cert_args);
+        });
+      }
     }
   })->then (sub {
     require Net::SSLeay;

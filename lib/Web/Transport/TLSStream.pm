@@ -588,6 +588,10 @@ sub create ($$) {
     ## data depends solely on the underlying transport.  (Should the
     ## use of |Net::SSLeay::SSL_pending| be considered in future.)
     $info->{has_pending_data} = delete $info->{parent}->{has_pending_data};
+    ## Whether the connection is closed by the peer (or is unusable)
+    ## depends solely on the underlying transport as well: an EOF or an
+    ## error on the TCP layer inevitably terminates the TLS connection.
+    $info->{peer_closed} = delete $info->{parent}->{peer_closed};
     $t_r->closed->catch ($abort)->then (sub { undef $t_read });
     $t_w->closed->catch ($abort);
 

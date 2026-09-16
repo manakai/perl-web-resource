@@ -13,7 +13,8 @@ use Web::Transport::TCPStream;
 use Web::Transport::FindPort;
 
 sub dv ($) {
-  return DataView->new (ArrayBuffer->new_from_scalarref (\($_[0])));
+  my $s = $_[0];
+  return DataView->new (ArrayBuffer->new_from_scalarref (\$s));
 } # dv
 
 {
@@ -1495,6 +1496,108 @@ test {
     undef $c;
   });
 } n => 3, name => 'has_pending_data';
+
+test {
+  my $c = shift;
+
+  my $port = find_listenable_port;
+  my $host = Web::Host->parse_string ('127.0.0.1');
+
+  my $hpd;
+  my $pc;
+  my $server_info;
+  my $client_info;
+  my $server = tcp_server undef, $port, sub {
+    Web::Transport::TCPStream->create ({
+      server => 1,
+      fh => $_[0],
+      host => Web::Host->parse_string ($_[1]),
+      port => $_[2],
+    })->then (sub {
+      my $info = $_[0];
+      $server_info = $info;
+      $hpd = $info->{has_pending_data};
+      $pc = $info->{peer_closed};
+      test {
+        ok defined $hpd, 'has_pending_data is defined';
+        ok defined $pc, 'peer_closed is defined';
+      } $c;
+    });
+  }; # $server
+
+  Web::Transport::TCPStream->create ({
+    host => $host,
+    port => $port,
+  })->then (sub {
+    my $info = $_[0];
+    $client_info = $info;
+    return (promised_wait_until { defined $hpd and defined $pc } timeout => 5)->then (sub { return $info });
+  })->then (sub {
+    my $info = $_[0];
+    test {
+      ok ! $pc->(), 'not closed when nothing has been received';
+    } $c;
+    my $w = $info->{writable}->get_writer;
+    return $w->write (dv "x")->then (sub { return [$info, $w] });
+  })->then (sub {
+    my ($info, $w) = @{$_[0]};
+    return (promised_wait_until { $hpd->() } timeout => 5)->then (sub { return [$info, $w] });
+  })->then (sub {
+    my ($info, $w) = @{$_[0]};
+    test {
+      ok $hpd->(), 'pending data detected after client send';
+      ok ! $pc->(), 'not closed while data is pending';
+    } $c;
+    my $reader = $server_info->{readable}->get_reader ('byob');
+    return $reader->read (dv "x")->then (sub {
+      my $v = $_[0]->{value};
+      test {
+        is $v->manakai_to_string, 'x';
+      } $c;
+    })->then (sub {
+      $reader->release_lock;
+      return [$info, $w];
+    });
+  })->then (sub {
+    my ($info, $w) = @{$_[0]};
+    ## Close the client's streams so that the server side of this test
+    ## receives an EOF from the peer.
+    return $w->close->then (sub {
+      return $client_info->{readable}->cancel;
+    });
+  })->then (sub {
+    return (promised_wait_until { $pc->() } timeout => 5)->then (sub {
+      test {
+        ok $pc->(), 'closed after the peer sent EOF';
+        ok ! $hpd->(), 'EOF is not pending data';
+      } $c;
+    });
+  })->then (sub {
+    return $server_info->{readable}->cancel if $server_info;
+    return undef;
+  })->then (sub {
+    undef $server;
+    undef $hpd;
+    undef $pc;
+    undef $server_info;
+    undef $client_info;
+    done $c;
+    undef $c;
+  });
+} n => 8, name => 'peer_closed';
+
+test {
+  my $c = shift;
+  my $fh = undef;
+  my $hpd = Web::Transport::TCPStream::_make_pending_data_checker ($fh);
+  my $pc = Web::Transport::TCPStream::_make_peer_closed_checker ($fh);
+  test {
+    ok ! $hpd->(), 'has_pending_data is false for a destroyed fh';
+    ok $pc->(), 'peer_closed is true for a destroyed fh';
+  } $c;
+  done $c;
+  undef $c;
+} n => 2, name => 'peer_closed (destroyed fh)';
 
 run_tests;
 

@@ -174,6 +174,7 @@ sub create ($$) {
       $info->{readable} = $readable;
       $info->{writable} = $writable;
       $info->{has_pending_data} = delete $info->{parent}->{has_pending_data};
+      $info->{peer_closed} = delete $info->{parent}->{peer_closed};
       $info->{closed} = delete $info->{parent}->{closed};
       
       return $info;

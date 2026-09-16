@@ -640,6 +640,75 @@ test {
            server => 1,
            fh => $_[0],
            host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }});
+    $con ||= $x;
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->headers_received->then (sub {
+        return $stream->send_response
+            ({status => 200, status_text => 'OK', length => 0, close => 1, headers => []});
+      });
+    });
+  }; # $server
+
+  my $client = Web::Transport::TCPTransport->new (host => $origin->host, port => $origin->port);
+  my $start;
+  my $closed_flag = 0;
+  $client->start (sub {})->then (sub {
+    return $client->push_write
+        (\ "POST / HTTP/1.1\x0D\x0AHost: localhost\x0D\x0A\x0D\x0A");
+  })->then (sub {
+    return promised_wait_until {
+      !! $con and $con->{cleanup_started};
+    } timeout => 5;
+  })->then (sub {
+    test {
+      ok $con->{cleanup_started}, 'teardown begun';
+    } $c;
+    $start = AE::time;
+    ## Keep sending data during teardown; this used to overwrite the
+    ## teardown deadline in $con->{timer} with the read timeout.
+    my $loop; $loop = sub {
+      return (promised_sleep (0.1)->then (sub {
+        return if $closed_flag;
+        $client->push_write (\ "x\x0D\x0A");
+        return $loop->();
+      }))->catch (sub { return undef });
+    }; # $loop
+    $loop->();
+    return $con->closed->then (sub {
+      $closed_flag = 1;
+    });
+  })->then (sub {
+    test {
+      ok $closed_flag;
+      ok AE::time - $start < 5, 'connection closed within teardown deadline despite incoming data';
+    } $c;
+    return $client->abort;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 3, name => 'teardown deadline not extended by incoming data';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
          }, server_header => 'Hoge/1.4.6'});
     my $r = $x->streams->get_reader;
     $r->read->then (sub {

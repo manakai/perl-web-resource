@@ -215,6 +215,7 @@ sub new ($$) {
 
       $con->_oneof (undef);
       delete $con->{timer};
+      delete $con->{cleanup_timer};
       return undef;
     }, sub {
       my $error = Web::Transport::Error->wrap ($_[0]);
@@ -226,6 +227,7 @@ sub new ($$) {
 
       $con->_oneof ($_[0]);
       delete $con->{timer};
+      delete $con->{cleanup_timer};
       return undef;
     }) : $con->{reader}->closed->then (sub {
       return promised_wait_until {
@@ -295,6 +297,7 @@ sub new ($$) {
     (delete $con->{writer})->abort ($error) if defined $con->{writer};
     (delete $con->{reader})->cancel ($error)->catch (sub { })
         if defined $con->{reader};
+    delete $con->{cleanup_timer};
 
     (delete $con->{ready}->[2])->($error), delete $con->{ready}->[1]
         if defined $con->{ready}->[1];
@@ -1130,26 +1133,27 @@ sub _both_done ($) {
 
     delete $con->{disable_timer};
     if ($con->{to_be_closed}) {
+      $con->{cleanup_started} = 1;
       delete $con->{exit}
           if UNIVERSAL::isa ($con->{exit}, 'Web::Transport::ProtocolError');
     my ($r_written, $s_written) = promised_cv;
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
       &promised_cleanup ($s_written, $writer->close);
-      $con->{timer} = AE::timer 1, 0, sub {
+      $con->{cleanup_timer} = AE::timer 1, 0, sub {
         $writer->abort (_pe "HTTP completion timer (1)");
         $s_written->();
       };
       delete $con->{writer};
     } else {
-      delete $con->{timer};
       $s_written->();
     }
     $r_written->then (sub {
       if (defined $con->{reader}) { # XXX spec
-        $con->closed->then (sub { delete $con->{timer} });
-        $con->{timer} = AE::timer 1, 0, sub {
+        $con->closed->then (sub { delete $con->{cleanup_timer} });
+        $con->{cleanup_timer} = AE::timer 1, 0, sub {
           return unless defined $con->{reader};
+          delete $con->{cleanup_timer};
           $con->{reader}->cancel ($error);
           delete $con->{reader};
         };
@@ -1180,13 +1184,14 @@ sub _both_done ($) {
   delete $con->{aborter};
 
   if ($con->{to_be_closed}) {
+    $con->{cleanup_started} = 1;
     delete $con->{exit}
         if UNIVERSAL::isa ($con->{exit}, 'Web::Transport::ProtocolError');
     my ($r_written, $s_written) = promised_cv;
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
       &promised_cleanup ($s_written, $writer->close);
-      $con->{timer} = AE::timer 1, 0, sub {
+      $con->{cleanup_timer} = AE::timer 1, 0, sub {
         $writer->abort (_pe "HTTP completion timer (1)");
         $s_written->();
       };
@@ -1196,9 +1201,10 @@ sub _both_done ($) {
     }
     $r_written->then (sub {
       if (defined $con->{reader}) { # XXX spec
-        $con->closed->then (sub { delete $con->{timer} });
-        $con->{timer} = AE::timer 1, 0, sub {
+        $con->closed->then (sub { delete $con->{cleanup_timer} });
+        $con->{cleanup_timer} = AE::timer 1, 0, sub {
           return unless defined $con->{reader};
+          delete $con->{cleanup_timer};
           $con->{reader}->cancel ($error);
           delete $con->{reader};
         };
@@ -1943,7 +1949,7 @@ sub _read ($) {
     return $self->{reader}->read (DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize)))->then (sub {
       return 'done' if $_[0]->{done};
 
-      if ($self->{disable_timer}) {
+      if ($self->{disable_timer} or $self->{cleanup_started}) {
         delete $self->{timer};
       } else {
         $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
@@ -2457,6 +2463,7 @@ sub _request_headers ($) {
 sub _timeout ($) {
   my $self = $_[0];
   delete $self->{timer};
+  delete $self->{cleanup_timer};
   return $self->abort
       (Web::Transport::TypeError->new ("Read timeout ($ReadTimeout)"));
 } # _timeout

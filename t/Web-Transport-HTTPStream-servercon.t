@@ -985,6 +985,133 @@ test {
   });
 } n => 7, name => 'HTTP parse error';
 
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, lingering_limit => 1024, parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }});
+    $con ||= $x;
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->headers_received->then (sub {
+        return $stream->send_response
+            ({status => 200, status_text => 'OK', length => 0, close => 1, headers => []});
+      });
+    });
+  }; # $server
+
+  my $client = Web::Transport::TCPTransport->new (host => $origin->host, port => $origin->port);
+  my $start;
+  my $closed_flag = 0;
+  $client->start (sub {})->then (sub {
+    return $client->push_write
+        (\ "POST / HTTP/1.1\x0D\x0AHost: localhost\x0D\x0A\x0D\x0A");
+  })->then (sub {
+    return promised_wait_until {
+      !! $con and $con->{cleanup_started};
+    } timeout => 5;
+  })->then (sub {
+    $start = AE::time;
+    ## Flood data during the cleanup.  The amount of the data read and
+    ## discarded after the output is completed is bounded by
+    ## |lingering_limit|, such that the connection is closed without
+    ## waiting for the lingering timeout to expire.
+    my $body = 'x' x 4096;
+    my $loop; $loop = sub {
+      return (promised_sleep (0.01)->then (sub {
+        return if $closed_flag;
+        $client->push_write (\$body);
+        return $loop->();
+      }))->catch (sub { return undef });
+    }; # $loop
+    $loop->();
+    return $con->closed->then (sub {
+      $closed_flag = 1;
+    });
+  })->then (sub {
+    test {
+      ok $closed_flag;
+      ok AE::time - $start < 5, 'connection closed despite incoming data';
+      ok $con->{output_done}, 'counting started after the output was completed';
+      ok defined $con->{lingering_read}, 'lingering amount recorded';
+      ok $con->{lingering_read} <= 1024, 'lingering read bounded by lingering limit';
+    } $c;
+    return $client->abort;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'lingering read bounded by lingering limit';
+
+test {
+  my $c = shift;
+
+  my $host = '127.0.0.1';
+  my $port = find_listenable_port;
+  my $origin = Web::URL->parse_string ("http://$host:$port");
+
+  my $body = 'y' x 8192;
+  my $con;
+  my $server = tcp_server $host, $port, sub {
+    my $x = Web::Transport::HTTPStream->new
+        ({server => 1, lingering_limit => 1, parent => {
+           class => 'Web::Transport::TCPStream',
+           server => 1,
+           fh => $_[0],
+           host => Web::Host->parse_string ($_[1]), port => $_[2],
+         }});
+    $con ||= $x;
+    my $r = $x->streams->get_reader;
+    $r->read->then (sub {
+      return if $_[0]->{done};
+      my $stream = $_[0]->{value};
+      return $stream->headers_received->then (sub {
+        return $stream->send_response
+            ({status => 200, status_text => 'OK', length => length $body,
+              close => 1, headers => []})->then (sub {
+          my $w = $_[0]->{body}->get_writer;
+          $w->write (d ($body));
+          return $w->close;
+        });
+      });
+    });
+  }; # $server
+
+  ## The output is completed before the lingering counting starts,
+  ## so a very small |lingering_limit| does not truncate the response.
+  my $input = "POST / HTTP/1.1\x0D\x0AHost: localhost\x0D\x0A\x0D\x0A"
+      . ('x' x 65536);
+  rawtcp ($origin->host, $origin->port, $input)->then (sub {
+    my $data = $_[0];
+    test {
+      like $data, qr{\AHTTP/1\.1 200 OK};
+      ok index ($data, $body) >= 0, 'response body received completely despite tiny lingering limit';
+      ok $con->{output_done}, 'output completed before lingering counting';
+      ok defined $con->{lingering_read}, 'lingering amount recorded';
+      ok $con->{lingering_read} <= 1, 'lingering read bounded by lingering limit';
+    } $c;
+    return undef;
+  })->then (sub {
+    undef $server;
+    done $c;
+    undef $c;
+  });
+} n => 5, name => 'response output not affected by lingering limit';
+
 run_tests;
 
 =head1 LICENSE

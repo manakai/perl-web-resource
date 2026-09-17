@@ -118,6 +118,12 @@ sub _make_h1_peer_closed ($) {
 ## method).  It is the value of the |Server:| header for the
 ## responses.  If it is not defined, the value |Server| is used.  It
 ## must be a character string.  It is encoded in UTF-8.
+##
+## There is also |lingering_limit| argument, which is the maximum number
+## of bytes, counted after the last output is written, read and
+## discarded during the lingering read after the connection is closed.
+## It is used only for the server connection cleanup.  If it is not
+## defined, the value 64 KB is used.
 sub new ($$) {
   my $args = $_[1];
   my $con = bless {
@@ -127,6 +133,13 @@ sub new ($$) {
   if ($args->{server}) {
     $con->{is_server} = 1;
     $con->{rbuf} = '';
+  }
+
+  my $lingering_limit = $args->{lingering_limit};
+  if (defined $lingering_limit and $lingering_limit >= 0) {
+    $con->{lingering_limit} = 0 + $lingering_limit;
+  } else {
+    $con->{lingering_limit} = 64 * 1024;
   }
 
   $con->{ready} = _pcap;
@@ -1134,6 +1147,8 @@ sub _both_done ($) {
     delete $con->{disable_timer};
     if ($con->{to_be_closed}) {
       $con->{cleanup_started} = 1;
+      $con->{lingering_read} = 0;
+      delete $con->{output_done};
       delete $con->{exit}
           if UNIVERSAL::isa ($con->{exit}, 'Web::Transport::ProtocolError');
     my ($r_written, $s_written) = promised_cv;
@@ -1149,6 +1164,7 @@ sub _both_done ($) {
       $s_written->();
     }
     $r_written->then (sub {
+      $con->{output_done} = 1;
       if (defined $con->{reader}) { # XXX spec
         $con->closed->then (sub { delete $con->{cleanup_timer} });
         $con->{cleanup_timer} = AE::timer 1, 0, sub {
@@ -1946,7 +1962,17 @@ sub _read ($) {
   my $self = $_[0];
   return unless defined $self->{reader};
   return ((promised_until {
-    return $self->{reader}->read (DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize)))->then (sub {
+    my $lingering = ($self->{output_done} and $self->{state} eq 'stopped');
+    my $size = $Streams::_Common::DefaultBufferSize;
+    if ($lingering) {
+      my $remaining = $self->{lingering_limit} - $self->{lingering_read};
+      if ($remaining <= 0) {
+        $self->{reader}->cancel (_pe 'HTTP lingering limit')->catch (sub { });
+        return 'done';
+      }
+      $size = $remaining if $remaining < $size;
+    }
+    return $self->{reader}->read (DataView->new (ArrayBuffer->new ($size)))->then (sub {
       return 'done' if $_[0]->{done};
 
       if ($self->{disable_timer} or $self->{cleanup_started}) {
@@ -1954,6 +1980,7 @@ sub _read ($) {
       } else {
         $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
       }
+      $self->{lingering_read} += $_[0]->{value}->byte_length if $lingering;
       $self->_ondata ($_[0]->{value});
 
       return not 'done';

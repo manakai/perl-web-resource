@@ -164,7 +164,7 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
           $received_data .= '[[EOF]]';
           $reof = 1;
           if ($cend) {
-            $transport->push_shutdown unless $write_closed;
+            $transport->push_shutdown unless $write_closed or $transport->write_to_be_closed;
           }
         } elsif ($type eq 'writeeof') {
           #warn "Sent EOF";
@@ -184,7 +184,7 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
           if ($command->{type} eq 'send') {
             $transport->push_write (\(encode_web_utf8 $command->{value}));
           } elsif ($command->{type} eq 'close') {
-            $transport->push_shutdown;
+            $transport->push_shutdown unless $transport->write_to_be_closed;
             $write_closed = 1;
           } elsif ($command->{type} eq 'sleep') {
             return promised_sleep $command->{value};
@@ -207,7 +207,7 @@ for my $path ($test_data_path->children (qr/\.dat\z/)) {
         })->then (sub {
           $cend = 1;
           if ($reof) {
-            return $transport->push_shutdown;
+            return $transport->push_shutdown unless $transport->write_to_be_closed;
           }
         })->catch (sub {
           my $error = $_[0];

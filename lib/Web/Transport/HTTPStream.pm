@@ -118,6 +118,12 @@ sub _make_h1_peer_closed ($) {
 ## method).  It is the value of the |Server:| header for the
 ## responses.  If it is not defined, the value |Server| is used.  It
 ## must be a character string.  It is encoded in UTF-8.
+##
+## There is also |lingering_limit| argument, which is the maximum number
+## of bytes, counted after the last output is written, read and
+## discarded during the lingering read after the connection is closed.
+## It is used only for the server connection cleanup.  If it is not
+## defined, the value 64 KB is used.
 sub new ($$) {
   my $args = $_[1];
   my $con = bless {
@@ -127,6 +133,13 @@ sub new ($$) {
   if ($args->{server}) {
     $con->{is_server} = 1;
     $con->{rbuf} = '';
+  }
+
+  my $lingering_limit = $args->{lingering_limit};
+  if (defined $lingering_limit and $lingering_limit >= 0) {
+    $con->{lingering_limit} = 0 + $lingering_limit;
+  } else {
+    $con->{lingering_limit} = 64 * 1024;
   }
 
   $con->{ready} = _pcap;
@@ -215,6 +228,7 @@ sub new ($$) {
 
       $con->_oneof (undef);
       delete $con->{timer};
+      delete $con->{cleanup_timer};
       return undef;
     }, sub {
       my $error = Web::Transport::Error->wrap ($_[0]);
@@ -226,6 +240,7 @@ sub new ($$) {
 
       $con->_oneof ($_[0]);
       delete $con->{timer};
+      delete $con->{cleanup_timer};
       return undef;
     }) : $con->{reader}->closed->then (sub {
       return promised_wait_until {
@@ -295,6 +310,7 @@ sub new ($$) {
     (delete $con->{writer})->abort ($error) if defined $con->{writer};
     (delete $con->{reader})->cancel ($error)->catch (sub { })
         if defined $con->{reader};
+    delete $con->{cleanup_timer};
 
     (delete $con->{ready}->[2])->($error), delete $con->{ready}->[1]
         if defined $con->{ready}->[1];
@@ -1130,26 +1146,30 @@ sub _both_done ($) {
 
     delete $con->{disable_timer};
     if ($con->{to_be_closed}) {
+      $con->{cleanup_started} = 1;
+      $con->{lingering_read} = 0;
+      delete $con->{output_done};
       delete $con->{exit}
           if UNIVERSAL::isa ($con->{exit}, 'Web::Transport::ProtocolError');
     my ($r_written, $s_written) = promised_cv;
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
       &promised_cleanup ($s_written, $writer->close);
-      $con->{timer} = AE::timer 1, 0, sub {
+      $con->{cleanup_timer} = AE::timer 1, 0, sub {
         $writer->abort (_pe "HTTP completion timer (1)");
         $s_written->();
       };
       delete $con->{writer};
     } else {
-      delete $con->{timer};
       $s_written->();
     }
     $r_written->then (sub {
+      $con->{output_done} = 1;
       if (defined $con->{reader}) { # XXX spec
-        $con->closed->then (sub { delete $con->{timer} });
-        $con->{timer} = AE::timer 1, 0, sub {
+        $con->closed->then (sub { delete $con->{cleanup_timer} });
+        $con->{cleanup_timer} = AE::timer 1, 0, sub {
           return unless defined $con->{reader};
+          delete $con->{cleanup_timer};
           $con->{reader}->cancel ($error);
           delete $con->{reader};
         };
@@ -1180,13 +1200,14 @@ sub _both_done ($) {
   delete $con->{aborter};
 
   if ($con->{to_be_closed}) {
+    $con->{cleanup_started} = 1;
     delete $con->{exit}
         if UNIVERSAL::isa ($con->{exit}, 'Web::Transport::ProtocolError');
     my ($r_written, $s_written) = promised_cv;
     if (defined $con->{writer}) {
       my $writer = $con->{writer};
       &promised_cleanup ($s_written, $writer->close);
-      $con->{timer} = AE::timer 1, 0, sub {
+      $con->{cleanup_timer} = AE::timer 1, 0, sub {
         $writer->abort (_pe "HTTP completion timer (1)");
         $s_written->();
       };
@@ -1196,9 +1217,10 @@ sub _both_done ($) {
     }
     $r_written->then (sub {
       if (defined $con->{reader}) { # XXX spec
-        $con->closed->then (sub { delete $con->{timer} });
-        $con->{timer} = AE::timer 1, 0, sub {
+        $con->closed->then (sub { delete $con->{cleanup_timer} });
+        $con->{cleanup_timer} = AE::timer 1, 0, sub {
           return unless defined $con->{reader};
+          delete $con->{cleanup_timer};
           $con->{reader}->cancel ($error);
           delete $con->{reader};
         };
@@ -1940,14 +1962,25 @@ sub _read ($) {
   my $self = $_[0];
   return unless defined $self->{reader};
   return ((promised_until {
-    return $self->{reader}->read (DataView->new (ArrayBuffer->new ($Streams::_Common::DefaultBufferSize)))->then (sub {
+    my $lingering = ($self->{output_done} and $self->{state} eq 'stopped');
+    my $size = $Streams::_Common::DefaultBufferSize;
+    if ($lingering) {
+      my $remaining = $self->{lingering_limit} - $self->{lingering_read};
+      if ($remaining <= 0) {
+        $self->{reader}->cancel (_pe 'HTTP lingering limit')->catch (sub { });
+        return 'done';
+      }
+      $size = $remaining if $remaining < $size;
+    }
+    return $self->{reader}->read (DataView->new (ArrayBuffer->new ($size)))->then (sub {
       return 'done' if $_[0]->{done};
 
-      if ($self->{disable_timer}) {
+      if ($self->{disable_timer} or $self->{cleanup_started}) {
         delete $self->{timer};
       } else {
         $self->{timer} = AE::timer $ReadTimeout, 0, sub { $self->_timeout };
       }
+      $self->{lingering_read} += $_[0]->{value}->byte_length if $lingering;
       $self->_ondata ($_[0]->{value});
 
       return not 'done';
@@ -2457,6 +2490,7 @@ sub _request_headers ($) {
 sub _timeout ($) {
   my $self = $_[0];
   delete $self->{timer};
+  delete $self->{cleanup_timer};
   return $self->abort
       (Web::Transport::TypeError->new ("Read timeout ($ReadTimeout)"));
 } # _timeout
